@@ -155,6 +155,15 @@ export interface CheckQueueState {
   queuedAccountIds: number[]
   activeAccountIds: number[]
   logs: CheckLogEntry[]
+  resultSummary: {
+    total: number
+    alive: number
+    limited: number
+    temporary_limited: number
+    frozen: number
+    banned: number
+    timeout: number
+  }
   lastUpdatedAt: string | null
 }
 

@@ -47,7 +47,7 @@ export class AccountCheckEngine {
     this.timeoutMs = options.timeoutMs ?? 25000
   }
 
-  async run(accountId: number, logger: CheckLogger): Promise<AccountCheckResult> {
+  async run(accountId: number, _logger: CheckLogger): Promise<AccountCheckResult> {
     const startedAt = Date.now()
     const account = this.repository.getByIds([accountId])[0]
 
@@ -71,16 +71,12 @@ export class AccountCheckEngine {
     let client: TelegramClient | null = null
 
     try {
-      logger('加载 Session')
       const session = await withStepTimeout(this.sessionLoader.load(account.sessionPath), this.timeoutMs, 'Session 加载')
 
-      logger('创建 GramJS 客户端')
       client = this.clientManager.createClient(session, account.profile)
 
-      logger('连接 Telegram')
       await withStepTimeout(client.connect(), this.timeoutMs, 'Telegram 连接')
 
-      logger('检查 Session 是否有效')
       const authorized = await withStepTimeout(client.checkAuthorization(), this.timeoutMs, 'Session 校验')
       const authorizationStatus = this.statusResolver.resolveAuthorization(authorized)
       if (authorizationStatus === 'not_logged_in') {
@@ -88,14 +84,10 @@ export class AccountCheckEngine {
         return this.persistFailure(account, authorizationStatus, 'Session 未登录', durationMs)
       }
 
-      logger('拉取账号资料')
       const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')
       const fullUser = await withStepTimeout(this.spamBotChecker.getFullProfile(client), this.timeoutMs, '完整资料读取')
 
-      logger('访问 SpamBot')
       const spamResult = await withStepTimeout(this.spamBotChecker.check(client), this.timeoutMs, 'SpamBot 检测')
-
-      logger(`SpamBot 结果：${spamResult.summary}`)
       const updated = this.updateService.buildSuccessProfile({
         account,
         liveUser,

@@ -41,6 +41,15 @@ function createInitialState(options: Required<CheckQueueOptions>): CheckQueueSta
     queuedAccountIds: [],
     activeAccountIds: [],
     logs: [],
+    resultSummary: {
+      total: 0,
+      alive: 0,
+      limited: 0,
+      temporary_limited: 0,
+      frozen: 0,
+      banned: 0,
+      timeout: 0
+    },
     lastUpdatedAt: null
   }
 }
@@ -73,6 +82,15 @@ export class CheckQueue extends EventEmitter {
 
   clearLogs() {
     this.state.logs = []
+    this.state.resultSummary = {
+      total: 0,
+      alive: 0,
+      limited: 0,
+      temporary_limited: 0,
+      frozen: 0,
+      banned: 0,
+      timeout: 0
+    }
     this.bump()
   }
 
@@ -84,6 +102,19 @@ export class CheckQueue extends EventEmitter {
       this.state.completedCount = 0
       this.state.failedCount = 0
       this.state.totalCount = 0
+      this.state.logs = []
+      this.state.resultSummary = {
+        total: 0,
+        alive: 0,
+        limited: 0,
+        temporary_limited: 0,
+        frozen: 0,
+        banned: 0,
+        timeout: 0
+      }
+      if (uniqueIds.length > 0) {
+        this.appendLog('info', null, `已选择 ${uniqueIds.length} 个账号，检查任务进行中，请稍等`)
+      }
     }
 
     for (const accountId of uniqueIds) {
@@ -93,7 +124,6 @@ export class CheckQueue extends EventEmitter {
 
       this.pending.push({ accountId, attempt: 0 })
       addedCount += 1
-      this.appendLog('info', accountId, '已加入检查队列')
     }
 
     this.state.totalCount += addedCount
@@ -108,7 +138,6 @@ export class CheckQueue extends EventEmitter {
       if (!task) break
 
       this.active.set(task.accountId, task)
-      this.appendLog('info', task.accountId, `开始检测（第 ${task.attempt + 1} 次）`, task.attempt + 1)
       this.syncCounters()
       void this.runTask(task)
     }
@@ -145,34 +174,37 @@ export class CheckQueue extends EventEmitter {
     }
   }
 
+  private normalizeDisplayStatus(status: AccountCheckResult['status']) {
+    if (status === 'alive' || status === 'limited' || status === 'temporary_limited' || status === 'frozen' || status === 'banned' || status === 'timeout') {
+      return status
+    }
+
+    return 'timeout' as const
+  }
+
   private handleResult(task: QueueTask, result: AccountCheckResult) {
     if (result.retryable && task.attempt + 1 <= this.options.retryLimit) {
       const retryTask = { accountId: task.accountId, attempt: task.attempt + 1 }
       this.pending.push(retryTask)
-      this.appendLog('warning', task.accountId, `检测失败，准备重试：${result.errorMessage ?? STATUS_LABELS[result.status]}`, task.attempt + 1, {
-        phone: result.phone,
-        status: result.status
-      })
       this.syncCounters()
       return
     }
 
     this.state.completedCount += 1
 
+    const displayStatus = this.normalizeDisplayStatus(result.status)
     const phoneLabel = result.phone || `账号#${task.accountId}`
-    if (result.status === 'timeout' || result.status === 'unknown') {
+    if (displayStatus === 'timeout') {
       this.state.failedCount += 1
-      this.appendLog('error', task.accountId, `${phoneLabel} ---- ${STATUS_LABELS[result.status]}${result.errorMessage ? ` - ${result.errorMessage}` : ''}`, task.attempt + 1, {
-        phone: result.phone,
-        status: result.status
-      })
-    } else {
-      const level: CheckLogLevel = result.status === 'alive' ? 'success' : 'warning'
-      this.appendLog(level, task.accountId, `${phoneLabel} ---- ${STATUS_LABELS[result.status]}`, task.attempt + 1, {
-        phone: result.phone,
-        status: result.status
-      })
     }
+    this.state.resultSummary.total += 1
+    this.state.resultSummary[displayStatus] += 1
+
+    const level: CheckLogLevel = displayStatus === 'alive' ? 'success' : displayStatus === 'timeout' ? 'error' : 'warning'
+    this.appendLog(level, task.accountId, `${phoneLabel} ---- ${STATUS_LABELS[displayStatus]}`, task.attempt + 1, {
+      phone: result.phone,
+      status: displayStatus
+    })
   }
 
   private appendLog(level: CheckLogLevel, accountId: number | null, message: string, attempt?: number, meta?: { phone?: string; status?: AccountCheckResult['status'] | null }) {
@@ -187,7 +219,7 @@ export class CheckQueue extends EventEmitter {
       phone: meta?.phone,
       status: meta?.status ?? null
     }
-    this.state.logs = [entry, ...this.state.logs].slice(0, 200)
+    this.state.logs = [...this.state.logs, entry].slice(-200)
     this.bump()
   }
 
@@ -200,7 +232,14 @@ export class CheckQueue extends EventEmitter {
     this.state.running = this.pending.length > 0 || this.active.size > 0
 
     if (wasRunning && !this.state.running && this.state.totalCount === this.state.completedCount) {
-      this.appendLog('success', null, '本轮批量检测已完成')
+      this.appendLog('success', null, '本次检测已完成')
+      this.appendLog('info', null, `总数量 ${this.state.resultSummary.total}`)
+      this.appendLog('info', null, `无限制 ${this.state.resultSummary.alive}`)
+      this.appendLog('info', null, `双向 ${this.state.resultSummary.limited}`)
+      this.appendLog('info', null, `临时双向 ${this.state.resultSummary.temporary_limited}`)
+      this.appendLog('info', null, `冻结 ${this.state.resultSummary.frozen}`)
+      this.appendLog('info', null, `封禁 ${this.state.resultSummary.banned}`)
+      this.appendLog('info', null, `超时 ${this.state.resultSummary.timeout}`)
     }
   }
 
