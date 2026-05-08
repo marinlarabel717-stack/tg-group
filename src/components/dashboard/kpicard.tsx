@@ -11,16 +11,15 @@ const toneMap = {
 
 export const KpiCard = memo(function KpiCard({ label, value, delta, tone }: StatRecord) {
   return (
-    <div className="group relative rounded-[16px] border border-white/8 bg-[#111927] p-5 transition hover:border-neon/20">
-      <div className={clsx('absolute inset-x-4 top-0 h-px opacity-70', toneMap[tone])} />
+    <div className="group relative rounded-[16px] bg-card p-6 transition hover:bg-hover">
       <div className="text-sm font-medium text-textMuted">{label}</div>
       <div className="mt-5 flex items-end justify-between">
         <div className="text-4xl font-semibold tracking-tight text-white">{value}</div>
-        <div className={clsx('rounded-full border px-3 py-1 text-xs font-semibold', toneMap[tone], 'border-current/20 bg-white/[0.03]')}>
+        <div className={clsx('rounded-full px-3 py-1 text-xs font-semibold', toneMap[tone], 'bg-white/[0.03]')}>
           {delta}
         </div>
       </div>
-      <div className="mt-6 h-9 rounded-[10px] border border-white/5 bg-white/[0.02]" />
+      <div className="mt-7 h-10 rounded-[10px] bg-white/[0.02]" />
     </div>
   )
 })

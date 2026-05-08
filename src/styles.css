@@ -19,7 +19,7 @@ body,
 
 body {
   font-family: 'Inter', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  background: #0b1220;
+  background: #08111f;
   color: #f8fafc;
   overflow: hidden;
   user-select: none;
@@ -78,6 +78,6 @@ textarea,
 }
 
 .flat-surface {
-  background: #111827;
+  background: #111c2d;
   border: 1px solid rgba(148, 163, 184, 0.12);
 }

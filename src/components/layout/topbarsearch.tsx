@@ -21,7 +21,7 @@ export const TopbarSearch = memo(function TopbarSearch() {
         onChange={(event) => handleChange(event.target.value)}
         placeholder={isAccountModule ? '搜索账号 / 用户名 / 国家' : '当前模块无需搜索'}
         disabled={!isAccountModule}
-        className="h-11 w-full rounded-[14px] border border-white/8 bg-[#0d1522] pl-11 pr-4 text-sm text-textMain outline-none transition focus:border-neon/30 disabled:cursor-default disabled:opacity-70"
+        className="h-11 w-full rounded-[14px] bg-card pl-11 pr-4 text-sm text-textMain outline-none transition focus:bg-hover disabled:cursor-default disabled:opacity-70"
       />
     </div>
   )

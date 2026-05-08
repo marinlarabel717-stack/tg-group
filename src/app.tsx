@@ -11,10 +11,10 @@ function App() {
         <Topbar />
       </DraggableTopbar>
 
-      <div className="relative grid min-h-0 flex-1 grid-cols-[280px_1fr] gap-3 px-3 py-3">
+      <div className="relative grid min-h-0 flex-1 grid-cols-[292px_1fr] gap-5 px-5 py-5">
         <Sidebar />
 
-        <main className="flex min-w-0 flex-col gap-4 rounded-[18px] border border-white/8 bg-[#101826] p-4 contain-layout">
+        <main className="flex min-w-0 flex-col gap-5 rounded-[16px] bg-panel/95 p-5 contain-layout">
           <div className="app-scroll-shell min-h-0 flex-1">
             <ModuleViewport />
           </div>

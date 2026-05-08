@@ -5,7 +5,7 @@ import { TopbarActions } from './topbaractions'
 
 const TopbarBrand = memo(function TopbarBrand() {
   return (
-    <div className="flex min-w-[220px] items-center gap-3 rounded-[14px] border border-white/8 bg-[#0d1522] px-4 py-2.5 text-cyan-200">
+    <div className="flex min-w-[240px] items-center gap-3 rounded-[14px] bg-card px-4 py-3 text-cyan-200">
       <Sparkles size={18} />
       <div>
         <div className="text-xs tracking-[0.22em] text-textMuted">实时中枢</div>
@@ -17,7 +17,7 @@ const TopbarBrand = memo(function TopbarBrand() {
 
 export const Topbar = memo(function Topbar() {
   return (
-    <div className="flex h-full items-center gap-4 px-4 contain-layout">
+    <div className="flex h-full items-center gap-5 px-5 contain-layout">
       <TopbarBrand />
       <TopbarSearch />
       <TopbarActions />

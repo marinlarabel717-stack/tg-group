@@ -20,9 +20,9 @@ const SidebarBrand = memo(function SidebarBrand() {
   return (
     <button
       onClick={() => setActiveModule('dashboard')}
-      className="group flex items-center gap-4 rounded-[14px] border border-white/8 bg-white/[0.03] px-4 py-3 transition hover:bg-white/[0.05]"
+      className="group flex items-center gap-4 rounded-[14px] bg-white/[0.025] px-4 py-4 transition hover:bg-hover"
     >
-      <div className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-[#1a2538] text-sm font-black text-cyan-200">
+      <div className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-hover text-sm font-black text-cyan-200">
         TM
       </div>
       <div className="text-left">
@@ -35,7 +35,7 @@ const SidebarBrand = memo(function SidebarBrand() {
 
 const SidebarPulse = memo(function SidebarPulse() {
   return (
-    <div className="mt-auto rounded-[14px] border border-white/8 bg-[#111927] p-4">
+    <div className="mt-auto rounded-[14px] bg-card p-5">
       <div className="text-xs tracking-[0.25em] text-textMuted">系统脉冲</div>
       <div className="mt-3 flex items-center justify-between">
         <div>
@@ -50,10 +50,10 @@ const SidebarPulse = memo(function SidebarPulse() {
 
 export const Sidebar = memo(function Sidebar() {
   return (
-    <aside className="relative flex w-[280px] flex-col rounded-[18px] border border-white/8 bg-[#101826] p-4 contain-layout">
+    <aside className="relative flex w-[292px] flex-col rounded-[16px] bg-panel/95 p-5 contain-layout">
       <SidebarBrand />
 
-      <div className="mt-8 space-y-2">
+      <div className="mt-10 space-y-2.5">
         {items.map((item) => (
           <SidebarNavItem key={item.key} moduleKey={item.key} label={item.label} icon={item.icon} />
         ))}

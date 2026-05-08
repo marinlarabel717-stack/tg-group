@@ -10,12 +10,12 @@ export const GlassPanel = memo(function GlassPanel({ className, header, children
   return (
     <section
       className={clsx(
-        'rounded-[18px] border border-white/8 bg-[#111927] shadow-glass',
+        'rounded-[16px] bg-card shadow-[0_1px_3px_rgba(0,0,0,0.14)]',
         className
       )}
     >
-      {header ? <div className="border-b border-white/8 px-5 py-4">{header}</div> : null}
-      <div className="px-5 py-4">{children}</div>
+      {header ? <div className="px-5 py-4">{header}</div> : null}
+      <div className="px-5 py-5">{children}</div>
     </section>
   )
 })

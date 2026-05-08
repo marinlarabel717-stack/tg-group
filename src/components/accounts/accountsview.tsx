@@ -25,7 +25,7 @@ const AccountsSummary = memo(function AccountsSummary() {
   }, [accounts])
 
   return (
-    <GlassPanel className="bg-[#111927]">
+    <GlassPanel className="bg-card">
       <div className="flex items-center justify-between gap-6">
         <div>
           <div className="flex items-center gap-2 text-xs tracking-[0.24em] text-neonSoft">
@@ -38,15 +38,15 @@ const AccountsSummary = memo(function AccountsSummary() {
         </div>
 
         <div className="grid min-w-[360px] grid-cols-3 gap-3">
-          <div className="rounded-[14px] border border-white/8 bg-[#0d1522] p-4">
+          <div className="rounded-[14px] bg-panel p-5">
             <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><MonitorCog size={14} /> 存活</div>
             <div className="mt-3 text-3xl font-semibold text-white">{onlineCount}</div>
           </div>
-          <div className="rounded-[14px] border border-white/8 bg-[#0d1522] p-4">
+          <div className="rounded-[14px] bg-panel p-5">
             <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><ShieldCheck size={14} /> 冻结</div>
             <div className="mt-3 text-3xl font-semibold text-white">{frozenCount}</div>
           </div>
-          <div className="rounded-[14px] border border-white/8 bg-[#0d1522] p-4">
+          <div className="rounded-[14px] bg-panel p-5">
             <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><Sparkles size={14} /> 正常</div>
             <div className="mt-3 text-3xl font-semibold text-white">{healthyCount}</div>
           </div>

@@ -22,18 +22,18 @@ import { filterAccounts, useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatProxyStatus, formatSessionStatus } from '../../lib/ui-text'
 
 function checkboxClass() {
-  return 'h-4 w-4 rounded border border-white/15 bg-slate-950/50 accent-blue-500'
+  return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
 }
 
 function actionButtonClass() {
-  return 'flex h-9 w-9 items-center justify-center rounded-[10px] border border-white/8 bg-[#0d1522] text-slate-300 transition hover:border-neon/25 hover:bg-neon/8 hover:text-neonSoft'
+  return 'flex h-9 w-9 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft'
 }
 
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
-    <div className="grid min-h-[60px] animate-pulse grid-cols-[52px_150px_130px_120px_130px_130px_160px_140px] gap-3 rounded-[10px] border border-white/8 bg-white/[0.02] px-4 py-3">
+    <div className="grid min-h-[60px] animate-pulse grid-cols-[52px_150px_130px_120px_130px_130px_160px_140px] gap-3 rounded-[10px] bg-panel px-4 py-3">
       {Array.from({ length: columns }).map((_, index) => (
-        <div key={index} className="h-9 rounded-[8px] bg-white/[0.04]" />
+        <div key={index} className="h-9 rounded-[8px] bg-white/[0.03]" />
       ))}
     </div>
   )
@@ -191,7 +191,7 @@ export const AccountTable = memo(function AccountTable() {
   const getColumnFilter = useCallback((id: string) => String(table.getColumn(id)?.getFilterValue() ?? ''), [table])
 
   return (
-    <div className="space-y-4 contain-layout">
+    <div className="space-y-5 contain-layout">
       <TableToolbar
         search={searchTerm}
         onSearchChange={handleGlobalFilterChange}
@@ -219,9 +219,9 @@ export const AccountTable = memo(function AccountTable() {
       <GlassPanel className="p-0">
         <div ref={parentRef} className="virtual-scroll-shell max-h-[640px] overflow-auto">
           <table className="w-full table-fixed border-separate border-spacing-0">
-            <thead className="sticky top-0 z-10 bg-[#111927]">
+            <thead className="sticky top-0 z-10 bg-card">
               {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id} className="border-b border-white/10">
+                <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
@@ -263,10 +263,10 @@ export const AccountTable = memo(function AccountTable() {
                       >
                         <td className="block py-1">
                           <div
-                            className={`grid min-h-[60px] grid-cols-[52px_150px_130px_120px_130px_130px_140px_160px_160px] items-center gap-3 rounded-[10px] border px-4 py-3 transition ${
+                            className={`grid min-h-[60px] grid-cols-[52px_150px_130px_120px_130px_130px_140px_160px_160px] items-center gap-4 rounded-[10px] px-4 py-3.5 transition ${
                               row.getIsSelected()
-                                ? 'border-neon/35 bg-neon/8'
-                                : 'border-white/8 bg-white/[0.025] hover:border-neon/18 hover:bg-white/[0.04]'
+                                ? 'bg-neon/8'
+                                : 'bg-panel hover:bg-hover'
                             }`}
                           >
                             {row.getVisibleCells().map((cell) => (

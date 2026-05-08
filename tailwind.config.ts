@@ -5,9 +5,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        base: '#07111f',
-        panel: '#0f1c31',
-        card: '#13233f',
+        base: '#08111f',
+        panel: '#0d1726',
+        card: '#111c2d',
+        hover: '#162235',
         line: '#243553',
         neon: '#3b82f6',
         neonSoft: '#60a5fa',
