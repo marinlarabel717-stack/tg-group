@@ -29,15 +29,42 @@ export interface AccountRecord {
 }
 
 export interface AccountJsonProfile extends Record<string, unknown> {
+  app_id?: number
+  app_hash?: string
+  sdk?: string
+  device?: string
+  app_version?: string
+  lang_pack?: string
+  system_lang_pack?: string
+  twoFA?: string | null
+  role?: string | null
+  id?: number | string
   phone?: string
-  username?: string
+  username?: string | null
+  date_of_birth?: number | string | null
+  date_of_birth_integrity?: string | null
+  is_premium?: boolean
+  premium_expiry?: string | number | null
+  first_name?: string | null
+  last_name?: string | null
+  has_profile_pic?: boolean
+  spamblock?: string | null
+  spamblock_end_date?: string | number | null
+  session_file?: string
+  stats_spam_count?: number
+  stats_invites_count?: number
+  last_connect_date?: string | null
+  session_created_date?: string | null
+  app_config_hash?: string | null
+  extra_params?: string | null
+  register_time?: number | string | null
+  last_check_time?: number | string | null
+  avatar?: string | null
+  sex?: string | null
+  proxy?: string | null
+  ipv6?: boolean
   userId?: string
   country?: string
-  sessionName?: string
-  sessionFile?: string
-  importedAt?: string
-  note?: string
-  tags?: string[]
 }
 
 export interface ScanCandidate {

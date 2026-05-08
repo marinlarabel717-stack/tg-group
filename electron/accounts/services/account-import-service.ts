@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { AccountJsonProfile, ImportAccountsResult, UpsertAccountInput } from '../types'
+import type { AccountJsonProfile, AccountStatus, ImportAccountsResult, UpsertAccountInput } from '../types'
 import type { AccountRepository } from './account-repository'
 import { FileScanner } from './file-scanner'
 import { JsonTemplateService } from './json-template-service'
@@ -18,6 +18,45 @@ function inferCountry(profile: AccountJsonProfile) {
   return readStringField(profile, 'country', 'countryCode', 'country_name')
 }
 
+function parseDateValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return null
+
+  if (typeof value === 'number') {
+    const timestamp = value > 10_000_000_000 ? value : value * 1000
+    const date = new Date(timestamp)
+    return Number.isNaN(date.getTime()) ? null : date.toISOString()
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+
+    if (/^\d+$/.test(trimmed)) {
+      return parseDateValue(Number(trimmed))
+    }
+
+    const normalized = trimmed.replace(/([+-]\d{2})(\d{2})$/, '$1:$2')
+    const date = new Date(normalized)
+    return Number.isNaN(date.getTime()) ? null : date.toISOString()
+  }
+
+  return null
+}
+
+function inferStatus(profile: AccountJsonProfile): AccountStatus {
+  const spamblock = readStringField(profile, 'spamblock').toLowerCase()
+
+  if (!spamblock || spamblock === 'unknown') return 'timeout_unchecked'
+  if (spamblock === 'free') return 'alive'
+  if (spamblock.includes('temporary')) return 'temporary_limited'
+  if (spamblock.includes('limited') || spamblock.includes('restrict')) return 'limited'
+  if (spamblock.includes('frozen')) return 'frozen'
+  if (spamblock.includes('ban')) return 'banned'
+  if (spamblock.includes('multi') && spamblock.includes('ip')) return 'multi_ip'
+
+  return 'timeout_unchecked'
+}
+
 function inferPhone(profile: AccountJsonProfile, sessionPath: string) {
   const explicitPhone = readStringField(profile, 'phone', 'tel', 'mobile')
   if (explicitPhone) return explicitPhone
@@ -29,6 +68,12 @@ function inferPhone(profile: AccountJsonProfile, sessionPath: string) {
 function inferUsername(profile: AccountJsonProfile) {
   const username = readStringField(profile, 'username', 'user_name', 'handle')
   return username.startsWith('@') || !username ? username : `@${username}`
+}
+
+function inferDisplayName(profile: AccountJsonProfile) {
+  const firstName = readStringField(profile, 'first_name', 'firstName')
+  const lastName = readStringField(profile, 'last_name', 'lastName')
+  return [firstName, lastName].filter(Boolean).join(' ').trim()
 }
 
 function inferUserId(profile: AccountJsonProfile) {
@@ -67,16 +112,19 @@ export class AccountImportService {
         if (ensured.generated) generatedJsonCount += 1
 
         const profile = await this.jsonTemplateService.readProfile(ensured.jsonPath)
+        const username = inferUsername(profile)
+        const displayName = inferDisplayName(profile)
+
         inputs.push({
           phone: inferPhone(profile, candidate.sessionPath),
-          username: inferUsername(profile),
+          username: username || displayName,
           userId: inferUserId(profile),
           country: inferCountry(profile),
           sessionPath: candidate.sessionPath,
           jsonPath: ensured.jsonPath,
-          status: 'timeout_unchecked',
-          lastCheckTime: null,
-          lastOnlineTime: null
+          status: inferStatus(profile),
+          lastCheckTime: parseDateValue(profile.last_check_time),
+          lastOnlineTime: parseDateValue(profile.last_connect_date)
         })
       } catch (error) {
         const reason = error instanceof Error ? error.message : '未知错误'
