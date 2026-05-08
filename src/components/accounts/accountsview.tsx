@@ -25,7 +25,7 @@ const AccountsSummary = memo(function AccountsSummary() {
   }, [accounts])
 
   return (
-    <GlassPanel className="overflow-hidden bg-gradient-to-r from-neon/10 via-white/[0.03] to-transparent">
+    <GlassPanel className="bg-[#111927]">
       <div className="flex items-center justify-between gap-6">
         <div>
           <div className="flex items-center gap-2 text-xs tracking-[0.24em] text-neonSoft">
@@ -38,15 +38,15 @@ const AccountsSummary = memo(function AccountsSummary() {
         </div>
 
         <div className="grid min-w-[360px] grid-cols-3 gap-3">
-          <div className="rounded-3xl border border-white/10 bg-slate-950/35 p-4">
+          <div className="rounded-[14px] border border-white/8 bg-[#0d1522] p-4">
             <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><MonitorCog size={14} /> 存活</div>
             <div className="mt-3 text-3xl font-semibold text-white">{onlineCount}</div>
           </div>
-          <div className="rounded-3xl border border-white/10 bg-slate-950/35 p-4">
+          <div className="rounded-[14px] border border-white/8 bg-[#0d1522] p-4">
             <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><ShieldCheck size={14} /> 冻结</div>
             <div className="mt-3 text-3xl font-semibold text-white">{frozenCount}</div>
           </div>
-          <div className="rounded-3xl border border-white/10 bg-slate-950/35 p-4">
+          <div className="rounded-[14px] border border-white/8 bg-[#0d1522] p-4">
             <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><Sparkles size={14} /> 正常</div>
             <div className="mt-3 text-3xl font-semibold text-white">{healthyCount}</div>
           </div>

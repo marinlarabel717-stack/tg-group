@@ -19,7 +19,6 @@ function createWindow() {
     show: false,
     vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
     visualEffectState: process.platform === 'darwin' ? 'active' : undefined,
-    backgroundMaterial: process.platform === 'win32' ? 'mica' : 'auto',
     transparent: false,
     hasShadow: true,
     roundedCorners: true,

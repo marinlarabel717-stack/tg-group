@@ -38,7 +38,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-2xl border border-white/10 bg-slate-950/40 px-4 text-sm text-textMain outline-none transition hover:border-neon/30 focus:border-neon/50"
+        className="h-11 rounded-[12px] border border-white/8 bg-[#0d1522] px-4 text-sm text-textMain outline-none transition hover:border-neon/25 focus:border-neon/35"
       >
         <option value="">全部</option>
         {options.map((option) => (
@@ -53,8 +53,8 @@ function FilterSelect({
 
 export const TableFilters = memo(function TableFilters(props: TableFiltersProps) {
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-[24px] border border-white/10 bg-white/[0.03] px-4 py-4 shadow-glass">
-      <div className="mr-1 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/45 text-neonSoft">
+    <div className="flex flex-wrap items-end gap-3 rounded-[14px] border border-white/8 bg-[#111927] px-4 py-4">
+      <div className="mr-1 flex h-11 w-11 items-center justify-center rounded-[12px] border border-white/8 bg-[#0d1522] text-neonSoft">
         <SlidersHorizontal size={17} />
       </div>
       <FilterSelect label="国家" value={props.countryFilter} options={props.countries} onChange={props.onCountryChange} />

@@ -5,7 +5,7 @@ import { TopbarActions } from './topbaractions'
 
 const TopbarBrand = memo(function TopbarBrand() {
   return (
-    <div className="flex min-w-[240px] items-center gap-3 rounded-2xl border border-cyan-300/10 bg-slate-950/35 px-4 py-3 text-cyan-200">
+    <div className="flex min-w-[220px] items-center gap-3 rounded-[14px] border border-white/8 bg-[#0d1522] px-4 py-2.5 text-cyan-200">
       <Sparkles size={18} />
       <div>
         <div className="text-xs tracking-[0.22em] text-textMuted">实时中枢</div>

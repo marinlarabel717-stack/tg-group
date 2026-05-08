@@ -25,7 +25,7 @@ export const TablePagination = memo(function TablePagination({
   onPageSizeChange
 }: TablePaginationProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-white/10 bg-white/[0.03] px-4 py-4 shadow-glass">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-white/8 bg-[#111927] px-4 py-4">
       <div>
         <div className="text-[11px] tracking-[0.22em] text-textMuted">分页</div>
         <div className="mt-1 text-sm text-white">
@@ -37,7 +37,7 @@ export const TablePagination = memo(function TablePagination({
         <select
           value={pageSize}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
-          className="h-11 rounded-2xl border border-white/10 bg-slate-950/40 px-4 text-sm text-textMain outline-none transition hover:border-neon/30 focus:border-neon/50"
+          className="h-11 rounded-[12px] border border-white/8 bg-[#0d1522] px-4 text-sm text-textMain outline-none transition hover:border-neon/25 focus:border-neon/35"
         >
           {[10, 20, 30, 50].map((size) => (
             <option key={size} value={size}>
@@ -51,7 +51,7 @@ export const TablePagination = memo(function TablePagination({
             title="上一页"
             onClick={onPreviousPage}
             disabled={!canPreviousPage}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/40 text-textMain transition hover:border-neon/30 hover:text-neonSoft disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-[12px] border border-white/8 bg-[#0d1522] text-textMain transition hover:border-neon/25 hover:text-neonSoft disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronLeft size={18} />
           </button>
@@ -59,7 +59,7 @@ export const TablePagination = memo(function TablePagination({
             title="下一页"
             onClick={onNextPage}
             disabled={!canNextPage}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/40 text-textMain transition hover:border-neon/30 hover:text-neonSoft disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-[12px] border border-white/8 bg-[#0d1522] text-textMain transition hover:border-neon/25 hover:text-neonSoft disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronRight size={18} />
           </button>

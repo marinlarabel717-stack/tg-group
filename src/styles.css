@@ -19,7 +19,7 @@ body,
 
 body {
   font-family: 'Inter', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  background: #07111f;
+  background: #0b1220;
   color: #f8fafc;
   overflow: hidden;
   user-select: none;
@@ -40,8 +40,8 @@ textarea,
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -59,16 +59,25 @@ textarea,
 
 .content-visibility-auto {
   content-visibility: auto;
+  contain-intrinsic-size: 320px;
 }
 
 .contain-layout {
-  contain: layout paint style;
+  contain: layout paint;
 }
 
 .virtual-scroll-shell {
-  contain: strict;
+  contain: layout paint;
+  overscroll-behavior: contain;
+  isolation: isolate;
 }
 
-.row-transform {
-  transform: translateZ(0);
+.app-scroll-shell {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.flat-surface {
+  background: #111827;
+  border: 1px solid rgba(148, 163, 184, 0.12);
 }

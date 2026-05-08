@@ -17,7 +17,7 @@ function controlClass(kind: 'default' | 'danger' = 'default') {
   return `flex h-10 w-10 items-center justify-center rounded-xl border transition ${
     kind === 'danger'
       ? 'border-rose-400/15 bg-rose-500/10 text-rose-200 hover:border-rose-400/40 hover:bg-rose-500/20'
-      : 'border-white/10 bg-white/[0.04] text-slate-300 hover:border-neon/30 hover:bg-neon/10 hover:text-white hover:shadow-neon'
+      : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-neon/25 hover:bg-neon/8 hover:text-white'
   }`
 }
 

@@ -6,13 +6,13 @@ import type { AccountRecord } from '../../types'
 import { formatSessionStatus } from '../../lib/ui-text'
 
 function actionClass() {
-  return 'flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-950/35 text-slate-300 transition hover:border-neon/40 hover:bg-neon/10 hover:text-neonSoft hover:shadow-neon'
+  return 'flex h-9 w-9 items-center justify-center rounded-[10px] border border-white/8 bg-[#0d1522] text-slate-300 transition hover:border-neon/25 hover:bg-neon/8 hover:text-neonSoft'
 }
 
 export const AccountsTable = memo(function AccountsTable({ accounts }: { accounts: AccountRecord[] }) {
   return (
     <GlassPanel
-      className="overflow-hidden"
+      className="bg-[#111927]"
       header={
         <div className="flex items-center justify-between">
           <div>
@@ -26,14 +26,14 @@ export const AccountsTable = memo(function AccountsTable({ accounts }: { account
       }
     >
       <div className="overflow-x-auto">
-        <table className="min-w-full border-separate border-spacing-y-3">
+        <table className="min-w-full border-separate border-spacing-y-2">
           <thead>
             <tr className="text-left text-sm text-textMuted">
-              <th className="rounded-l-2xl bg-white/5 px-4 py-4">手机号</th>
-              <th className="bg-white/5 px-4 py-4">国家</th>
-              <th className="bg-white/5 px-4 py-4">状态</th>
-              <th className="bg-white/5 px-4 py-4">用户名</th>
-              <th className="rounded-r-2xl bg-white/5 px-4 py-4 text-right">操作</th>
+                <th className="rounded-l-[12px] bg-white/[0.03] px-4 py-4">手机号</th>
+                <th className="bg-white/[0.03] px-4 py-4">国家</th>
+                <th className="bg-white/[0.03] px-4 py-4">状态</th>
+                <th className="bg-white/[0.03] px-4 py-4">用户名</th>
+                <th className="rounded-r-[12px] bg-white/[0.03] px-4 py-4 text-right">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -42,24 +42,24 @@ export const AccountsTable = memo(function AccountsTable({ accounts }: { account
                 key={account.id}
                 className="group"
               >
-                <td className="rounded-l-3xl border border-white/10 border-r-0 bg-white/5 px-4 py-4 transition group-hover:border-neon/30 group-hover:bg-white/[0.08]">
+                <td className="rounded-l-[12px] border border-white/8 border-r-0 bg-white/[0.03] px-4 py-4 transition group-hover:border-neon/20 group-hover:bg-white/[0.05]">
                   <div className="font-medium text-textMain">{account.phone}</div>
                   <div className="mt-1 text-xs text-textMuted">{account.id} • {account.lastSeen}</div>
                 </td>
-                <td className="border border-white/10 border-l-0 border-r-0 bg-white/5 px-4 py-4 transition group-hover:border-neon/30 group-hover:bg-white/[0.08]">
+                <td className="border border-white/8 border-l-0 border-r-0 bg-white/[0.03] px-4 py-4 transition group-hover:border-neon/20 group-hover:bg-white/[0.05]">
                   {account.country}
                 </td>
-                <td className="border border-white/10 border-l-0 border-r-0 bg-white/5 px-4 py-4 transition group-hover:border-neon/30 group-hover:bg-white/[0.08]">
+                <td className="border border-white/8 border-l-0 border-r-0 bg-white/[0.03] px-4 py-4 transition group-hover:border-neon/20 group-hover:bg-white/[0.05]">
                   <div className="flex items-center gap-3">
                     <StatusBadge status={account.status} />
                     <span className="text-xs text-textMuted">Session {formatSessionStatus(account.session)}</span>
                   </div>
                 </td>
-                <td className="border border-white/10 border-l-0 border-r-0 bg-white/5 px-4 py-4 transition group-hover:border-neon/30 group-hover:bg-white/[0.08]">
+                <td className="border border-white/8 border-l-0 border-r-0 bg-white/[0.03] px-4 py-4 transition group-hover:border-neon/20 group-hover:bg-white/[0.05]">
                   <div className="font-medium text-textMain">{account.username}</div>
                   <div className="mt-1 text-xs text-textMuted">{account.online ? '当前在线' : '空闲中'}</div>
                 </td>
-                <td className="rounded-r-3xl border border-white/10 border-l-0 bg-white/5 px-4 py-4 transition group-hover:border-neon/30 group-hover:bg-white/[0.08]">
+                <td className="rounded-r-[12px] border border-white/8 border-l-0 bg-white/[0.03] px-4 py-4 transition group-hover:border-neon/20 group-hover:bg-white/[0.05]">
                   <div className="flex items-center justify-end gap-2">
                     <button title="打开目录" className={actionClass()}><FolderOpen size={16} /></button>
                     <button title="锁定账号" className={actionClass()}><Lock size={16} /></button>
