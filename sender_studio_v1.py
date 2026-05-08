@@ -719,6 +719,16 @@ class SenderStudioV1(QMainWindow):
         self.account_check_summary_label = QLabel('这里会显示检查结果和当前账号统计。')
         self.account_check_summary_label.setStyleSheet('color:#93c5fd;background:#0f172a;border:1px solid #1d4ed8;border-radius:12px;padding:12px 14px;')
         toolbar_layout.addWidget(self.account_check_summary_label)
+
+        stats_row = QHBoxLayout()
+        self.account_stat_total_chip = QLabel('总数 0'); self.account_stat_total_chip.setProperty('chip', 'true')
+        self.account_stat_ok_chip = QLabel('正常 0'); self.account_stat_ok_chip.setProperty('chip', 'true')
+        self.account_stat_bad_chip = QLabel('异常 0'); self.account_stat_bad_chip.setProperty('chip', 'true')
+        self.account_stat_enabled_chip = QLabel('启用 0'); self.account_stat_enabled_chip.setProperty('chip', 'true')
+        for chip in [self.account_stat_total_chip, self.account_stat_ok_chip, self.account_stat_bad_chip, self.account_stat_enabled_chip]:
+            stats_row.addWidget(chip)
+        stats_row.addStretch()
+        toolbar_layout.addLayout(stats_row)
         layout.addWidget(toolbar_frame)
 
         table_card = QFrame()
@@ -859,8 +869,8 @@ class SenderStudioV1(QMainWindow):
             bottom_layout.addWidget(btn)
         detail_layout.addWidget(bottom_bar)
 
-        hint = QLabel('当前检查判断的是 session 可用性与授权状态，不是 @spambot 回复结果。')
-        hint.setProperty('dim', 'true')
+        hint = QLabel('检查的是 session 可用性与授权状态。')
+        hint.setProperty('soft', 'true')
         detail_layout.addWidget(hint)
         layout.addWidget(detail_card)
         return page
@@ -1143,6 +1153,10 @@ class SenderStudioV1(QMainWindow):
         self.account_check_summary_label.setText(
             f"账号总数 {metrics['total']} · 正常 {metrics['normal']} · 异常 {metrics['abnormal']} · 启用 {metrics['enabled']} · 最近检查 {metrics['last_check_at']}"
         )
+        self.account_stat_total_chip.setText(f"总数 {metrics['total']}")
+        self.account_stat_ok_chip.setText(f"正常 {metrics['normal']}")
+        self.account_stat_bad_chip.setText(f"异常 {metrics['abnormal']}")
+        self.account_stat_enabled_chip.setText(f"启用 {metrics['enabled']}")
         self.refresh_dashboard()
         if rows and selected_id:
             for r, row in enumerate(rows):
@@ -1162,10 +1176,10 @@ class SenderStudioV1(QMainWindow):
         self.refresh_account_selection_status()
 
     def selected_account_id_from_table(self):
-        row = self.accounts_table.currentRow()
-        if row < 0:
+        rows = self.accounts_table.selectionModel().selectedRows(1)
+        if not rows:
             return None
-        item = self.accounts_table.item(row, 1)
+        item = self.accounts_table.item(rows[0].row(), 1)
         return item.data(Qt.UserRole) if item else None
 
     def selected_account_ids(self):
@@ -1197,7 +1211,9 @@ class SenderStudioV1(QMainWindow):
         self.account_selected_count_label.setText(f'已选：{len(selected_ids)}')
         total_rows = self.accounts_table.rowCount()
         self.account_bottom_status_label.setText(f'专用账号：{total_rows} / {total_rows}')
-        if selected_ids:
+        if len(selected_ids) == 1 and self.current_account_id:
+            self.account_footer_hint_label.setText(f'当前账号：{self.account_name_edit.text().strip() or "未命名账号"}')
+        elif selected_ids:
             self.account_footer_hint_label.setText(f'已选中 {len(selected_ids)} 个账号')
         elif self.current_account_id:
             self.account_footer_hint_label.setText(f'当前账号：{self.account_name_edit.text().strip() or "未命名账号"}')
