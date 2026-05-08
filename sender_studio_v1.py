@@ -1,5 +1,5 @@
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
@@ -182,6 +182,11 @@ QFrame[variant='miniCard'] {
     border: 1px solid #2a3650;
     border-radius: 14px;
 }
+QFrame[variant='inspector'] {
+    background: #121a2c;
+    border: 1px solid #243146;
+    border-radius: 16px;
+}
 QLabel[chip='true'] {
     background: #111827;
     border: 1px solid #233048;
@@ -239,6 +244,11 @@ QCheckBox[table='true']::indicator:checked {
     border-radius: 8px;
     border: 1px solid #4c8dff;
     background: #3b82f6;
+}
+QLabel[tableHeader='true'] {
+    color: #7dd3fc;
+    font-weight: 700;
+    font-size: 13px;
 }
 """
 
@@ -401,6 +411,45 @@ class SenderStudioV1(QMainWindow):
             f"background:{bg};border:1px solid {border};border-radius:10px;padding:6px 10px;color:{fg};font-weight:700;"
         )
         return label
+
+    def infer_account_region(self, phone: str):
+        phone = str(phone or '').strip().replace(' ', '')
+        mapping = [
+            ('+1', '🇺🇸 US'),
+            ('+44', '🇬🇧 UK'),
+            ('+86', '🇨🇳 CN'),
+            ('+7', '🇷🇺 RU'),
+            ('+81', '🇯🇵 JP'),
+            ('+82', '🇰🇷 KR'),
+            ('+84', '🇻🇳 VN'),
+            ('+66', '🇹🇭 TH'),
+            ('+63', '🇵🇭 PH'),
+            ('+65', '🇸🇬 SG'),
+        ]
+        for prefix, label in mapping:
+            if phone.startswith(prefix):
+                return label
+        return '🌐 --'
+
+    def format_relative_check_time(self, last_check_at: str):
+        text = str(last_check_at or '').strip()
+        if not text:
+            return '-'
+        try:
+            dt = datetime.strptime(text, '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            return text
+        delta = datetime.now() - dt
+        minutes = max(int(delta.total_seconds() // 60), 0)
+        if minutes < 1:
+            return '刚刚'
+        if minutes < 60:
+            return f'{minutes} 分钟前'
+        hours = minutes // 60
+        if hours < 24:
+            return f'{hours} 小时前'
+        days = hours // 24
+        return f'{days} 天前'
 
     def _apply_accounts_table_row_styles(self):
         selected_rows = {index.row() for index in self.accounts_table.selectionModel().selectedRows()}
@@ -660,10 +709,10 @@ class SenderStudioV1(QMainWindow):
 
         title_row = QHBoxLayout()
         title_box = QVBoxLayout()
-        title = QLabel('账号管理')
-        title.setStyleSheet('font-size:22px;font-weight:800;color:white;')
-        subtitle = QLabel('账号列表 / 批量动作 / 深色选中 / 底部动作条')
-        subtitle.setProperty('dim', 'true')
+        title = QLabel('账号')
+        title.setStyleSheet('font-size:20px;font-weight:800;color:white;')
+        subtitle = QLabel('桌面列表视图')
+        subtitle.setProperty('soft', 'true')
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
         title_row.addLayout(title_box)
@@ -680,9 +729,9 @@ class SenderStudioV1(QMainWindow):
         tool_row.setSpacing(10)
         self.btn_import_session = self._icon_button('＋', self.import_sessions, primary=True)
         self.btn_refresh_accounts = self._icon_button('↻', self.refresh_accounts)
-        self.btn_check_account = QPushButton('✓ 选中')
+        self.btn_check_account = QPushButton('检查')
         self.btn_check_account.clicked.connect(self.check_selected_accounts)
-        self.btn_check_all_accounts = QPushButton('✓ 全部')
+        self.btn_check_all_accounts = QPushButton('全部')
         self.btn_check_all_accounts.clicked.connect(self.check_all_accounts)
         self.btn_enable_accounts = QPushButton('启用')
         self.btn_enable_accounts.clicked.connect(lambda: self.set_selected_accounts_enabled(True))
@@ -707,7 +756,7 @@ class SenderStudioV1(QMainWindow):
         self.account_group_filter.addItems(['全部群组', '已选群组>0', '未选群组'])
         self.account_group_filter.currentIndexChanged.connect(self.refresh_accounts)
         self.account_search = QLineEdit()
-        self.account_search.setPlaceholderText('搜索手机号 / 名称 / 用户名 / session')
+        self.account_search.setPlaceholderText('Search')
         self.account_search.returnPressed.connect(self.refresh_accounts)
         filter_row.addWidget(self.account_status_filter)
         filter_row.addWidget(self.account_enabled_filter)
@@ -716,7 +765,7 @@ class SenderStudioV1(QMainWindow):
         filter_row.addWidget(self.account_search, 1)
         toolbar_layout.addLayout(filter_row)
 
-        self.account_check_summary_label = QLabel('这里会显示检查结果和当前账号统计。')
+        self.account_check_summary_label = QLabel('状态摘要会显示在这里')
         self.account_check_summary_label.setStyleSheet('color:#93c5fd;background:#0f172a;border:1px solid #1d4ed8;border-radius:12px;padding:12px 14px;')
         toolbar_layout.addWidget(self.account_check_summary_label)
 
@@ -736,21 +785,42 @@ class SenderStudioV1(QMainWindow):
         table_layout = QVBoxLayout(table_card)
         table_layout.setContentsMargins(14, 14, 14, 14)
         table_layout.setSpacing(12)
-        self.accounts_table = self._create_table(['', '#', '电话', '姓名', '状态', '开关', '群组', '最近检查'])
+        self.accounts_table = self._create_table(['', 'ID', '电话', '地区', '状态', '休息', '角色', '姓名'])
         self.accounts_table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.accounts_table.itemSelectionChanged.connect(self.on_account_selection_changed)
         self.accounts_table.cellClicked.connect(lambda row, _col: self.on_account_row_clicked(row))
         self.accounts_table.setSortingEnabled(False)
         table_layout.addWidget(self.accounts_table)
-        self.account_table_empty_label = QLabel('还没有账号。先点左上角导入 session。')
+        self.account_table_empty_label = QLabel('还没有账号，先点左上角 + 导入。')
         self.account_table_empty_label.setAlignment(Qt.AlignCenter)
         self.account_table_empty_label.setProperty('dim', 'true')
         self.account_table_empty_label.setMinimumHeight(72)
         table_layout.addWidget(self.account_table_empty_label)
         layout.addWidget(table_card, 1)
 
+        bottom_bar = QFrame()
+        bottom_bar.setProperty('variant', 'statusbar')
+        bottom_layout = QHBoxLayout(bottom_bar)
+        bottom_layout.setContentsMargins(16, 12, 16, 12)
+        self.account_bottom_status_label = QLabel('专用账号：0 / 0')
+        self.account_bottom_status_label.setStyleSheet('font-size:15px;font-weight:700;color:white;')
+        bottom_layout.addWidget(self.account_bottom_status_label)
+        self.account_footer_hint_label = QLabel('未选择账号')
+        self.account_footer_hint_label.setProperty('dim', 'true')
+        bottom_layout.addWidget(self.account_footer_hint_label)
+        bottom_layout.addStretch()
+        self.btn_footer_check = self._icon_button('⟳', self.check_current_account)
+        self.btn_footer_materials = self._icon_button('⌁', lambda: self.jump_to_materials(self.current_account_id))
+        self.btn_footer_rules = self._icon_button('⇄', lambda: self.jump_to_rules(self.current_account_id))
+        self.btn_footer_save = QPushButton('行动')
+        self.btn_footer_save.setProperty('role', 'primary')
+        self.btn_footer_save.clicked.connect(self.save_current_account)
+        for btn in [self.btn_footer_check, self.btn_footer_materials, self.btn_footer_rules, self.btn_footer_save]:
+            bottom_layout.addWidget(btn)
+        layout.addWidget(bottom_bar)
+
         detail_card = QFrame()
-        detail_card.setObjectName('Card')
+        detail_card.setProperty('variant', 'inspector')
         detail_layout = QVBoxLayout(detail_card)
         detail_layout.setContentsMargins(16, 16, 16, 16)
         detail_layout.setSpacing(14)
@@ -849,25 +919,6 @@ class SenderStudioV1(QMainWindow):
         self.account_groups_list = QListWidget(); self.account_groups_list.itemChanged.connect(lambda item: self.schedule_account_profile_autosave())
         groups_layout.addWidget(self.account_groups_list)
         detail_layout.addWidget(groups_card)
-
-        bottom_bar = QFrame()
-        bottom_bar.setProperty('variant', 'statusbar')
-        bottom_layout = QHBoxLayout(bottom_bar)
-        bottom_layout.setContentsMargins(16, 12, 16, 12)
-        self.account_bottom_status_label = QLabel('专用账号：0 / 0')
-        self.account_bottom_status_label.setStyleSheet('font-size:15px;font-weight:700;color:white;')
-        bottom_layout.addWidget(self.account_bottom_status_label)
-        self.account_footer_hint_label = QLabel('未选择账号')
-        self.account_footer_hint_label.setProperty('dim', 'true')
-        bottom_layout.addWidget(self.account_footer_hint_label)
-        bottom_layout.addStretch()
-        save = QPushButton('◎ 行动'); save.setProperty('role', 'primary'); save.clicked.connect(self.save_current_account)
-        check_now = self._icon_button('⟳', self.check_current_account)
-        go_materials = self._icon_button('⌁', lambda: self.jump_to_materials(self.current_account_id))
-        go_rules = self._icon_button('⇄', lambda: self.jump_to_rules(self.current_account_id))
-        for btn in [check_now, go_materials, go_rules, save]:
-            bottom_layout.addWidget(btn)
-        detail_layout.addWidget(bottom_bar)
 
         hint = QLabel('检查的是 session 可用性与授权状态。')
         hint.setProperty('soft', 'true')
@@ -1068,10 +1119,12 @@ class SenderStudioV1(QMainWindow):
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
         table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
         table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Stretch)
         table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         table.setMinimumHeight(320)
         table.setFocusPolicy(Qt.StrongFocus)
@@ -1134,19 +1187,20 @@ class SenderStudioV1(QMainWindow):
             self.accounts_table.setItem(r, 1, index_item)
 
             self.accounts_table.setItem(r, 2, self._table_text_item(row['phone'] or '未同步', Qt.AlignLeft | Qt.AlignVCenter))
-            self.accounts_table.setCellWidget(r, 3, self._make_name_cell(row.get('display_name') or '未命名', row.get('username') or ''))
+            self.accounts_table.setItem(r, 3, self._table_text_item(self.infer_account_region(row.get('phone') or ''), Qt.AlignCenter, '#cbd5e1'))
 
             self.accounts_table.setCellWidget(r, 4, self._make_status_chip(row['status'], row['status']))
             self.accounts_table.setItem(r, 4, self._table_text_item(row['status'], Qt.AlignCenter, '#ffffff'))
             self.accounts_table.item(r, 4).setText('')
 
-            self.accounts_table.setCellWidget(r, 5, self._make_tag_chip('启用' if row['enabled'] else '停用', '#22c55e' if row['enabled'] else '#94a3b8', '#10231b' if row['enabled'] else '#1a2233', '#1f4d36' if row['enabled'] else '#334155'))
-            self.accounts_table.setItem(r, 5, self._table_text_item('', Qt.AlignCenter, '#ffffff'))
+            self.accounts_table.setItem(r, 5, self._table_text_item(self.format_relative_check_time(row.get('last_check_at') or ''), Qt.AlignCenter, '#cbd5e1'))
 
-            self.accounts_table.setCellWidget(r, 6, self._make_tag_chip(f'{checked_groups} 个', '#cbd5e1' if checked_groups else '#64748b', '#162033', '#2b3850'))
+            self.accounts_table.setCellWidget(r, 6, self._make_tag_chip('启用' if row['enabled'] else '停用', '#22c55e' if row['enabled'] else '#94a3b8', '#10231b' if row['enabled'] else '#1a2233', '#1f4d36' if row['enabled'] else '#334155'))
             self.accounts_table.setItem(r, 6, self._table_text_item('', Qt.AlignCenter, '#ffffff'))
+            self.accounts_table.item(r, 6).setText('')
 
-            self.accounts_table.setItem(r, 7, self._table_text_item(row['last_check_at'] or '-', Qt.AlignCenter, '#cbd5e1'))
+            self.accounts_table.setCellWidget(r, 7, self._make_name_cell(row.get('display_name') or '未命名', row.get('username') or ''))
+            self.accounts_table.setItem(r, 7, self._table_text_item('', Qt.AlignCenter, '#ffffff'))
             self.accounts_table.setRowHeight(r, 58)
 
         self.account_visible_count_label.setText(f"显示账号：{len(rows)} / {metrics['total']}")
