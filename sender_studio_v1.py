@@ -1,10 +1,11 @@
 import json
+import os
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtGui import QColor, QBrush, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QInputDialog,
+    QGraphicsDropShadowEffect,
     QPushButton,
     QProgressDialog,
     QScrollArea,
@@ -44,77 +46,77 @@ BASE_DIR = Path(__file__).resolve().parent
 
 APP_STYLE = """
 QWidget {
-    background: #0b1020;
-    color: #e5e7eb;
+    background: #0F172A;
+    color: #F8FAFC;
     font-family: 'Segoe UI', 'Microsoft YaHei UI';
     font-size: 14px;
 }
 QMainWindow {
-    background: #0b1020;
+    background: #0F172A;
 }
 QFrame#Sidebar {
-    background: #0f172a;
-    border-right: 1px solid #1e293b;
+    background: #0F172A;
+    border-right: 1px solid #1E293B;
 }
 QFrame#TopBar {
-    background: #111827;
-    border-bottom: 1px solid #1f2937;
+    background: #0F172A;
+    border-bottom: 1px solid #1E293B;
 }
 QFrame#Card, QFrame#Panel {
-    background: #111827;
-    border: 1px solid #1f2937;
-    border-radius: 18px;
-}
-QFrame#AccentCard {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1d4ed8, stop:1 #7c3aed);
-    border: none;
-    border-radius: 20px;
+    background: #1E293B;
+    border: 1px solid #334155;
+    border-radius: 16px;
 }
 QPushButton {
-    background: #1f2937;
+    background: #334155;
     border: 1px solid #334155;
-    border-radius: 12px;
+    border-radius: 10px;
     padding: 10px 16px;
+    color: #CBD5E1;
 }
 QPushButton:hover {
-    background: #273449;
+    background: #3B4D70;
 }
 QPushButton[role='primary'] {
-    background: #2563eb;
+    background: #334155;
     border: 1px solid #3b82f6;
     color: white;
     font-weight: 600;
 }
 QPushButton[role='primary']:hover {
-    background: #1d4ed8;
+    background: #3B4D70;
 }
 QPushButton[role='ghost'] {
-    background: transparent;
-    border: 1px solid #263244;
+    background: #334155;
+    border: 1px solid #334155;
 }
 QToolButton[nav='true'] {
     text-align: left;
     border: none;
-    border-radius: 14px;
-    padding: 12px 14px;
+    border-radius: 8px;
+    padding: 0 14px 0 18px;
     background: transparent;
-    color: #cbd5e1;
-    font-size: 15px;
+    color: #E2E8F0;
+    font-size: 14px;
+    min-height: 48px;
 }
 QToolButton[nav='true']:hover {
-    background: #172033;
+    background: #1A2238;
 }
 QToolButton[active='true'] {
-    background: #1d4ed8;
-    color: white;
+    background: #1E293B;
+    color: #F8FAFC;
     font-weight: 600;
+    border-left: 3px solid #3B82F6;
+    padding-left: 15px;
 }
 QLineEdit, QTextEdit, QComboBox {
-    background: #1a2236;
-    border: 1px solid #2d3855;
+    background: #334155;
+    border: 1px solid #334155;
     border-radius: 10px;
     padding: 8px 12px;
     selection-background-color: #2563eb;
+    color: #F8FAFC;
 }
 QTextEdit {
     padding: 12px;
@@ -124,20 +126,20 @@ QComboBox::drop-down {
     width: 24px;
 }
 QTableWidget {
-    background: #141c2f;
-    border: 1px solid #243146;
-    gridline-color: #1f2937;
-    border-radius: 14px;
-    alternate-background-color: #182235;
-    selection-background-color: #2c3854;
+    background: #1E293B;
+    border: 1px solid #334155;
+    gridline-color: #334155;
+    border-radius: 16px;
+    alternate-background-color: #1E293B;
+    selection-background-color: #223049;
     selection-color: white;
 }
 QHeaderView::section {
-    background: #27314a;
-    color: #d4dcf2;
+    background: #273449;
+    color: #F8FAFC;
     border: none;
-    border-bottom: 1px solid #394562;
-    padding: 14px 12px;
+    border-bottom: 1px solid #334155;
+    padding: 0 12px;
     font-weight: 600;
 }
 QTableWidget::item {
@@ -145,15 +147,15 @@ QTableWidget::item {
     padding: 8px;
 }
 QTableWidget::item:selected {
-    background: #202944;
+    background: #223049;
     color: white;
 }
 QTableWidget::item:selected:active {
-    background: #202944;
+    background: #223049;
     color: white;
 }
 QTableCornerButton::section {
-    background: #0f172a;
+    background: #273449;
     border: none;
 }
 QScrollBar:vertical {
@@ -170,46 +172,48 @@ QCheckBox {
     spacing: 8px;
 }
 QFrame[variant='toolbar'] {
-    background: #1b2440;
-    border: 1px solid #273250;
+    background: #1E293B;
+    border: 1px solid #334155;
     border-radius: 16px;
 }
 QFrame[variant='statusbar'] {
-    background: #1b2440;
-    border: 1px solid #273250;
+    background: #1E293B;
+    border: 1px solid #334155;
     border-radius: 16px;
 }
 QFrame[variant='miniCard'] {
-    background: #202944;
-    border: 1px solid #2d3855;
-    border-radius: 12px;
+    background: #1E293B;
+    border: 1px solid #334155;
+    border-radius: 16px;
 }
 QFrame[variant='inspector'] {
-    background: #121a2c;
-    border: 1px solid #243146;
+    background: #1E293B;
+    border: 1px solid #334155;
     border-radius: 16px;
 }
 QLabel[chip='true'] {
-    background: #111827;
-    border: 1px solid #233048;
-    border-radius: 12px;
-    padding: 8px 12px;
-    color: #cbd5e1;
+    background: #1E293B;
+    border: 1px solid #334155;
+    border-radius: 999px;
+    padding: 2px 8px;
+    color: #CBD5E1;
+    font-size: 12px;
+    font-weight: 700;
 }
 QLabel[soft='true'] {
-    color: #cbd5e1;
+    color: #94A3B8;
     font-size: 13px;
 }
 QLabel[dim='true'] {
-    color: #94a3b8;
+    color: #94A3B8;
 }
 QListWidget {
     background: transparent;
     border: none;
 }
 QListWidget::item {
-    background: #0f172a;
-    border: 1px solid #263244;
+    background: #1E293B;
+    border: 1px solid #334155;
     border-radius: 12px;
     margin: 4px 0;
     padding: 12px;
@@ -248,9 +252,56 @@ QCheckBox[table='true']::indicator:checked {
     background: #3b82f6;
 }
 QLabel[tableHeader='true'] {
-    color: #7dd3fc;
+    color: #F8FAFC;
     font-weight: 700;
-    font-size: 13px;
+    font-size: 14px;
+}
+QPushButton[quick='true'] {
+    min-height: 48px;
+    border-radius: 12px;
+    background: #1E293B;
+    border: 1px solid #334155;
+    text-align: left;
+    padding: 0 14px;
+}
+QPushButton[quick='true']:hover {
+    background: #273549;
+}
+QLabel[groupTitle='true'] {
+    color: #94A3B8;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 16px 0 4px 2px;
+}
+QPushButton[actionTool='true'] {
+    min-width: 44px;
+    max-width: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    border-radius: 10px;
+    background: #334155;
+    border: 1px solid #334155;
+    color: #CBD5E1;
+    font-size: 18px;
+}
+QPushButton[actionTool='true']:hover {
+    background: #3B4D70;
+}
+QPushButton[tableIcon='true'] {
+    min-width: 28px;
+    max-width: 28px;
+    min-height: 28px;
+    max-height: 28px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: #CBD5E1;
+    font-size: 16px;
+    padding: 0;
+}
+QPushButton[tableIcon='true']:hover {
+    color: #3B82F6;
+    background: rgba(59,130,246,0.12);
 }
 """
 
@@ -306,6 +357,7 @@ class AccountOverviewCard(QFrame):
         super().__init__()
         self.setObjectName('AccountOverviewCard')
         self.setProperty('variant', 'miniCard')
+        self.setMinimumSize(150, 100)
         self._active = active
         self._add_mode = add_mode
         layout = QVBoxLayout(self)
@@ -320,6 +372,12 @@ class AccountOverviewCard(QFrame):
         layout.addStretch()
         self._click_handler = None
         self.setCursor(Qt.PointingHandCursor)
+        glow = QGraphicsDropShadowEffect(self)
+        glow.setBlurRadius(24)
+        glow.setOffset(0, 0)
+        glow.setColor(QColor(59, 130, 246, 45 if active else 18))
+        self.setGraphicsEffect(glow)
+        self._glow = glow
         self.set_active(active)
         if add_mode:
             self.value_label.setText('+')
@@ -338,10 +396,12 @@ class AccountOverviewCard(QFrame):
                 'QFrame#AccountOverviewCard{background:#1f2740;border:1px dashed #4f9cff;border-radius:12px;}'
                 'QFrame#AccountOverviewCard QLabel{border:none;background:transparent;}'
             )
+            self._glow.setColor(QColor(59, 130, 246, 30))
             self.value_label.setStyleSheet('color:#63a5ff;font-size:22px;font-weight:800;')
             return
         border = '#4f9cff' if active else '#2b3654'
         text = '#63a5ff' if active else '#ffffff'
+        self._glow.setColor(QColor(59, 130, 246, 65 if active else 18))
         self.setStyleSheet(
             f'QFrame#AccountOverviewCard{{background:#202944;border:2px solid {border};border-radius:12px;}}'
             'QFrame#AccountOverviewCard QLabel{border:none;background:transparent;}'
@@ -362,6 +422,8 @@ class SenderStudioV1(QMainWindow):
         super().__init__()
         self.store = StudioStore(str(BASE_DIR))
         self.nav_buttons = []
+        self.nav_button_texts = ['总览', '账号管理', '素材配置', '定时规则', '任务预览', '日志中心', '设置']
+        self.nav_button_icons = ['⌂', '👥', '🖼', '⏰', '▣', '🧾', '⚙']
         self.current_account_id = None
         self.current_text_material_id = None
         self.current_image_material_id = None
@@ -369,6 +431,7 @@ class SenderStudioV1(QMainWindow):
         self.account_inspector_visible = False
         self.account_overview_filter = {'kind': 'all', 'value': ''}
         self.custom_account_filters = []
+        self.sidebar_collapsed = False
         self.account_profile_autosave_timer = QTimer(self)
         self.account_profile_autosave_timer.setSingleShot(True)
         self.account_profile_autosave_timer.timeout.connect(self.auto_save_account_profile)
@@ -376,6 +439,12 @@ class SenderStudioV1(QMainWindow):
         self.resize(1600, 980)
         self._build_ui()
         self.refresh_all()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        should_collapse = self.width() < 1280
+        if should_collapse != self.sidebar_collapsed:
+            self.toggle_sidebar()
 
     def status_palette(self, status: str):
         mapping = {
@@ -413,6 +482,42 @@ class SenderStudioV1(QMainWindow):
             btn.setStyleSheet('padding:0 0; font-size:16px;')
         if handler:
             btn.clicked.connect(handler)
+        return btn
+
+    def _action_toolbar_button(self, text: str, handler=None, tooltip: str = ''):
+        btn = QPushButton(text)
+        btn.setProperty('actionTool', 'true')
+        if tooltip:
+            btn.setToolTip(tooltip)
+        if handler:
+            btn.clicked.connect(handler)
+        return btn
+
+    def _quick_button(self, text: str, handler=None):
+        btn = QPushButton(text)
+        btn.setProperty('quick', 'true')
+        btn.setProperty('fullText', text)
+        if handler:
+            btn.clicked.connect(handler)
+        return btn
+
+    def _group_title_label(self, text: str):
+        label = QLabel(text)
+        label.setProperty('groupTitle', 'true')
+        return label
+
+    def _make_table_action_button(self, text: str, handler=None, tooltip: str = ''):
+        btn = QPushButton(text)
+        btn.setProperty('tableIcon', 'true')
+        if tooltip:
+            btn.setToolTip(tooltip)
+        if handler:
+            btn.clicked.connect(handler)
+        glow = QGraphicsDropShadowEffect(btn)
+        glow.setBlurRadius(16)
+        glow.setOffset(0)
+        glow.setColor(QColor(59, 130, 246, 90))
+        btn.setGraphicsEffect(glow)
         return btn
 
     def _table_text_item(self, text: str, align=Qt.AlignLeft | Qt.AlignVCenter, color: str = '#e5e7eb'):
@@ -469,9 +574,27 @@ class SenderStudioV1(QMainWindow):
         label = QLabel(text)
         label.setAlignment(Qt.AlignCenter)
         label.setStyleSheet(
-            f"background:{bg};border:1px solid {border};border-radius:10px;padding:6px 10px;color:{fg};font-weight:700;"
+            f"background:{bg};border:none;border-radius:999px;padding:2px 8px;color:{fg};font-size:12px;font-weight:700;"
         )
         return label
+
+    def _make_action_cell(self, row_data: dict):
+        host = QWidget()
+        layout = QHBoxLayout(host)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setSpacing(2)
+        account_id = row_data.get('id')
+        buttons = [
+            ('📁', lambda: self.open_account_files(account_id), '查看账号文件'),
+            ('🔒', lambda: self.toggle_account_lock(account_id), '锁定 / 解锁账号'),
+            ('ℹ', lambda: self.show_account_info(account_id), '查看 Telegram 用户详情'),
+            ('↗', lambda: self.open_account_telegram(account_id), '打开 Telegram'),
+        ]
+        for text, handler, tooltip in buttons:
+            btn = self._make_table_action_button(text, handler, tooltip)
+            layout.addWidget(btn)
+        layout.addStretch()
+        return host
 
     def infer_account_region(self, phone: str):
         phone = str(phone or '').strip().replace(' ', '')
@@ -495,14 +618,14 @@ class SenderStudioV1(QMainWindow):
 
     def format_account_status_badge(self, status: str):
         mapping = {
-            '正常': ('在线', '#14324a', '#38bdf8', '#0ea5e9'),
-            '受限': ('冷冻', '#102840', '#38bdf8', '#0ea5e9'),
-            '失效': ('失效', '#3a0f12', '#ef4444', '#b91c1c'),
-            '需重新登录': ('登录', '#3b2206', '#f59e0b', '#92400e'),
-            '检查失败': ('异常', '#3b2206', '#f59e0b', '#92400e'),
-            '未检查': ('未测', '#162033', '#94a3b8', '#334155'),
+            '正常': ('无限制', 'rgba(34,197,94,0.15)', '#22C55E', '#22C55E'),
+            '受限': ('冷冻', 'rgba(59,130,246,0.15)', '#3B82F6', '#3B82F6'),
+            '失效': ('限制', 'rgba(239,68,68,0.15)', '#EF4444', '#EF4444'),
+            '需重新登录': ('限制', 'rgba(239,68,68,0.15)', '#EF4444', '#EF4444'),
+            '检查失败': ('限制', 'rgba(239,68,68,0.15)', '#EF4444', '#EF4444'),
+            '未检查': ('未测', 'rgba(148,163,184,0.15)', '#94A3B8', '#94A3B8'),
         }
-        return mapping.get(status, ('未知', '#162033', '#94a3b8', '#334155'))
+        return mapping.get(status, ('未知', 'rgba(148,163,184,0.15)', '#94A3B8', '#94A3B8'))
 
     def format_last_used_text(self, last_check_at: str):
         text = str(last_check_at or '').strip()
@@ -662,6 +785,51 @@ class SenderStudioV1(QMainWindow):
         except Exception:
             QMessageBox.information(self, '目录', str(path))
 
+    def select_all_accounts(self):
+        self.accounts_table.selectAll()
+        self.refresh_account_selection_status()
+
+    def clear_account_selection(self):
+        self.accounts_table.clearSelection()
+        self.refresh_account_selection_status()
+
+    def open_account_files(self, account_id):
+        account = self.store.get_account(account_id) if account_id else None
+        session_path = Path(str((account or {}).get('session_path') or ''))
+        target = session_path.parent if session_path.exists() else Path(self.store.get_settings().get('sessions_dir', str(BASE_DIR / 'sessions')))
+        target.mkdir(parents=True, exist_ok=True)
+        try:
+            os.startfile(target)
+        except Exception:
+            QMessageBox.information(self, '账号文件', str(target))
+
+    def toggle_account_lock(self, account_id):
+        account = self.store.get_account(account_id) if account_id else None
+        if not account:
+            return
+        payload = dict(account)
+        payload['enabled'] = not bool(account.get('enabled'))
+        self.store.save_account(payload)
+        self.refresh_accounts()
+
+    def show_account_info(self, account_id):
+        account = self.store.get_account(account_id) if account_id else None
+        if not account:
+            return
+        QMessageBox.information(
+            self,
+            '账号详情',
+            f"名称：{account.get('display_name') or '-'}\n手机号：{account.get('phone') or '-'}\n用户名：@{account.get('username') or '-'}\n状态：{account.get('status') or '-'}"
+        )
+
+    def open_account_telegram(self, account_id):
+        account = self.store.get_account(account_id) if account_id else None
+        username = str((account or {}).get('username') or '').strip().lstrip('@')
+        if not username:
+            QMessageBox.information(self, '打开 Telegram', '这个账号还没有用户名。')
+            return
+        QDesktopServices.openUrl(QUrl(f'https://t.me/{username}'))
+
     def format_relative_check_time(self, last_check_at: str):
         text = str(last_check_at or '').strip()
         if not text:
@@ -700,7 +868,7 @@ class SenderStudioV1(QMainWindow):
                 if text_col:
                     text_col.itemAt(0).widget().setStyleSheet(f"color:{'#ffffff' if row_selected else '#e5e7eb'};font-weight:700;")
                     text_col.itemAt(1).widget().setStyleSheet(f"color:{'#cbd5e1' if row_selected else '#94a3b8'};font-size:12px;")
-            for col in [4, 8]:
+            for col in [4, 8, 9]:
                 widget = self.accounts_table.cellWidget(row, col)
                 if widget:
                     widget.setStyleSheet(widget.styleSheet() + (";opacity:1;" if row_selected else ''))
@@ -772,7 +940,8 @@ class SenderStudioV1(QMainWindow):
         shell.setContentsMargins(0, 0, 0, 0)
         shell.setSpacing(0)
 
-        shell.addWidget(self._build_sidebar())
+        self.sidebar_frame = self._build_sidebar()
+        shell.addWidget(self.sidebar_frame)
 
         content_wrap = QVBoxLayout()
         content_wrap.setContentsMargins(0, 0, 0, 0)
@@ -799,63 +968,67 @@ class SenderStudioV1(QMainWindow):
     def _build_sidebar(self):
         frame = QFrame()
         frame.setObjectName('Sidebar')
-        frame.setFixedWidth(280)
+        frame.setFixedWidth(240)
         layout = QVBoxLayout(frame)
-        layout.setContentsMargins(18, 20, 18, 20)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 12, 12, 16)
+        layout.setSpacing(8)
 
-        brand = QFrame()
-        brand.setObjectName('AccentCard')
-        brand_layout = QVBoxLayout(brand)
-        brand_layout.setContentsMargins(18, 18, 18, 18)
-        title = QLabel('Sender Studio')
-        title.setStyleSheet('font-size:22px;font-weight:800;color:white;')
-        subtitle = QLabel('v1 本地可用版\n账号 / 素材 / 规则 / 预览')
-        subtitle.setStyleSheet('color:rgba(255,255,255,0.85);font-size:13px;line-height:1.7;')
-        brand_layout.addWidget(title)
-        brand_layout.addWidget(subtitle)
-        layout.addWidget(brand)
+        self.sidebar_logo_button = QPushButton('✦  Sender Studio')
+        self.sidebar_logo_button.setStyleSheet('background:transparent;border:none;color:#FFFFFF;font-size:28px;font-weight:700;text-align:left;padding:8px 8px;')
+        self.sidebar_logo_button.setFixedHeight(64)
+        self.sidebar_logo_button.clicked.connect(lambda: self._set_page(0))
+        layout.addWidget(self.sidebar_logo_button)
 
-        for idx, text in enumerate(['总览', '账号管理', '素材配置', '定时规则', '任务预览', '日志中心', '设置']):
+        layout.addWidget(self._group_title_label('核心模块'))
+        for idx, text in enumerate(self.nav_button_texts[:2]):
             btn = QToolButton()
             btn.setProperty('nav', True)
-            btn.setText(text)
-            btn.setMinimumHeight(46)
+            btn.setText(f'{self.nav_button_icons[idx]}  {text}')
+            btn.setMinimumHeight(48)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            btn.clicked.connect(lambda checked=False, i=idx: self._set_page(i))
+            layout.addWidget(btn)
+            self.nav_buttons.append(btn)
+
+        layout.addWidget(self._group_title_label('功能模块'))
+        for idx, text in enumerate(self.nav_button_texts[2:], start=2):
+            btn = QToolButton()
+            btn.setProperty('nav', True)
+            btn.setText(f'{self.nav_button_icons[idx]}  {text}')
+            btn.setMinimumHeight(48)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             btn.clicked.connect(lambda checked=False, i=idx: self._set_page(i))
             layout.addWidget(btn)
             self.nav_buttons.append(btn)
 
         layout.addStretch()
-        footer = QLabel('这版已经接本地 SQLite。\n先把“管理层”做顺，\n后面再看是否扩展。')
-        footer.setStyleSheet('color:#94a3b8;line-height:1.7;padding:8px 4px;')
-        layout.addWidget(footer)
+        layout.addWidget(self._group_title_label('快捷操作'))
+        layout.addWidget(self._quick_button('🟢 完整许可'))
+        layout.addWidget(self._quick_button('💬 我们的聊天'))
+        self.dark_mode_btn = self._quick_button('🌙 深色模式')
+        layout.addWidget(self.dark_mode_btn)
         return frame
 
     def _build_topbar(self):
         bar = QFrame()
         bar.setObjectName('TopBar')
-        bar.setFixedHeight(82)
+        bar.setFixedHeight(64)
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(26, 16, 26, 16)
+        layout.setContentsMargins(18, 10, 18, 10)
         layout.setSpacing(16)
-        title_wrap = QVBoxLayout()
-        title = QLabel('TG Sender Studio')
-        title.setStyleSheet('font-size:24px;font-weight:800;color:white;')
-        subtitle = QLabel('第一版本地软件：导入账号、配置素材、保存规则、生成预览')
-        subtitle.setStyleSheet('color:#94a3b8;font-size:13px;')
-        title_wrap.addWidget(title)
-        title_wrap.addWidget(subtitle)
-        layout.addLayout(title_wrap)
+        self.sidebar_toggle_btn = self._action_toolbar_button('☰', self.toggle_sidebar, '收起 / 展开侧栏')
+        layout.addWidget(self.sidebar_toggle_btn)
+        title = QLabel('账号管理')
+        title.setStyleSheet('font-size:20px;font-weight:700;color:#FFFFFF;')
+        layout.addWidget(title)
         layout.addStretch()
         self.top_search = QLineEdit()
-        self.top_search.setPlaceholderText('输入关键词后回车，可在账号页里筛选')
-        self.top_search.setFixedWidth(360)
+        self.top_search.setPlaceholderText('搜索账号 / 电话 / 用户名')
+        self.top_search.setFixedWidth(320)
+        self.top_search.setFixedHeight(40)
         self.top_search.returnPressed.connect(self.apply_account_filter_from_top)
         layout.addWidget(self.top_search)
-        refresh_btn = QPushButton('全部刷新')
-        refresh_btn.setProperty('role', 'primary')
-        refresh_btn.clicked.connect(self.refresh_all)
+        refresh_btn = self._action_toolbar_button('↻', self.refresh_all, '全部刷新')
         layout.addWidget(refresh_btn)
         return bar
 
@@ -956,21 +1129,22 @@ class SenderStudioV1(QMainWindow):
         action_layout = QHBoxLayout(action_bar)
         action_layout.setContentsMargins(14, 12, 14, 12)
         action_layout.setSpacing(8)
-        self.btn_import_session = self._icon_button('+', self.import_sessions)
-        self.btn_open_sessions_dir = self._icon_button('📁', self.open_sessions_directory)
-        self.btn_refresh_accounts = self._icon_button('⟳', self.refresh_accounts)
-        self.btn_check_account = self._icon_button('✓', self.check_selected_accounts)
-        self.btn_check_all_accounts = self._icon_button('✔', self.check_all_accounts)
+        self.btn_import_session = self._action_toolbar_button('+', self.import_sessions, '上传账号')
+        self.btn_open_sessions_dir = self._action_toolbar_button('📁', self.open_sessions_directory, '选择 Session 文件夹')
+        self.btn_refresh_accounts = self._action_toolbar_button('⟳', self.refresh_accounts, '刷新列表')
+        self.btn_check_account = self._action_toolbar_button('◫', self.check_selected_accounts, '范围选择')
+        self.btn_check_all_accounts = self._action_toolbar_button('☑', self.select_all_accounts, '全选')
+        self.btn_clear_all_accounts = self._action_toolbar_button('⊟', self.clear_account_selection, '取消选择')
         self.btn_import_session.setToolTip('导入 session 文件')
         self.btn_open_sessions_dir.setToolTip('打开 session 目录')
         self.btn_refresh_accounts.setToolTip('刷新账号列表')
         self.btn_check_account.setToolTip('检查选中账号')
-        self.btn_check_all_accounts.setToolTip('检查全部账号')
-        for btn in [self.btn_import_session, self.btn_open_sessions_dir, self.btn_refresh_accounts, self.btn_check_account, self.btn_check_all_accounts]:
+        self.btn_check_all_accounts.setToolTip('全选')
+        for btn in [self.btn_import_session, self.btn_open_sessions_dir, self.btn_refresh_accounts, self.btn_check_account, self.btn_check_all_accounts, self.btn_clear_all_accounts]:
             action_layout.addWidget(btn)
         action_layout.addStretch()
-        self.account_visible_count_label = QLabel('显示账户：0 / 0')
-        self.account_visible_count_label.setStyleSheet('color:#cbd5e1;font-size:13px;font-weight:600;padding-right:8px;')
+        self.account_visible_count_label = QLabel('0 / 0')
+        self.account_visible_count_label.setStyleSheet('color:#CBD5E1;font-size:14px;font-weight:700;padding-right:8px;')
         action_layout.addWidget(self.account_visible_count_label)
         layout.addWidget(action_bar)
 
@@ -979,8 +1153,8 @@ class SenderStudioV1(QMainWindow):
         filter_layout = QHBoxLayout(filter_bar)
         filter_layout.setContentsMargins(14, 12, 14, 12)
         filter_layout.setSpacing(10)
-        self.btn_delete_account = self._icon_button('🗑', self.delete_selected_accounts, width=44)
-        self.btn_delete_account.setStyleSheet('background:#1a2033;border:1px solid #a74a63;border-radius:12px;color:#ff6b8b;font-size:16px;')
+        self.btn_delete_account = self._action_toolbar_button('🗑', self.delete_selected_accounts, '删除选中账号')
+        self.btn_delete_account.setStyleSheet('background:#334155;border:1px solid #334155;border-radius:10px;color:#CBD5E1;font-size:18px;')
         filter_layout.addWidget(self.btn_delete_account)
 
         self.account_role_filter = QComboBox()
@@ -1002,15 +1176,15 @@ class SenderStudioV1(QMainWindow):
         self.account_enabled_filter.currentIndexChanged.connect(self.refresh_accounts)
 
         self.account_more_filter = QPushButton('...')
-        self.account_more_filter.setFixedHeight(40)
+        self.account_more_filter.setFixedHeight(56)
 
         for widget in [self.account_role_filter, self.account_geo_filter, self.account_group_filter, self.account_status_filter, self.account_enabled_filter, self.account_more_filter]:
-            widget.setFixedHeight(40)
+            widget.setFixedHeight(56)
             filter_layout.addWidget(widget)
 
         filter_layout.addStretch()
         self.account_search = QLineEdit()
-        self.account_search.setPlaceholderText('搜索...')
+        self.account_search.setPlaceholderText('🔍 搜索账号')
         self.account_search.setFixedWidth(300)
         self.account_search.setFixedHeight(40)
         self.account_search.returnPressed.connect(self.refresh_accounts)
@@ -1026,7 +1200,7 @@ class SenderStudioV1(QMainWindow):
         table_layout = QVBoxLayout(table_card)
         table_layout.setContentsMargins(0, 0, 0, 0)
         table_layout.setSpacing(0)
-        self.accounts_table = self._create_table(['', '#', '电话', '地理', '地位', '休息处', '角色', '用过的', '姓名', '各种各样的'])
+        self.accounts_table = self._create_table(['', '#', '电话', '地理', '地位', '休息处', '角色', '用过的', '姓名', '操作'])
         self.accounts_table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.accounts_table.itemSelectionChanged.connect(self.on_account_selection_changed)
         self.accounts_table.cellClicked.connect(lambda row, _col: self.on_account_row_clicked(row))
@@ -1357,6 +1531,7 @@ class SenderStudioV1(QMainWindow):
         table = QTableWidget(0, len(headers))
         table.setHorizontalHeaderLabels(headers)
         table.horizontalHeader().setVisible(True)
+        table.horizontalHeader().setFixedHeight(48)
         table.verticalHeader().setVisible(False)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.ExtendedSelection)
@@ -1374,16 +1549,35 @@ class SenderStudioV1(QMainWindow):
             table.setColumnWidth(1, 46)
             table.setColumnWidth(2, 160)
             table.setColumnWidth(3, 86)
-            table.setColumnWidth(4, 92)
+            table.setColumnWidth(4, 104)
             table.setColumnWidth(5, 104)
             table.setColumnWidth(6, 70)
             table.setColumnWidth(7, 132)
             table.setColumnWidth(8, 220)
-            table.setColumnWidth(9, 140)
+            table.setColumnWidth(9, 132)
         else:
             table.setColumnWidth(0, 42)
             table.setColumnWidth(1, 52)
         return table
+
+    def toggle_sidebar(self):
+        self.sidebar_collapsed = not self.sidebar_collapsed
+        self.sidebar_frame.setFixedWidth(64 if self.sidebar_collapsed else 240)
+        self.sidebar_logo_button.setText('✦' if self.sidebar_collapsed else '✦  Sender Studio')
+        self.sidebar_logo_button.setStyleSheet(
+            'background:transparent;border:none;color:#FFFFFF;font-size:%spx;font-weight:700;text-align:left;padding:8px 8px;'
+            % ('20' if self.sidebar_collapsed else '28')
+        )
+        for idx, btn in enumerate(self.nav_buttons):
+            btn.setText(self.nav_button_icons[idx] if self.sidebar_collapsed else f'{self.nav_button_icons[idx]}  {self.nav_button_texts[idx]}')
+            btn.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        for child in self.sidebar_frame.findChildren(QLabel):
+            if child.property('groupTitle') == 'true':
+                child.setVisible(not self.sidebar_collapsed)
+        for child in self.sidebar_frame.findChildren(QPushButton):
+            if child.property('quick') == 'true':
+                child.setText('•' if self.sidebar_collapsed else str(child.property('fullText') or ''))
+                child.setVisible(not self.sidebar_collapsed)
 
     def _set_page(self, index: int):
         self.stack.setCurrentIndex(index)
@@ -1448,6 +1642,7 @@ class SenderStudioV1(QMainWindow):
         self.account_table_empty_label.setVisible(len(rows) == 0)
         self.refresh_account_overview_cards(rows)
         for r, row in enumerate(rows):
+            checked_groups = len([g for g in (row.get('joined_groups') or []) if g.get('selected')])
             self.accounts_table.setCellWidget(r, 0, self._make_table_checkbox(True))
 
             index_item = self._table_text_item(str(r + 1), Qt.AlignCenter)
@@ -1462,19 +1657,20 @@ class SenderStudioV1(QMainWindow):
             self.accounts_table.setItem(r, 4, self._table_text_item(badge_text, Qt.AlignCenter, '#ffffff'))
             self.accounts_table.item(r, 4).setText('')
 
-            self.accounts_table.setItem(r, 5, self._table_text_item(self.format_relative_check_time(row.get('last_check_at') or ''), Qt.AlignCenter, '#cbd5e1'))
+            self.accounts_table.setItem(r, 5, self._table_text_item(str(checked_groups or '-'), Qt.AlignCenter, '#CBD5E1'))
 
-            self.accounts_table.setItem(r, 6, self._table_text_item('-', Qt.AlignCenter, '#cbd5e1'))
+            self.accounts_table.setItem(r, 6, self._table_text_item('会员' if row.get('enabled') else '-', Qt.AlignCenter, '#CBD5E1'))
             self.accounts_table.setItem(r, 7, self._table_text_item(self.format_last_used_text(row.get('last_check_at') or ''), Qt.AlignCenter, '#dbe4ff'))
 
             self.accounts_table.setCellWidget(r, 8, self._make_name_cell(row.get('display_name') or '未命名', row.get('username') or ''))
             self.accounts_table.setItem(r, 8, self._table_text_item('', Qt.AlignCenter, '#ffffff'))
 
-            misc_text = '◻  🔒  ⓘ  ⎘'
-            self.accounts_table.setItem(r, 9, self._table_text_item(misc_text, Qt.AlignCenter, '#8fb4ff'))
-            self.accounts_table.setRowHeight(r, 54)
+            self.accounts_table.setCellWidget(r, 9, self._make_action_cell(row))
+            self.accounts_table.setItem(r, 9, self._table_text_item('', Qt.AlignCenter, '#8fb4ff'))
+            self.accounts_table.item(r, 9).setText('')
+            self.accounts_table.setRowHeight(r, 64)
 
-        self.account_visible_count_label.setText(f"显示账户： {len(rows)} / {metrics['total']}")
+        self.account_visible_count_label.setText(f"{len(rows)} / {metrics['total']}")
         self.account_check_summary_label.setText(
             f"账号总数 {metrics['total']} · 正常 {metrics['normal']} · 异常 {metrics['abnormal']} · 启用 {metrics['enabled']} · 最近检查 {metrics['last_check_at']}"
         )
