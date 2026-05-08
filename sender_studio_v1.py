@@ -304,6 +304,7 @@ class MetricCard(QFrame):
 class AccountOverviewCard(QFrame):
     def __init__(self, title: str, active: bool = False, add_mode: bool = False):
         super().__init__()
+        self.setObjectName('AccountOverviewCard')
         self.setProperty('variant', 'miniCard')
         self._active = active
         self._add_mode = add_mode
@@ -333,12 +334,18 @@ class AccountOverviewCard(QFrame):
     def set_active(self, active: bool):
         self._active = active
         if self._add_mode:
-            self.setStyleSheet('background:#1f2740;border:1px dashed #4f9cff;border-radius:12px;')
+            self.setStyleSheet(
+                'QFrame#AccountOverviewCard{background:#1f2740;border:1px dashed #4f9cff;border-radius:12px;}'
+                'QFrame#AccountOverviewCard QLabel{border:none;background:transparent;}'
+            )
             self.value_label.setStyleSheet('color:#63a5ff;font-size:22px;font-weight:800;')
             return
         border = '#4f9cff' if active else '#2b3654'
         text = '#63a5ff' if active else '#ffffff'
-        self.setStyleSheet(f'background:#202944;border:2px solid {border};border-radius:12px;')
+        self.setStyleSheet(
+            f'QFrame#AccountOverviewCard{{background:#202944;border:2px solid {border};border-radius:12px;}}'
+            'QFrame#AccountOverviewCard QLabel{border:none;background:transparent;}'
+        )
         self.value_label.setStyleSheet(f'color:{text};font-size:20px;font-weight:800;')
 
     def set_click_handler(self, handler):
@@ -576,7 +583,7 @@ class SenderStudioV1(QMainWindow):
 
     def account_overview_specs(self):
         specs = [
-            {'key': 'all', 'title': '账号总量', 'active': self.account_overview_filter.get('kind') == 'all', 'filter': {'kind': 'all', 'value': ''}},
+            {'key': 'all', 'title': '总量', 'active': self.account_overview_filter.get('kind') == 'all', 'filter': {'kind': 'all', 'value': ''}},
             {'key': 'alive', 'title': '存活', 'active': self.account_overview_filter == {'kind': 'status', 'value': '正常'}, 'filter': {'kind': 'status', 'value': '正常'}},
             {'key': 'frozen', 'title': '封禁', 'active': self.account_overview_filter == {'kind': 'status', 'value': '受限'}, 'filter': {'kind': 'status', 'value': '受限'}},
         ]
@@ -602,7 +609,7 @@ class SenderStudioV1(QMainWindow):
             card.set_click_handler(lambda s=spec: self.apply_account_overview_filter(s['filter']))
             self.account_overview_cards[spec['key']] = card
             self.account_overview_grid.addWidget(card, idx // 6, idx % 6)
-        add_card = AccountOverviewCard('添加筛选', add_mode=True)
+        add_card = AccountOverviewCard('添加', add_mode=True)
         add_card.set_click_handler(self.prompt_add_custom_status)
         self.account_overview_grid.addWidget(add_card, len(specs) // 6, len(specs) % 6)
 
