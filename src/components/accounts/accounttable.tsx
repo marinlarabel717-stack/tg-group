@@ -31,8 +31,8 @@ import { filterAccounts, useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatProfileSource } from '../../lib/ui-text'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '60px 180px 120px 140px 140px 140px 180px 240px 180px'
-const ACCOUNT_GRID_WIDTH = 1380
+const ACCOUNT_GRID_TEMPLATE = '60px 176px 120px 136px 136px 136px 172px 212px 140px'
+const ACCOUNT_GRID_WIDTH = 1288
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -59,15 +59,15 @@ function cellShellClass(columnId: string, isHeader = false) {
 
   if (columnId === 'status') {
     return isHeader
-      ? 'flex h-full w-full items-center justify-center px-4'
-      : 'flex h-full w-full items-center justify-center px-4'
+      ? 'flex h-full w-full items-center justify-center px-3'
+      : 'flex h-full w-full items-center justify-center px-3'
   }
 
   if (columnId === 'actions') {
-    return 'flex h-full w-full items-center justify-start px-4'
+    return 'flex h-full w-full items-center justify-start px-3'
   }
 
-  return 'flex h-full w-full min-w-0 items-center justify-start px-4'
+  return 'flex h-full w-full min-w-0 items-center justify-start px-3'
 }
 
 function readProxy(account: AccountRecord) {
@@ -79,7 +79,7 @@ const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) 
   return (
     <div className="grid min-h-[52px] shrink-0 items-center gap-0 rounded-[10px] bg-panel" style={ACCOUNT_GRID_STYLE}>
       {Array.from({ length: columns }).map((_, index) => (
-        <div key={index} className="px-4 py-2.5">
+        <div key={index} className="px-3 py-2.5">
           <div className="h-7 animate-pulse rounded-[8px] bg-white/[0.03]" />
         </div>
       ))}
@@ -337,6 +337,10 @@ export const AccountTable = memo(function AccountTable() {
     setSelectedIds(orderedIds)
   }, [orderedIds, setSelectedIds])
 
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds([])
+  }, [setSelectedIds])
+
   const handleSelectRange = useCallback((start: number, end: number) => {
     const normalizedStart = Math.max(1, Math.min(start, end))
     const normalizedEnd = Math.max(start, end)
@@ -383,6 +387,7 @@ export const AccountTable = memo(function AccountTable() {
         onDeleteSelected={() => void deleteSelected()}
         onDeleteAll={() => void deleteAll()}
         onSelectAll={handleSelectAll}
+        onClearSelection={handleClearSelection}
         onSelectRange={handleSelectRange}
         onStartCheck={handleStartCheck}
         onRefresh={() => void refresh()}

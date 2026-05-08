@@ -7,6 +7,7 @@ import {
   Loader2,
   RefreshCcw,
   Search,
+  SquareDashedMousePointer,
   Trash2,
   Upload,
   WandSparkles,
@@ -26,6 +27,7 @@ interface TableToolbarProps {
   onDeleteSelected: () => void
   onDeleteAll: () => void
   onSelectAll: () => void
+  onClearSelection: () => void
   onSelectRange: (start: number, end: number) => void
   onStartCheck: (actions: string[]) => void
   onRefresh: () => void
@@ -71,6 +73,7 @@ export const TableToolbar = memo(function TableToolbar({
   onDeleteSelected,
   onDeleteAll,
   onSelectAll,
+  onClearSelection,
   onSelectRange,
   onStartCheck,
   onRefresh
@@ -78,6 +81,7 @@ export const TableToolbar = memo(function TableToolbar({
   const blocked = loading || busy
   const [rangeStart, setRangeStart] = useState('1')
   const [rangeEnd, setRangeEnd] = useState('20')
+  const [rangeMenuOpen, setRangeMenuOpen] = useState(false)
   const [checkMenuOpen, setCheckMenuOpen] = useState(false)
   const [selectedActions, setSelectedActions] = useState<string[]>(['login-check'])
 
@@ -146,38 +150,6 @@ export const TableToolbar = memo(function TableToolbar({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 rounded-[12px] bg-panel px-3 py-2.5">
-          <span className="text-[11px] tracking-[0.2em] text-textMuted">选择账号</span>
-          <input
-            inputMode="numeric"
-            value={rangeStart}
-            onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
-            className="h-9 w-16 rounded-[10px] bg-slate-950/40 px-3 text-sm text-white outline-none transition focus:bg-hover"
-          />
-          <span className="text-sm text-textMuted">-</span>
-          <input
-            inputMode="numeric"
-            value={rangeEnd}
-            onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
-            className="h-9 w-16 rounded-[10px] bg-slate-950/40 px-3 text-sm text-white outline-none transition focus:bg-hover"
-          />
-          <button
-            onClick={handleRangeSelect}
-            disabled={blocked || totalCount === 0}
-            className="h-9 rounded-[10px] bg-slate-950/40 px-3 text-sm text-textMain transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            选择区间
-          </button>
-          <button
-            onClick={onSelectAll}
-            disabled={blocked || totalCount === 0}
-            className="flex h-9 items-center gap-2 rounded-[10px] bg-slate-950/40 px-3 text-sm text-textMain transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <CheckSquare size={15} />
-            全选账号
-          </button>
-        </div>
-
         <ActionButton
           label="刷新"
           icon={loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
@@ -242,6 +214,52 @@ export const TableToolbar = memo(function TableToolbar({
         </div>
 
         <ActionButton label="删除所选" icon={<Trash2 size={16} />} onClick={onDeleteSelected} disabled={blocked || selectedCount === 0} />
+        <ActionButton label="全选账号" icon={<CheckSquare size={16} />} onClick={onSelectAll} disabled={blocked || totalCount === 0} />
+        <ActionButton label="取消选中" icon={<SquareDashedMousePointer size={16} />} onClick={onClearSelection} disabled={blocked || selectedCount === 0} />
+
+        <div className="relative">
+          <button
+            onClick={() => setRangeMenuOpen((value) => !value)}
+            disabled={blocked || totalCount === 0}
+            className="flex h-11 items-center gap-2 rounded-[12px] bg-panel px-4 text-sm font-medium text-textMain transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <CheckSquare size={16} />
+            选择区间
+            <ChevronDown size={15} className={`transition ${rangeMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {rangeMenuOpen ? (
+            <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[240px] rounded-[14px] border border-white/8 bg-card p-3 shadow-2xl">
+              <div className="mb-2 text-xs tracking-[0.2em] text-textMuted">选择区间号</div>
+              <div className="flex items-center gap-2">
+                <input
+                  inputMode="numeric"
+                  value={rangeStart}
+                  onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
+                  className="h-10 w-full rounded-[10px] bg-panel px-3 text-sm text-white outline-none transition focus:bg-hover"
+                />
+                <span className="text-sm text-textMuted">-</span>
+                <input
+                  inputMode="numeric"
+                  value={rangeEnd}
+                  onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
+                  className="h-10 w-full rounded-[10px] bg-panel px-3 text-sm text-white outline-none transition focus:bg-hover"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  handleRangeSelect()
+                  setRangeMenuOpen(false)
+                }}
+                disabled={blocked || totalCount === 0}
+                className="mt-3 h-10 w-full rounded-[10px] bg-neon/10 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                应用区间
+              </button>
+            </div>
+          ) : null}
+        </div>
+
         <ActionButton label="全部删除" icon={<Trash2 size={16} />} onClick={onDeleteAll} disabled={blocked || totalCount === 0} />
       </div>
     </div>
