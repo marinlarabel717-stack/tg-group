@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QProgressDialog,
     QScrollArea,
     QSizePolicy,
     QSplitter,
@@ -159,6 +161,22 @@ QListWidget::item {
     margin: 4px 0;
     padding: 12px;
 }
+QLabel[status='normal'] {
+    color: #22c55e;
+    font-weight: 700;
+}
+QLabel[status='warning'] {
+    color: #f59e0b;
+    font-weight: 700;
+}
+QLabel[status='danger'] {
+    color: #ef4444;
+    font-weight: 700;
+}
+QLabel[status='muted'] {
+    color: #94a3b8;
+    font-weight: 700;
+}
 QSplitter::handle {
     background: #0f172a;
 }
@@ -219,6 +237,42 @@ class SenderStudioV1(QMainWindow):
         self.resize(1600, 980)
         self._build_ui()
         self.refresh_all()
+
+    def status_palette(self, status: str):
+        mapping = {
+            '正常': {'bg': '#052e1c', 'fg': '#22c55e', 'label': 'normal'},
+            '受限': {'bg': '#3b2206', 'fg': '#f59e0b', 'label': 'warning'},
+            '失效': {'bg': '#3a0f12', 'fg': '#ef4444', 'label': 'danger'},
+            '需重新登录': {'bg': '#3a0f12', 'fg': '#ef4444', 'label': 'danger'},
+            '检查失败': {'bg': '#3b2206', 'fg': '#f59e0b', 'label': 'warning'},
+            '未检查': {'bg': '#162033', 'fg': '#94a3b8', 'label': 'muted'},
+        }
+        return mapping.get(status, {'bg': '#162033', 'fg': '#94a3b8', 'label': 'muted'})
+
+    def set_status_label_style(self, label: QLabel, status: str):
+        palette = self.status_palette(status)
+        label.setText(status or '-')
+        label.setProperty('status', palette['label'])
+        label.setStyleSheet(
+            f"background:{palette['bg']}; border:1px solid {palette['fg']}; border-radius:10px; padding:8px 12px;"
+        )
+        label.style().unpolish(label)
+        label.style().polish(label)
+
+    def paint_status_item(self, item: QTableWidgetItem, status: str):
+        palette = self.status_palette(status)
+        item.setBackground(QBrush(QColor(palette['bg'])))
+        item.setForeground(QBrush(QColor(palette['fg'])))
+
+    def format_check_summary(self, results):
+        summary = {key: 0 for key in STATUS_OPTIONS}
+        for row in results:
+            if not row:
+                continue
+            status = row.get('status') or '未检查'
+            summary[status] = summary.get(status, 0) + 1
+        parts = [f"{key} {value} 个" for key, value in summary.items() if value]
+        return '，'.join(parts) if parts else '没有可汇总结果'
 
     def _build_ui(self):
         root = QWidget()
@@ -437,6 +491,7 @@ class SenderStudioV1(QMainWindow):
         self.account_phone_edit = QLineEdit()
         self.account_session_label = QLabel('-')
         self.account_status_combo = QComboBox(); self.account_status_combo.addItems(STATUS_OPTIONS)
+        self.account_status_badge = QLabel('未检查')
         self.account_target_edit = QLineEdit()
         self.account_enabled_check = QCheckBox('启用这个账号')
         self.account_enabled_check.setChecked(True)
@@ -448,12 +503,14 @@ class SenderStudioV1(QMainWindow):
         form.addRow('手机号', self.account_phone_edit)
         form.addRow('Session', self.account_session_label)
         form.addRow('状态', self.account_status_combo)
+        form.addRow('状态标签', self.account_status_badge)
         form.addRow('默认目标群', self.account_target_edit)
         form.addRow('', self.account_enabled_check)
         form.addRow('最近检查', self.account_last_check)
         form.addRow('最近结果', self.account_last_result)
         form.addRow('最近错误', self.account_last_error)
         detail.body.addLayout(form)
+        self.set_status_label_style(self.account_status_badge, '未检查')
         btns = QHBoxLayout()
         save = QPushButton('保存账号')
         save.setProperty('role', 'primary')
@@ -708,6 +765,8 @@ class SenderStudioV1(QMainWindow):
                 item = QTableWidgetItem(str(value))
                 if c == 0:
                     item.setData(Qt.UserRole, row['id'])
+                if c == 4:
+                    self.paint_status_item(item, row['status'])
                 self.accounts_table.setItem(r, c, item)
         self.accounts_table.resizeRowsToContents()
         self.refresh_dashboard()
@@ -747,6 +806,7 @@ class SenderStudioV1(QMainWindow):
         self.account_phone_edit.setText(data['phone'])
         self.account_session_label.setText(data['session_name'])
         self.account_status_combo.setCurrentText(data['status'])
+        self.set_status_label_style(self.account_status_badge, data['status'])
         self.account_target_edit.setText(data['target_chat'])
         self.account_enabled_check.setChecked(bool(data['enabled']))
         self.account_last_check.setText(data['last_check_at'] or '-')
@@ -760,6 +820,7 @@ class SenderStudioV1(QMainWindow):
         self.account_phone_edit.clear()
         self.account_session_label.setText('-')
         self.account_status_combo.setCurrentText('未检查')
+        self.set_status_label_style(self.account_status_badge, '未检查')
         self.account_target_edit.clear()
         self.account_enabled_check.setChecked(True)
         self.account_last_check.setText('-')
@@ -795,6 +856,7 @@ class SenderStudioV1(QMainWindow):
         self.refresh_material_account_choices()
         self.refresh_preview_account_choices()
         self.refresh_rules()
+        self.set_status_label_style(self.account_status_badge, self.account_status_combo.currentText())
         QMessageBox.information(self, '已保存', '账号信息已保存。')
 
     def import_sessions(self):
@@ -814,28 +876,48 @@ class SenderStudioV1(QMainWindow):
         if not account_ids:
             QMessageBox.warning(self, '提示', '先选中一个或多个账号。')
             return
-        try:
-            results = self.store.check_accounts_status(account_ids)
-        except Exception as exc:
-            QMessageBox.critical(self, '检查失败', str(exc))
-            return
-        self.refresh_all()
-        normal_count = sum(1 for row in results if row and row.get('status') == '正常')
-        QMessageBox.information(self, '检查完成', f'已检查 {len(results)} 个账号，其中正常 {normal_count} 个。')
+        self.run_account_status_checks(account_ids, '选中账号')
 
     def check_all_accounts(self):
         rows = self.store.list_accounts()
         if not rows:
             QMessageBox.warning(self, '提示', '当前还没有账号。')
             return
+        self.run_account_status_checks([row['id'] for row in rows], '全部账号')
+
+    def run_account_status_checks(self, account_ids, scope_text: str):
+        progress = QProgressDialog(f'正在检查{scope_text}状态...', '取消', 0, len(account_ids), self)
+        progress.setWindowTitle('检查账号状态')
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+
+        results = []
         try:
-            results = self.store.check_accounts_status([row['id'] for row in rows])
+            for index, account_id in enumerate(account_ids, start=1):
+                if progress.wasCanceled():
+                    break
+                account = self.store.get_account(account_id)
+                display_name = account['display_name'] if account else f'账号#{account_id}'
+                progress.setLabelText(f'正在检查 {display_name} ({index}/{len(account_ids)}) ...')
+                QApplication.processEvents()
+                result = self.store.check_account_status(account_id)
+                results.append(result)
+                progress.setValue(index)
+                QApplication.processEvents()
         except Exception as exc:
+            progress.close()
             QMessageBox.critical(self, '检查失败', str(exc))
+            self.refresh_all()
             return
+
+        progress.close()
         self.refresh_all()
-        normal_count = sum(1 for row in results if row and row.get('status') == '正常')
-        QMessageBox.information(self, '检查完成', f'已检查全部 {len(results)} 个账号，其中正常 {normal_count} 个。')
+        summary_text = self.format_check_summary(results)
+        if progress.wasCanceled():
+            QMessageBox.information(self, '已取消', f'已检查 {len(results)} 个账号。\n\n结果：{summary_text}')
+            return
+        QMessageBox.information(self, '检查完成', f'已检查 {len(results)} 个账号。\n\n结果：{summary_text}')
 
     def delete_selected_accounts(self):
         account_id = self.selected_account_id_from_table()
