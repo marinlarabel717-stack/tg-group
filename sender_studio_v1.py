@@ -1,3 +1,4 @@
+import json
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QInputDialog,
     QPushButton,
     QProgressDialog,
     QScrollArea,
@@ -303,14 +305,12 @@ class AccountOverviewCard(QFrame):
     def __init__(self, title: str, subtitle: str = '', active: bool = False):
         super().__init__()
         self.setProperty('variant', 'miniCard')
-        self.setStyleSheet(
-            "background:#202944;border:1px solid %s;border-radius:12px;" % ('#4f9cff' if active else '#2b3654')
-        )
+        self._active = active
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(4)
         self.value_label = QLabel('0')
-        self.value_label.setStyleSheet("color:%s;font-size:20px;font-weight:800;" % ('#63a5ff' if active else '#ffffff'))
+        self.value_label.setStyleSheet("font-size:20px;font-weight:800;")
         self.title_label = QLabel(title)
         self.title_label.setStyleSheet('color:#e5e7eb;font-size:13px;font-weight:700;')
         self.subtitle_label = QLabel(subtitle)
@@ -320,11 +320,29 @@ class AccountOverviewCard(QFrame):
         if subtitle:
             layout.addWidget(self.subtitle_label)
         layout.addStretch()
+        self._click_handler = None
+        self.setCursor(Qt.PointingHandCursor)
+        self.set_active(active)
 
     def update_value(self, value: str, subtitle: str | None = None):
         self.value_label.setText(str(value))
         if subtitle is not None:
             self.subtitle_label.setText(str(subtitle))
+
+    def set_active(self, active: bool):
+        self._active = active
+        border = '#4f9cff' if active else '#2b3654'
+        text = '#63a5ff' if active else '#ffffff'
+        self.setStyleSheet(f'background:#202944;border:1px solid {border};border-radius:12px;')
+        self.value_label.setStyleSheet(f'color:{text};font-size:20px;font-weight:800;')
+
+    def set_click_handler(self, handler):
+        self._click_handler = handler
+
+    def mousePressEvent(self, event):
+        if callable(self._click_handler):
+            self._click_handler()
+        super().mousePressEvent(event)
 
 
 class SenderStudioV1(QMainWindow):
@@ -337,6 +355,8 @@ class SenderStudioV1(QMainWindow):
         self.current_image_material_id = None
         self.current_rule_id = None
         self.account_inspector_visible = False
+        self.account_overview_filter = {'kind': 'all', 'value': ''}
+        self.custom_status_options = []
         self.account_profile_autosave_timer = QTimer(self)
         self.account_profile_autosave_timer.setSingleShot(True)
         self.account_profile_autosave_timer.timeout.connect(self.auto_save_account_profile)
@@ -494,7 +514,7 @@ class SenderStudioV1(QMainWindow):
             if row.get('enabled'):
                 enabled_count += 1
         abnormal = sum(count for key, count in status_counter.items() if key not in ('正常', '未检查'))
-        return {
+        stats = {
             'all': len(rows),
             'work': enabled_count,
             'spam': 0,
@@ -511,6 +531,9 @@ class SenderStudioV1(QMainWindow):
             'years_3_plus': 0,
             'years_10_ok': 0,
         }
+        for idx, status in enumerate(self.custom_status_options):
+            stats[f'custom_{idx}'] = status_counter.get(status, 0)
+        return stats
 
     def refresh_account_overview_cards(self, rows):
         stats = self.build_account_overview_stats(rows)
@@ -518,6 +541,108 @@ class SenderStudioV1(QMainWindow):
             card = self.account_overview_cards.get(key)
             if card:
                 card.update_value(value)
+
+    def load_custom_status_options(self):
+        settings = self.store.get_settings()
+        raw = settings.get('custom_status_options', '[]')
+        try:
+            values = json.loads(raw or '[]')
+        except Exception:
+            values = []
+        self.custom_status_options = [str(item).strip() for item in values if str(item).strip()]
+
+    def save_custom_status_options(self):
+        self.store.save_settings({'custom_status_options': json.dumps(self.custom_status_options, ensure_ascii=False)})
+
+    def all_status_options(self):
+        return list(STATUS_OPTIONS) + [item for item in self.custom_status_options if item not in STATUS_OPTIONS]
+
+    def sync_status_comboboxes(self):
+        all_statuses = self.all_status_options()
+        current_combo = self.account_status_combo.currentText() if hasattr(self, 'account_status_combo') else '未检查'
+        current_filter = self.account_status_filter.currentText() if hasattr(self, 'account_status_filter') else '限制：冷冻'
+        if hasattr(self, 'account_status_combo'):
+            self.account_status_combo.blockSignals(True)
+            self.account_status_combo.clear()
+            self.account_status_combo.addItems(all_statuses)
+            self.account_status_combo.setCurrentText(current_combo if current_combo in all_statuses else '未检查')
+            self.account_status_combo.blockSignals(False)
+        if hasattr(self, 'account_status_filter'):
+            self.account_status_filter.blockSignals(True)
+            self.account_status_filter.clear()
+            self.account_status_filter.addItems(['限制：冷冻', '全部状态'] + all_statuses)
+            self.account_status_filter.setCurrentText(current_filter if current_filter in ['限制：冷冻', '全部状态'] + all_statuses else '限制：冷冻')
+            self.account_status_filter.blockSignals(False)
+
+    def account_overview_specs(self):
+        specs = [
+            {'key': 'all', 'title': 'Все аккаунты', 'subtitle': '全部账号', 'active': self.account_overview_filter.get('kind') == 'all', 'filter': {'kind': 'all', 'value': ''}},
+            {'key': 'work', 'title': 'Для работы', 'subtitle': '工作', 'active': self.account_overview_filter == {'kind': 'enabled', 'value': '1'}, 'filter': {'kind': 'enabled', 'value': '1'}},
+            {'key': 'spam', 'title': '垃圾邮件', 'subtitle': '检查失败', 'active': self.account_overview_filter == {'kind': 'status', 'value': '检查失败'}, 'filter': {'kind': 'status', 'value': '检查失败'}},
+            {'key': 'unlimited', 'title': '无限制', 'subtitle': '正常', 'active': self.account_overview_filter == {'kind': 'status', 'value': '正常'}, 'filter': {'kind': 'status', 'value': '正常'}},
+            {'key': 'frozen', 'title': '冻结', 'subtitle': '受限', 'active': self.account_overview_filter == {'kind': 'status', 'value': '受限'}, 'filter': {'kind': 'status', 'value': '受限'}},
+            {'key': 'member', 'title': '会员', 'subtitle': '已停用', 'active': self.account_overview_filter == {'kind': 'enabled', 'value': '0'}, 'filter': {'kind': 'enabled', 'value': '0'}},
+            {'key': 'no2fa', 'title': '无2FA', 'subtitle': '需重新登录', 'active': self.account_overview_filter == {'kind': 'status', 'value': '需重新登录'}, 'filter': {'kind': 'status', 'value': '需重新登录'}},
+            {'key': 'unlimited_ok', 'title': '无限制成功', 'subtitle': '正常', 'active': self.account_overview_filter == {'kind': 'status', 'value': '正常'}, 'filter': {'kind': 'status', 'value': '正常'}},
+            {'key': 'spam_ok', 'title': '垃圾邮件成功', 'subtitle': '检查失败', 'active': self.account_overview_filter == {'kind': 'status', 'value': '检查失败'}, 'filter': {'kind': 'status', 'value': '检查失败'}},
+            {'key': 'unlimited_fail', 'title': '无限制失败', 'subtitle': '失效', 'active': self.account_overview_filter == {'kind': 'status', 'value': '失效'}, 'filter': {'kind': 'status', 'value': '失效'}},
+            {'key': 'spam_fail', 'title': '垃圾邮件失败', 'subtitle': '检查失败', 'active': self.account_overview_filter == {'kind': 'status', 'value': '检查失败'}, 'filter': {'kind': 'status', 'value': '检查失败'}},
+            {'key': 'untested', 'title': '未测试', 'subtitle': '未检查', 'active': self.account_overview_filter == {'kind': 'status', 'value': '未检查'}, 'filter': {'kind': 'status', 'value': '未检查'}},
+            {'key': 'years_1_2', 'title': '1-2年', 'subtitle': '占位状态', 'active': False, 'filter': {'kind': 'all', 'value': ''}},
+            {'key': 'years_3_plus', 'title': '3年以上', 'subtitle': '占位状态', 'active': False, 'filter': {'kind': 'all', 'value': ''}},
+            {'key': 'years_10_ok', 'title': '10年', 'subtitle': '占位状态', 'active': False, 'filter': {'kind': 'all', 'value': ''}},
+        ]
+        for idx, status in enumerate(self.custom_status_options):
+            specs.append({
+                'key': f'custom_{idx}',
+                'title': status,
+                'subtitle': '自定义状态',
+                'active': self.account_overview_filter == {'kind': 'status', 'value': status},
+                'filter': {'kind': 'status', 'value': status},
+            })
+        return specs
+
+    def rebuild_account_overview_cards(self):
+        self.account_overview_cards = {}
+        while self.account_overview_grid.count():
+            item = self.account_overview_grid.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        specs = self.account_overview_specs()
+        for idx, spec in enumerate(specs):
+            card = AccountOverviewCard(spec['title'], spec['subtitle'], active=spec['active'])
+            card.set_click_handler(lambda s=spec: self.apply_account_overview_filter(s['filter']))
+            self.account_overview_cards[spec['key']] = card
+            self.account_overview_grid.addWidget(card, idx // 6, idx % 6)
+
+    def apply_account_overview_filter(self, filter_data: dict):
+        self.account_overview_filter = dict(filter_data or {'kind': 'all', 'value': ''})
+        self.rebuild_account_overview_cards()
+        self.refresh_accounts()
+
+    def prompt_add_custom_status(self):
+        status_name, ok = QInputDialog.getText(self, '新增状态', '输入新的状态名称：')
+        status_name = (status_name or '').strip()
+        if not ok or not status_name:
+            return
+        if status_name in self.all_status_options():
+            QMessageBox.information(self, '提示', '这个状态已经存在。')
+            return
+        self.custom_status_options.append(status_name)
+        self.save_custom_status_options()
+        self.sync_status_comboboxes()
+        self.rebuild_account_overview_cards()
+        self.refresh_accounts()
+        QMessageBox.information(self, '已添加', f'已新增状态：{status_name}')
+
+    def open_sessions_directory(self):
+        path = Path(self.store.get_settings().get('sessions_dir', str(BASE_DIR / 'sessions')))
+        path.mkdir(parents=True, exist_ok=True)
+        try:
+            os.startfile(path)
+        except Exception:
+            QMessageBox.information(self, '目录', str(path))
 
     def format_relative_check_time(self, last_check_at: str):
         text = str(last_check_at or '').strip()
@@ -794,34 +919,26 @@ class SenderStudioV1(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setSpacing(14)
 
+        self.load_custom_status_options()
         overview_wrap = QFrame()
         overview_wrap.setProperty('variant', 'toolbar')
-        overview_layout = QGridLayout(overview_wrap)
-        overview_layout.setContentsMargins(0, 0, 0, 0)
-        overview_layout.setHorizontalSpacing(14)
-        overview_layout.setVerticalSpacing(14)
-        self.account_overview_cards = {}
-        overview_specs = [
-            ('all', 'Все аккаунты', '全部账号', False),
-            ('work', 'Для работы', '工作', False),
-            ('spam', '垃圾邮件', '垃圾邮件', False),
-            ('unlimited', '无限制', '无限制', False),
-            ('frozen', '冻结', '冻结', True),
-            ('member', '会员', '会员', False),
-            ('no2fa', '无2FA', '无2FA', False),
-            ('unlimited_ok', '无限制成功', '无限制成功', False),
-            ('spam_ok', '垃圾邮件成功', '垃圾邮件成功', False),
-            ('unlimited_fail', '无限制失败', '无限制失败', False),
-            ('spam_fail', '垃圾邮件失败', '垃圾邮件失败', False),
-            ('untested', '未测试', '未测试', False),
-            ('years_1_2', '1-2年', '1-2年 无限制', False),
-            ('years_3_plus', '3年以上', '3年以上 无限制', False),
-            ('years_10_ok', '10年', '10年无限制成功', False),
-        ]
-        for idx, (key, title, subtitle, active) in enumerate(overview_specs):
-            card = AccountOverviewCard(title, subtitle, active=active)
-            self.account_overview_cards[key] = card
-            overview_layout.addWidget(card, idx // 6, idx % 6)
+        overview_outer = QVBoxLayout(overview_wrap)
+        overview_outer.setContentsMargins(0, 0, 0, 0)
+        overview_outer.setSpacing(10)
+        overview_top = QHBoxLayout()
+        overview_top.setContentsMargins(6, 6, 6, 0)
+        overview_top.addStretch()
+        self.account_add_status_btn = QPushButton('＋ 状态')
+        self.account_add_status_btn.setFixedHeight(34)
+        self.account_add_status_btn.clicked.connect(self.prompt_add_custom_status)
+        overview_top.addWidget(self.account_add_status_btn)
+        overview_outer.addLayout(overview_top)
+        self.account_overview_grid = QGridLayout()
+        self.account_overview_grid.setContentsMargins(0, 0, 0, 0)
+        self.account_overview_grid.setHorizontalSpacing(14)
+        self.account_overview_grid.setVerticalSpacing(14)
+        overview_outer.addLayout(self.account_overview_grid)
+        self.rebuild_account_overview_cards()
         layout.addWidget(overview_wrap)
 
         action_bar = QFrame()
@@ -830,11 +947,16 @@ class SenderStudioV1(QMainWindow):
         action_layout.setContentsMargins(14, 12, 14, 12)
         action_layout.setSpacing(8)
         self.btn_import_session = self._icon_button('+', self.import_sessions)
-        self.btn_new_account = self._icon_button('⌂', self.new_account)
+        self.btn_open_sessions_dir = self._icon_button('📁', self.open_sessions_directory)
         self.btn_refresh_accounts = self._icon_button('⟳', self.refresh_accounts)
         self.btn_check_account = self._icon_button('✓', self.check_selected_accounts)
         self.btn_check_all_accounts = self._icon_button('✔', self.check_all_accounts)
-        for btn in [self.btn_import_session, self.btn_new_account, self.btn_refresh_accounts, self.btn_check_account, self.btn_check_all_accounts]:
+        self.btn_import_session.setToolTip('导入 session 文件')
+        self.btn_open_sessions_dir.setToolTip('打开 session 目录')
+        self.btn_refresh_accounts.setToolTip('刷新账号列表')
+        self.btn_check_account.setToolTip('检查选中账号')
+        self.btn_check_all_accounts.setToolTip('检查全部账号')
+        for btn in [self.btn_import_session, self.btn_open_sessions_dir, self.btn_refresh_accounts, self.btn_check_account, self.btn_check_all_accounts]:
             action_layout.addWidget(btn)
         action_layout.addStretch()
         self.account_visible_count_label = QLabel('显示账户：0 / 0')
@@ -1037,6 +1159,7 @@ class SenderStudioV1(QMainWindow):
         detail_card.setVisible(False)
         self.account_detail_card = detail_card
         layout.addWidget(detail_card)
+        self.sync_status_comboboxes()
         return page
 
     def _build_materials_page(self):
@@ -1303,6 +1426,12 @@ class SenderStudioV1(QMainWindow):
         geo_filter = self.account_geo_filter.currentText()
         if geo_filter not in ('地理', '全部'):
             rows = [row for row in rows if self.infer_account_region(row.get('phone') or '').endswith(geo_filter)]
+        overview_filter = self.account_overview_filter or {'kind': 'all', 'value': ''}
+        if overview_filter.get('kind') == 'status' and overview_filter.get('value'):
+            rows = [row for row in rows if (row.get('status') or '未检查') == overview_filter.get('value')]
+        elif overview_filter.get('kind') == 'enabled' and overview_filter.get('value') in ('0', '1'):
+            expected = overview_filter.get('value') == '1'
+            rows = [row for row in rows if bool(row.get('enabled')) == expected]
         self.accounts_table.setSortingEnabled(False)
         self.accounts_table.clearSelection()
         self.accounts_table.setRowCount(len(rows))
