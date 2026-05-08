@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerAccountIpc } from './accounts/ipc'
@@ -91,11 +91,11 @@ function bindWindowControls() {
   })
 }
 
-app.whenReady().then(() => {
+async function bootstrap() {
   nativeTheme.themeSource = 'dark'
 
   const databasePath = path.join(app.getPath('userData'), 'accounts', 'accounts.db')
-  const database = createAccountsDatabase(databasePath)
+  const database = await createAccountsDatabase(databasePath)
   const repository = new AccountRepository(database)
   const scanner = new FileScanner()
   const jsonTemplateService = new JsonTemplateService()
@@ -136,7 +136,16 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
-})
+}
+
+app.whenReady()
+  .then(() => bootstrap())
+  .catch((error) => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('应用启动失败：', message)
+    dialog.showErrorBox('应用启动失败', message)
+    app.quit()
+  })
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
