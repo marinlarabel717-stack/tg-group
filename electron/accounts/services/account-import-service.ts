@@ -197,11 +197,10 @@ export class AccountImportService {
 
         const profile = await this.jsonTemplateService.readProfile(ensured.jsonPath)
         const username = inferUsername(profile)
-        const displayName = inferDisplayName(profile)
 
         inputs.push({
           phone: inferPhone(profile, candidate.sessionPath),
-          username: username || displayName,
+          username,
           userId: inferUserId(profile),
           country: inferCountry(profile, candidate.sessionPath),
           sessionPath: candidate.sessionPath,

@@ -74,7 +74,7 @@ export class AccountUpdateService {
 
     return {
       phone,
-      username: buildUsername(rawUsername) || buildDisplayName(firstName, lastName),
+      username: buildUsername(rawUsername),
       userId,
       country: inferCountryDisplay(phone, pickString(args.account.profile.country, args.account.country)),
       lastCheckTime: now.toISOString(),

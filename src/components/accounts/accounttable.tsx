@@ -111,11 +111,13 @@ function readNickname(account: AccountRecord) {
 }
 
 function readUsername(account: AccountRecord) {
-  const username = account.username?.trim()
-  if (username) return username.startsWith('@') ? username : `@${username}`
-
   const profileUsername = typeof account.profile?.username === 'string' ? account.profile.username.trim() : ''
   if (profileUsername) return profileUsername.startsWith('@') ? profileUsername : `@${profileUsername}`
+
+  const username = account.username?.trim() ?? ''
+  if (username && !/\s/.test(username) && /^@?[A-Za-z0-9_]+$/.test(username)) {
+    return username.startsWith('@') ? username : `@${username}`
+  }
 
   return '-'
 }
