@@ -17,7 +17,8 @@ import { createAccountsDatabase } from './accounts/services/database'
 import { FileScanner } from './accounts/services/file-scanner'
 import { JsonTemplateService } from './accounts/services/json-template-service'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 let mainWindow: BrowserWindow | null = null
 
