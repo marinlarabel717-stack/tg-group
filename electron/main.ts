@@ -1,6 +1,13 @@
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { registerAccountIpc } from './accounts/ipc'
+import { AccountImportService } from './accounts/services/account-import-service'
+import { AccountRepository } from './accounts/services/account-repository'
+import { AccountStatusService } from './accounts/services/account-status-service'
+import { createAccountsDatabase } from './accounts/services/database'
+import { FileScanner } from './accounts/services/file-scanner'
+import { JsonTemplateService } from './accounts/services/json-template-service'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -61,6 +68,7 @@ function bindWindowControls() {
       mainWindow.unmaximize()
       return false
     }
+
     mainWindow.maximize()
     return true
   })
@@ -76,7 +84,22 @@ function bindWindowControls() {
 
 app.whenReady().then(() => {
   nativeTheme.themeSource = 'dark'
+
+  const databasePath = path.join(app.getPath('userData'), 'accounts', 'accounts.db')
+  const database = createAccountsDatabase(databasePath)
+  const repository = new AccountRepository(database)
+  const scanner = new FileScanner()
+  const jsonTemplateService = new JsonTemplateService()
+  const importService = new AccountImportService(repository, scanner, jsonTemplateService)
+  const statusService = new AccountStatusService(repository)
+
   bindWindowControls()
+  registerAccountIpc({
+    getMainWindow: () => mainWindow,
+    accountRepository: repository,
+    accountImportService: importService,
+    accountStatusService: statusService
+  })
   createWindow()
 
   app.on('activate', () => {

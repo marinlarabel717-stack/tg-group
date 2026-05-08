@@ -1,4 +1,4 @@
-import type { AccountStatus, ProxyStatus, SessionStatus } from '../types'
+import type { AccountStatus } from '../types'
 
 export const moduleLabelMap = {
   dashboard: '仪表盘',
@@ -10,35 +10,39 @@ export const moduleLabelMap = {
 } as const
 
 export const accountStatusLabelMap: Record<AccountStatus, string> = {
-  Online: '存活',
-  Frozen: '冻结',
-  Limited: '双向限制',
-  Offline: '离线',
-  Active: '活跃',
-  Checking: '检测中'
-}
-
-export const sessionStatusLabelMap: Record<SessionStatus, string> = {
-  Healthy: '正常',
-  Warning: '风险',
-  Expired: '失效'
-}
-
-export const proxyStatusLabelMap: Record<ProxyStatus, string> = {
-  Dedicated: '专属 Proxy',
-  Shared: '共享 Proxy',
-  Rotating: '轮换 Proxy',
-  Fallback: '备用 Proxy'
+  alive: '存活',
+  frozen: '冻结',
+  banned: '封禁',
+  limited: '双向限制',
+  temporary_limited: '临时双向',
+  session_expired: 'Session 失效',
+  multi_ip: '多 IP 登录',
+  timeout_unchecked: '超时未检测',
+  checking: '检测中',
+  unknown: '未知'
 }
 
 export function formatAccountStatus(status: AccountStatus) {
   return accountStatusLabelMap[status]
 }
 
-export function formatSessionStatus(status: SessionStatus) {
-  return sessionStatusLabelMap[status]
+export function formatDateTime(value: string | null) {
+  if (!value) return '—'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date)
 }
 
-export function formatProxyStatus(status: ProxyStatus) {
-  return proxyStatusLabelMap[status]
+export function formatRelativePath(fullPath: string) {
+  if (!fullPath) return '—'
+
+  const parts = fullPath.split(/[/\\]/)
+  return parts.slice(Math.max(parts.length - 3, 0)).join(' / ')
 }

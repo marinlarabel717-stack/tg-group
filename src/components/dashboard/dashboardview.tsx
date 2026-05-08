@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useEffect } from 'react'
 import { Activity, Globe2, RadioTower, ShieldAlert } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { KpiCard } from './kpicard'
@@ -12,31 +12,27 @@ const DashboardNetworkPanel = memo(function DashboardNetworkPanel() {
     <GlassPanel>
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <div className="text-lg font-semibold text-textMain">实时网络网格</div>
-          <div className="text-sm text-textMuted">桌面级遥测总览与玻璃态运行视图</div>
+          <div className="text-lg font-semibold text-textMain">本地账号网络</div>
+          <div className="text-sm text-textMuted">第一阶段只展示本地管理视角，不接自动化与代理池</div>
         </div>
-        <div className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs tracking-[0.2em] text-cyan-300">
-          实时
-        </div>
+        <div className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs tracking-[0.2em] text-cyan-300">阶段一</div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         <div className="rounded-[16px] bg-panel p-6">
-          <div className="flex items-center gap-3 text-neonSoft"><Activity size={18} /> 信号速率</div>
-          <div className="mt-4 text-3xl font-semibold text-white">3.84k/s</div>
-          <div className="mt-3 h-2 rounded-full bg-white/5">
-            <div className="h-2 w-3/4 rounded-full bg-neon/70" />
-          </div>
+          <div className="flex items-center gap-3 text-neonSoft"><Activity size={18} /> 数据吞吐</div>
+          <div className="mt-4 text-3xl font-semibold text-white">SQLite</div>
+          <div className="mt-2 text-sm text-textMuted">Session / JSON / 状态数据统一入库</div>
         </div>
         <div className="rounded-[16px] bg-panel p-6">
-          <div className="flex items-center gap-3 text-emerald-300"><Globe2 size={18} /> Proxy 覆盖</div>
-          <div className="mt-4 text-3xl font-semibold text-white">42 节点</div>
-          <div className="mt-2 text-sm text-textMuted">11 个区域已同步</div>
+          <div className="flex items-center gap-3 text-emerald-300"><Globe2 size={18} /> 文件扫描</div>
+          <div className="mt-4 text-3xl font-semibold text-white">递归</div>
+          <div className="mt-2 text-sm text-textMuted">支持拖拽、文件夹扫描、同名 JSON 自动匹配</div>
         </div>
         <div className="rounded-[16px] bg-panel p-6">
-          <div className="flex items-center gap-3 text-warning"><ShieldAlert size={18} /> 安全脉冲</div>
-          <div className="mt-4 text-3xl font-semibold text-white">低风险</div>
-          <div className="mt-2 text-sm text-textMuted">威胁情报已自动校准</div>
+          <div className="flex items-center gap-3 text-warning"><ShieldAlert size={18} /> 状态维护</div>
+          <div className="mt-4 text-3xl font-semibold text-white">SpamBot</div>
+          <div className="mt-2 text-sm text-textMuted">粘贴回复文本后批量解析状态</div>
         </div>
       </div>
     </GlassPanel>
@@ -51,7 +47,7 @@ const DashboardSessionPanel = memo(function DashboardSessionPanel() {
       <div className="flex items-center justify-between">
         <div>
           <div className="text-lg font-semibold text-textMain">Session 流</div>
-          <div className="text-sm text-textMuted">Telegram 风格的企业运行面板</div>
+          <div className="text-sm text-textMuted">当前桌面框架预留区</div>
         </div>
         <RadioTower className="text-neonSoft" size={18} />
       </div>
@@ -63,9 +59,7 @@ const DashboardSessionPanel = memo(function DashboardSessionPanel() {
               <div className="font-medium text-white">{item.title}</div>
               <div className="text-xs text-textMuted">{item.meta}</div>
             </div>
-            <div className="rounded-full bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-200">
-              {item.status}
-            </div>
+            <div className="rounded-full bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-200">{item.status}</div>
           </div>
         ))}
       </div>
@@ -74,7 +68,13 @@ const DashboardSessionPanel = memo(function DashboardSessionPanel() {
 })
 
 const DashboardPreviewTable = memo(function DashboardPreviewTable() {
+  const init = useAccountStore((state) => state.init)
   const accounts = useAccountStore((state) => state.accounts)
+
+  useEffect(() => {
+    void init()
+  }, [init])
+
   return <AccountsTable accounts={accounts.slice(0, 8)} />
 })
 

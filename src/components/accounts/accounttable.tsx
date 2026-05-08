@@ -1,17 +1,15 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
+  type ColumnDef,
+  type RowSelectionState,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUpDown, ExternalLink, FolderOpen, Info, Lock, Loader2 } from 'lucide-react'
+import { ArrowUpDown, FileJson2, FolderOpen, Loader2 } from 'lucide-react'
 import type { AccountRecord } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
@@ -19,7 +17,7 @@ import { TableFilters } from './tablefilters'
 import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
 import { filterAccounts, useAccountStore } from '../../stores/accountstore'
-import { formatAccountStatus, formatProxyStatus, formatSessionStatus } from '../../lib/ui-text'
+import { formatDateTime, formatRelativePath } from '../../lib/ui-text'
 
 function checkboxClass() {
   return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
@@ -31,7 +29,7 @@ function actionButtonClass() {
 
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
-    <div className="grid min-h-[60px] animate-pulse grid-cols-[52px_150px_130px_120px_130px_130px_160px_140px] gap-3 rounded-[10px] bg-panel px-4 py-3">
+    <div className="grid min-h-[60px] animate-pulse grid-cols-[52px_90px_140px_120px_140px_120px_110px_160px_160px_120px_120px_92px] gap-3 rounded-[10px] bg-panel px-4 py-3">
       {Array.from({ length: columns }).map((_, index) => (
         <div key={index} className="h-9 rounded-[8px] bg-white/[0.03]" />
       ))}
@@ -39,44 +37,97 @@ const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) 
   )
 })
 
-const TableRowActions = memo(function TableRowActions() {
+const TableRowActions = memo(function TableRowActions({ account }: { account: AccountRecord }) {
+  const revealPath = useAccountStore((state) => state.revealPath)
+
   return (
     <div className="flex items-center gap-2">
-      <button title="打开目录" className={actionButtonClass()}><FolderOpen size={15} /></button>
-      <button title="锁定账号" className={actionButtonClass()}><Lock size={15} /></button>
-      <button title="查看详情" className={actionButtonClass()}><Info size={15} /></button>
-      <button title="跳转外部" className={actionButtonClass()}><ExternalLink size={15} /></button>
+      <button title="打开 Session 目录" className={actionButtonClass()} onClick={() => void revealPath(account.sessionPath)}>
+        <FolderOpen size={15} />
+      </button>
+      <button
+        title="打开 JSON 目录"
+        className={actionButtonClass()}
+        onClick={() => void revealPath(account.jsonPath)}
+        disabled={!account.jsonPath}
+      >
+        <FileJson2 size={15} />
+      </button>
     </div>
   )
 })
 
 export const AccountTable = memo(function AccountTable() {
-  const accounts = useAccountStore((state) => state.accounts)
-  const searchTerm = useAccountStore((state) => state.searchTerm)
-  const setSearchTerm = useAccountStore((state) => state.setSearchTerm)
+  const {
+    accounts,
+    loading,
+    busy,
+    search,
+    statusFilter,
+    countryFilter,
+    selectedIds,
+    setSearch,
+    setStatusFilter,
+    setCountryFilter,
+    setSelectedIds,
+    refresh,
+    importFiles,
+    importFolder,
+    exportSelected,
+    deleteSelected,
+    deleteAll,
+    markSelectedChecking
+  } = useAccountStore((state) => ({
+    accounts: state.accounts,
+    loading: state.loading,
+    busy: state.busy,
+    search: state.search,
+    statusFilter: state.statusFilter,
+    countryFilter: state.countryFilter,
+    selectedIds: state.selectedIds,
+    setSearch: state.setSearch,
+    setStatusFilter: state.setStatusFilter,
+    setCountryFilter: state.setCountryFilter,
+    setSelectedIds: state.setSelectedIds,
+    refresh: state.refresh,
+    importFiles: state.importFiles,
+    importFolder: state.importFolder,
+    exportSelected: state.exportSelected,
+    deleteSelected: state.deleteSelected,
+    deleteAll: state.deleteAll,
+    markSelectedChecking: state.markSelectedChecking
+  }))
 
-  const deferredSearch = useDeferredValue(searchTerm)
-  const data = useMemo(() => filterAccounts(accounts, deferredSearch), [accounts, deferredSearch])
+  const deferredSearch = useDeferredValue(search)
+  const data = useMemo(
+    () =>
+      filterAccounts(accounts, {
+        search: deferredSearch,
+        statusFilter,
+        countryFilter
+      }),
+    [accounts, deferredSearch, statusFilter, countryFilter]
+  )
 
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'lastActive', desc: false }])
-  const [rowSelection, setRowSelection] = useState({})
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [globalFilter, setGlobalFilter] = useState(deferredSearch)
+  const [sorting, setSorting] = useState([{ id: 'updatedAt', desc: true }])
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
-  const [loading, setLoading] = useState(true)
-  const [refreshTick, setRefreshTick] = useState(0)
+  const [tableLoading, setTableLoading] = useState(true)
   const parentRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    setGlobalFilter(deferredSearch)
-    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
-  }, [deferredSearch])
+    setPagination((previous) => ({ ...previous, pageIndex: 0 }))
+  }, [deferredSearch, statusFilter, countryFilter])
 
   useEffect(() => {
-    setLoading(true)
-    const timer = window.setTimeout(() => setLoading(false), 160)
+    setTableLoading(true)
+    const timer = window.setTimeout(() => setTableLoading(false), 120)
     return () => window.clearTimeout(timer)
-  }, [data, sorting, columnFilters, pagination.pageIndex, pagination.pageSize, refreshTick])
+  }, [data, sorting, pagination.pageIndex, pagination.pageSize, loading])
+
+  const rowSelection = useMemo<RowSelectionState>(
+    () => Object.fromEntries(selectedIds.map((id) => [String(id), true])),
+    [selectedIds]
+  )
 
   const columns = useMemo<ColumnDef<AccountRecord>[]>(
     () => [
@@ -105,115 +156,129 @@ export const AccountTable = memo(function AccountTable() {
             onChange={row.getToggleSelectedHandler()}
           />
         ),
-        enableSorting: false,
-        enableColumnFilter: false
+        enableSorting: false
       },
-      { accessorKey: 'phone', header: '手机号' },
-      { accessorKey: 'country', header: '国家' },
+      { accessorKey: 'id', header: 'ID', size: 90 },
+      { accessorKey: 'phone', header: '手机号', size: 140 },
+      { accessorKey: 'username', header: '用户名', size: 120 },
+      { accessorKey: 'userId', header: 'User ID', size: 140 },
+      { accessorKey: 'country', header: '国家', size: 120 },
       {
         accessorKey: 'status',
         header: '状态',
+        size: 110,
         cell: ({ row }) => <StatusBadge status={row.original.status} />
       },
       {
-        accessorKey: 'session',
+        accessorKey: 'sessionPath',
         header: 'Session',
-        cell: ({ row }) => formatSessionStatus(row.original.session)
+        size: 160,
+        cell: ({ row }) => (
+          <div>
+            <div className="truncate text-sm text-white">{formatRelativePath(row.original.sessionPath)}</div>
+            <div className="mt-1 text-xs text-textMuted">{row.original.sessionPath}</div>
+          </div>
+        )
       },
       {
-        accessorKey: 'proxy',
-        header: 'Proxy',
-        cell: ({ row }) => formatProxyStatus(row.original.proxy)
+        accessorKey: 'jsonPath',
+        header: 'JSON',
+        size: 160,
+        cell: ({ row }) => (
+          <div>
+            <div className="truncate text-sm text-white">{row.original.jsonPath ? formatRelativePath(row.original.jsonPath) : '待生成'}</div>
+            <div className="mt-1 text-xs text-textMuted">{row.original.jsonPath || '导入时自动补齐'}</div>
+          </div>
+        )
       },
-      { accessorKey: 'lastActive', header: '最后活跃' },
-      { accessorKey: 'username', header: '用户名' },
+      {
+        accessorKey: 'lastCheckTime',
+        header: '最后检测',
+        size: 120,
+        cell: ({ row }) => formatDateTime(row.original.lastCheckTime)
+      },
+      {
+        accessorKey: 'lastOnlineTime',
+        header: '最近在线',
+        size: 120,
+        cell: ({ row }) => formatDateTime(row.original.lastOnlineTime)
+      },
       {
         id: 'actions',
         header: '操作',
+        size: 92,
         enableSorting: false,
-        enableColumnFilter: false,
-        cell: () => <TableRowActions />
+        cell: ({ row }) => <TableRowActions account={row.original} />
       }
     ],
     []
   )
 
-  const handleGlobalFilterChange = useCallback((value: string) => {
-    setSearchTerm(value)
-  }, [setSearchTerm])
-
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, rowSelection, globalFilter, columnFilters, pagination },
+    state: { sorting, pagination, rowSelection },
     enableRowSelection: true,
     onSortingChange: setSorting,
-    onRowSelectionChange: setRowSelection,
-    onGlobalFilterChange: setGlobalFilter,
-    onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
+    onRowSelectionChange: (updater) => {
+      const nextState = typeof updater === 'function' ? updater(rowSelection) : updater
+      const nextIds = Object.entries(nextState)
+        .filter(([, selected]) => Boolean(selected))
+        .map(([id]) => Number(id))
+      setSelectedIds(nextIds)
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    getRowId: (row) => row.id
+    getRowId: (row) => String(row.id)
   })
 
   const rows = table.getPaginationRowModel().rows
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 60,
-    overscan: 3
+    estimateSize: () => 88,
+    overscan: 4
   })
 
   const virtualRows = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
 
-  const selectedCount = table.getFilteredSelectedRowModel().rows.length
   const countries = useMemo(
-    () => Array.from(new Set(accounts.map((item) => item.country))).map((value) => ({ label: value, value })),
-    [accounts]
-  )
-  const statuses = useMemo(
-    () => Array.from(new Set(accounts.map((item) => item.status))).map((value) => ({ label: formatAccountStatus(value), value })),
-    [accounts]
-  )
-  const sessions = useMemo(
-    () => Array.from(new Set(accounts.map((item) => item.session))).map((value) => ({ label: formatSessionStatus(value), value })),
-    [accounts]
-  )
-  const proxies = useMemo(
-    () => Array.from(new Set(accounts.map((item) => item.proxy))).map((value) => ({ label: formatProxyStatus(value), value })),
+    () => Array.from(new Set(accounts.map((item) => item.country).filter(Boolean))).map((value) => ({ label: value, value })),
     [accounts]
   )
 
-  const getColumnFilter = useCallback((id: string) => String(table.getColumn(id)?.getFilterValue() ?? ''), [table])
+  const selectedCount = selectedIds.length
+  const totalCount = data.length
+
+  const handleSearchChange = useCallback((value: string) => setSearch(value), [setSearch])
 
   return (
     <div className="space-y-5 contain-layout">
       <TableToolbar
-        search={searchTerm}
-        onSearchChange={handleGlobalFilterChange}
+        search={search}
+        onSearchChange={handleSearchChange}
         selectedCount={selectedCount}
-        totalCount={table.getFilteredRowModel().rows.length}
+        totalCount={totalCount}
         loading={loading}
-        onRefresh={() => setRefreshTick((value) => value + 1)}
+        busy={busy}
+        onImportFiles={() => void importFiles()}
+        onImportFolder={() => void importFolder()}
+        onExportSelected={() => void exportSelected()}
+        onDeleteSelected={() => void deleteSelected()}
+        onDeleteAll={() => void deleteAll()}
+        onMarkChecking={() => void markSelectedChecking()}
+        onRefresh={() => void refresh()}
       />
 
       <TableFilters
-        countryFilter={getColumnFilter('country')}
-        statusFilter={getColumnFilter('status')}
-        sessionFilter={getColumnFilter('session')}
-        proxyFilter={getColumnFilter('proxy')}
+        statusFilter={statusFilter}
+        countryFilter={countryFilter}
         countries={countries}
-        statuses={statuses}
-        sessions={sessions}
-        proxies={proxies}
-        onCountryChange={(value) => table.getColumn('country')?.setFilterValue(value || undefined)}
-        onStatusChange={(value) => table.getColumn('status')?.setFilterValue(value || undefined)}
-        onSessionChange={(value) => table.getColumn('session')?.setFilterValue(value || undefined)}
-        onProxyChange={(value) => table.getColumn('proxy')?.setFilterValue(value || undefined)}
+        onStatusChange={setStatusFilter}
+        onCountryChange={setCountryFilter}
       />
 
       <GlassPanel className="p-0">
@@ -225,13 +290,13 @@ export const AccountTable = memo(function AccountTable() {
                   {headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
-                      style={{ width: header.getSize() === 150 ? undefined : header.getSize() }}
+                      style={{ width: header.getSize() }}
                       className="px-4 py-4 text-left text-xs font-semibold tracking-[0.24em] text-textMuted"
                     >
                       {header.isPlaceholder ? null : (
                         <button
                           className="flex items-center gap-2 transition hover:text-white"
-                          onClick={header.column.getToggleSortingHandler()}
+                          onClick={header.column.getCanSort() ? header.column.getToggleSortingHandler() : undefined}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
                           {header.column.getCanSort() ? <ArrowUpDown size={14} /> : null}
@@ -242,12 +307,17 @@ export const AccountTable = memo(function AccountTable() {
                 </tr>
               ))}
             </thead>
-            <tbody className="relative block" style={{ height: `${loading ? 8 * 64 : totalSize}px` }}>
-              {loading
+
+            <tbody className="relative block" style={{ height: `${tableLoading ? 8 * 96 : totalSize}px` }}>
+              {tableLoading
                 ? Array.from({ length: 8 }).map((_, index) => (
-                    <tr key={`skeleton-${index}`} className="absolute left-0 top-0 block w-full px-3" style={{ transform: `translateY(${index * 64}px)` }}>
+                    <tr
+                      key={`skeleton-${index}`}
+                      className="absolute left-0 top-0 block w-full px-3"
+                      style={{ transform: `translateY(${index * 96}px)` }}
+                    >
                       <td className="block py-1">
-                        <SkeletonRow columns={8} />
+                        <SkeletonRow columns={12} />
                       </td>
                     </tr>
                   ))
@@ -263,10 +333,8 @@ export const AccountTable = memo(function AccountTable() {
                       >
                         <td className="block py-1">
                           <div
-                            className={`grid min-h-[60px] grid-cols-[52px_150px_130px_120px_130px_130px_140px_160px_160px] items-center gap-4 rounded-[10px] px-4 py-3.5 transition ${
-                              row.getIsSelected()
-                                ? 'bg-neon/8'
-                                : 'bg-panel hover:bg-hover'
+                            className={`grid min-h-[80px] grid-cols-[52px_90px_140px_120px_140px_120px_110px_160px_160px_120px_120px_92px] items-center gap-4 rounded-[10px] px-4 py-3.5 transition ${
+                              row.getIsSelected() ? 'bg-neon/8' : 'bg-panel hover:bg-hover'
                             }`}
                           >
                             {row.getVisibleCells().map((cell) => (
@@ -282,11 +350,11 @@ export const AccountTable = memo(function AccountTable() {
             </tbody>
           </table>
 
-          {!loading && rows.length === 0 ? (
+          {!tableLoading && rows.length === 0 ? (
             <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center">
               <Loader2 className="animate-spin text-neonSoft" size={22} />
-              <div className="text-base font-medium text-white">没有符合筛选条件的账号</div>
-              <div className="max-w-md text-sm text-textMuted">请尝试调整状态、Session、Proxy 或搜索关键词后再查看结果。</div>
+              <div className="text-base font-medium text-white">当前没有符合条件的账号</div>
+              <div className="max-w-md text-sm text-textMuted">可以先导入 .session / JSON，或者调整搜索与筛选条件后再查看。</div>
             </div>
           ) : null}
         </div>
@@ -296,7 +364,7 @@ export const AccountTable = memo(function AccountTable() {
         pageIndex={table.getState().pagination.pageIndex}
         pageCount={table.getPageCount()}
         pageSize={table.getState().pagination.pageSize}
-        totalRows={table.getFilteredRowModel().rows.length}
+        totalRows={data.length}
         canPreviousPage={table.getCanPreviousPage()}
         canNextPage={table.getCanNextPage()}
         onPreviousPage={() => table.previousPage()}

@@ -6,10 +6,10 @@ interface DashboardState {
 }
 
 const baseStats: StatRecord[] = [
-  { id: 'online', label: '存活账号', value: '128', delta: '+12.4%', tone: 'success' },
-  { id: 'frozen', label: '冻结账号', value: '07', delta: '-2.1%', tone: 'danger' },
-  { id: 'session', label: 'Session 状态', value: '96.8%', delta: '+3.8%', tone: 'primary' },
-  { id: 'realtime', label: '实时吞吐', value: '18.4k', delta: '+9.9%', tone: 'warning' }
+  { id: 'import', label: '导入链路', value: '已接通', delta: 'SQLite', tone: 'success' },
+  { id: 'scanner', label: '扫描能力', value: '递归', delta: 'Session + JSON', tone: 'primary' },
+  { id: 'status', label: '状态解析', value: 'SpamBot', delta: '文本驱动', tone: 'warning' },
+  { id: 'scope', label: '当前范围', value: '本地管理', delta: '无自动化', tone: 'danger' }
 ]
 
 export const useDashboardStore = create<DashboardState>(() => ({

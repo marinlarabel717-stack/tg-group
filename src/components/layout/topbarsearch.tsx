@@ -5,8 +5,8 @@ import { useAccountStore } from '../../stores/accountstore'
 
 export const TopbarSearch = memo(function TopbarSearch() {
   const activeModule = useUIStore((state) => state.activeModule)
-  const searchTerm = useAccountStore((state) => state.searchTerm)
-  const setSearchTerm = useAccountStore((state) => state.setSearchTerm)
+  const searchTerm = useAccountStore((state) => state.search)
+  const setSearchTerm = useAccountStore((state) => state.setSearch)
 
   const isAccountModule = activeModule === 'accounts'
   const handleChange = useCallback((value: string) => {
