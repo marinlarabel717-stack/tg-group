@@ -9,7 +9,7 @@ import {
   useReactTable
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUpDown, FileJson2, FolderOpen, Loader2 } from 'lucide-react'
+import { ArrowUpDown, FolderOpen, Info, Loader2 } from 'lucide-react'
 import type { AccountRecord } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
@@ -17,7 +17,7 @@ import { TableFilters } from './tablefilters'
 import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
 import { filterAccounts, useAccountStore } from '../../stores/accountstore'
-import { formatDateTime, formatRelativePath } from '../../lib/ui-text'
+import { formatAccountStatus, formatDateTime, formatProfileSource, formatRelativePath } from '../../lib/ui-text'
 
 function checkboxClass() {
   return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
@@ -27,9 +27,14 @@ function actionButtonClass() {
   return 'flex h-9 w-9 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft'
 }
 
+function readProxy(account: AccountRecord) {
+  const proxy = account.profile?.proxy
+  return typeof proxy === 'string' && proxy.trim() ? proxy.trim() : '未配置'
+}
+
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
-    <div className="grid min-h-[60px] animate-pulse grid-cols-[52px_90px_140px_120px_140px_120px_110px_160px_160px_120px_120px_92px] gap-3 rounded-[10px] bg-panel px-4 py-3">
+    <div className="grid min-h-[60px] animate-pulse grid-cols-[52px_150px_130px_120px_130px_130px_140px_160px] gap-3 rounded-[10px] bg-panel px-4 py-3">
       {Array.from({ length: columns }).map((_, index) => (
         <div key={index} className="h-9 rounded-[8px] bg-white/[0.03]" />
       ))}
@@ -42,16 +47,11 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
 
   return (
     <div className="flex items-center gap-2">
-      <button title="打开 Session 目录" className={actionButtonClass()} onClick={() => void revealPath(account.sessionPath)}>
+      <button title="打开目录" className={actionButtonClass()} onClick={() => void revealPath(account.sessionPath)}>
         <FolderOpen size={15} />
       </button>
-      <button
-        title="打开 JSON 目录"
-        className={actionButtonClass()}
-        onClick={() => void revealPath(account.jsonPath)}
-        disabled={!account.jsonPath}
-      >
-        <FileJson2 size={15} />
+      <button title="打开 JSON" className={actionButtonClass()} onClick={() => void revealPath(account.jsonPath)}>
+        <Info size={15} />
       </button>
     </div>
   )
@@ -59,9 +59,9 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
 
 export const AccountTable = memo(function AccountTable() {
   const accounts = useAccountStore((state) => state.accounts)
+  const search = useAccountStore((state) => state.search)
   const loading = useAccountStore((state) => state.loading)
   const busy = useAccountStore((state) => state.busy)
-  const search = useAccountStore((state) => state.search)
   const statusFilter = useAccountStore((state) => state.statusFilter)
   const countryFilter = useAccountStore((state) => state.countryFilter)
   const selectedIds = useAccountStore((state) => state.selectedIds)
@@ -77,36 +77,39 @@ export const AccountTable = memo(function AccountTable() {
   const deleteAll = useAccountStore((state) => state.deleteAll)
   const startSelectedCheck = useAccountStore((state) => state.startSelectedCheck)
 
+  const [sourceFilter, setSourceFilter] = useState('')
+  const [proxyFilter, setProxyFilter] = useState('')
   const deferredSearch = useDeferredValue(search)
-  const data = useMemo(
-    () =>
-      filterAccounts(accounts, {
-        search: deferredSearch,
-        statusFilter,
-        countryFilter
-      }),
+  const baseData = useMemo(
+    () => filterAccounts(accounts, { search: deferredSearch, statusFilter, countryFilter }),
     [accounts, deferredSearch, statusFilter, countryFilter]
   )
+  const data = useMemo(
+    () =>
+      baseData.filter((account) => {
+        if (sourceFilter && account.profileSource !== sourceFilter) return false
+        if (proxyFilter && readProxy(account) !== proxyFilter) return false
+        return true
+      }),
+    [baseData, sourceFilter, proxyFilter]
+  )
 
-  const [sorting, setSorting] = useState([{ id: 'updatedAt', desc: true }])
+  const [sorting, setSorting] = useState([{ id: 'lastOnlineTime', desc: true }])
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [tableLoading, setTableLoading] = useState(true)
   const parentRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setPagination((previous) => ({ ...previous, pageIndex: 0 }))
-  }, [deferredSearch, statusFilter, countryFilter])
+  }, [deferredSearch, statusFilter, countryFilter, sourceFilter, proxyFilter])
 
   useEffect(() => {
     setTableLoading(true)
-    const timer = window.setTimeout(() => setTableLoading(false), 120)
+    const timer = window.setTimeout(() => setTableLoading(false), 160)
     return () => window.clearTimeout(timer)
   }, [data, sorting, pagination.pageIndex, pagination.pageSize, loading])
 
-  const rowSelection = useMemo<RowSelectionState>(
-    () => Object.fromEntries(selectedIds.map((id) => [String(id), true])),
-    [selectedIds]
-  )
+  const rowSelection = useMemo<RowSelectionState>(() => Object.fromEntries(selectedIds.map((id) => [String(id), true])), [selectedIds])
 
   const columns = useMemo<ColumnDef<AccountRecord>[]>(
     () => [
@@ -137,55 +140,42 @@ export const AccountTable = memo(function AccountTable() {
         ),
         enableSorting: false
       },
-      { accessorKey: 'id', header: 'ID', size: 90 },
-      { accessorKey: 'phone', header: '手机号', size: 140 },
-      { accessorKey: 'username', header: '用户名', size: 120 },
-      { accessorKey: 'userId', header: 'User ID', size: 140 },
-      { accessorKey: 'country', header: '国家', size: 120 },
+      { accessorKey: 'phone', header: '手机号', size: 150 },
+      { accessorKey: 'country', header: '国家', size: 130 },
       {
         accessorKey: 'status',
         header: '状态',
-        size: 110,
+        size: 120,
         cell: ({ row }) => <StatusBadge status={row.original.status} />
       },
       {
-        accessorKey: 'sessionPath',
-        header: 'Session',
-        size: 160,
-        cell: ({ row }) => (
-          <div>
-            <div className="truncate text-sm text-white">{formatRelativePath(row.original.sessionPath)}</div>
-            <div className="mt-1 text-xs text-textMuted">{row.original.sessionPath}</div>
-          </div>
-        )
+        id: 'source',
+        header: '资料来源',
+        size: 130,
+        cell: ({ row }) => formatProfileSource(row.original.profileSource)
       },
       {
-        accessorKey: 'jsonPath',
-        header: 'JSON',
-        size: 160,
-        cell: ({ row }) => (
-          <div>
-            <div className="truncate text-sm text-white">{row.original.jsonPath ? formatRelativePath(row.original.jsonPath) : '待生成'}</div>
-            <div className="mt-1 text-xs text-textMuted">{row.original.jsonPath || '导入时自动补齐'}</div>
-          </div>
-        )
-      },
-      {
-        accessorKey: 'lastCheckTime',
-        header: '最后检测',
-        size: 120,
-        cell: ({ row }) => formatDateTime(row.original.lastCheckTime)
+        id: 'proxy',
+        header: 'Proxy',
+        size: 130,
+        cell: ({ row }) => readProxy(row.original)
       },
       {
         accessorKey: 'lastOnlineTime',
-        header: '最近在线',
-        size: 120,
-        cell: ({ row }) => formatDateTime(row.original.lastOnlineTime)
+        header: '最后活跃',
+        size: 140,
+        cell: ({ row }) => formatDateTime(row.original.lastOnlineTime || row.original.lastCheckTime)
+      },
+      {
+        accessorKey: 'username',
+        header: '用户名',
+        size: 160,
+        cell: ({ row }) => row.original.username || formatRelativePath(row.original.sessionPath)
       },
       {
         id: 'actions',
         header: '操作',
-        size: 92,
+        size: 160,
         enableSorting: false,
         cell: ({ row }) => <TableRowActions account={row.original} />
       }
@@ -217,8 +207,8 @@ export const AccountTable = memo(function AccountTable() {
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 88,
-    overscan: 4
+    estimateSize: () => 60,
+    overscan: 3
   })
 
   const virtualRows = rowVirtualizer.getVirtualItems()
@@ -228,11 +218,28 @@ export const AccountTable = memo(function AccountTable() {
     () => Array.from(new Set(accounts.map((item) => item.country).filter(Boolean))).map((value) => ({ label: value, value })),
     [accounts]
   )
+  const statuses = useMemo(
+    () => Array.from(new Set(accounts.map((item) => item.status))).map((value) => ({ label: formatAccountStatus(value), value })),
+    [accounts]
+  )
+  const sources = useMemo(
+    () => [
+      { label: 'JSON 导入', value: 'json_import' },
+      { label: '登录检查', value: 'login_check' }
+    ],
+    []
+  )
+  const proxies = useMemo(
+    () => Array.from(new Set(accounts.map((item) => readProxy(item)))).filter(Boolean).map((value) => ({ label: value, value })),
+    [accounts]
+  )
 
   const selectedCount = selectedIds.length
   const totalCount = data.length
 
-  const handleSearchChange = useCallback((value: string) => setSearch(value), [setSearch])
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value)
+  }, [setSearch])
 
   return (
     <div className="space-y-5 contain-layout">
@@ -241,7 +248,7 @@ export const AccountTable = memo(function AccountTable() {
         onSearchChange={handleSearchChange}
         selectedCount={selectedCount}
         totalCount={totalCount}
-        loading={loading}
+        loading={tableLoading}
         busy={busy}
         onImportFiles={() => void importFiles()}
         onImportFolder={() => void importFolder()}
@@ -253,11 +260,18 @@ export const AccountTable = memo(function AccountTable() {
       />
 
       <TableFilters
-        statusFilter={statusFilter}
         countryFilter={countryFilter}
+        statusFilter={statusFilter === 'all' ? '' : statusFilter}
+        sourceFilter={sourceFilter}
+        proxyFilter={proxyFilter}
         countries={countries}
-        onStatusChange={setStatusFilter}
+        statuses={statuses}
+        sources={sources}
+        proxies={proxies}
         onCountryChange={setCountryFilter}
+        onStatusChange={(value) => setStatusFilter((value || 'all') as typeof statusFilter)}
+        onSourceChange={setSourceFilter}
+        onProxyChange={setProxyFilter}
       />
 
       <GlassPanel className="p-0">
@@ -286,17 +300,12 @@ export const AccountTable = memo(function AccountTable() {
                 </tr>
               ))}
             </thead>
-
-            <tbody className="relative block" style={{ height: `${tableLoading ? 8 * 96 : totalSize}px` }}>
+            <tbody className="relative block" style={{ height: `${tableLoading ? 8 * 64 : totalSize}px` }}>
               {tableLoading
                 ? Array.from({ length: 8 }).map((_, index) => (
-                    <tr
-                      key={`skeleton-${index}`}
-                      className="absolute left-0 top-0 block w-full px-3"
-                      style={{ transform: `translateY(${index * 96}px)` }}
-                    >
+                    <tr key={`skeleton-${index}`} className="absolute left-0 top-0 block w-full px-3" style={{ transform: `translateY(${index * 64}px)` }}>
                       <td className="block py-1">
-                        <SkeletonRow columns={12} />
+                        <SkeletonRow columns={8} />
                       </td>
                     </tr>
                   ))
@@ -312,7 +321,7 @@ export const AccountTable = memo(function AccountTable() {
                       >
                         <td className="block py-1">
                           <div
-                            className={`grid min-h-[80px] grid-cols-[52px_90px_140px_120px_140px_120px_110px_160px_160px_120px_120px_92px] items-center gap-4 rounded-[10px] px-4 py-3.5 transition ${
+                            className={`grid min-h-[60px] grid-cols-[52px_150px_130px_120px_130px_130px_140px_160px_160px] items-center gap-4 rounded-[10px] px-4 py-3.5 transition ${
                               row.getIsSelected() ? 'bg-neon/8' : 'bg-panel hover:bg-hover'
                             }`}
                           >
@@ -332,8 +341,8 @@ export const AccountTable = memo(function AccountTable() {
           {!tableLoading && rows.length === 0 ? (
             <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center">
               <Loader2 className="animate-spin text-neonSoft" size={22} />
-              <div className="text-base font-medium text-white">当前没有符合条件的账号</div>
-              <div className="max-w-md text-sm text-textMuted">可以先导入 .session / JSON，或者调整搜索与筛选条件后再查看。</div>
+              <div className="text-base font-medium text-white">没有符合筛选条件的账号</div>
+              <div className="max-w-md text-sm text-textMuted">请尝试调整状态、资料来源、Proxy 或搜索关键词后再查看结果。</div>
             </div>
           ) : null}
         </div>
