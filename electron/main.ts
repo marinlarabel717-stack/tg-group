@@ -94,12 +94,14 @@ function bindWindowControls() {
 async function bootstrap() {
   nativeTheme.themeSource = 'dark'
 
-  const databasePath = path.join(app.getPath('userData'), 'accounts', 'accounts.db')
+  const accountsRootPath = path.join(app.getPath('userData'), 'accounts')
+  const databasePath = path.join(accountsRootPath, 'accounts.db')
+  const managedSessionsDirectory = path.join(accountsRootPath, 'sessions')
   const database = await createAccountsDatabase(databasePath)
   const repository = new AccountRepository(database)
   const scanner = new FileScanner()
   const jsonTemplateService = new JsonTemplateService()
-  const importService = new AccountImportService(repository, scanner, jsonTemplateService)
+  const importService = new AccountImportService(repository, scanner, jsonTemplateService, managedSessionsDirectory)
   const statusService = new AccountStatusService(repository)
 
   const sessionLoader = new SessionLoader()
@@ -122,6 +124,8 @@ async function bootstrap() {
     timeoutMs: 25000,
     retryLimit: 2
   })
+
+  await importService.syncManagedSessions()
 
   bindWindowControls()
   registerAccountIpc({

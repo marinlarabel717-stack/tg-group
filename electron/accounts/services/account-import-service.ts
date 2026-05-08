@@ -1,6 +1,7 @@
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { inferCountryDisplay, inferPhoneFromText } from '../../../src/lib/phone-country'
-import type { AccountJsonProfile, AccountStatus, ImportAccountsResult, UpsertAccountInput } from '../types'
+import type { AccountJsonProfile, AccountRecord, AccountStatus, ImportAccountsResult, ScanCandidate, UpsertAccountInput } from '../types'
 import type { AccountRepository } from './account-repository'
 import { FileScanner } from './file-scanner'
 import { JsonTemplateService } from './json-template-service'
@@ -84,34 +85,113 @@ function inferUserId(profile: AccountJsonProfile) {
   return readStringField(profile, 'userId', 'user_id', 'uid', 'id')
 }
 
+async function pathExists(targetPath: string) {
+  try {
+    await fs.access(targetPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function isInsideDirectory(filePath: string, directoryPath: string) {
+  const relativePath = path.relative(directoryPath, filePath)
+  return relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
+}
+
 export class AccountImportService {
   constructor(
     private readonly repository: AccountRepository,
     private readonly scanner: FileScanner,
-    private readonly jsonTemplateService: JsonTemplateService
+    private readonly jsonTemplateService: JsonTemplateService,
+    private readonly managedSessionsDirectory: string
   ) {}
 
   async importFromPaths(inputPaths: string[]): Promise<ImportAccountsResult> {
     const scanResult = await this.scanner.scanPaths(inputPaths)
-    return this.importScanResult(scanResult.candidates, scanResult.ignoredPaths)
+    return this.importScanResult(scanResult.candidates, scanResult.ignoredPaths, { mirrorToManagedDirectory: true })
   }
 
   async importFromFolder(folderPath: string): Promise<ImportAccountsResult> {
     const scanResult = await this.scanner.scanFolder(folderPath)
-    return this.importScanResult(scanResult.candidates, scanResult.ignoredPaths)
+    return this.importScanResult(scanResult.candidates, scanResult.ignoredPaths, { mirrorToManagedDirectory: true })
   }
 
   async scanFolder(folderPath: string) {
     return this.scanner.scanFolder(folderPath)
   }
 
-  private async importScanResult(candidates: Awaited<ReturnType<FileScanner['scanPaths']>>['candidates'], ignoredPaths: string[]) {
+  async syncManagedSessions() {
+    await fs.mkdir(this.managedSessionsDirectory, { recursive: true })
+
+    const scanResult = await this.scanner.scanFolder(this.managedSessionsDirectory)
+    await this.importScanResult(scanResult.candidates, scanResult.ignoredPaths, { mirrorToManagedDirectory: false })
+
+    const managedAccounts = this.repository.list().filter((account) => isInsideDirectory(account.sessionPath, this.managedSessionsDirectory))
+    const missingIds: number[] = []
+
+    for (const account of managedAccounts) {
+      if (!(await pathExists(account.sessionPath))) {
+        missingIds.push(account.id)
+      }
+    }
+
+    if (missingIds.length > 0) {
+      this.repository.deleteByIds(missingIds)
+    }
+  }
+
+  async deleteManagedAccounts(accounts: AccountRecord[]) {
+    for (const account of accounts) {
+      if (account.sessionPath && isInsideDirectory(account.sessionPath, this.managedSessionsDirectory)) {
+        await fs.rm(account.sessionPath, { force: true })
+      }
+
+      if (account.jsonPath && isInsideDirectory(account.jsonPath, this.managedSessionsDirectory)) {
+        await fs.rm(account.jsonPath, { force: true })
+      }
+    }
+  }
+
+  private async mirrorCandidateToManagedDirectory(candidate: ScanCandidate) {
+    await fs.mkdir(this.managedSessionsDirectory, { recursive: true })
+
+    const targetSessionPath = path.join(this.managedSessionsDirectory, `${candidate.baseName}.session`)
+    const targetJsonPath = path.join(this.managedSessionsDirectory, `${candidate.baseName}.json`)
+
+    if (path.resolve(candidate.sessionPath) !== path.resolve(targetSessionPath)) {
+      await fs.copyFile(candidate.sessionPath, targetSessionPath)
+    }
+
+    if (candidate.jsonPath) {
+      if (path.resolve(candidate.jsonPath) !== path.resolve(targetJsonPath)) {
+        await fs.copyFile(candidate.jsonPath, targetJsonPath)
+      }
+    }
+
+    return {
+      ...candidate,
+      directory: this.managedSessionsDirectory,
+      sessionPath: targetSessionPath,
+      jsonPath: (await pathExists(targetJsonPath)) ? targetJsonPath : null
+    } satisfies ScanCandidate
+  }
+
+  private async importScanResult(
+    candidates: Awaited<ReturnType<FileScanner['scanPaths']>>['candidates'],
+    ignoredPaths: string[],
+    options: { mirrorToManagedDirectory: boolean }
+  ) {
     const warnings = [...ignoredPaths.map((item) => `已忽略非账号文件：${item}`)]
     const inputs: UpsertAccountInput[] = []
     let generatedJsonCount = 0
 
-    for (const candidate of candidates) {
+    for (const sourceCandidate of candidates) {
       try {
+        const candidate = options.mirrorToManagedDirectory
+          ? await this.mirrorCandidateToManagedDirectory(sourceCandidate)
+          : sourceCandidate
+
         const ensured = await this.jsonTemplateService.ensureJsonForSession(candidate.sessionPath, candidate.jsonPath)
         if (ensured.generated) generatedJsonCount += 1
 
@@ -134,7 +214,7 @@ export class AccountImportService {
         })
       } catch (error) {
         const reason = error instanceof Error ? error.message : '未知错误'
-        warnings.push(`导入失败：${candidate.sessionPath} -> ${reason}`)
+        warnings.push(`导入失败：${sourceCandidate.sessionPath} -> ${reason}`)
       }
     }
 

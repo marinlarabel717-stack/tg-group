@@ -322,9 +322,29 @@ export const AccountTable = memo(function AccountTable() {
   const selectedCount = selectedIds.length
   const totalCount = data.length
 
+  const orderedIds = useMemo(
+    () => table.getSortedRowModel().rows.map((row) => row.original.id),
+    [table, data, sorting]
+  )
+
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)
   }, [setSearch])
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds(orderedIds)
+  }, [orderedIds, setSelectedIds])
+
+  const handleSelectRange = useCallback((start: number, end: number) => {
+    const normalizedStart = Math.max(1, Math.min(start, end))
+    const normalizedEnd = Math.max(start, end)
+    const ids = orderedIds.slice(normalizedStart - 1, normalizedEnd)
+    setSelectedIds(ids)
+  }, [orderedIds, setSelectedIds])
+
+  const handleStartCheck = useCallback((_actions: string[]) => {
+    void startSelectedCheck()
+  }, [startSelectedCheck])
 
   const handleScrollbarScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     setScrollLeft(event.currentTarget.scrollLeft)
@@ -359,7 +379,9 @@ export const AccountTable = memo(function AccountTable() {
         onExportSelected={() => void exportSelected()}
         onDeleteSelected={() => void deleteSelected()}
         onDeleteAll={() => void deleteAll()}
-        onStartCheck={() => void startSelectedCheck()}
+        onSelectAll={handleSelectAll}
+        onSelectRange={handleSelectRange}
+        onStartCheck={handleStartCheck}
         onRefresh={() => void refresh()}
       />
 

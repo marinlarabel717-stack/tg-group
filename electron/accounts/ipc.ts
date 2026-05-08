@@ -31,7 +31,10 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
   checkQueue.on('state', emitCheckState)
 
-  ipcMain.handle('accounts:list', () => accountRepository.list())
+  ipcMain.handle('accounts:list', async () => {
+    await accountImportService.syncManagedSessions()
+    return accountRepository.list()
+  })
   ipcMain.handle('accounts:get-check-state', () => checkQueue.getState())
   ipcMain.handle('accounts:clear-check-logs', () => {
     checkQueue.clearLogs()
@@ -75,11 +78,15 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     return accountImportService.importFromPaths(inputPaths)
   })
 
-  ipcMain.handle('accounts:delete', (_event, ids: number[]) => {
+  ipcMain.handle('accounts:delete', async (_event, ids: number[]) => {
+    const accounts = accountRepository.getByIds(ids)
+    await accountImportService.deleteManagedAccounts(accounts)
     return accountRepository.deleteByIds(ids)
   })
 
-  ipcMain.handle('accounts:delete-all', () => {
+  ipcMain.handle('accounts:delete-all', async () => {
+    const accounts = accountRepository.list()
+    await accountImportService.deleteManagedAccounts(accounts)
     return accountRepository.deleteAll()
   })
 

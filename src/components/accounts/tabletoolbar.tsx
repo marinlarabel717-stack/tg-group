@@ -1,5 +1,7 @@
-import { memo, type ReactNode } from 'react'
+import { memo, useMemo, useState, type ReactNode } from 'react'
 import {
+  CheckSquare,
+  ChevronDown,
   Download,
   FolderSearch2,
   Loader2,
@@ -23,7 +25,9 @@ interface TableToolbarProps {
   onExportSelected: () => void
   onDeleteSelected: () => void
   onDeleteAll: () => void
-  onStartCheck: () => void
+  onSelectAll: () => void
+  onSelectRange: (start: number, end: number) => void
+  onStartCheck: (actions: string[]) => void
   onRefresh: () => void
 }
 
@@ -66,10 +70,50 @@ export const TableToolbar = memo(function TableToolbar({
   onExportSelected,
   onDeleteSelected,
   onDeleteAll,
+  onSelectAll,
+  onSelectRange,
   onStartCheck,
   onRefresh
 }: TableToolbarProps) {
   const blocked = loading || busy
+  const [rangeStart, setRangeStart] = useState('1')
+  const [rangeEnd, setRangeEnd] = useState('20')
+  const [checkMenuOpen, setCheckMenuOpen] = useState(false)
+  const [selectedActions, setSelectedActions] = useState<string[]>(['login-check'])
+
+  const checkActions = useMemo(
+    () => [
+      { id: 'login-check', label: '登录状态检测', description: '登录 + SpamBot + 资料回写', disabled: false },
+      { id: 'profile-refresh', label: '资料补全', description: '后续添加', disabled: true },
+      { id: 'proxy-health', label: '代理连通性', description: '后续添加', disabled: true }
+    ],
+    []
+  )
+
+  const handleRangeSelect = () => {
+    const start = Number(rangeStart)
+    const end = Number(rangeEnd)
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return
+    onSelectRange(start, end)
+  }
+
+  const toggleAction = (actionId: string) => {
+    setSelectedActions((current) =>
+      current.includes(actionId)
+        ? current.filter((item) => item !== actionId)
+        : [...current, actionId]
+    )
+  }
+
+  const handleStartCheck = () => {
+    const enabledActions = selectedActions.filter((actionId) =>
+      checkActions.some((item) => item.id === actionId && !item.disabled)
+    )
+
+    if (enabledActions.length === 0) return
+    onStartCheck(enabledActions)
+    setCheckMenuOpen(false)
+  }
 
   return (
     <div className="space-y-4 rounded-[14px] bg-card px-5 py-5">
@@ -102,6 +146,38 @@ export const TableToolbar = memo(function TableToolbar({
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 rounded-[12px] bg-panel px-3 py-2.5">
+          <span className="text-[11px] tracking-[0.2em] text-textMuted">选择账号</span>
+          <input
+            inputMode="numeric"
+            value={rangeStart}
+            onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
+            className="h-9 w-16 rounded-[10px] bg-slate-950/40 px-3 text-sm text-white outline-none transition focus:bg-hover"
+          />
+          <span className="text-sm text-textMuted">-</span>
+          <input
+            inputMode="numeric"
+            value={rangeEnd}
+            onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
+            className="h-9 w-16 rounded-[10px] bg-slate-950/40 px-3 text-sm text-white outline-none transition focus:bg-hover"
+          />
+          <button
+            onClick={handleRangeSelect}
+            disabled={blocked || totalCount === 0}
+            className="h-9 rounded-[10px] bg-slate-950/40 px-3 text-sm text-textMain transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            选择区间
+          </button>
+          <button
+            onClick={onSelectAll}
+            disabled={blocked || totalCount === 0}
+            className="flex h-9 items-center gap-2 rounded-[10px] bg-slate-950/40 px-3 text-sm text-textMain transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <CheckSquare size={15} />
+            全选账号
+          </button>
+        </div>
+
         <ActionButton
           label="刷新"
           icon={loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
@@ -115,7 +191,56 @@ export const TableToolbar = memo(function TableToolbar({
         <ActionButton label="导入文件" icon={<Upload size={16} />} onClick={onImportFiles} disabled={blocked} />
         <ActionButton label="扫描文件夹" icon={<FolderSearch2 size={16} />} onClick={onImportFolder} disabled={blocked} />
         <ActionButton label="导出所选" icon={<Download size={16} />} onClick={onExportSelected} disabled={blocked || selectedCount === 0} />
-        <ActionButton label="批量检测" icon={<WandSparkles size={16} />} onClick={onStartCheck} disabled={blocked || selectedCount === 0} />
+
+        <div className="relative">
+          <button
+            onClick={() => setCheckMenuOpen((value) => !value)}
+            disabled={blocked || selectedCount === 0}
+            className="flex h-11 items-center gap-2 rounded-[12px] bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <WandSparkles size={16} />
+            批量检测
+            <ChevronDown size={15} className={`transition ${checkMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {checkMenuOpen ? (
+            <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[280px] rounded-[14px] border border-white/8 bg-card p-3 shadow-2xl">
+              <div className="mb-2 text-xs tracking-[0.2em] text-textMuted">检测菜单</div>
+              <div className="space-y-2">
+                {checkActions.map((action) => {
+                  const checked = selectedActions.includes(action.id)
+                  return (
+                    <button
+                      key={action.id}
+                      onClick={() => !action.disabled && toggleAction(action.id)}
+                      disabled={action.disabled}
+                      className={`flex w-full items-start gap-3 rounded-[12px] px-3 py-2.5 text-left transition ${action.disabled ? 'cursor-not-allowed bg-panel/40 opacity-45' : 'bg-panel hover:bg-hover'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        readOnly
+                        className="mt-1 h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-white">{action.label}</div>
+                        <div className="mt-1 text-xs text-textMuted">{action.description}</div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              <button
+                onClick={handleStartCheck}
+                disabled={blocked || selectedCount === 0 || selectedActions.filter((actionId) => checkActions.some((item) => item.id === actionId && !item.disabled)).length === 0}
+                className="mt-3 h-10 w-full rounded-[10px] bg-neon/10 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                开始执行
+              </button>
+            </div>
+          ) : null}
+        </div>
+
         <ActionButton label="删除所选" icon={<Trash2 size={16} />} onClick={onDeleteSelected} disabled={blocked || selectedCount === 0} />
         <ActionButton label="全部删除" icon={<Trash2 size={16} />} onClick={onDeleteAll} disabled={blocked || totalCount === 0} />
       </div>
