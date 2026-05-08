@@ -182,6 +182,33 @@ export class CheckQueue extends EventEmitter {
     return 'timeout' as const
   }
 
+  private formatFailureReason(result: AccountCheckResult) {
+    const raw = (result.errorMessage || '').trim()
+    const normalized = raw.toLowerCase()
+
+    if (!raw) {
+      if (result.status === 'not_logged_in') return 'Session 未登录'
+      if (result.status === 'session_expired') return 'Session 已失效'
+      if (result.status === 'multi_ip') return '检测到多 IP 登录'
+      if (result.status === 'unknown') return '未拿到有效结果'
+      return STATUS_LABELS[result.status]
+    }
+
+    if (normalized.includes('session 加载')) return 'Session 加载超时'
+    if (normalized.includes('telegram 连接')) return '连接 Telegram 超时'
+    if (normalized.includes('session 校验')) return 'Session 校验超时'
+    if (normalized.includes('账号资料读取')) return '读取账号资料超时'
+    if (normalized.includes('完整资料读取')) return '读取完整资料超时'
+    if (normalized.includes('spambot 检测')) return 'SpamBot 检测超时'
+    if (normalized.includes('session 未登录')) return 'Session 未登录'
+    if (normalized.includes('session revoked') || normalized.includes('session expired') || normalized.includes('auth_key_unregistered')) return 'Session 已失效'
+    if (normalized.includes('phone number banned') || normalized.includes('user_deactivated_ban') || normalized.includes('banned')) return '账号已封禁'
+    if (normalized.includes('network') || normalized.includes('socket') || normalized.includes('disconnect')) return '网络连接失败'
+    if (normalized.includes('timeout') || normalized.includes('timed out')) return '请求超时'
+
+    return raw
+  }
+
   private handleResult(task: QueueTask, result: AccountCheckResult) {
     if (result.retryable && task.attempt + 1 <= this.options.retryLimit) {
       const retryTask = { accountId: task.accountId, attempt: task.attempt + 1 }
@@ -201,7 +228,8 @@ export class CheckQueue extends EventEmitter {
     this.state.resultSummary[displayStatus] += 1
 
     const level: CheckLogLevel = displayStatus === 'alive' ? 'success' : displayStatus === 'timeout' ? 'error' : 'warning'
-    this.appendLog(level, task.accountId, `${phoneLabel} ---- ${STATUS_LABELS[displayStatus]}`, task.attempt + 1, {
+    const reasonSuffix = displayStatus === 'timeout' ? `（${this.formatFailureReason(result)}）` : ''
+    this.appendLog(level, task.accountId, `${phoneLabel} ---- ${STATUS_LABELS[displayStatus]}${reasonSuffix}`, task.attempt + 1, {
       phone: result.phone,
       status: displayStatus
     })
