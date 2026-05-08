@@ -777,6 +777,9 @@ class SenderStudioV1(QMainWindow):
         for chip in [self.account_stat_total_chip, self.account_stat_ok_chip, self.account_stat_bad_chip, self.account_stat_enabled_chip]:
             stats_row.addWidget(chip)
         stats_row.addStretch()
+        self.account_selected_info_chip = QLabel('选中 0')
+        self.account_selected_info_chip.setProperty('chip', 'true')
+        stats_row.addWidget(self.account_selected_info_chip)
         toolbar_layout.addLayout(stats_row)
         layout.addWidget(toolbar_frame)
 
@@ -785,6 +788,16 @@ class SenderStudioV1(QMainWindow):
         table_layout = QVBoxLayout(table_card)
         table_layout.setContentsMargins(14, 14, 14, 14)
         table_layout.setSpacing(12)
+        custom_header = QFrame()
+        custom_header.setProperty('variant', 'miniCard')
+        custom_header_layout = QHBoxLayout(custom_header)
+        custom_header_layout.setContentsMargins(14, 10, 14, 10)
+        custom_header_layout.setSpacing(18)
+        for text, stretch in [('', 0), ('ID', 0), ('PHONE', 1), ('AREA', 0), ('STATUS', 0), ('REST', 0), ('ROLE', 0), ('NAME', 2)]:
+            label = QLabel(text)
+            label.setProperty('tableHeader', 'true')
+            custom_header_layout.addWidget(label, stretch)
+        table_layout.addWidget(custom_header)
         self.accounts_table = self._create_table(['', 'ID', '电话', '地区', '状态', '休息', '角色', '姓名'])
         self.accounts_table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.accounts_table.itemSelectionChanged.connect(self.on_account_selection_changed)
@@ -1110,6 +1123,7 @@ class SenderStudioV1(QMainWindow):
     def _create_table(self, headers):
         table = QTableWidget(0, len(headers))
         table.setHorizontalHeaderLabels(headers)
+        table.horizontalHeader().setVisible(False)
         table.verticalHeader().setVisible(False)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.ExtendedSelection)
@@ -1263,6 +1277,7 @@ class SenderStudioV1(QMainWindow):
         selected_ids = self.selected_account_ids()
         self._apply_accounts_table_row_styles()
         self.account_selected_count_label.setText(f'已选：{len(selected_ids)}')
+        self.account_selected_info_chip.setText(f'选中 {len(selected_ids)}')
         total_rows = self.accounts_table.rowCount()
         self.account_bottom_status_label.setText(f'专用账号：{total_rows} / {total_rows}')
         if len(selected_ids) == 1 and self.current_account_id:
@@ -1280,7 +1295,7 @@ class SenderStudioV1(QMainWindow):
         username = ('@' + data.get('username')) if data.get('username') else '无用户名'
         selected_groups = len([g for g in (data.get('joined_groups') or []) if g.get('selected')])
         self.account_detail_name_label.setText(display_name)
-        self.account_detail_meta_label.setText(f'{phone}  ·  {username}')
+        self.account_detail_meta_label.setText(f'{phone}  ·  {self.infer_account_region(phone)}  ·  {username}')
         self.account_avatar_label.setText((display_name[:1] or 'A').upper())
         self.account_selected_groups_label.setText(f"已选群：{selected_groups}")
         self.account_quick_phone_chip.setText(f'电话：{phone}')
