@@ -1,4 +1,15 @@
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type UIEvent,
+  type WheelEvent
+} from 'react'
 import {
   type ColumnDef,
   type RowSelectionState,
@@ -109,8 +120,10 @@ export const AccountTable = memo(function AccountTable() {
   const [sorting, setSorting] = useState([{ id: 'lastOnlineTime', desc: true }])
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [tableLoading, setTableLoading] = useState(true)
+  const [scrollLeft, setScrollLeft] = useState(0)
   const deferredSearch = useDeferredValue(search)
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const scrollbarRef = useRef<HTMLDivElement | null>(null)
 
   const baseData = useMemo(
     () => filterAccounts(accounts, { search: deferredSearch, statusFilter, countryFilter }),
@@ -135,6 +148,12 @@ export const AccountTable = memo(function AccountTable() {
     const timer = window.setTimeout(() => setTableLoading(false), 160)
     return () => window.clearTimeout(timer)
   }, [data, sorting, pagination.pageIndex, pagination.pageSize, loading])
+
+  useEffect(() => {
+    if (scrollbarRef.current) {
+      scrollbarRef.current.scrollLeft = scrollLeft
+    }
+  }, [scrollLeft])
 
   const rowSelection = useMemo<RowSelectionState>(() => Object.fromEntries(selectedIds.map((id) => [String(id), true])), [selectedIds])
 
@@ -301,6 +320,25 @@ export const AccountTable = memo(function AccountTable() {
     setSearch(value)
   }, [setSearch])
 
+  const handleScrollbarScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    setScrollLeft(event.currentTarget.scrollLeft)
+  }, [])
+
+  const handleViewportWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+    if (!scrollbarRef.current) return
+
+    if (Math.abs(event.deltaX) > 0) {
+      scrollbarRef.current.scrollLeft += event.deltaX
+      event.preventDefault()
+      return
+    }
+
+    if (event.shiftKey && Math.abs(event.deltaY) > 0) {
+      scrollbarRef.current.scrollLeft += event.deltaY
+      event.preventDefault()
+    }
+  }, [])
+
   return (
     <div className="space-y-5 min-w-0">
       <TableToolbar
@@ -334,75 +372,82 @@ export const AccountTable = memo(function AccountTable() {
         onProxyChange={setProxyFilter}
       />
 
-      <GlassPanel className="p-0 overflow-hidden">
-        <div ref={viewportRef} className="virtual-scroll-shell min-w-0 max-h-[640px] overflow-x-auto overflow-y-auto">
-          <div className="relative min-w-max" style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content' }}>
-            <div className="sticky top-0 z-10 bg-card px-3 pb-1 pt-1">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <div key={headerGroup.id} className="grid shrink-0" style={ACCOUNT_GRID_STYLE}>
-                  {headerGroup.headers.map((header) => (
-                    <div
-                      key={header.id}
-                      className={`${cellShellClass(header.column.id)} h-[56px] shrink-0 text-left text-xs font-semibold tracking-[0.24em] text-textMuted`}
-                    >
-                      {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                        <button
-                          className="flex w-full min-w-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-left transition hover:text-white"
-                          onClick={header.column.getToggleSortingHandler()}
-                          title={String(header.column.columnDef.header ?? '')}
+      <GlassPanel className="overflow-hidden p-0">
+        <div className="min-w-0">
+          <div ref={viewportRef} className="virtual-scroll-shell min-w-0 max-h-[608px] overflow-y-auto overflow-x-hidden" onWheel={handleViewportWheel}>
+            <div className="relative overflow-hidden" style={{ height: `${tableLoading ? 8 * 62 + 64 : totalSize + 64}px` }}>
+              <div
+                className="absolute left-0 top-0"
+                style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content', transform: `translateX(-${scrollLeft}px)` }}
+              >
+                <div className="sticky top-0 z-10 bg-card px-3 pb-1 pt-1" style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content' }}>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <div key={headerGroup.id} className="grid shrink-0" style={ACCOUNT_GRID_STYLE}>
+                      {headerGroup.headers.map((header) => (
+                        <div
+                          key={header.id}
+                          className={`${cellShellClass(header.column.id)} h-[56px] shrink-0 text-left text-xs font-semibold tracking-[0.24em] text-textMuted`}
                         >
-                          <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </span>
-                          <ArrowUpDown size={14} className="shrink-0" />
-                        </button>
-                      ) : (
-                        <div className="w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                            <button
+                              className="flex w-full min-w-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-left transition hover:text-white"
+                              onClick={header.column.getToggleSortingHandler()}
+                              title={String(header.column.columnDef.header ?? '')}
+                            >
+                              <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                                {flexRender(header.column.columnDef.header, header.getContext())}
+                              </span>
+                              <ArrowUpDown size={14} className="shrink-0" />
+                            </button>
+                          ) : (
+                            <div className="w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      ))}
                     </div>
                   ))}
                 </div>
-              ))}
-            </div>
 
-            <div className="relative" style={{ height: `${tableLoading ? 8 * 62 : totalSize}px` }}>
-              {tableLoading
-                ? Array.from({ length: 8 }).map((_, index) => (
-                    <div
-                      key={`skeleton-${index}`}
-                      className="absolute left-0 top-0 px-3 py-1"
-                      style={{ transform: `translateY(${index * 62}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
-                    >
-                      <SkeletonRow columns={9} />
-                    </div>
-                  ))
-                : virtualRows.map((virtualRow) => {
-                    const row = rows[virtualRow.index]
-                    return (
-                      <div
-                        key={row.id}
-                        data-index={virtualRow.index}
-                        ref={rowVirtualizer.measureElement}
-                        className="absolute left-0 top-0 px-3 py-1"
-                        style={{ transform: `translateY(${virtualRow.start}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
-                      >
+                <div className="relative" style={{ height: `${tableLoading ? 8 * 62 : totalSize}px` }}>
+                  {tableLoading
+                    ? Array.from({ length: 8 }).map((_, index) => (
                         <div
-                          className={`grid min-h-[62px] shrink-0 items-center gap-0 rounded-[10px] transition ${
-                            row.getIsSelected() ? 'bg-neon/8' : 'bg-panel hover:bg-hover'
-                          }`}
-                          style={ACCOUNT_GRID_STYLE}
+                          key={`skeleton-${index}`}
+                          className="absolute left-0 top-0 px-3 py-1"
+                          style={{ transform: `translateY(${index * 62}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
                         >
-                          {row.getVisibleCells().map((cell) => (
-                            <div key={cell.id} className={`${cellShellClass(cell.column.id)} shrink-0 py-3.5 text-sm text-textMain`}>
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </div>
-                          ))}
+                          <SkeletonRow columns={9} />
                         </div>
-                      </div>
-                    )
-                  })}
+                      ))
+                    : virtualRows.map((virtualRow) => {
+                        const row = rows[virtualRow.index]
+                        return (
+                          <div
+                            key={row.id}
+                            data-index={virtualRow.index}
+                            ref={rowVirtualizer.measureElement}
+                            className="absolute left-0 top-0 px-3 py-1"
+                            style={{ transform: `translateY(${virtualRow.start}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
+                          >
+                            <div
+                              className={`grid min-h-[62px] shrink-0 items-center gap-0 rounded-[10px] transition ${
+                                row.getIsSelected() ? 'bg-neon/8' : 'bg-panel hover:bg-hover'
+                              }`}
+                              style={ACCOUNT_GRID_STYLE}
+                            >
+                              {row.getVisibleCells().map((cell) => (
+                                <div key={cell.id} className={`${cellShellClass(cell.column.id)} shrink-0 py-3.5 text-sm text-textMain`}>
+                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -412,7 +457,13 @@ export const AccountTable = memo(function AccountTable() {
               <div className="text-base font-medium text-white">没有符合筛选条件的账号</div>
               <div className="max-w-md text-sm text-textMuted">请尝试调整状态、资料来源、Proxy 或搜索关键词后再查看结果。</div>
             </div>
-          ) : null}
+          ) : (
+            <div className="border-t border-white/5 px-3 pb-3 pt-2">
+              <div ref={scrollbarRef} className="account-table-scrollbar h-4 overflow-x-auto overflow-y-hidden" onScroll={handleScrollbarScroll}>
+                <div style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, height: '1px' }} />
+              </div>
+            </div>
+          )}
         </div>
       </GlassPanel>
 
