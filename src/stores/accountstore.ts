@@ -137,9 +137,10 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         }
       })
       window.desktopAccounts?.onAccountsUpdated((accounts) => {
-        applyAccountSnapshot(accounts, set, get, {
-          lastActionMessage: 'sessions 目录检测到变更，列表已自动同步。'
-        })
+        const isChecking = get().checkState.running
+        applyAccountSnapshot(accounts, set, get, isChecking
+          ? undefined
+          : { lastActionMessage: 'sessions 目录检测到变更，列表已自动同步。' })
       })
       subscribed = true
     }
