@@ -165,6 +165,7 @@ export interface DesktopAccountsApi {
   getCheckState: () => Promise<CheckQueueState>
   clearCheckLogs: () => Promise<CheckQueueState>
   onCheckState: (callback: (state: CheckQueueState) => void) => () => void
+  onAccountsUpdated: (callback: (accounts: AccountRecord[]) => void) => () => void
   exportByIds: (ids: number[]) => Promise<ExportAccountsResult>
   revealPath: (targetPath: string) => Promise<boolean>
 }

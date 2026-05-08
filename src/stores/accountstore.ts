@@ -24,6 +24,28 @@ function createEmptyCheckState(): CheckQueueState {
   }
 }
 
+function applyAccountSnapshot(
+  accounts: AccountRecord[],
+  set: (partial: Partial<AccountStoreState>) => void,
+  get: () => AccountStoreState,
+  extra?: Partial<AccountStoreState>
+) {
+  const validIds = new Set(accounts.map((item) => item.id))
+  const selectedIds = get().selectedIds.filter((id) => validIds.has(id))
+  const selectedProfileAccountId = validIds.has(get().selectedProfileAccountId ?? -1)
+    ? get().selectedProfileAccountId
+    : selectedIds[0] ?? accounts[0]?.id ?? null
+
+  set({
+    accounts,
+    selectedIds,
+    selectedProfileAccountId,
+    loading: false,
+    initialized: true,
+    ...extra
+  })
+}
+
 let subscribed = false
 
 interface AccountStoreState {
@@ -65,20 +87,7 @@ async function syncAccounts(set: (partial: Partial<AccountStoreState>) => void, 
   }
 
   const [accounts, checkState] = await Promise.all([api.list(), api.getCheckState()])
-  const validIds = new Set(accounts.map((item) => item.id))
-  const selectedIds = get().selectedIds.filter((id) => validIds.has(id))
-  const selectedProfileAccountId = validIds.has(get().selectedProfileAccountId ?? -1)
-    ? get().selectedProfileAccountId
-    : selectedIds[0] ?? accounts[0]?.id ?? null
-
-  set({
-    accounts,
-    checkState,
-    selectedIds,
-    selectedProfileAccountId,
-    loading: false,
-    initialized: true
-  })
+  applyAccountSnapshot(accounts, set, get, { checkState })
 }
 
 async function runBusyAction(
@@ -117,6 +126,11 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           await syncAccounts(set, get)
           set({ lastActionMessage: '批量检测已完成，账号资料已刷新。' })
         }
+      })
+      window.desktopAccounts?.onAccountsUpdated((accounts) => {
+        applyAccountSnapshot(accounts, set, get, {
+          lastActionMessage: 'sessions 目录检测到变更，列表已自动同步。'
+        })
       })
       subscribed = true
     }

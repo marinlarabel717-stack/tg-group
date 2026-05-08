@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { CheckQueueState, CheckResultInput } from '../src/types'
+import type { AccountRecord, CheckQueueState, CheckResultInput } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'Telegram Multi Account Manager',
@@ -31,6 +31,11 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
     const listener = (_event: Electron.IpcRendererEvent, state: CheckQueueState) => callback(state)
     ipcRenderer.on('accounts:check-state', listener)
     return () => ipcRenderer.removeListener('accounts:check-state', listener)
+  },
+  onAccountsUpdated: (callback: (accounts: AccountRecord[]) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, accounts: AccountRecord[]) => callback(accounts)
+    ipcRenderer.on('accounts:updated', listener)
+    return () => ipcRenderer.removeListener('accounts:updated', listener)
   },
   exportByIds: (ids: number[]) => ipcRenderer.invoke('accounts:export', ids),
   revealPath: (targetPath: string) => ipcRenderer.invoke('accounts:reveal-path', targetPath)

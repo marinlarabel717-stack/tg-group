@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerAccountIpc } from './accounts/ipc'
@@ -12,6 +13,7 @@ import { TelegramClientManager } from './accounts/check-engine/telegram-client-m
 import { AccountUpdateService } from './accounts/check-engine/account-update-service'
 import { AccountImportService } from './accounts/services/account-import-service'
 import { AccountRepository } from './accounts/services/account-repository'
+import type { AccountRecord } from './accounts/types'
 import { AccountStatusService } from './accounts/services/account-status-service'
 import { createAccountsDatabase } from './accounts/services/database'
 import { FileScanner } from './accounts/services/file-scanner'
@@ -21,6 +23,8 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 let mainWindow: BrowserWindow | null = null
+let managedSessionsWatcher: fs.FSWatcher | null = null
+let managedSessionsSyncTimer: NodeJS.Timeout | null = null
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -63,6 +67,29 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
+  })
+}
+
+function emitAccountsUpdated(accounts: AccountRecord[]) {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('accounts:updated', accounts)
+}
+
+function bindManagedSessionsWatcher(importService: AccountImportService, repository: AccountRepository, managedSessionsDirectory: string) {
+  managedSessionsWatcher?.close()
+  managedSessionsWatcher = fs.watch(managedSessionsDirectory, { persistent: false }, () => {
+    if (managedSessionsSyncTimer) {
+      clearTimeout(managedSessionsSyncTimer)
+    }
+
+    managedSessionsSyncTimer = setTimeout(() => {
+      void importService.syncManagedSessions()
+        .then(() => emitAccountsUpdated(repository.list()))
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          console.error('同步 sessions 目录失败：', message)
+        })
+    }, 220)
   })
 }
 
@@ -127,6 +154,7 @@ async function bootstrap() {
 
   await importService.syncManagedSessions()
 
+  bindManagedSessionsWatcher(importService, repository, managedSessionsDirectory)
   bindWindowControls()
   registerAccountIpc({
     getMainWindow: () => mainWindow,
