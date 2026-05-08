@@ -1,4 +1,4 @@
-import type { AccountStatus } from '../types'
+import type { AccountStatus, CheckLogLevel, ProfileSource } from '../types'
 
 export const moduleLabelMap = {
   dashboard: '仪表盘',
@@ -11,19 +11,28 @@ export const moduleLabelMap = {
 
 export const accountStatusLabelMap: Record<AccountStatus, string> = {
   alive: '存活',
-  frozen: '冻结',
   banned: '封禁',
   limited: '双向限制',
   temporary_limited: '临时双向',
   session_expired: 'Session 失效',
+  not_logged_in: '未登录',
   multi_ip: '多 IP 登录',
-  timeout_unchecked: '超时未检测',
+  timeout: '超时未连接',
   checking: '检测中',
-  unknown: '未知'
+  unknown: '未检查'
+}
+
+export const profileSourceLabelMap: Record<ProfileSource, string> = {
+  json_import: 'JSON 导入',
+  login_check: '登录检查'
 }
 
 export function formatAccountStatus(status: AccountStatus) {
   return accountStatusLabelMap[status]
+}
+
+export function formatProfileSource(source: ProfileSource) {
+  return profileSourceLabelMap[source]
 }
 
 export function formatDateTime(value: string | null) {
@@ -45,4 +54,11 @@ export function formatRelativePath(fullPath: string) {
 
   const parts = fullPath.split(/[/\\]/)
   return parts.slice(Math.max(parts.length - 3, 0)).join(' / ')
+}
+
+export function formatCheckLogLevel(level: CheckLogLevel) {
+  if (level === 'success') return '成功'
+  if (level === 'warning') return '警告'
+  if (level === 'error') return '错误'
+  return '信息'
 }

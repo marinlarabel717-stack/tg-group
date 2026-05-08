@@ -1,9 +1,29 @@
 import { create } from 'zustand'
-import type { AccountRecord, AccountStatus } from '../types'
+import type { AccountRecord, AccountStatus, CheckQueueState } from '../types'
 
 function getDesktopAccountsApi() {
   return window.desktopAccounts
 }
+
+function createEmptyCheckState(): CheckQueueState {
+  return {
+    running: false,
+    concurrency: 3,
+    timeoutMs: 25000,
+    retryLimit: 2,
+    pendingCount: 0,
+    activeCount: 0,
+    completedCount: 0,
+    failedCount: 0,
+    totalCount: 0,
+    queuedAccountIds: [],
+    activeAccountIds: [],
+    logs: [],
+    lastUpdatedAt: null
+  }
+}
+
+let subscribed = false
 
 interface AccountStoreState {
   accounts: AccountRecord[]
@@ -14,7 +34,8 @@ interface AccountStoreState {
   statusFilter: 'all' | AccountStatus
   countryFilter: string
   selectedIds: number[]
-  spamReplyDraft: string
+  selectedProfileAccountId: number | null
+  checkState: CheckQueueState
   lastActionMessage: string
   errorMessage: string
   init: () => Promise<void>
@@ -23,15 +44,15 @@ interface AccountStoreState {
   setStatusFilter: (value: 'all' | AccountStatus) => void
   setCountryFilter: (value: string) => void
   setSelectedIds: (ids: number[]) => void
-  setSpamReplyDraft: (value: string) => void
+  setSelectedProfileAccountId: (id: number | null) => void
   importFiles: () => Promise<void>
   importFolder: () => Promise<void>
   importDroppedPaths: (paths: string[]) => Promise<void>
   exportSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
   deleteAll: () => Promise<void>
-  markSelectedChecking: () => Promise<void>
-  applySpamReplyToSelected: () => Promise<void>
+  startSelectedCheck: () => Promise<void>
+  clearCheckLogs: () => Promise<void>
   revealPath: (targetPath: string) => Promise<void>
 }
 
@@ -42,10 +63,21 @@ async function syncAccounts(set: (partial: Partial<AccountStoreState>) => void, 
     return
   }
 
-  const accounts = await api.list()
+  const [accounts, checkState] = await Promise.all([api.list(), api.getCheckState()])
   const validIds = new Set(accounts.map((item) => item.id))
   const selectedIds = get().selectedIds.filter((id) => validIds.has(id))
-  set({ accounts, selectedIds, loading: false, initialized: true })
+  const selectedProfileAccountId = validIds.has(get().selectedProfileAccountId ?? -1)
+    ? get().selectedProfileAccountId
+    : selectedIds[0] ?? accounts[0]?.id ?? null
+
+  set({
+    accounts,
+    checkState,
+    selectedIds,
+    selectedProfileAccountId,
+    loading: false,
+    initialized: true
+  })
 }
 
 async function runBusyAction(
@@ -71,10 +103,23 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   statusFilter: 'all',
   countryFilter: '',
   selectedIds: [],
-  spamReplyDraft: '',
+  selectedProfileAccountId: null,
+  checkState: createEmptyCheckState(),
   lastActionMessage: '',
   errorMessage: '',
   init: async () => {
+    if (!subscribed) {
+      window.desktopAccounts?.onCheckState(async (checkState) => {
+        const previousState = get().checkState
+        set({ checkState })
+        if (previousState.running && !checkState.running) {
+          await syncAccounts(set, get)
+          set({ lastActionMessage: '批量检测已完成，账号资料已刷新。' })
+        }
+      })
+      subscribed = true
+    }
+
     if (get().initialized) return
     set({ loading: true, errorMessage: '' })
     await syncAccounts(set, get)
@@ -87,8 +132,11 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   setSearch: (value) => set({ search: value }),
   setStatusFilter: (value) => set({ statusFilter: value }),
   setCountryFilter: (value) => set({ countryFilter: value }),
-  setSelectedIds: (ids) => set({ selectedIds: ids }),
-  setSpamReplyDraft: (value) => set({ spamReplyDraft: value }),
+  setSelectedIds: (ids) => set((state) => ({
+    selectedIds: ids,
+    selectedProfileAccountId: ids[0] ?? state.selectedProfileAccountId ?? state.accounts[0]?.id ?? null
+  })),
+  setSelectedProfileAccountId: (id) => set({ selectedProfileAccountId: id }),
   importFiles: async () => {
     await runBusyAction(set, async () => {
       const result = await getDesktopAccountsApi()?.pickImportFiles()
@@ -156,7 +204,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       set({ selectedIds: [], lastActionMessage: '账号数据已全部清空。' })
     })
   },
-  markSelectedChecking: async () => {
+  startSelectedCheck: async () => {
     await runBusyAction(set, async () => {
       const ids = get().selectedIds
       if (ids.length === 0) {
@@ -164,34 +212,20 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      await getDesktopAccountsApi()?.markChecking(ids)
+      const checkState = await getDesktopAccountsApi()?.startCheck(ids)
+      if (!checkState) return
+      set({
+        checkState,
+        lastActionMessage: `已启动 ${ids.length} 个账号的登录检查任务。`
+      })
       await syncAccounts(set, get)
-      set({ lastActionMessage: `已将 ${ids.length} 个账号标记为检测中。` })
     })
   },
-  applySpamReplyToSelected: async () => {
-    await runBusyAction(set, async () => {
-      const ids = get().selectedIds
-      const replyText = get().spamReplyDraft.trim()
-
-      if (ids.length === 0) {
-        set({ errorMessage: '请先选择要更新状态的账号。' })
-        return
-      }
-
-      if (!replyText) {
-        set({ errorMessage: '请先粘贴 SpamBot 回复内容。' })
-        return
-      }
-
-      const result = await getDesktopAccountsApi()?.applySpamBotReply({ ids, replyText })
-      if (!result) return
-      await syncAccounts(set, get)
-      set({
-        spamReplyDraft: '',
-        lastActionMessage: `已根据 SpamBot 回复更新 ${result.updatedCount} 个账号状态：${result.status}`
-      })
-    })
+  clearCheckLogs: async () => {
+    const checkState = await getDesktopAccountsApi()?.clearCheckLogs()
+    if (checkState) {
+      set({ checkState, lastActionMessage: '检测日志已清空。' })
+    }
   },
   revealPath: async (targetPath) => {
     await runBusyAction(set, async () => {
@@ -229,6 +263,7 @@ export function filterAccounts(accounts: AccountRecord[], filters: {
       account.status,
       account.sessionPath,
       account.jsonPath,
+      account.profileSource,
       JSON.stringify(account.profile ?? {})
     ]
       .join(' ')

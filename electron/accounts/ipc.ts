@@ -5,23 +5,43 @@ import type { CheckResultInput } from './types'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
 import type { AccountStatusService } from './services/account-status-service'
+import type { CheckQueue } from './check-engine/check-queue'
 
 interface RegisterAccountIpcOptions {
   getMainWindow: () => BrowserWindow | null
   accountRepository: AccountRepository
   accountImportService: AccountImportService
   accountStatusService: AccountStatusService
+  checkQueue: CheckQueue
 }
 
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
-  const { getMainWindow, accountRepository, accountImportService, accountStatusService } = options
+  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue } = options
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
     const mainWindow = getMainWindow()
     return mainWindow ? dialog.showOpenDialog(mainWindow, dialogOptions) : dialog.showOpenDialog(dialogOptions)
   }
 
+  const emitCheckState = () => {
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('accounts:check-state', checkQueue.getState())
+  }
+
+  checkQueue.on('state', emitCheckState)
+
   ipcMain.handle('accounts:list', () => accountRepository.list())
+  ipcMain.handle('accounts:get-check-state', () => checkQueue.getState())
+  ipcMain.handle('accounts:clear-check-logs', () => {
+    checkQueue.clearLogs()
+    return checkQueue.getState()
+  })
+  ipcMain.handle('accounts:start-check', (_event, ids: number[]) => {
+    const state = checkQueue.enqueue(ids)
+    emitCheckState()
+    return state
+  })
 
   ipcMain.handle('accounts:pick-import-files', async () => {
     const result = await showOpenDialog({

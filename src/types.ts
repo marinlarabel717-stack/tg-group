@@ -8,15 +8,18 @@ export type ModuleKey =
 
 export type AccountStatus =
   | 'alive'
-  | 'frozen'
   | 'banned'
   | 'limited'
   | 'temporary_limited'
   | 'session_expired'
+  | 'not_logged_in'
   | 'multi_ip'
-  | 'timeout_unchecked'
+  | 'timeout'
   | 'checking'
   | 'unknown'
+
+export type ProfileSource = 'json_import' | 'login_check'
+export type CheckLogLevel = 'info' | 'success' | 'warning' | 'error'
 
 export interface AccountJsonProfile extends Record<string, unknown> {
   app_id?: number
@@ -33,7 +36,12 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   username?: string | null
   first_name?: string | null
   last_name?: string | null
+  bio?: string | null
+  has_profile_pic?: boolean
+  is_premium?: boolean
   spamblock?: string | null
+  spamblock_end_date?: string | number | null
+  spambot_reply?: string | null
   session_file?: string
   last_connect_date?: string | null
   session_created_date?: string | null
@@ -41,6 +49,9 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   last_check_time?: number | string | null
   proxy?: string | null
   ipv6?: boolean
+  check_error?: string | null
+  check_status?: AccountStatus
+  check_duration_ms?: number
   [key: string]: unknown
 }
 
@@ -54,7 +65,7 @@ export interface AccountRecord {
   jsonPath: string
   status: AccountStatus
   profile: AccountJsonProfile
-  profileSource: 'json_import' | 'login_check'
+  profileSource: ProfileSource
   lastCheckTime: string | null
   lastOnlineTime: string | null
   createdAt: string
@@ -114,6 +125,31 @@ export interface ExportAccountsResult {
   targetDirectory: string
 }
 
+export interface CheckLogEntry {
+  id: string
+  accountId: number | null
+  level: CheckLogLevel
+  message: string
+  createdAt: string
+  attempt?: number
+}
+
+export interface CheckQueueState {
+  running: boolean
+  concurrency: number
+  timeoutMs: number
+  retryLimit: number
+  pendingCount: number
+  activeCount: number
+  completedCount: number
+  failedCount: number
+  totalCount: number
+  queuedAccountIds: number[]
+  activeAccountIds: number[]
+  logs: CheckLogEntry[]
+  lastUpdatedAt: string | null
+}
+
 export interface DesktopAccountsApi {
   list: () => Promise<AccountRecord[]>
   pickImportFiles: () => Promise<ImportAccountsResult | null>
@@ -125,6 +161,10 @@ export interface DesktopAccountsApi {
   markChecking: (ids: number[]) => Promise<StatusUpdateResult>
   applySpamBotReply: (payload: { ids: number[]; replyText: string }) => Promise<StatusUpdateResult>
   applyCheckResults: (items: CheckResultInput[]) => Promise<StatusUpdateResult>
+  startCheck: (ids: number[]) => Promise<CheckQueueState>
+  getCheckState: () => Promise<CheckQueueState>
+  clearCheckLogs: () => Promise<CheckQueueState>
+  onCheckState: (callback: (state: CheckQueueState) => void) => () => void
   exportByIds: (ids: number[]) => Promise<ExportAccountsResult>
   revealPath: (targetPath: string) => Promise<boolean>
 }

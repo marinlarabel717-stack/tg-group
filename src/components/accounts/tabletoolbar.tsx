@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import {
   Download,
   FolderSearch2,
@@ -18,12 +18,15 @@ interface TableToolbarProps {
   totalCount: number
   loading: boolean
   busy: boolean
+  running: boolean
+  activeCount: number
+  pendingCount: number
   onImportFiles: () => void
   onImportFolder: () => void
   onExportSelected: () => void
   onDeleteSelected: () => void
   onDeleteAll: () => void
-  onMarkChecking: () => void
+  onStartCheck: () => void
   onRefresh: () => void
 }
 
@@ -35,7 +38,7 @@ function ActionButton({
   emphasis = false
 }: {
   label: string
-  icon: React.ReactNode
+  icon: ReactNode
   onClick: () => void
   disabled?: boolean
   emphasis?: boolean
@@ -61,12 +64,15 @@ export const TableToolbar = memo(function TableToolbar({
   totalCount,
   loading,
   busy,
+  running,
+  activeCount,
+  pendingCount,
   onImportFiles,
   onImportFolder,
   onExportSelected,
   onDeleteSelected,
   onDeleteAll,
-  onMarkChecking,
+  onStartCheck,
   onRefresh
 }: TableToolbarProps) {
   const blocked = loading || busy
@@ -79,7 +85,7 @@ export const TableToolbar = memo(function TableToolbar({
           <input
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="按手机号、用户名、userId、路径搜索"
+            placeholder="按手机号、用户名、userId、路径、资料内容搜索"
             className="h-11 w-full rounded-[12px] bg-panel pl-11 pr-10 text-sm text-textMain outline-none transition focus:bg-hover"
           />
           {search ? (
@@ -96,8 +102,15 @@ export const TableToolbar = memo(function TableToolbar({
         <div className="flex items-center gap-3 rounded-[12px] bg-panel px-4 py-3.5">
           <div>
             <div className="text-[11px] tracking-[0.2em] text-textMuted">批量统计</div>
+            <div className="mt-1 text-sm font-medium text-white">已选 {selectedCount} 项 / 共 {totalCount} 行</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-[12px] bg-panel px-4 py-3.5">
+          <div>
+            <div className="text-[11px] tracking-[0.2em] text-textMuted">检查队列</div>
             <div className="mt-1 text-sm font-medium text-white">
-              已选 {selectedCount} 项 / 共 {totalCount} 行
+              {running ? `执行中 · 活跃 ${activeCount} / 排队 ${pendingCount}` : '空闲'}
             </div>
           </div>
         </div>
@@ -115,9 +128,9 @@ export const TableToolbar = memo(function TableToolbar({
         <ActionButton label="导入文件" icon={<Upload size={16} />} onClick={onImportFiles} disabled={blocked} />
         <ActionButton label="扫描文件夹" icon={<FolderSearch2 size={16} />} onClick={onImportFolder} disabled={blocked} />
         <ActionButton label="导出所选" icon={<Download size={16} />} onClick={onExportSelected} disabled={blocked || selectedCount === 0} />
-        <ActionButton label="批量检测" icon={<WandSparkles size={16} />} onClick={onMarkChecking} disabled={blocked || selectedCount === 0} />
-        <ActionButton label="删除所选" icon={<Trash2 size={16} />} onClick={onDeleteSelected} disabled={blocked || selectedCount === 0} />
-        <ActionButton label="全部删除" icon={<Trash2 size={16} />} onClick={onDeleteAll} disabled={blocked || totalCount === 0} />
+        <ActionButton label={running ? '检查执行中' : '开始登录检查'} icon={<WandSparkles size={16} />} onClick={onStartCheck} disabled={blocked || selectedCount === 0 || running} />
+        <ActionButton label="删除所选" icon={<Trash2 size={16} />} onClick={onDeleteSelected} disabled={blocked || selectedCount === 0 || running} />
+        <ActionButton label="全部删除" icon={<Trash2 size={16} />} onClick={onDeleteAll} disabled={blocked || totalCount === 0 || running} />
       </div>
     </div>
   )

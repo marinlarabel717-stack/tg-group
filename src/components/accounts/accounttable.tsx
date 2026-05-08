@@ -24,12 +24,12 @@ function checkboxClass() {
 }
 
 function actionButtonClass() {
-  return 'flex h-9 w-9 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft'
+  return 'flex h-9 w-9 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft disabled:cursor-not-allowed disabled:opacity-40'
 }
 
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
-    <div className="grid min-h-[60px] animate-pulse grid-cols-[52px_90px_140px_120px_140px_120px_110px_160px_160px_120px_120px_92px] gap-3 rounded-[10px] bg-panel px-4 py-3">
+    <div className="grid min-h-[60px] animate-pulse grid-cols-[52px_90px_140px_120px_140px_120px_110px_110px_160px_160px_120px_120px_92px] gap-3 rounded-[10px] bg-panel px-4 py-3">
       {Array.from({ length: columns }).map((_, index) => (
         <div key={index} className="h-9 rounded-[8px] bg-white/[0.03]" />
       ))}
@@ -39,9 +39,13 @@ const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) 
 
 const TableRowActions = memo(function TableRowActions({ account }: { account: AccountRecord }) {
   const revealPath = useAccountStore((state) => state.revealPath)
+  const setSelectedProfileAccountId = useAccountStore((state) => state.setSelectedProfileAccountId)
 
   return (
     <div className="flex items-center gap-2">
+      <button title="查看资料" className={actionButtonClass()} onClick={() => setSelectedProfileAccountId(account.id)}>
+        览
+      </button>
       <button title="打开 Session 目录" className={actionButtonClass()} onClick={() => void revealPath(account.sessionPath)}>
         <FolderOpen size={15} />
       </button>
@@ -66,6 +70,7 @@ export const AccountTable = memo(function AccountTable() {
     statusFilter,
     countryFilter,
     selectedIds,
+    checkState,
     setSearch,
     setStatusFilter,
     setCountryFilter,
@@ -76,7 +81,7 @@ export const AccountTable = memo(function AccountTable() {
     exportSelected,
     deleteSelected,
     deleteAll,
-    markSelectedChecking
+    startSelectedCheck
   } = useAccountStore((state) => ({
     accounts: state.accounts,
     loading: state.loading,
@@ -85,6 +90,7 @@ export const AccountTable = memo(function AccountTable() {
     statusFilter: state.statusFilter,
     countryFilter: state.countryFilter,
     selectedIds: state.selectedIds,
+    checkState: state.checkState,
     setSearch: state.setSearch,
     setStatusFilter: state.setStatusFilter,
     setCountryFilter: state.setCountryFilter,
@@ -95,17 +101,12 @@ export const AccountTable = memo(function AccountTable() {
     exportSelected: state.exportSelected,
     deleteSelected: state.deleteSelected,
     deleteAll: state.deleteAll,
-    markSelectedChecking: state.markSelectedChecking
+    startSelectedCheck: state.startSelectedCheck
   }))
 
   const deferredSearch = useDeferredValue(search)
   const data = useMemo(
-    () =>
-      filterAccounts(accounts, {
-        search: deferredSearch,
-        statusFilter,
-        countryFilter
-      }),
+    () => filterAccounts(accounts, { search: deferredSearch, statusFilter, countryFilter }),
     [accounts, deferredSearch, statusFilter, countryFilter]
   )
 
@@ -124,10 +125,7 @@ export const AccountTable = memo(function AccountTable() {
     return () => window.clearTimeout(timer)
   }, [data, sorting, pagination.pageIndex, pagination.pageSize, loading])
 
-  const rowSelection = useMemo<RowSelectionState>(
-    () => Object.fromEntries(selectedIds.map((id) => [String(id), true])),
-    [selectedIds]
-  )
+  const rowSelection = useMemo<RowSelectionState>(() => Object.fromEntries(selectedIds.map((id) => [String(id), true])), [selectedIds])
 
   const columns = useMemo<ColumnDef<AccountRecord>[]>(
     () => [
@@ -168,6 +166,12 @@ export const AccountTable = memo(function AccountTable() {
         header: '状态',
         size: 110,
         cell: ({ row }) => <StatusBadge status={row.original.status} />
+      },
+      {
+        accessorKey: 'profileSource',
+        header: '资料来源',
+        size: 110,
+        cell: ({ row }) => (row.original.profileSource === 'login_check' ? '登录检查' : 'JSON 导入')
       },
       {
         accessorKey: 'sessionPath',
@@ -252,7 +256,6 @@ export const AccountTable = memo(function AccountTable() {
 
   const selectedCount = selectedIds.length
   const totalCount = data.length
-
   const handleSearchChange = useCallback((value: string) => setSearch(value), [setSearch])
 
   return (
@@ -264,12 +267,15 @@ export const AccountTable = memo(function AccountTable() {
         totalCount={totalCount}
         loading={loading}
         busy={busy}
+        running={checkState.running}
+        activeCount={checkState.activeCount}
+        pendingCount={checkState.pendingCount}
         onImportFiles={() => void importFiles()}
         onImportFolder={() => void importFolder()}
         onExportSelected={() => void exportSelected()}
         onDeleteSelected={() => void deleteSelected()}
         onDeleteAll={() => void deleteAll()}
-        onMarkChecking={() => void markSelectedChecking()}
+        onStartCheck={() => void startSelectedCheck()}
         onRefresh={() => void refresh()}
       />
 
@@ -317,7 +323,7 @@ export const AccountTable = memo(function AccountTable() {
                       style={{ transform: `translateY(${index * 96}px)` }}
                     >
                       <td className="block py-1">
-                        <SkeletonRow columns={12} />
+                        <SkeletonRow columns={13} />
                       </td>
                     </tr>
                   ))
@@ -333,7 +339,7 @@ export const AccountTable = memo(function AccountTable() {
                       >
                         <td className="block py-1">
                           <div
-                            className={`grid min-h-[80px] grid-cols-[52px_90px_140px_120px_140px_120px_110px_160px_160px_120px_120px_92px] items-center gap-4 rounded-[10px] px-4 py-3.5 transition ${
+                            className={`grid min-h-[80px] grid-cols-[52px_90px_140px_120px_140px_120px_110px_110px_160px_160px_120px_120px_92px] items-center gap-4 rounded-[10px] px-4 py-3.5 transition ${
                               row.getIsSelected() ? 'bg-neon/8' : 'bg-panel hover:bg-hover'
                             }`}
                           >

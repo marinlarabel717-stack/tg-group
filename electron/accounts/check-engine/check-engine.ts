@@ -1,0 +1,184 @@
+import type { TelegramClient } from 'telegram'
+import type { AccountCheckResult, AccountRecord, CheckResultInput } from '../types'
+import type { AccountRepository } from '../services/account-repository'
+import { AccountUpdateService } from './account-update-service'
+import { CheckResultWriter } from './check-result-writer'
+import { SessionLoader } from './session-loader'
+import { SpamBotChecker } from './spam-bot-checker'
+import { StatusResolver } from './status-resolver'
+import { TelegramClientManager } from './telegram-client-manager'
+
+interface CheckLogger {
+  (message: string): void
+}
+
+interface AccountCheckEngineOptions {
+  timeoutMs?: number
+}
+
+function withStepTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} 超时（${timeoutMs}ms）`)), timeoutMs)
+    promise
+      .then((value) => {
+        clearTimeout(timer)
+        resolve(value)
+      })
+      .catch((error) => {
+        clearTimeout(timer)
+        reject(error)
+      })
+  })
+}
+
+export class AccountCheckEngine {
+  private readonly timeoutMs: number
+
+  constructor(
+    private readonly repository: AccountRepository,
+    private readonly sessionLoader: SessionLoader,
+    private readonly clientManager: TelegramClientManager,
+    private readonly spamBotChecker: SpamBotChecker,
+    private readonly statusResolver: StatusResolver,
+    private readonly updateService: AccountUpdateService,
+    private readonly resultWriter: CheckResultWriter,
+    options: AccountCheckEngineOptions = {}
+  ) {
+    this.timeoutMs = options.timeoutMs ?? 25000
+  }
+
+  async run(accountId: number, logger: CheckLogger): Promise<AccountCheckResult> {
+    const startedAt = Date.now()
+    const account = this.repository.getByIds([accountId])[0]
+
+    if (!account) {
+      return {
+        accountId,
+        status: 'unknown',
+        profile: {},
+        phone: '',
+        username: '',
+        userId: '',
+        country: '',
+        lastCheckTime: new Date().toISOString(),
+        lastOnlineTime: null,
+        durationMs: 0,
+        retryable: false,
+        errorMessage: '账号不存在'
+      }
+    }
+
+    let client: TelegramClient | null = null
+
+    try {
+      logger('加载 Session')
+      const session = await withStepTimeout(this.sessionLoader.load(account.sessionPath), this.timeoutMs, 'Session 加载')
+
+      logger('创建 GramJS 客户端')
+      client = this.clientManager.createClient(session, account.profile)
+
+      logger('连接 Telegram')
+      await withStepTimeout(client.connect(), this.timeoutMs, 'Telegram 连接')
+
+      logger('检查 Session 是否有效')
+      const authorized = await withStepTimeout(client.checkAuthorization(), this.timeoutMs, 'Session 校验')
+      const authorizationStatus = this.statusResolver.resolveAuthorization(authorized)
+      if (authorizationStatus === 'not_logged_in') {
+        const durationMs = Date.now() - startedAt
+        return this.persistFailure(account, authorizationStatus, 'Session 未登录', durationMs)
+      }
+
+      logger('拉取账号资料')
+      const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')
+      const fullUser = await withStepTimeout(this.spamBotChecker.getFullProfile(client), this.timeoutMs, '完整资料读取')
+
+      logger('访问 SpamBot')
+      const spamResult = await withStepTimeout(this.spamBotChecker.check(client), this.timeoutMs, 'SpamBot 检测')
+
+      logger(`SpamBot 结果：${spamResult.summary}`)
+      const updated = this.updateService.buildSuccessProfile({
+        account,
+        liveUser,
+        fullUser,
+        spambotReply: spamResult.replyText,
+        status: spamResult.status,
+        durationMs: Date.now() - startedAt
+      })
+
+      const payload: CheckResultInput = {
+        id: account.id,
+        profile: updated.profile,
+        status: spamResult.status,
+        phone: updated.phone,
+        username: updated.username,
+        userId: updated.userId,
+        country: updated.country,
+        lastCheckTime: updated.lastCheckTime,
+        lastOnlineTime: updated.lastOnlineTime
+      }
+
+      this.resultWriter.write(payload)
+
+      return {
+        accountId: account.id,
+        status: spamResult.status,
+        profile: updated.profile,
+        phone: updated.phone,
+        username: updated.username,
+        userId: updated.userId,
+        country: updated.country,
+        lastCheckTime: updated.lastCheckTime,
+        lastOnlineTime: updated.lastOnlineTime,
+        durationMs: Date.now() - startedAt,
+        retryable: false
+      }
+    } catch (error) {
+      const durationMs = Date.now() - startedAt
+      const status = this.statusResolver.resolveFromError(error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      return this.persistFailure(account, status, errorMessage, durationMs, this.statusResolver.isRetryable(status, error))
+    } finally {
+      if (client) {
+        await this.clientManager.destroyClient(client)
+      }
+    }
+  }
+
+  private persistFailure(account: AccountRecord, status: AccountCheckResult['status'], errorMessage: string, durationMs: number, retryable = false) {
+    const updated = this.updateService.buildFailureProfile({
+      account,
+      status,
+      errorMessage,
+      durationMs
+    })
+
+    const payload: CheckResultInput = {
+      id: account.id,
+      profile: updated.profile,
+      status,
+      phone: updated.phone,
+      username: updated.username,
+      userId: updated.userId,
+      country: updated.country,
+      lastCheckTime: updated.lastCheckTime,
+      lastOnlineTime: updated.lastOnlineTime
+    }
+
+    this.resultWriter.write(payload)
+
+    return {
+      accountId: account.id,
+      status,
+      profile: updated.profile,
+      phone: updated.phone,
+      username: updated.username,
+      userId: updated.userId,
+      country: updated.country,
+      lastCheckTime: updated.lastCheckTime,
+      lastOnlineTime: updated.lastOnlineTime,
+      durationMs,
+      retryable,
+      errorMessage
+    }
+  }
+}

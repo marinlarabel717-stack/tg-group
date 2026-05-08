@@ -1,59 +1,67 @@
-import { memo, useEffect, useMemo, useState } from 'react'
-import { Database, FolderArchive, ShieldCheck, Sparkles } from 'lucide-react'
+import { memo, useEffect, useMemo } from 'react'
+import { Activity, Database, FileText, ShieldCheck, Sparkles } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { AccountTable } from './accounttable'
+import { formatAccountStatus, formatCheckLogLevel, formatDateTime, formatProfileSource } from '../../lib/ui-text'
 import { useAccountStore } from '../../stores/accountstore'
 
 const AccountsSummary = memo(function AccountsSummary() {
   const accounts = useAccountStore((state) => state.accounts)
-  const { totalCount, aliveCount, riskCount, pendingCount } = useMemo(() => {
-    let alive = 0
-    let risk = 0
-    let pending = 0
+  const checkState = useAccountStore((state) => state.checkState)
+
+  const summary = useMemo(() => {
+    let aliveCount = 0
+    let riskCount = 0
+    let pendingCount = 0
 
     for (const item of accounts) {
-      if (item.status === 'alive') alive += 1
-      if (['frozen', 'banned', 'limited', 'temporary_limited', 'session_expired', 'multi_ip'].includes(item.status)) risk += 1
-      if (['timeout_unchecked', 'checking', 'unknown'].includes(item.status)) pending += 1
+      if (item.status === 'alive') aliveCount += 1
+      if (['banned', 'limited', 'temporary_limited', 'session_expired', 'not_logged_in', 'multi_ip', 'timeout'].includes(item.status)) {
+        riskCount += 1
+      }
+      if (['checking', 'unknown'].includes(item.status)) {
+        pendingCount += 1
+      }
     }
 
     return {
       totalCount: accounts.length,
-      aliveCount: alive,
-      riskCount: risk,
-      pendingCount: pending
+      aliveCount,
+      riskCount,
+      pendingCount,
+      queueActive: checkState.activeCount
     }
-  }, [accounts])
+  }, [accounts, checkState.activeCount])
 
   return (
     <GlassPanel className="bg-card">
       <div className="flex items-center justify-between gap-6">
         <div>
           <div className="flex items-center gap-2 text-xs tracking-[0.24em] text-neonSoft">
-            <Sparkles size={14} /> 第一阶段 · 本地账号管理系统
+            <Sparkles size={14} /> Check Engine · 账号登录检查系统
           </div>
-          <h1 className="mt-3 text-3xl font-semibold text-white">账号管理模块</h1>
+          <h1 className="mt-3 text-3xl font-semibold text-white">账号检查引擎</h1>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-textMuted">
-            当前仅覆盖本地 Session 导入、文件夹扫描、JSON 自动补齐、SQLite 入库、批量状态维护与 DataGrid 管理，不碰自动化、代理池、聊天与多窗口。
+            当前阶段只做 Session 登录检测、SpamBot 状态检测、状态自动判定、SQLite 回写与资料更新；保持现有界面结构，只补齐中文联动与检查链路。
           </p>
         </div>
 
         <div className="grid min-w-[420px] grid-cols-4 gap-3">
           <div className="rounded-[14px] bg-panel p-5">
             <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><Database size={14} /> 总账号</div>
-            <div className="mt-3 text-3xl font-semibold text-white">{totalCount}</div>
+            <div className="mt-3 text-3xl font-semibold text-white">{summary.totalCount}</div>
           </div>
           <div className="rounded-[14px] bg-panel p-5">
             <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><ShieldCheck size={14} /> 存活</div>
-            <div className="mt-3 text-3xl font-semibold text-white">{aliveCount}</div>
+            <div className="mt-3 text-3xl font-semibold text-white">{summary.aliveCount}</div>
           </div>
           <div className="rounded-[14px] bg-panel p-5">
-            <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><FolderArchive size={14} /> 风险</div>
-            <div className="mt-3 text-3xl font-semibold text-white">{riskCount}</div>
+            <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><Activity size={14} /> 风险/异常</div>
+            <div className="mt-3 text-3xl font-semibold text-white">{summary.riskCount}</div>
           </div>
           <div className="rounded-[14px] bg-panel p-5">
-            <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><Sparkles size={14} /> 待检测</div>
-            <div className="mt-3 text-3xl font-semibold text-white">{pendingCount}</div>
+            <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><FileText size={14} /> 待处理</div>
+            <div className="mt-3 text-3xl font-semibold text-white">{summary.pendingCount + summary.queueActive}</div>
           </div>
         </div>
       </div>
@@ -64,37 +72,24 @@ const AccountsSummary = memo(function AccountsSummary() {
 const DropImportPanel = memo(function DropImportPanel() {
   const busy = useAccountStore((state) => state.busy)
   const importDroppedPaths = useAccountStore((state) => state.importDroppedPaths)
-  const [dragActive, setDragActive] = useState(false)
 
   return (
-    <GlassPanel className={dragActive ? 'border border-cyan-300/40 bg-cyan-400/5' : ''}>
+    <GlassPanel>
       <div
-        onDragEnter={(event) => {
-          event.preventDefault()
-          setDragActive(true)
-        }}
-        onDragOver={(event) => {
-          event.preventDefault()
-          setDragActive(true)
-        }}
-        onDragLeave={(event) => {
-          event.preventDefault()
-          if (event.currentTarget === event.target) setDragActive(false)
-        }}
+        onDragEnter={(event) => event.preventDefault()}
+        onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault()
-          setDragActive(false)
           const droppedPaths = Array.from(event.dataTransfer.files)
             .map((file) => (file as File & { path?: string }).path)
             .filter((item): item is string => Boolean(item))
-
           void importDroppedPaths(droppedPaths)
         }}
-        className="rounded-[14px] border border-dashed border-white/10 bg-panel/60 px-6 py-8 text-center transition"
+        className="rounded-[14px] border border-dashed border-white/10 bg-panel/60 px-6 py-8 text-center transition hover:border-cyan-300/30"
       >
         <div className="text-lg font-semibold text-white">拖拽导入 Session / JSON / 文件夹</div>
         <div className="mt-2 text-sm text-textMuted">
-          支持单个导入、批量识别、同目录 JSON 自动匹配；缺失 JSON 会自动生成占位模板。
+          支持 Telethon SQLite Session、同名 JSON 自动匹配与缺失 JSON 自动生成，占位资料会在登录检查后自动覆盖更新。
         </div>
         <div className="mt-4 text-xs tracking-[0.2em] text-textMuted">
           {busy ? '处理中…' : '可直接拖入 .session / .json / 文件夹'}
@@ -104,48 +99,138 @@ const DropImportPanel = memo(function DropImportPanel() {
   )
 })
 
-const SpamBotPanel = memo(function SpamBotPanel() {
+const CheckPanels = memo(function CheckPanels() {
+  const accounts = useAccountStore((state) => state.accounts)
   const selectedIds = useAccountStore((state) => state.selectedIds)
-  const spamReplyDraft = useAccountStore((state) => state.spamReplyDraft)
-  const setSpamReplyDraft = useAccountStore((state) => state.setSpamReplyDraft)
-  const applySpamReplyToSelected = useAccountStore((state) => state.applySpamReplyToSelected)
-  const busy = useAccountStore((state) => state.busy)
+  const selectedProfileAccountId = useAccountStore((state) => state.selectedProfileAccountId)
+  const setSelectedProfileAccountId = useAccountStore((state) => state.setSelectedProfileAccountId)
+  const checkState = useAccountStore((state) => state.checkState)
+  const clearCheckLogs = useAccountStore((state) => state.clearCheckLogs)
   const lastActionMessage = useAccountStore((state) => state.lastActionMessage)
   const errorMessage = useAccountStore((state) => state.errorMessage)
 
+  const profileAccount = useMemo(() => {
+    return accounts.find((item) => item.id === selectedProfileAccountId) ?? accounts[0] ?? null
+  }, [accounts, selectedProfileAccountId])
+
   return (
-    <GlassPanel>
-      <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-        <div>
-          <div className="text-lg font-semibold text-white">SpamBot 状态解析</div>
-          <div className="mt-2 text-sm text-textMuted">
-            这里先做第一阶段可落地方案：把 SpamBot 回复文本贴进来，批量解析并更新所选账号状态。等你给 JSON 标准模版后，我再把自动生成部分替换成正式字段。
+    <div className="grid gap-5 xl:grid-cols-[1.1fr_1fr]">
+      <GlassPanel>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-lg font-semibold text-white">检查队列</div>
+            <div className="mt-2 text-sm text-textMuted">
+              支持批量检测、并发控制、超时控制、重试机制与中文检测日志。当前已选 {selectedIds.length} 个账号。
+            </div>
           </div>
-          <textarea
-            value={spamReplyDraft}
-            onChange={(event) => setSpamReplyDraft(event.target.value)}
-            placeholder="把 SpamBot 回复原文贴到这里，例如：Good news, no limits are currently applied..."
-            className="mt-4 min-h-[140px] w-full rounded-[14px] bg-panel px-4 py-4 text-sm text-textMain outline-none transition focus:bg-hover"
-          />
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => void applySpamReplyToSelected()}
-              disabled={busy || selectedIds.length === 0}
-              className="flex h-11 items-center rounded-[12px] bg-neon/10 px-5 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              解析并更新所选账号
-            </button>
-            <div className="text-sm text-textMuted">当前选中：{selectedIds.length} 个账号</div>
+          <button
+            onClick={() => void clearCheckLogs()}
+            className="rounded-[12px] bg-panel px-4 py-2 text-sm text-textMain transition hover:bg-hover"
+          >
+            清空日志
+          </button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-4 gap-3">
+          <div className="rounded-[12px] bg-panel p-4">
+            <div className="text-[11px] tracking-[0.2em] text-textMuted">总任务</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{checkState.totalCount}</div>
+          </div>
+          <div className="rounded-[12px] bg-panel p-4">
+            <div className="text-[11px] tracking-[0.2em] text-textMuted">执行中</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{checkState.activeCount}</div>
+          </div>
+          <div className="rounded-[12px] bg-panel p-4">
+            <div className="text-[11px] tracking-[0.2em] text-textMuted">排队中</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{checkState.pendingCount}</div>
+          </div>
+          <div className="rounded-[12px] bg-panel p-4">
+            <div className="text-[11px] tracking-[0.2em] text-textMuted">失败数</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{checkState.failedCount}</div>
           </div>
         </div>
 
-        <div className="space-y-3 rounded-[14px] bg-panel p-5">
-          <div className="text-xs tracking-[0.22em] text-textMuted">状态回显</div>
-          <div className="rounded-[12px] bg-card px-4 py-4 text-sm text-white">{lastActionMessage || '暂无最近操作'}</div>
-          <div className="rounded-[12px] bg-card px-4 py-4 text-sm text-amber-200">{errorMessage || '当前没有错误。'}</div>
+        <div className="mt-5 rounded-[14px] bg-panel p-4">
+          <div className="mb-3 text-sm font-medium text-white">检测日志</div>
+          <div className="max-h-[320px] space-y-2 overflow-auto pr-1">
+            {checkState.logs.length === 0 ? (
+              <div className="rounded-[12px] bg-card px-4 py-6 text-sm text-textMuted">暂时还没有检测日志。</div>
+            ) : (
+              checkState.logs.map((log) => (
+                <div key={log.id} className="rounded-[12px] bg-card px-4 py-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-sm text-white">
+                      [{formatCheckLogLevel(log.level)}]
+                      {log.accountId ? ` #${log.accountId}` : ' 系统'}
+                      {log.attempt ? ` · 第 ${log.attempt} 次` : ''}
+                    </div>
+                    <div className="text-xs text-textMuted">{formatDateTime(log.createdAt)}</div>
+                  </div>
+                  <div className="mt-2 text-sm text-textMuted">{log.message}</div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
-      </div>
-    </GlassPanel>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-[12px] bg-panel px-4 py-4 text-sm text-white">最近操作：{lastActionMessage || '暂无'}</div>
+          <div className="rounded-[12px] bg-panel px-4 py-4 text-sm text-amber-200">异常提示：{errorMessage || '当前没有错误。'}</div>
+        </div>
+      </GlassPanel>
+
+      <GlassPanel>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-lg font-semibold text-white">账号资料回写预览</div>
+            <div className="mt-2 text-sm text-textMuted">
+              未检查前读取导入 JSON；登录检查成功后自动回写 profile_json / profile_source / status / 时间字段。
+            </div>
+          </div>
+          <select
+            value={profileAccount?.id ?? ''}
+            onChange={(event) => setSelectedProfileAccountId(event.target.value ? Number(event.target.value) : null)}
+            className="h-11 min-w-[220px] rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none"
+          >
+            {accounts.map((item) => (
+              <option key={item.id} value={item.id}>{item.phone || item.username || `账号 ${item.id}`}</option>
+            ))}
+          </select>
+        </div>
+
+        {profileAccount ? (
+          <div className="mt-5 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[12px] bg-panel p-4">
+                <div className="text-[11px] tracking-[0.2em] text-textMuted">当前状态</div>
+                <div className="mt-2 text-lg font-semibold text-white">{formatAccountStatus(profileAccount.status)}</div>
+              </div>
+              <div className="rounded-[12px] bg-panel p-4">
+                <div className="text-[11px] tracking-[0.2em] text-textMuted">资料来源</div>
+                <div className="mt-2 text-lg font-semibold text-white">{formatProfileSource(profileAccount.profileSource)}</div>
+              </div>
+              <div className="rounded-[12px] bg-panel p-4">
+                <div className="text-[11px] tracking-[0.2em] text-textMuted">最后检测</div>
+                <div className="mt-2 text-sm font-medium text-white">{formatDateTime(profileAccount.lastCheckTime)}</div>
+              </div>
+              <div className="rounded-[12px] bg-panel p-4">
+                <div className="text-[11px] tracking-[0.2em] text-textMuted">最近在线</div>
+                <div className="mt-2 text-sm font-medium text-white">{formatDateTime(profileAccount.lastOnlineTime)}</div>
+              </div>
+            </div>
+
+            <div className="rounded-[14px] bg-panel p-4">
+              <div className="mb-3 text-sm font-medium text-white">profile_json</div>
+              <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-all rounded-[12px] bg-card p-4 text-xs leading-6 text-textMuted">
+                {JSON.stringify(profileAccount.profile ?? {}, null, 2)}
+              </pre>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-5 rounded-[12px] bg-panel px-4 py-10 text-center text-sm text-textMuted">暂无账号数据可预览。</div>
+        )}
+      </GlassPanel>
+    </div>
   )
 })
 
@@ -160,7 +245,7 @@ export function AccountsView() {
     <div className="space-y-5 contain-layout">
       <AccountsSummary />
       <DropImportPanel />
-      <SpamBotPanel />
+      <CheckPanels />
       <AccountTable />
     </div>
   )

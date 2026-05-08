@@ -46,15 +46,17 @@ function parseDateValue(value: unknown) {
 function inferStatus(profile: AccountJsonProfile): AccountStatus {
   const spamblock = readStringField(profile, 'spamblock').toLowerCase()
 
-  if (!spamblock || spamblock === 'unknown') return 'timeout_unchecked'
+  if (!spamblock || spamblock === 'unknown') return 'unknown'
   if (spamblock === 'free') return 'alive'
   if (spamblock.includes('temporary')) return 'temporary_limited'
   if (spamblock.includes('limited') || spamblock.includes('restrict')) return 'limited'
-  if (spamblock.includes('frozen')) return 'frozen'
   if (spamblock.includes('ban')) return 'banned'
   if (spamblock.includes('multi') && spamblock.includes('ip')) return 'multi_ip'
+  if (spamblock.includes('timeout')) return 'timeout'
+  if (spamblock.includes('session')) return 'session_expired'
+  if (spamblock.includes('login')) return 'not_logged_in'
 
-  return 'timeout_unchecked'
+  return 'unknown'
 }
 
 function inferPhone(profile: AccountJsonProfile, sessionPath: string) {

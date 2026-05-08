@@ -2,6 +2,14 @@ import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerAccountIpc } from './accounts/ipc'
+import { AccountCheckEngine } from './accounts/check-engine/check-engine'
+import { CheckQueue } from './accounts/check-engine/check-queue'
+import { CheckResultWriter } from './accounts/check-engine/check-result-writer'
+import { SessionLoader } from './accounts/check-engine/session-loader'
+import { SpamBotChecker } from './accounts/check-engine/spam-bot-checker'
+import { StatusResolver } from './accounts/check-engine/status-resolver'
+import { TelegramClientManager } from './accounts/check-engine/telegram-client-manager'
+import { AccountUpdateService } from './accounts/check-engine/account-update-service'
 import { AccountImportService } from './accounts/services/account-import-service'
 import { AccountRepository } from './accounts/services/account-repository'
 import { AccountStatusService } from './accounts/services/account-status-service'
@@ -93,12 +101,34 @@ app.whenReady().then(() => {
   const importService = new AccountImportService(repository, scanner, jsonTemplateService)
   const statusService = new AccountStatusService(repository)
 
+  const sessionLoader = new SessionLoader()
+  const clientManager = new TelegramClientManager()
+  const spamBotChecker = new SpamBotChecker()
+  const statusResolver = new StatusResolver()
+  const updateService = new AccountUpdateService()
+  const resultWriter = new CheckResultWriter(repository)
+  const checkEngine = new AccountCheckEngine(
+    repository,
+    sessionLoader,
+    clientManager,
+    spamBotChecker,
+    statusResolver,
+    updateService,
+    resultWriter
+  )
+  const checkQueue = new CheckQueue(checkEngine, {
+    concurrency: 3,
+    timeoutMs: 25000,
+    retryLimit: 2
+  })
+
   bindWindowControls()
   registerAccountIpc({
     getMainWindow: () => mainWindow,
     accountRepository: repository,
     accountImportService: importService,
-    accountStatusService: statusService
+    accountStatusService: statusService,
+    checkQueue
   })
   createWindow()
 
