@@ -148,7 +148,20 @@ export class CheckQueue extends EventEmitter {
 
   private async runTask(task: QueueTask) {
     try {
-      const result = await this.engine.run(task.accountId, (message) => this.appendLog('info', task.accountId, message, task.attempt + 1))
+      const result = await this.engine.run(task.accountId, (payload) => {
+        if (payload.type === 'login_success') {
+          this.appendLog('success', task.accountId, `${payload.phone} ---- 登录成功`, task.attempt + 1, {
+            phone: payload.phone,
+            status: null
+          })
+          return
+        }
+
+        this.appendLog('warning', task.accountId, `${payload.phone} ---- 登录失败（${payload.reason}）`, task.attempt + 1, {
+          phone: payload.phone,
+          status: null
+        })
+      })
       this.handleResult(task, result)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

@@ -9,7 +9,7 @@ import { StatusResolver } from './status-resolver'
 import { TelegramClientManager } from './telegram-client-manager'
 
 interface CheckLogger {
-  (message: string): void
+  (payload: { type: 'login_success'; phone: string } | { type: 'login_failed'; phone: string; reason: string }): void
 }
 
 interface AccountCheckEngineOptions {
@@ -47,7 +47,7 @@ export class AccountCheckEngine {
     this.timeoutMs = options.timeoutMs ?? 25000
   }
 
-  async run(accountId: number, _logger: CheckLogger): Promise<AccountCheckResult> {
+  async run(accountId: number, logger: CheckLogger): Promise<AccountCheckResult> {
     const startedAt = Date.now()
     const account = this.repository.getByIds([accountId])[0]
 
@@ -80,12 +80,19 @@ export class AccountCheckEngine {
       const authorized = await withStepTimeout(client.checkAuthorization(), this.timeoutMs, 'Session 校验')
       const authorizationStatus = this.statusResolver.resolveAuthorization(authorized)
       if (authorizationStatus === 'not_logged_in') {
+        const failedPhone = account.phone || account.profile.phone || `账号#${account.id}`
+        logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session 未登录' })
         const durationMs = Date.now() - startedAt
         return this.persistFailure(account, authorizationStatus, 'Session 未登录', durationMs)
       }
 
       const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')
       const fullUser = await withStepTimeout(this.spamBotChecker.getFullProfile(client), this.timeoutMs, '完整资料读取')
+
+      const loginPhone = String((typeof liveUser === 'object' && liveUser && 'phone' in liveUser && typeof (liveUser as { phone?: unknown }).phone === 'string'
+        ? (liveUser as { phone?: string }).phone
+        : account.phone) || `账号#${account.id}`)
+      logger({ type: 'login_success', phone: loginPhone })
 
       const spamResult = await withStepTimeout(this.spamBotChecker.check(client), this.timeoutMs, 'SpamBot 检测')
       const updated = this.updateService.buildSuccessProfile({
