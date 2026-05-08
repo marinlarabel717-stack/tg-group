@@ -88,7 +88,7 @@ function cellShellClass(columnId: string, isHeader = false) {
   }
 
   if (columnId === 'nickname') {
-    return 'flex h-full w-full min-w-0 items-center justify-start pl-6 pr-2'
+    return 'flex h-full w-full min-w-0 items-center justify-start pl-12 pr-2'
   }
 
   if (columnId === 'actions') {
