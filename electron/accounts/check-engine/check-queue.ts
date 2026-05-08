@@ -150,10 +150,6 @@ export class CheckQueue extends EventEmitter {
     try {
       const result = await this.engine.run(task.accountId, (payload) => {
         if (payload.type === 'login_success') {
-          this.appendLog('success', task.accountId, `${payload.phone} ---- 登录成功`, task.attempt + 1, {
-            phone: payload.phone,
-            status: null
-          })
           return
         }
 
