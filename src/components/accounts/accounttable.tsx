@@ -20,8 +20,12 @@ import { filterAccounts, useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatDateTime, formatProfileSource } from '../../lib/ui-text'
 
 const ACCOUNT_GRID_TEMPLATE = '60px 180px 120px 140px 140px 140px 180px 240px 180px'
+const ACCOUNT_GRID_WIDTH = 1380
+const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
-  gridTemplateColumns: ACCOUNT_GRID_TEMPLATE
+  gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
+  width: `${ACCOUNT_GRID_WIDTH}px`,
+  minWidth: 'max-content'
 }
 
 function checkboxClass() {
@@ -44,7 +48,7 @@ function readProxy(account: AccountRecord) {
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
     <div
-      className="grid min-h-[60px] min-w-max animate-pulse items-center gap-0 rounded-[10px] bg-panel px-0 py-0"
+      className="grid min-h-[60px] shrink-0 animate-pulse items-center gap-0 rounded-[10px] bg-panel px-0 py-0"
       style={ACCOUNT_GRID_STYLE}
     >
       {Array.from({ length: columns }).map((_, index) => (
@@ -322,10 +326,10 @@ export const AccountTable = memo(function AccountTable() {
 
       <GlassPanel className="p-0">
         <div ref={parentRef} className="virtual-scroll-shell min-w-0 max-h-[640px] overflow-x-auto overflow-y-auto">
-          <div className="relative min-w-max">
-            <div className="sticky top-0 z-10 min-w-max bg-card px-3 pb-1 pt-1">
+          <div className="relative min-w-full" style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content' }}>
+            <div className="sticky top-0 z-10 bg-card px-3 pb-1 pt-1" style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content' }}>
               {table.getHeaderGroups().map((headerGroup) => (
-                <div key={headerGroup.id} className="grid min-w-max" style={ACCOUNT_GRID_STYLE}>
+                <div key={headerGroup.id} className="grid shrink-0" style={ACCOUNT_GRID_STYLE}>
                   {headerGroup.headers.map((header) => (
                     <div
                       key={header.id}
@@ -359,7 +363,7 @@ export const AccountTable = memo(function AccountTable() {
                     <div
                       key={`skeleton-${index}`}
                       className="absolute left-0 top-0 px-3 py-1"
-                      style={{ transform: `translateY(${index * 62}px)` }}
+                      style={{ transform: `translateY(${index * 62}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
                     >
                       <SkeletonRow columns={9} />
                     </div>
@@ -372,10 +376,10 @@ export const AccountTable = memo(function AccountTable() {
                         data-index={virtualRow.index}
                         ref={rowVirtualizer.measureElement}
                         className="absolute left-0 top-0 px-3 py-1"
-                        style={{ transform: `translateY(${virtualRow.start}px)` }}
+                        style={{ transform: `translateY(${virtualRow.start}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
                       >
                         <div
-                          className={`grid min-h-[62px] min-w-max items-center gap-0 rounded-[10px] px-0 py-0 transition ${
+                          className={`grid min-h-[62px] shrink-0 items-center gap-0 rounded-[10px] px-0 py-0 transition ${
                             row.getIsSelected() ? 'bg-neon/8' : 'bg-panel hover:bg-hover'
                           }`}
                           style={ACCOUNT_GRID_STYLE}
