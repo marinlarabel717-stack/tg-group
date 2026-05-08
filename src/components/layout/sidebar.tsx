@@ -1,6 +1,6 @@
 import { Bot, Boxes, ChartColumnBig, FileClock, Network, Users } from 'lucide-react'
 import clsx from 'clsx'
-import { motion } from 'framer-motion'
+import { memo } from 'react'
 import { useAppStore } from '../../store/appstore'
 import type { ModuleKey } from '../../types'
 import { moduleLabelMap } from '../../lib/ui-text'
@@ -14,17 +14,17 @@ const items: { key: ModuleKey; label: string; icon: typeof ChartColumnBig }[] = 
   { key: 'logs', label: moduleLabelMap.logs, icon: FileClock }
 ]
 
-export function Sidebar() {
+export const Sidebar = memo(function Sidebar() {
   const activeModule = useAppStore((state) => state.activeModule)
   const setModule = useAppStore((state) => state.setModule)
 
   return (
-    <aside className="relative flex w-[280px] flex-col rounded-[28px] border border-white/10 bg-panel/75 p-5 backdrop-blur-2xl shadow-glass">
+    <aside className="relative flex w-[280px] flex-col rounded-[28px] border border-white/10 bg-panel/88 p-5 shadow-glass contain-layout">
       <button
         onClick={() => setModule('dashboard')}
-        className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 transition hover:bg-white/10"
+        className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 transition hover:bg-white/[0.06]"
       >
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-neon to-cyan-300 text-base font-black text-slate-950 shadow-neon">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-neon to-cyan-300 text-base font-black text-slate-950">
           TM
         </div>
         <div className="text-left">
@@ -43,15 +43,12 @@ export function Sidebar() {
               className={clsx(
                 'group relative flex h-14 items-center gap-3 rounded-2xl px-4 text-left transition-all duration-300',
                 isActive
-                  ? 'bg-white/10 text-white shadow-neon'
+                  ? 'bg-white/[0.10] text-white'
                   : 'text-slate-300 hover:bg-white/5 hover:text-white'
               )}
             >
               {isActive ? (
-                <motion.span
-                  layoutId="sidebar-indicator"
-                  className="absolute left-0 top-2 h-10 w-1 rounded-r-full bg-neon"
-                />
+                <span className="absolute left-0 top-2 h-10 w-1 rounded-r-full bg-neon" />
               ) : null}
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/40">
                 <Icon size={20} />
@@ -69,9 +66,9 @@ export function Sidebar() {
             <div className="text-2xl font-semibold text-white">99.82%</div>
             <div className="text-sm text-textMuted">运行健康度</div>
           </div>
-          <div className="h-3 w-3 animate-pulseLine rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(34,211,238,0.8)]" />
+          <div className="h-3 w-3 animate-pulseLine rounded-full bg-cyan-300" />
         </div>
       </div>
     </aside>
   )
-}
+})

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -34,7 +34,7 @@ function actionButtonClass() {
   return 'flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-950/40 text-slate-300 transition hover:border-neon/40 hover:bg-neon/10 hover:text-neonSoft hover:shadow-neon'
 }
 
-function SkeletonRow({ columns }: { columns: number }) {
+const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
     <div className="grid min-h-[68px] animate-pulse grid-cols-[52px_150px_130px_120px_130px_130px_160px_140px] gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
       {Array.from({ length: columns }).map((_, index) => (
@@ -42,7 +42,7 @@ function SkeletonRow({ columns }: { columns: number }) {
       ))}
     </div>
   )
-}
+})
 
 export function AccountTable({ data, externalSearch = '', onExternalSearchChange }: AccountTableProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'lastActive', desc: false }])
@@ -131,6 +131,12 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
     []
   )
 
+  const handleGlobalFilterChange = useCallback((value: unknown) => {
+    const next = String(value)
+    setGlobalFilter(next)
+    onExternalSearchChange?.(next)
+  }, [onExternalSearchChange])
+
   const table = useReactTable({
     data,
     columns,
@@ -138,11 +144,7 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
     enableRowSelection: true,
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
-    onGlobalFilterChange: (value) => {
-      const next = String(value)
-      setGlobalFilter(next)
-      onExternalSearchChange?.(next)
-    },
+    onGlobalFilterChange: handleGlobalFilterChange,
     onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
@@ -156,8 +158,8 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 72,
-    overscan: 8
+    estimateSize: () => 68,
+    overscan: 5
   })
 
   const virtualRows = rowVirtualizer.getVirtualItems()
@@ -210,9 +212,9 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
       />
 
       <GlassPanel className="overflow-hidden p-0">
-        <div ref={parentRef} className="max-h-[640px] overflow-auto">
+        <div ref={parentRef} className="virtual-scroll-shell max-h-[640px] overflow-auto">
           <table className="w-full table-fixed border-separate border-spacing-0">
-            <thead className="sticky top-0 z-20 bg-[#101a2f]/95 backdrop-blur-xl">
+            <thead className="sticky top-0 z-20 bg-[#101a2f]/96">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} className="border-b border-white/10">
                   {headerGroup.headers.map((header) => (
@@ -238,7 +240,7 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
             <tbody className="relative block" style={{ height: `${loading ? 8 * 72 : totalSize}px` }}>
               {loading
                 ? Array.from({ length: 8 }).map((_, index) => (
-                    <tr key={`skeleton-${index}`} className="absolute left-0 top-0 block w-full px-4" style={{ transform: `translateY(${index * 72}px)` }}>
+                    <tr key={`skeleton-${index}`} className="absolute left-0 top-0 block w-full px-4 row-transform" style={{ transform: `translate3d(0, ${index * 72}px, 0)` }}>
                       <td className="block py-1">
                         <SkeletonRow columns={8} />
                       </td>
@@ -251,8 +253,8 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
                         key={row.id}
                         data-index={virtualRow.index}
                         ref={rowVirtualizer.measureElement}
-                        className="absolute left-0 top-0 block w-full px-4"
-                        style={{ transform: `translateY(${virtualRow.start}px)` }}
+                        className="absolute left-0 top-0 block w-full px-4 row-transform"
+                        style={{ transform: `translate3d(0, ${virtualRow.start}px, 0)` }}
                       >
                         <td className="block py-1">
                           <div

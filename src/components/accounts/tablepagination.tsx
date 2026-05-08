@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface TablePaginationProps {
@@ -12,7 +13,7 @@ interface TablePaginationProps {
   onPageSizeChange: (size: number) => void
 }
 
-export function TablePagination({
+export const TablePagination = memo(function TablePagination({
   pageIndex,
   pageCount,
   pageSize,
@@ -66,4 +67,4 @@ export function TablePagination({
       </div>
     </div>
   )
-}
+})

@@ -16,7 +16,8 @@ function createWindow() {
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     titleBarOverlay: false,
     trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 18 } : undefined,
-    vibrancy: process.platform === 'darwin' ? 'sidebar' : undefined,
+    show: false,
+    vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
     visualEffectState: process.platform === 'darwin' ? 'active' : undefined,
     backgroundMaterial: process.platform === 'win32' ? 'mica' : 'auto',
     transparent: false,
@@ -29,7 +30,9 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
       sandbox: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      spellcheck: false,
+      backgroundThrottling: true
     }
   })
 
@@ -41,6 +44,10 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null
+  })
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show()
   })
 }
 

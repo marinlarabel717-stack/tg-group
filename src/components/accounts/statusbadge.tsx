@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import clsx from 'clsx'
 import type { AccountStatus } from '../../types'
 import { formatAccountStatus } from '../../lib/ui-text'
@@ -11,7 +12,7 @@ const styles: Record<AccountStatus, string> = {
   Checking: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/20'
 }
 
-export function StatusBadge({ status }: { status: AccountStatus }) {
+export const StatusBadge = memo(function StatusBadge({ status }: { status: AccountStatus }) {
   return (
     <span
       className={clsx(
@@ -22,4 +23,4 @@ export function StatusBadge({ status }: { status: AccountStatus }) {
       {formatAccountStatus(status)}
     </span>
   )
-}
+})

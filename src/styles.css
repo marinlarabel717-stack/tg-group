@@ -23,6 +23,8 @@ body {
   color: #f8fafc;
   overflow: hidden;
   user-select: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -53,4 +55,20 @@ textarea,
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(59, 130, 246, 0.6);
+}
+
+.content-visibility-auto {
+  content-visibility: auto;
+}
+
+.contain-layout {
+  contain: layout paint style;
+}
+
+.virtual-scroll-shell {
+  contain: strict;
+}
+
+.row-transform {
+  transform: translateZ(0);
 }

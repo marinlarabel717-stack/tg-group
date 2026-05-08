@@ -1,8 +1,8 @@
-import type { CSSProperties } from 'react'
+import { memo, type CSSProperties } from 'react'
 import { Bell, Search, Settings, Sparkles } from 'lucide-react'
 import { useAppStore } from '../../store/appstore'
 
-export function Topbar() {
+export const Topbar = memo(function Topbar() {
   const search = useAppStore((state) => state.search)
   const setSearch = useAppStore((state) => state.setSearch)
   const notificationCount = useAppStore((state) => state.notificationCount)
@@ -10,7 +10,7 @@ export function Topbar() {
 
   return (
     <div className="flex h-full items-center gap-4 px-4">
-      <div className="flex min-w-[240px] items-center gap-3 rounded-2xl border border-cyan-300/10 bg-slate-950/35 px-4 py-3 text-cyan-200 shadow-neon">
+      <div className="flex min-w-[240px] items-center gap-3 rounded-2xl border border-cyan-300/10 bg-slate-950/35 px-4 py-3 text-cyan-200">
         <Sparkles size={18} />
         <div>
           <div className="text-xs tracking-[0.22em] text-textMuted">实时中枢</div>
@@ -24,18 +24,18 @@ export function Topbar() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="搜索账号 / 用户名 / 国家"
-          className="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/45 pl-11 pr-4 text-sm text-textMain outline-none transition focus:border-neon/50 focus:shadow-neon"
+          className="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/45 pl-11 pr-4 text-sm text-textMain outline-none transition focus:border-neon/35"
         />
       </div>
 
-      <button title="通知" className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/40 text-slate-200 transition hover:border-neon/40 hover:text-white hover:shadow-neon" style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
+      <button title="通知" className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/40 text-slate-200 transition hover:border-neon/30 hover:text-white" style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
         <Bell size={18} />
         <span className="absolute right-2 top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-neon px-1 text-[10px] font-bold text-white">
           {notificationCount}
         </span>
       </button>
 
-      <button title="设置" className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/40 text-slate-200 transition hover:border-neon/40 hover:text-white hover:shadow-neon" style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
+      <button title="设置" className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/40 text-slate-200 transition hover:border-neon/30 hover:text-white" style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
         <Settings size={18} />
       </button>
 
@@ -50,4 +50,4 @@ export function Topbar() {
       </div>
     </div>
   )
-}
+})

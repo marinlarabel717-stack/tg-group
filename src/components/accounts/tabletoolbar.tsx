@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Loader2, RefreshCcw, Search, X } from 'lucide-react'
 
 interface TableToolbarProps {
@@ -9,7 +10,7 @@ interface TableToolbarProps {
   onRefresh?: () => void
 }
 
-export function TableToolbar({
+export const TableToolbar = memo(function TableToolbar({
   search,
   onSearchChange,
   selectedCount,
@@ -25,7 +26,7 @@ export function TableToolbar({
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="按手机号、国家、用户名、Proxy 搜索"
-          className="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/45 pl-11 pr-10 text-sm text-textMain outline-none transition hover:border-neon/30 focus:border-neon/50 focus:shadow-neon"
+          className="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/45 pl-11 pr-10 text-sm text-textMain outline-none transition hover:border-neon/25 focus:border-neon/35"
         />
         {search ? (
           <button
@@ -50,11 +51,11 @@ export function TableToolbar({
       <button
         title="刷新数据"
         onClick={onRefresh}
-        className="flex h-12 items-center gap-2 rounded-2xl border border-neon/20 bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:border-neon/40 hover:bg-neon/15 hover:shadow-neon"
+        className="flex h-12 items-center gap-2 rounded-2xl border border-neon/20 bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:border-neon/35 hover:bg-neon/15"
       >
         {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
         刷新
       </button>
     </div>
   )
-}
+})

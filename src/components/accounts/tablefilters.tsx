@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 
 interface FilterOption {
@@ -50,7 +51,7 @@ function FilterSelect({
   )
 }
 
-export function TableFilters(props: TableFiltersProps) {
+export const TableFilters = memo(function TableFilters(props: TableFiltersProps) {
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-[24px] border border-white/10 bg-white/[0.03] px-4 py-4 shadow-glass">
       <div className="mr-1 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/45 text-neonSoft">
@@ -62,4 +63,4 @@ export function TableFilters(props: TableFiltersProps) {
       <FilterSelect label="Proxy" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
     </div>
   )
-}
+})

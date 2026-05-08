@@ -18,15 +18,15 @@ export default {
         textMuted: '#94a3b8'
       },
       boxShadow: {
-        glass: '0 10px 40px rgba(8, 15, 30, 0.35)',
-        neon: '0 0 0 1px rgba(59,130,246,0.45), 0 0 24px rgba(59,130,246,0.22)',
-        panel: '0 18px 50px rgba(2, 8, 23, 0.45)'
+        glass: '0 6px 18px rgba(8, 15, 30, 0.22)',
+        neon: '0 0 0 1px rgba(59,130,246,0.28), 0 0 10px rgba(59,130,246,0.12)',
+        panel: '0 10px 28px rgba(2, 8, 23, 0.28)'
       },
       borderRadius: {
         '4xl': '2rem'
       },
       backgroundImage: {
-        cyber: 'radial-gradient(circle at top left, rgba(59,130,246,0.16), transparent 28%), radial-gradient(circle at top right, rgba(96,165,250,0.12), transparent 22%), linear-gradient(180deg, rgba(7,17,31,0.98), rgba(8,14,26,1))'
+        cyber: 'radial-gradient(circle at top left, rgba(59,130,246,0.10), transparent 24%), linear-gradient(180deg, rgba(7,17,31,0.98), rgba(8,14,26,1))'
       },
       keyframes: {
         float: {
@@ -34,13 +34,13 @@ export default {
           '50%': { transform: 'translateY(-4px)' }
         },
         pulseLine: {
-          '0%, 100%': { opacity: '0.45' },
-          '50%': { opacity: '1' }
+          '0%, 100%': { opacity: '0.55' },
+          '50%': { opacity: '0.85' }
         }
       },
       animation: {
         float: 'float 4s ease-in-out infinite',
-        pulseLine: 'pulseLine 2.4s ease-in-out infinite'
+        pulseLine: 'pulseLine 3.8s ease-in-out infinite'
       }
     }
   },

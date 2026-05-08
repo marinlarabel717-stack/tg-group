@@ -1,4 +1,4 @@
-import type { PropsWithChildren, ReactNode } from 'react'
+import { memo, type PropsWithChildren, type ReactNode } from 'react'
 import clsx from 'clsx'
 
 interface GlassPanelProps extends PropsWithChildren {
@@ -6,11 +6,11 @@ interface GlassPanelProps extends PropsWithChildren {
   header?: ReactNode
 }
 
-export function GlassPanel({ className, header, children }: GlassPanelProps) {
+export const GlassPanel = memo(function GlassPanel({ className, header, children }: GlassPanelProps) {
   return (
     <section
       className={clsx(
-        'rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl shadow-panel',
+        'content-visibility-auto rounded-3xl border border-white/10 bg-[#111a2b]/78 backdrop-blur-sm shadow-glass',
         className
       )}
     >
@@ -18,4 +18,4 @@ export function GlassPanel({ className, header, children }: GlassPanelProps) {
       <div className="px-6 py-5">{children}</div>
     </section>
   )
-}
+})

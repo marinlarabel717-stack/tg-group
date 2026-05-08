@@ -1,5 +1,5 @@
+import { memo } from 'react'
 import { ExternalLink, FolderOpen, Info, Lock } from 'lucide-react'
-import { motion } from 'framer-motion'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
 import type { AccountRecord } from '../../types'
@@ -9,7 +9,7 @@ function actionClass() {
   return 'flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-950/35 text-slate-300 transition hover:border-neon/40 hover:bg-neon/10 hover:text-neonSoft hover:shadow-neon'
 }
 
-export function AccountsTable({ accounts }: { accounts: AccountRecord[] }) {
+export const AccountsTable = memo(function AccountsTable({ accounts }: { accounts: AccountRecord[] }) {
   return (
     <GlassPanel
       className="overflow-hidden"
@@ -37,12 +37,9 @@ export function AccountsTable({ accounts }: { accounts: AccountRecord[] }) {
             </tr>
           </thead>
           <tbody>
-            {accounts.map((account, index) => (
-              <motion.tr
+            {accounts.map((account) => (
+              <tr
                 key={account.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.04 }}
                 className="group"
               >
                 <td className="rounded-l-3xl border border-white/10 border-r-0 bg-white/5 px-4 py-4 transition group-hover:border-neon/30 group-hover:bg-white/[0.08]">
@@ -70,11 +67,11 @@ export function AccountsTable({ accounts }: { accounts: AccountRecord[] }) {
                     <button title="跳转外部" className={actionClass()}><ExternalLink size={16} /></button>
                   </div>
                 </td>
-              </motion.tr>
+              </tr>
             ))}
           </tbody>
         </table>
       </div>
     </GlassPanel>
   )
-}
+})
