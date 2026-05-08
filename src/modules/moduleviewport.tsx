@@ -1,0 +1,32 @@
+import { lazy, memo, Suspense, useMemo, type ComponentType, type LazyExoticComponent } from 'react'
+import { useUIStore } from '../stores/uistore'
+import { moduleLabelMap } from '../lib/ui-text'
+import type { ModuleKey } from '../types'
+import { ModuleLoading } from './moduleloading'
+
+const DashboardModule = lazy(() => import('./dashboard-module'))
+const AccountsModule = lazy(() => import('./accounts-module'))
+const AutomationModule = lazy(() => import('./automation-module'))
+const ProxyPoolModule = lazy(() => import('./proxy-pool-module'))
+const SessionManagerModule = lazy(() => import('./session-manager-module'))
+const LogsModule = lazy(() => import('./logs-module'))
+
+const moduleMap: Record<ModuleKey, LazyExoticComponent<ComponentType>> = {
+  dashboard: DashboardModule,
+  accounts: AccountsModule,
+  automation: AutomationModule,
+  'proxy-pool': ProxyPoolModule,
+  'session-manager': SessionManagerModule,
+  logs: LogsModule
+}
+
+export const ModuleViewport = memo(function ModuleViewport() {
+  const activeModule = useUIStore((state) => state.activeModule)
+  const ActiveComponent = useMemo(() => moduleMap[activeModule], [activeModule])
+
+  return (
+    <Suspense fallback={<ModuleLoading title={moduleLabelMap[activeModule]} />}>
+      <ActiveComponent />
+    </Suspense>
+  )
+})

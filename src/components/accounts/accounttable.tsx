@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -12,26 +12,22 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowUpDown, ExternalLink, FolderOpen, Info, Lock, Loader2 } from 'lucide-react'
+import { shallow } from 'zustand/shallow'
 import type { AccountRecord } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
 import { TableFilters } from './tablefilters'
 import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
+import { filterAccounts, useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatProxyStatus, formatSessionStatus } from '../../lib/ui-text'
-
-interface AccountTableProps {
-  data: AccountRecord[]
-  externalSearch?: string
-  onExternalSearchChange?: (value: string) => void
-}
 
 function checkboxClass() {
   return 'h-4 w-4 rounded border border-white/15 bg-slate-950/50 accent-blue-500'
 }
 
 function actionButtonClass() {
-  return 'flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-950/40 text-slate-300 transition hover:border-neon/40 hover:bg-neon/10 hover:text-neonSoft hover:shadow-neon'
+  return 'flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-950/40 text-slate-300 transition hover:border-neon/30 hover:bg-neon/10 hover:text-neonSoft'
 }
 
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
@@ -44,25 +40,49 @@ const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) 
   )
 })
 
-export function AccountTable({ data, externalSearch = '', onExternalSearchChange }: AccountTableProps) {
+const TableRowActions = memo(function TableRowActions() {
+  return (
+    <div className="flex items-center gap-2">
+      <button title="打开目录" className={actionButtonClass()}><FolderOpen size={15} /></button>
+      <button title="锁定账号" className={actionButtonClass()}><Lock size={15} /></button>
+      <button title="查看详情" className={actionButtonClass()}><Info size={15} /></button>
+      <button title="跳转外部" className={actionButtonClass()}><ExternalLink size={15} /></button>
+    </div>
+  )
+})
+
+export const AccountTable = memo(function AccountTable() {
+  const { accounts, searchTerm, setSearchTerm } = useAccountStore(
+    (state) => ({
+      accounts: state.accounts,
+      searchTerm: state.searchTerm,
+      setSearchTerm: state.setSearchTerm
+    }),
+    shallow
+  )
+
+  const deferredSearch = useDeferredValue(searchTerm)
+  const data = useMemo(() => filterAccounts(accounts, deferredSearch), [accounts, deferredSearch])
+
   const [sorting, setSorting] = useState<SortingState>([{ id: 'lastActive', desc: false }])
   const [rowSelection, setRowSelection] = useState({})
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [globalFilter, setGlobalFilter] = useState(externalSearch)
+  const [globalFilter, setGlobalFilter] = useState(deferredSearch)
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [loading, setLoading] = useState(true)
   const [refreshTick, setRefreshTick] = useState(0)
   const parentRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    setGlobalFilter(externalSearch)
-  }, [externalSearch])
+    setGlobalFilter(deferredSearch)
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+  }, [deferredSearch])
 
   useEffect(() => {
     setLoading(true)
-    const timer = window.setTimeout(() => setLoading(false), 420)
+    const timer = window.setTimeout(() => setLoading(false), 160)
     return () => window.clearTimeout(timer)
-  }, [globalFilter, sorting, columnFilters, pagination.pageIndex, pagination.pageSize, refreshTick])
+  }, [data, sorting, columnFilters, pagination.pageIndex, pagination.pageSize, refreshTick])
 
   const columns = useMemo<ColumnDef<AccountRecord>[]>(
     () => [
@@ -118,24 +138,15 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
         header: '操作',
         enableSorting: false,
         enableColumnFilter: false,
-        cell: () => (
-          <div className="flex items-center gap-2">
-            <button title="打开目录" className={actionButtonClass()}><FolderOpen size={15} /></button>
-            <button title="锁定账号" className={actionButtonClass()}><Lock size={15} /></button>
-            <button title="查看详情" className={actionButtonClass()}><Info size={15} /></button>
-            <button title="跳转外部" className={actionButtonClass()}><ExternalLink size={15} /></button>
-          </div>
-        )
+        cell: () => <TableRowActions />
       }
     ],
     []
   )
 
-  const handleGlobalFilterChange = useCallback((value: unknown) => {
-    const next = String(value)
-    setGlobalFilter(next)
-    onExternalSearchChange?.(next)
-  }, [onExternalSearchChange])
+  const handleGlobalFilterChange = useCallback((value: string) => {
+    setSearchTerm(value)
+  }, [setSearchTerm])
 
   const table = useReactTable({
     data,
@@ -144,7 +155,7 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
     enableRowSelection: true,
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
-    onGlobalFilterChange: handleGlobalFilterChange,
+    onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
@@ -159,7 +170,7 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
     count: rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 68,
-    overscan: 5
+    overscan: 4
   })
 
   const virtualRows = rowVirtualizer.getVirtualItems()
@@ -167,29 +178,29 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
 
   const selectedCount = table.getFilteredSelectedRowModel().rows.length
   const countries = useMemo(
-    () => Array.from(new Set(data.map((item) => item.country))).map((value) => ({ label: value, value })),
-    [data]
+    () => Array.from(new Set(accounts.map((item) => item.country))).map((value) => ({ label: value, value })),
+    [accounts]
   )
   const statuses = useMemo(
-    () => Array.from(new Set(data.map((item) => item.status))).map((value) => ({ label: formatAccountStatus(value), value })),
-    [data]
+    () => Array.from(new Set(accounts.map((item) => item.status))).map((value) => ({ label: formatAccountStatus(value), value })),
+    [accounts]
   )
   const sessions = useMemo(
-    () => Array.from(new Set(data.map((item) => item.session))).map((value) => ({ label: formatSessionStatus(value), value })),
-    [data]
+    () => Array.from(new Set(accounts.map((item) => item.session))).map((value) => ({ label: formatSessionStatus(value), value })),
+    [accounts]
   )
   const proxies = useMemo(
-    () => Array.from(new Set(data.map((item) => item.proxy))).map((value) => ({ label: formatProxyStatus(value), value })),
-    [data]
+    () => Array.from(new Set(accounts.map((item) => item.proxy))).map((value) => ({ label: formatProxyStatus(value), value })),
+    [accounts]
   )
 
-  const getColumnFilter = (id: string) => String(table.getColumn(id)?.getFilterValue() ?? '')
+  const getColumnFilter = useCallback((id: string) => String(table.getColumn(id)?.getFilterValue() ?? ''), [table])
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 contain-layout">
       <TableToolbar
-        search={globalFilter}
-        onSearchChange={(value) => table.setGlobalFilter(value)}
+        search={searchTerm}
+        onSearchChange={handleGlobalFilterChange}
         selectedCount={selectedCount}
         totalCount={table.getFilteredRowModel().rows.length}
         loading={loading}
@@ -260,8 +271,8 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
                           <div
                             className={`grid min-h-[68px] grid-cols-[52px_150px_130px_120px_130px_130px_140px_160px_160px] items-center gap-3 rounded-2xl border px-4 py-3 transition ${
                               row.getIsSelected()
-                                ? 'border-neon/40 bg-neon/10 shadow-neon'
-                                : 'border-white/10 bg-white/[0.035] hover:border-neon/25 hover:bg-white/[0.06]'
+                                ? 'border-neon/35 bg-neon/8'
+                                : 'border-white/10 bg-white/[0.035] hover:border-neon/20 hover:bg-white/[0.05]'
                             }`}
                           >
                             {row.getVisibleCells().map((cell) => (
@@ -300,4 +311,4 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
       />
     </div>
   )
-}
+})
