@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises'
 import Database from 'better-sqlite3'
+import { AuthKey } from 'telegram/crypto/AuthKey'
 import type { Session } from 'telegram/sessions'
 import { StringSession } from 'telegram/sessions'
-import { TelethonSqliteSession } from './telethon-sqlite-session'
 
 interface TelethonSessionRow {
   dc_id: number
@@ -58,13 +58,13 @@ export class SessionLoader {
         throw new Error('Session 数据库缺少 auth_key')
       }
 
-      const session = new TelethonSqliteSession({
-        dcId: row.dc_id,
-        serverAddress: row.server_address,
-        port: row.port,
-        authKey: row.auth_key
-      })
-      await session.load()
+      const session = new StringSession('')
+      session.setDC(row.dc_id, row.server_address, row.port)
+
+      const authKey = new AuthKey()
+      await authKey.setKey(row.auth_key)
+      session.setAuthKey(authKey, row.dc_id)
+
       return session
     } finally {
       database.close()
