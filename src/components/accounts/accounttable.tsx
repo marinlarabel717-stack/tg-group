@@ -20,7 +20,7 @@ import {
   useReactTable
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUpDown, FolderOpen, Info, Loader2 } from 'lucide-react'
+import { ArrowUpDown, Loader2 } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
 import type { AccountRecord } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
@@ -33,8 +33,8 @@ import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatProfil
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '56px 168px 124px 124px 124px 124px 148px 168px 108px'
-const ACCOUNT_GRID_WIDTH = 1144
+const ACCOUNT_GRID_TEMPLATE = '56px 176px 120px 124px 180px 156px 204px'
+const ACCOUNT_GRID_WIDTH = 1016
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -46,8 +46,10 @@ function checkboxClass() {
   return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
 }
 
-function actionButtonClass() {
-  return 'flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft'
+function actionButtonClass(active = true) {
+  return `flex h-7 min-w-7 shrink-0 items-center justify-center rounded-[8px] border text-[12px] font-semibold transition ${active
+    ? 'border-white/10 bg-panel text-slate-200 hover:bg-hover hover:text-neonSoft'
+    : 'border-white/5 bg-slate-950/35 text-slate-500'}`
 }
 
 function cellTextClass(extra = '') {
@@ -97,6 +99,38 @@ function readProxy(account: AccountRecord) {
   return typeof proxy === 'string' && proxy.trim() ? proxy.trim() : '未配置'
 }
 
+function readNickname(account: AccountRecord) {
+  const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
+  const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
+  if (fullName) return fullName
+
+  const username = account.username?.trim() ?? ''
+  if (username) return username.replace(/^@/, '')
+
+  return '—'
+}
+
+function readUsername(account: AccountRecord) {
+  const username = account.username?.trim()
+  if (username) return username.startsWith('@') ? username : `@${username}`
+
+  const profileUsername = typeof account.profile?.username === 'string' ? account.profile.username.trim() : ''
+  if (profileUsername) return profileUsername.startsWith('@') ? profileUsername : `@${profileUsername}`
+
+  return ''
+}
+
+function readTwoFactor(account: AccountRecord) {
+  const raw = account.profile?.twoFA
+  if (typeof raw === 'string' && raw.trim()) return raw.trim()
+  return ''
+}
+
+function readLastLogin(account: AccountRecord) {
+  return formatDateTime(account.lastOnlineTime || account.lastCheckTime)
+}
+
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
     <div className="grid min-h-[52px] shrink-0 items-center gap-0 rounded-[10px] bg-panel" style={ACCOUNT_GRID_STYLE}>
@@ -110,16 +144,17 @@ const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) 
 })
 
 const TableRowActions = memo(function TableRowActions({ account }: { account: AccountRecord }) {
-  const revealPath = useAccountStore((state) => state.revealPath)
+  const username = readUsername(account)
+  const twoFactor = readTwoFactor(account)
+  const lastLogin = readLastLogin(account)
 
   return (
     <div className="flex w-full items-center justify-start gap-1.5 overflow-hidden">
-      <button title="打开目录" className={actionButtonClass()} onClick={() => void revealPath(account.sessionPath)}>
-        <FolderOpen size={15} />
-      </button>
-      <button title="打开 JSON" className={actionButtonClass()} onClick={() => void revealPath(account.jsonPath)}>
-        <Info size={15} />
-      </button>
+      <span title={username ? `用户名：${username}` : '用户名：未设置'} className={actionButtonClass(Boolean(username))}>@</span>
+      <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>🔓</span>
+      <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>
+      <span title="跳转（后续接功能）" className={actionButtonClass(false)}>↗</span>
+      <span title="打开网页版 Web（后续接功能）" className="flex h-7 min-w-[38px] shrink-0 items-center justify-center rounded-[8px] border border-white/5 bg-slate-950/35 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">web</span>
     </div>
   )
 })
@@ -223,7 +258,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'phone',
         header: '手机号',
-        size: 168,
+        size: 176,
         cell: ({ row }) => {
           const value = row.original.phone || '—'
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -232,7 +267,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'country',
         header: '国家',
-        size: 124,
+        size: 120,
         cell: ({ row }) => <CountryCell country={row.original.country} phone={row.original.phone} />
       },
       {
@@ -242,45 +277,27 @@ export const AccountTable = memo(function AccountTable() {
         cell: ({ row }) => <StatusBadge status={row.original.status} />
       },
       {
-        id: 'source',
-        header: '资料来源',
-        size: 124,
+        id: 'nickname',
+        header: '昵称',
+        size: 180,
         cell: ({ row }) => {
-          const value = formatProfileSource(row.original.profileSource)
+          const value = readNickname(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
         }
       },
       {
         id: 'proxy',
-        header: 'Proxy',
-        size: 124,
+        header: '代理',
+        size: 156,
         cell: ({ row }) => {
           const value = readProxy(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
         }
       },
       {
-        accessorKey: 'lastOnlineTime',
-        header: '最后活跃',
-        size: 148,
-        cell: ({ row }) => {
-          const value = formatDateTime(row.original.lastOnlineTime || row.original.lastCheckTime)
-          return <div className={cellTextClass()} title={value}>{value}</div>
-        }
-      },
-      {
-        accessorKey: 'username',
-        header: '用户名',
-        size: 168,
-        cell: ({ row }) => {
-          const value = row.original.username || '—'
-          return <div className={cellTextClass()} title={value}>{value}</div>
-        }
-      },
-      {
         id: 'actions',
         header: '操作',
-        size: 108,
+        size: 204,
         enableSorting: false,
         cell: ({ row }) => <TableRowActions account={row.original} />
       }
