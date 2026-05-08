@@ -3,15 +3,17 @@ import { DraggableTopbar } from './components/window/draggabletopbar'
 import { Sidebar } from './components/layout/sidebar'
 import { Topbar } from './components/layout/topbar'
 import { ModuleViewport } from './modules/moduleviewport'
+import { useUIStore } from './stores/uistore'
 
 function App() {
+  const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed)
   return (
     <AppFrame>
       <DraggableTopbar>
         <Topbar />
       </DraggableTopbar>
 
-      <div className="relative grid min-h-0 flex-1 grid-cols-[248px_1fr] gap-5 overflow-hidden px-5 py-5">
+      <div className={`relative grid min-h-0 flex-1 gap-5 overflow-hidden px-5 py-5 ${sidebarCollapsed ? 'grid-cols-[84px_1fr]' : 'grid-cols-[224px_1fr]'}`}>
         <Sidebar />
 
         <main className="flex min-h-0 min-w-0 flex-col gap-5 overflow-hidden rounded-[16px] bg-panel/95 p-5 contain-layout">

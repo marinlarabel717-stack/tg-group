@@ -23,7 +23,7 @@ export const StatusBadge = memo(function StatusBadge({ status }: { status: Accou
     <span
       title={label}
       className={clsx(
-        'inline-flex h-7 w-[108px] items-center justify-center overflow-hidden rounded-full px-2.5 text-center text-[11px] font-semibold tracking-[0.12em] whitespace-nowrap',
+        'inline-flex h-6 w-[102px] items-center justify-center overflow-hidden rounded-full px-2 text-center text-[10px] font-semibold tracking-[0.1em] whitespace-nowrap',
         styles[status]
       )}
     >

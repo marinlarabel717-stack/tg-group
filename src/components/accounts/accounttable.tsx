@@ -76,10 +76,10 @@ function readProxy(account: AccountRecord) {
 
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
-    <div className="grid min-h-[60px] shrink-0 items-center gap-0 rounded-[10px] bg-panel" style={ACCOUNT_GRID_STYLE}>
+    <div className="grid min-h-[52px] shrink-0 items-center gap-0 rounded-[10px] bg-panel" style={ACCOUNT_GRID_STYLE}>
       {Array.from({ length: columns }).map((_, index) => (
-        <div key={index} className="px-4 py-3.5">
-          <div className="h-9 animate-pulse rounded-[8px] bg-white/[0.03]" />
+        <div key={index} className="px-4 py-2.5">
+          <div className="h-7 animate-pulse rounded-[8px] bg-white/[0.03]" />
         </div>
       ))}
     </div>
@@ -291,7 +291,7 @@ export const AccountTable = memo(function AccountTable() {
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => viewportRef.current,
-    estimateSize: () => 62,
+    estimateSize: () => 54,
     overscan: 4,
     paddingStart: 0
   })
@@ -346,7 +346,7 @@ export const AccountTable = memo(function AccountTable() {
   }, [])
 
   return (
-    <div className="space-y-5 min-w-0">
+    <div className="space-y-4 min-w-0">
       <TableToolbar
         search={search}
         onSearchChange={handleSearchChange}
@@ -380,8 +380,8 @@ export const AccountTable = memo(function AccountTable() {
 
       <GlassPanel className="overflow-hidden p-0">
         <div className="min-w-0">
-          <div ref={viewportRef} className="virtual-scroll-shell min-w-0 max-h-[608px] overflow-y-auto overflow-x-hidden" onWheel={handleViewportWheel}>
-            <div className="relative overflow-hidden" style={{ height: `${tableLoading ? 8 * 62 + 64 : totalSize + 64}px` }}>
+          <div ref={viewportRef} className="virtual-scroll-shell min-w-0 max-h-[580px] overflow-y-auto overflow-x-hidden" onWheel={handleViewportWheel}>
+            <div className="relative overflow-hidden" style={{ height: `${tableLoading ? 8 * 54 + 56 : totalSize + 56}px` }}>
               <div
                 className="absolute left-0 top-0"
                 style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content', transform: `translateX(-${scrollLeft}px)` }}
@@ -392,7 +392,7 @@ export const AccountTable = memo(function AccountTable() {
                       {headerGroup.headers.map((header) => (
                         <div
                           key={header.id}
-                          className={`${cellShellClass(header.column.id, true)} h-[56px] shrink-0 text-left text-xs font-semibold tracking-[0.24em] text-textMuted`}
+                          className={`${cellShellClass(header.column.id, true)} h-[48px] shrink-0 text-left text-[11px] font-semibold tracking-[0.22em] text-textMuted`}
                         >
                           {header.isPlaceholder ? null : header.column.getCanSort() ? (
                             <button
@@ -423,8 +423,8 @@ export const AccountTable = memo(function AccountTable() {
                     ? Array.from({ length: 8 }).map((_, index) => (
                         <div
                           key={`skeleton-${index}`}
-                          className="absolute left-0 top-0 px-3 py-1"
-                          style={{ transform: `translateY(${index * 62}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
+                          className="absolute left-0 top-0 px-3 py-[3px]"
+                          style={{ transform: `translateY(${index * 54}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
                         >
                           <SkeletonRow columns={9} />
                         </div>
@@ -436,17 +436,17 @@ export const AccountTable = memo(function AccountTable() {
                             key={row.id}
                             data-index={virtualRow.index}
                             ref={rowVirtualizer.measureElement}
-                            className="absolute left-0 top-0 px-3 py-1"
+                            className="absolute left-0 top-0 px-3 py-[3px]"
                             style={{ transform: `translateY(${virtualRow.start}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
                           >
                             <div
-                              className={`grid min-h-[62px] shrink-0 items-center gap-0 rounded-[10px] transition ${
+                              className={`grid min-h-[54px] shrink-0 items-center gap-0 rounded-[10px] transition ${
                                 row.getIsSelected() ? 'bg-neon/8' : 'bg-panel hover:bg-hover'
                               }`}
                               style={ACCOUNT_GRID_STYLE}
                             >
                               {row.getVisibleCells().map((cell) => (
-                                <div key={cell.id} className={`${cellShellClass(cell.column.id)} shrink-0 py-3.5 text-sm text-textMain`}>
+                                <div key={cell.id} className={`${cellShellClass(cell.column.id)} shrink-0 py-2.5 text-[13px] text-textMain`}>
                                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                 </div>
                               ))}
