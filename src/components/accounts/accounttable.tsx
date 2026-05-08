@@ -51,9 +51,15 @@ function cellTextClass(extra = '') {
   return `block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${extra}`.trim()
 }
 
-function cellShellClass(columnId: string) {
+function cellShellClass(columnId: string, isHeader = false) {
   if (columnId === 'select') {
     return 'flex h-full w-full items-center justify-center px-0'
+  }
+
+  if (columnId === 'status') {
+    return isHeader
+      ? 'flex h-full w-full items-center justify-center px-4'
+      : 'flex h-full w-full items-center justify-center px-4'
   }
 
   if (columnId === 'actions') {
@@ -163,7 +169,7 @@ export const AccountTable = memo(function AccountTable() {
         id: 'select',
         size: 60,
         header: ({ table }) => (
-          <div className={cellShellClass('select')}>
+          <div className={cellShellClass('select', true)}>
             <input
               type="checkbox"
               title="全选当前页"
@@ -386,11 +392,13 @@ export const AccountTable = memo(function AccountTable() {
                       {headerGroup.headers.map((header) => (
                         <div
                           key={header.id}
-                          className={`${cellShellClass(header.column.id)} h-[56px] shrink-0 text-left text-xs font-semibold tracking-[0.24em] text-textMuted`}
+                          className={`${cellShellClass(header.column.id, true)} h-[56px] shrink-0 text-left text-xs font-semibold tracking-[0.24em] text-textMuted`}
                         >
                           {header.isPlaceholder ? null : header.column.getCanSort() ? (
                             <button
-                              className="flex w-full min-w-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-left transition hover:text-white"
+                              className={header.column.id === 'status'
+                                ? 'flex min-w-0 items-center justify-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-left transition hover:text-white'
+                                : 'flex w-full min-w-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-left transition hover:text-white'}
                               onClick={header.column.getToggleSortingHandler()}
                               title={String(header.column.columnDef.header ?? '')}
                             >
