@@ -81,10 +81,14 @@ function cellShellClass(columnId: string, isHeader = false) {
     return 'flex h-full w-full items-center justify-center px-0'
   }
 
-  if (columnId === 'phone' || columnId === 'country' || columnId === 'status') {
+  if (columnId === 'phone' || columnId === 'country') {
     return isHeader
       ? 'flex h-full w-full items-center justify-center px-2'
       : 'flex h-full w-full items-center justify-center px-2'
+  }
+
+  if (columnId === 'status') {
+    return 'flex h-full w-full items-center justify-start px-2'
   }
 
   if (columnId === 'nickname') {
