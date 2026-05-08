@@ -158,6 +158,25 @@ class StudioStore:
             'recent_logs': [dict(row) for row in recent_logs],
         }
 
+    def account_metrics(self):
+        with self.connect() as conn:
+            total = conn.execute('SELECT COUNT(*) FROM accounts').fetchone()[0]
+            normal = conn.execute("SELECT COUNT(*) FROM accounts WHERE status = '正常'").fetchone()[0]
+            abnormal = conn.execute(
+                "SELECT COUNT(*) FROM accounts WHERE status IN ('受限', '失效', '需重新登录', '检查失败')"
+            ).fetchone()[0]
+            enabled = conn.execute('SELECT COUNT(*) FROM accounts WHERE enabled = 1').fetchone()[0]
+            row = conn.execute(
+                "SELECT last_check_at FROM accounts WHERE last_check_at != '' ORDER BY last_check_at DESC LIMIT 1"
+            ).fetchone()
+        return {
+            'total': total,
+            'normal': normal,
+            'abnormal': abnormal,
+            'enabled': enabled,
+            'last_check_at': row['last_check_at'] if row else '-',
+        }
+
     def list_accounts(self, status: str = '', keyword: str = ''):
         query = 'SELECT * FROM accounts WHERE 1=1'
         params = []
@@ -229,9 +248,12 @@ class StudioStore:
 
     def import_session_files(self, file_paths):
         imported = []
+        skipped = []
+        renamed = 0
         for raw_path in file_paths:
             path = Path(raw_path)
             if not path.exists() or path.suffix.lower() != '.session':
+                skipped.append(str(raw_path))
                 continue
             target_name = path.name
             target_path = self.sessions_dir / target_name
@@ -241,6 +263,8 @@ class StudioStore:
                 target_name = f'{stem}_{suffix_index}.session'
                 target_path = self.sessions_dir / target_name
                 suffix_index += 1
+            if target_name != path.name:
+                renamed += 1
             shutil.copy2(path, target_path)
             payload = {
                 'display_name': target_path.stem,
@@ -252,7 +276,13 @@ class StudioStore:
             account_id = self.save_account(payload)
             imported.append(account_id)
             self.add_log('导入 Session', '成功', target_path.name, target_path.stem)
-        return imported
+        return {
+            'imported_ids': imported,
+            'imported_count': len(imported),
+            'skipped_count': len(skipped),
+            'renamed_count': renamed,
+            'skipped_files': skipped,
+        }
 
     def delete_accounts(self, account_ids):
         if not account_ids:
@@ -271,6 +301,16 @@ class StudioStore:
                         pass
                 self.add_log('删除账号', '成功', row['display_name'], row['display_name'])
             conn.execute(f"DELETE FROM accounts WHERE id IN ({','.join('?' * len(account_ids))})", list(account_ids))
+
+    def set_accounts_enabled(self, account_ids, enabled: bool):
+        if not account_ids:
+            return
+        with self.connect() as conn:
+            conn.execute(
+                f"UPDATE accounts SET enabled = ?, updated_at = ? WHERE id IN ({','.join('?' * len(account_ids))})",
+                [1 if enabled else 0, self.now(), *list(account_ids)],
+            )
+        self.add_log('批量启停账号', '成功', f"{'启用' if enabled else '停用'} {len(account_ids)} 个账号")
 
     def list_materials(self, account_id: int, kind: str = ''):
         query = 'SELECT * FROM materials WHERE account_id = ?'
