@@ -37,7 +37,23 @@ function actionButtonClass() {
 }
 
 function cellTextClass(extra = '') {
-  return `min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${extra}`.trim()
+  return `block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${extra}`.trim()
+}
+
+function cellShellClass(columnId: string, isHeader = false) {
+  if (columnId === 'select') {
+    return 'flex h-full w-full items-center justify-center px-0'
+  }
+
+  if (columnId === 'actions') {
+    return 'flex h-full w-full items-center justify-start px-4'
+  }
+
+  if (columnId === 'status') {
+    return `flex h-full w-full items-center justify-start ${isHeader ? 'px-4' : 'px-4'}`
+  }
+
+  return 'flex h-full w-full min-w-0 items-center justify-start px-4'
 }
 
 function readProxy(account: AccountRecord) {
@@ -64,7 +80,7 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
   const revealPath = useAccountStore((state) => state.revealPath)
 
   return (
-    <div className="flex w-full items-center justify-center gap-2 overflow-hidden">
+    <div className="flex w-full items-center justify-start gap-2 overflow-hidden">
       <button title="打开目录" className={actionButtonClass()} onClick={() => void revealPath(account.sessionPath)}>
         <FolderOpen size={15} />
       </button>
@@ -135,7 +151,7 @@ export const AccountTable = memo(function AccountTable() {
         id: 'select',
         size: 60,
         header: ({ table }) => (
-          <div className="flex h-full w-full items-center justify-center">
+          <div className={cellShellClass('select', true)}>
             <input
               type="checkbox"
               title="全选当前页"
@@ -149,7 +165,7 @@ export const AccountTable = memo(function AccountTable() {
           </div>
         ),
         cell: ({ row }) => (
-          <div className="flex h-full w-full items-center justify-center">
+          <div className={cellShellClass('select')}>
             <input
               type="checkbox"
               title="选择当前行"
@@ -333,11 +349,11 @@ export const AccountTable = memo(function AccountTable() {
                   {headerGroup.headers.map((header) => (
                     <div
                       key={header.id}
-                      className="flex h-[56px] min-w-0 shrink-0 items-center px-4 text-left text-xs font-semibold tracking-[0.24em] text-textMuted"
+                      className={`${cellShellClass(header.column.id, true)} h-[56px] shrink-0 text-left text-xs font-semibold tracking-[0.24em] text-textMuted`}
                     >
                       {header.isPlaceholder ? null : header.column.getCanSort() ? (
                         <button
-                          className="flex min-w-0 shrink-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap transition hover:text-white"
+                          className="flex w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-left transition hover:text-white"
                           onClick={header.column.getToggleSortingHandler()}
                           title={String(header.column.columnDef.header ?? '')}
                         >
@@ -347,7 +363,7 @@ export const AccountTable = memo(function AccountTable() {
                           <ArrowUpDown size={14} className="shrink-0" />
                         </button>
                       ) : (
-                        <div className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                        <div className="w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
                           {flexRender(header.column.columnDef.header, header.getContext())}
                         </div>
                       )}
@@ -385,7 +401,7 @@ export const AccountTable = memo(function AccountTable() {
                           style={ACCOUNT_GRID_STYLE}
                         >
                           {row.getVisibleCells().map((cell) => (
-                            <div key={cell.id} className="flex min-w-0 shrink-0 items-center px-4 py-3.5 text-sm text-textMain">
+                            <div key={cell.id} className={`${cellShellClass(cell.column.id)} shrink-0 py-3.5 text-sm text-textMain`}>
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </div>
                           ))}
