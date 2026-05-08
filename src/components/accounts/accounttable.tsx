@@ -21,6 +21,7 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowUpDown, FolderOpen, Info, Loader2 } from 'lucide-react'
+import * as FlagIcons from 'country-flag-icons/react/3x2'
 import type { AccountRecord } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
@@ -29,10 +30,11 @@ import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
 import { filterAccounts, useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatProfileSource } from '../../lib/ui-text'
+import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '60px 172px 132px 128px 128px 128px 160px 188px 124px'
-const ACCOUNT_GRID_WIDTH = 1220
+const ACCOUNT_GRID_TEMPLATE = '56px 168px 124px 124px 124px 124px 148px 168px 108px'
+const ACCOUNT_GRID_WIDTH = 1144
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -52,6 +54,26 @@ function cellTextClass(extra = '') {
   return `block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${extra}`.trim()
 }
 
+function CountryCell({ country, phone }: { country: string; phone: string }) {
+  const meta = resolveCountryMeta(phone, country)
+  const value = formatCountryDisplay(country, phone)
+
+  if (!meta) {
+    return <div className={cellTextClass()} title={value}>{value}</div>
+  }
+
+  const FlagComponent = FlagIcons[meta.iso2 as keyof typeof FlagIcons] as ((props: { title?: string; className?: string }) => JSX.Element) | undefined
+
+  return (
+    <div className="flex min-w-0 items-center gap-2" title={value}>
+      {FlagComponent ? (
+        <FlagComponent className="h-3.5 w-5 shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]" title={meta.nameZh} />
+      ) : null}
+      <span className={cellTextClass()}>{meta.nameZh}</span>
+    </div>
+  )
+}
+
 function cellShellClass(columnId: string, isHeader = false) {
   if (columnId === 'select') {
     return 'flex h-full w-full items-center justify-center px-0'
@@ -59,15 +81,15 @@ function cellShellClass(columnId: string, isHeader = false) {
 
   if (columnId === 'status') {
     return isHeader
-      ? 'flex h-full w-full items-center justify-center px-2.5'
-      : 'flex h-full w-full items-center justify-center px-2.5'
+      ? 'flex h-full w-full items-center justify-center px-2'
+      : 'flex h-full w-full items-center justify-center px-2'
   }
 
   if (columnId === 'actions') {
-    return 'flex h-full w-full items-center justify-start px-2.5'
+    return 'flex h-full w-full items-center justify-start px-2'
   }
 
-  return 'flex h-full w-full min-w-0 items-center justify-start px-2.5'
+  return 'flex h-full w-full min-w-0 items-center justify-start px-2'
 }
 
 function readProxy(account: AccountRecord) {
@@ -201,7 +223,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'phone',
         header: '手机号',
-        size: 180,
+        size: 168,
         cell: ({ row }) => {
           const value = row.original.phone || '—'
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -210,22 +232,19 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'country',
         header: '国家',
-        size: 132,
-        cell: ({ row }) => {
-          const value = formatCountryDisplay(row.original.country, row.original.phone)
-          return <div className={cellTextClass('country-flag-text')} title={value}>{value}</div>
-        }
+        size: 124,
+        cell: ({ row }) => <CountryCell country={row.original.country} phone={row.original.phone} />
       },
       {
         accessorKey: 'status',
         header: '状态',
-        size: 140,
+        size: 124,
         cell: ({ row }) => <StatusBadge status={row.original.status} />
       },
       {
         id: 'source',
         header: '资料来源',
-        size: 140,
+        size: 124,
         cell: ({ row }) => {
           const value = formatProfileSource(row.original.profileSource)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -234,7 +253,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'proxy',
         header: 'Proxy',
-        size: 140,
+        size: 124,
         cell: ({ row }) => {
           const value = readProxy(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -243,7 +262,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'lastOnlineTime',
         header: '最后活跃',
-        size: 160,
+        size: 148,
         cell: ({ row }) => {
           const value = formatDateTime(row.original.lastOnlineTime || row.original.lastCheckTime)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -252,7 +271,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'username',
         header: '用户名',
-        size: 188,
+        size: 168,
         cell: ({ row }) => {
           const value = row.original.username || '—'
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -261,7 +280,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'actions',
         header: '操作',
-        size: 124,
+        size: 108,
         enableSorting: false,
         cell: ({ row }) => <TableRowActions account={row.original} />
       }

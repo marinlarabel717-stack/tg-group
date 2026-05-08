@@ -135,16 +135,17 @@ export function findCountryByLabel(value: string | null | undefined) {
   return null
 }
 
+export function resolveCountryMeta(phone: string | null | undefined, explicitCountry?: string | null) {
+  return findCountryByLabel(explicitCountry) ?? findCountryByPhone(phone)
+}
+
 export function formatCountryDisplay(country: PhoneCountryMeta) {
   return `${isoToFlag(country.iso2)} ${country.nameZh}`
 }
 
 export function inferCountryDisplay(phone: string | null | undefined, explicitCountry?: string | null) {
-  const explicit = findCountryByLabel(explicitCountry)
-  if (explicit) return formatCountryDisplay(explicit)
-
-  const fromPhone = findCountryByPhone(phone)
-  if (fromPhone) return formatCountryDisplay(fromPhone)
+  const resolved = resolveCountryMeta(phone, explicitCountry)
+  if (resolved) return formatCountryDisplay(resolved)
 
   return explicitCountry?.trim() ?? ''
 }
