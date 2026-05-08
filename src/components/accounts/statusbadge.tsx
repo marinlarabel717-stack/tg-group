@@ -17,14 +17,17 @@ const styles: Record<AccountStatus, string> = {
 }
 
 export const StatusBadge = memo(function StatusBadge({ status }: { status: AccountStatus }) {
+  const label = formatAccountStatus(status)
+
   return (
     <span
+      title={label}
       className={clsx(
-        'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.12em]',
+        'inline-flex h-7 w-[108px] items-center justify-center overflow-hidden rounded-full px-2.5 text-center text-[11px] font-semibold tracking-[0.12em] whitespace-nowrap',
         styles[status]
       )}
     >
-      {formatAccountStatus(status)}
+      <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
     </span>
   )
 })
