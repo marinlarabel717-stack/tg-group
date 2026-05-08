@@ -8,6 +8,11 @@ export interface SpamBotParseResult {
 
 const RULES: Array<{ status: AccountStatus; summary: string; patterns: RegExp[] }> = [
   {
+    status: 'frozen',
+    summary: '账号处于冻结状态',
+    patterns: [/frozen/i, /freeze state/i, /account frozen/i, /已冻结/i, /冻结/i]
+  },
+  {
     status: 'multi_ip',
     summary: 'SpamBot 提示存在多 IP / 异地登录风险',
     patterns: [/multiple\s+ip/i, /different\s+ip/i, /many\s+locations/i, /多\s*ip/i, /异地登录/i]

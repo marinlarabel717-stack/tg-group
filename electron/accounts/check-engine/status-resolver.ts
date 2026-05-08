@@ -17,6 +17,7 @@ export class StatusResolver {
     const text = normalizeError(error).toLowerCase()
 
     if (!text) return 'unknown'
+    if (text.includes('frozen') || text.includes('freeze_state') || text.includes('freeze')) return 'frozen'
     if (text.includes('phone number banned') || text.includes('user_deactivated_ban') || text.includes('banned')) return 'banned'
     if (text.includes('auth_key_unregistered') || text.includes('session_revoked') || text.includes('session expired')) return 'session_expired'
     if (text.includes('not authorized') || text.includes('unauthorized') || text.includes('auth key') && text.includes('missing')) return 'not_logged_in'

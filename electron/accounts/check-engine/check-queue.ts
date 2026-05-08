@@ -7,6 +7,20 @@ interface QueueTask {
   attempt: number
 }
 
+const STATUS_LABELS: Record<AccountCheckResult['status'], string> = {
+  alive: '无限制',
+  banned: '封禁',
+  limited: '双向',
+  temporary_limited: '临时双向',
+  frozen: '冻结',
+  session_expired: 'Session 失效',
+  not_logged_in: '未登录',
+  multi_ip: '多 IP 登录',
+  timeout: '超时',
+  checking: '检测中',
+  unknown: '未检查'
+}
+
 interface CheckQueueOptions {
   concurrency?: number
   timeoutMs?: number
@@ -135,23 +149,33 @@ export class CheckQueue extends EventEmitter {
     if (result.retryable && task.attempt + 1 <= this.options.retryLimit) {
       const retryTask = { accountId: task.accountId, attempt: task.attempt + 1 }
       this.pending.push(retryTask)
-      this.appendLog('warning', task.accountId, `检测失败，准备重试：${result.errorMessage ?? result.status}`, retryTask.attempt + 1)
+      this.appendLog('warning', task.accountId, `检测失败，准备重试：${result.errorMessage ?? STATUS_LABELS[result.status]}`, task.attempt + 1, {
+        phone: result.phone,
+        status: result.status
+      })
       this.syncCounters()
       return
     }
 
     this.state.completedCount += 1
 
+    const phoneLabel = result.phone || `账号#${task.accountId}`
     if (result.status === 'timeout' || result.status === 'unknown') {
       this.state.failedCount += 1
-      this.appendLog('error', task.accountId, `检测结束：${result.status}${result.errorMessage ? ` - ${result.errorMessage}` : ''}`, task.attempt + 1)
+      this.appendLog('error', task.accountId, `${phoneLabel} ---- ${STATUS_LABELS[result.status]}${result.errorMessage ? ` - ${result.errorMessage}` : ''}`, task.attempt + 1, {
+        phone: result.phone,
+        status: result.status
+      })
     } else {
       const level: CheckLogLevel = result.status === 'alive' ? 'success' : 'warning'
-      this.appendLog(level, task.accountId, `检测结束：${result.status}`, task.attempt + 1)
+      this.appendLog(level, task.accountId, `${phoneLabel} ---- ${STATUS_LABELS[result.status]}`, task.attempt + 1, {
+        phone: result.phone,
+        status: result.status
+      })
     }
   }
 
-  private appendLog(level: CheckLogLevel, accountId: number | null, message: string, attempt?: number) {
+  private appendLog(level: CheckLogLevel, accountId: number | null, message: string, attempt?: number, meta?: { phone?: string; status?: AccountCheckResult['status'] | null }) {
     this.logSerial += 1
     const entry: CheckLogEntry = {
       id: `log-${Date.now()}-${this.logSerial}`,
@@ -159,7 +183,9 @@ export class CheckQueue extends EventEmitter {
       level,
       message,
       createdAt: new Date().toISOString(),
-      attempt
+      attempt,
+      phone: meta?.phone,
+      status: meta?.status ?? null
     }
     this.state.logs = [entry, ...this.state.logs].slice(0, 200)
     this.bump()

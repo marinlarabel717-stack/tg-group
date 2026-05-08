@@ -27,9 +27,45 @@ function isIncomingMessage(message: unknown) {
 
 export interface SpamBotCheckResult extends SpamBotParseResult {
   replyText: string
+  frozenByAppConfig?: boolean
+}
+
+function extractPrimitiveTokens(value: unknown, collector: string[] = []) {
+  if (value === null || value === undefined) return collector
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    collector.push(String(value))
+    return collector
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      extractPrimitiveTokens(item, collector)
+    }
+    return collector
+  }
+
+  if (typeof value === 'object') {
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      collector.push(key)
+      extractPrimitiveTokens(item, collector)
+    }
+  }
+
+  return collector
 }
 
 export class SpamBotChecker {
+  async detectFrozenState(client: TelegramClient) {
+    try {
+      const appConfig = await client.invoke(new Api.help.GetAppConfig({ hash: 0 }))
+      const haystack = extractPrimitiveTokens(appConfig).join(' ').toLowerCase()
+      return /frozen|freeze_state|freeze/.test(haystack)
+    } catch {
+      return false
+    }
+  }
+
   async check(client: TelegramClient): Promise<SpamBotCheckResult> {
     const entity = await client.getEntity('SpamBot')
     const beforeMessages = await client.getMessages(entity, { limit: 1 })
@@ -44,9 +80,14 @@ export class SpamBotChecker {
 
       if (reply) {
         const replyText = extractMessageText(reply)
+        const frozenByAppConfig = await this.detectFrozenState(client)
+        const parsed = parseSpamBotReply(replyText)
         return {
-          ...parseSpamBotReply(replyText),
-          replyText
+          ...parsed,
+          status: frozenByAppConfig ? 'frozen' : parsed.status,
+          summary: frozenByAppConfig ? '账号处于冻结状态' : parsed.summary,
+          replyText,
+          frozenByAppConfig
         }
       }
     }
@@ -55,9 +96,14 @@ export class SpamBotChecker {
     const fallbackReply = fallbackMessages.find((message) => isIncomingMessage(message) && extractMessageText(message))
     if (fallbackReply) {
       const replyText = extractMessageText(fallbackReply)
+      const frozenByAppConfig = await this.detectFrozenState(client)
+      const parsed = parseSpamBotReply(replyText)
       return {
-        ...parseSpamBotReply(replyText),
-        replyText
+        ...parsed,
+        status: frozenByAppConfig ? 'frozen' : parsed.status,
+        summary: frozenByAppConfig ? '账号处于冻结状态' : parsed.summary,
+        replyText,
+        frozenByAppConfig
       }
     }
 
@@ -65,7 +111,8 @@ export class SpamBotChecker {
       status: 'timeout',
       normalizedText: '',
       summary: '未在超时时间内收到 SpamBot 回复',
-      replyText: ''
+      replyText: '',
+      frozenByAppConfig: false
     }
   }
 

@@ -116,7 +116,7 @@ export function findCountryByLabel(value: string | null | undefined) {
 }
 
 export function formatCountryDisplay(country: PhoneCountryMeta) {
-  return `${isoToFlag(country.iso2)}${country.nameZh}`
+  return `${isoToFlag(country.iso2)} ${country.nameZh}`
 }
 
 export function inferCountryDisplay(phone: string | null | undefined, explicitCountry?: string | null) {

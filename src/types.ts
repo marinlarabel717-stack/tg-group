@@ -11,6 +11,7 @@ export type AccountStatus =
   | 'banned'
   | 'limited'
   | 'temporary_limited'
+  | 'frozen'
   | 'session_expired'
   | 'not_logged_in'
   | 'multi_ip'
@@ -132,6 +133,8 @@ export interface CheckLogEntry {
   message: string
   createdAt: string
   attempt?: number
+  phone?: string
+  status?: AccountStatus | null
 }
 
 export interface CheckQueueState {

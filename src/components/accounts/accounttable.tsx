@@ -29,6 +29,7 @@ import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
 import { filterAccounts, useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatProfileSource } from '../../lib/ui-text'
+import { useUIStore } from '../../stores/uistore'
 
 const ACCOUNT_GRID_TEMPLATE = '60px 180px 120px 140px 140px 140px 180px 240px 180px'
 const ACCOUNT_GRID_WIDTH = 1380
@@ -120,6 +121,7 @@ export const AccountTable = memo(function AccountTable() {
   const deleteSelected = useAccountStore((state) => state.deleteSelected)
   const deleteAll = useAccountStore((state) => state.deleteAll)
   const startSelectedCheck = useAccountStore((state) => state.startSelectedCheck)
+  const setActiveModule = useUIStore((state) => state.setActiveModule)
 
   const [sourceFilter, setSourceFilter] = useState('')
   const [proxyFilter, setProxyFilter] = useState('')
@@ -211,7 +213,7 @@ export const AccountTable = memo(function AccountTable() {
         size: 120,
         cell: ({ row }) => {
           const value = formatCountryDisplay(row.original.country, row.original.phone)
-          return <div className={cellTextClass()} title={value}>{value}</div>
+          return <div className={cellTextClass('country-flag-text')} title={value}>{value}</div>
         }
       },
       {
@@ -343,8 +345,9 @@ export const AccountTable = memo(function AccountTable() {
   }, [orderedIds, setSelectedIds])
 
   const handleStartCheck = useCallback((_actions: string[]) => {
+    setActiveModule('logs')
     void startSelectedCheck()
-  }, [startSelectedCheck])
+  }, [setActiveModule, startSelectedCheck])
 
   const handleScrollbarScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     setScrollLeft(event.currentTarget.scrollLeft)

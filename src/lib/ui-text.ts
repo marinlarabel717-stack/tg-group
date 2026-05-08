@@ -11,14 +11,15 @@ export const moduleLabelMap = {
 } as const
 
 export const accountStatusLabelMap: Record<AccountStatus, string> = {
-  alive: '存活',
+  alive: '无限制',
   banned: '封禁',
-  limited: '双向限制',
+  limited: '双向',
   temporary_limited: '临时双向',
+  frozen: '冻结',
   session_expired: 'Session 失效',
   not_logged_in: '未登录',
   multi_ip: '多 IP 登录',
-  timeout: '超时未连接',
+  timeout: '超时',
   checking: '检测中',
   unknown: '未检查'
 }
