@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from telethon import TelegramClient
-from telethon.errors import AuthKeyError, FloodWaitError, RpcError, SessionPasswordNeededError
+from telethon.errors import AuthKeyError, FloodWaitError, RPCError, SessionPasswordNeededError
 
 
 STATUS_OPTIONS = ['未检查', '正常', '受限', '失效', '需重新登录', '检查失败']
@@ -503,7 +503,7 @@ class StudioStore:
             status = '失效'
             check_result = 'session 文件损坏或不可用'
             last_error = 'session 文件损坏 / 不可读取'
-        except RpcError as exc:
+        except RPCError as exc:
             status = '检查失败'
             check_result = f'检查失败：{exc.__class__.__name__}'
             last_error = str(exc)
