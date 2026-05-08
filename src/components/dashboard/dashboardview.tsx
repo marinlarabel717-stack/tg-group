@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo } from 'react'
+import { memo, useEffect } from 'react'
 import { Activity, Globe2, RadioTower, ShieldAlert } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { KpiCard } from './kpicard'
@@ -12,27 +12,27 @@ const DashboardNetworkPanel = memo(function DashboardNetworkPanel() {
     <GlassPanel>
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <div className="text-lg font-semibold text-textMain">检查引擎概览</div>
-          <div className="text-sm text-textMuted">当前阶段只接 Session 登录检测、SpamBot 状态检测与数据库回写</div>
+          <div className="text-lg font-semibold text-textMain">本地账号网络</div>
+          <div className="text-sm text-textMuted">第一阶段只展示本地管理视角，不接自动化与代理池</div>
         </div>
-        <div className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs tracking-[0.2em] text-cyan-300">Check Engine</div>
+        <div className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs tracking-[0.2em] text-cyan-300">阶段一</div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         <div className="rounded-[16px] bg-panel p-6">
-          <div className="flex items-center gap-3 text-neonSoft"><Activity size={18} /> 资料回写</div>
+          <div className="flex items-center gap-3 text-neonSoft"><Activity size={18} /> 数据吞吐</div>
           <div className="mt-4 text-3xl font-semibold text-white">SQLite</div>
-          <div className="mt-2 text-sm text-textMuted">profile_json / status / 时间字段统一更新</div>
+          <div className="mt-2 text-sm text-textMuted">Session / JSON / 状态数据统一入库</div>
         </div>
         <div className="rounded-[16px] bg-panel p-6">
-          <div className="flex items-center gap-3 text-emerald-300"><Globe2 size={18} /> 登录检测</div>
-          <div className="mt-4 text-3xl font-semibold text-white">GramJS</div>
-          <div className="mt-2 text-sm text-textMuted">优先加载 Telethon SQLite Session，失败时回退字符串 Session</div>
+          <div className="flex items-center gap-3 text-emerald-300"><Globe2 size={18} /> 文件扫描</div>
+          <div className="mt-4 text-3xl font-semibold text-white">递归</div>
+          <div className="mt-2 text-sm text-textMuted">支持拖拽、文件夹扫描、同名 JSON 自动匹配</div>
         </div>
         <div className="rounded-[16px] bg-panel p-6">
-          <div className="flex items-center gap-3 text-warning"><ShieldAlert size={18} /> 状态判定</div>
-          <div className="mt-4 text-3xl font-semibold text-white">SpamBot</div>
-          <div className="mt-2 text-sm text-textMuted">自动解析限制、封禁、多 IP、超时等结果</div>
+          <div className="flex items-center gap-3 text-warning"><ShieldAlert size={18} /> 状态维护</div>
+          <div className="mt-4 text-3xl font-semibold text-white">Check Engine</div>
+          <div className="mt-2 text-sm text-textMuted">登录检测已接入，但不主动改动已确认界面结构</div>
         </div>
       </div>
     </GlassPanel>
@@ -47,7 +47,7 @@ const DashboardSessionPanel = memo(function DashboardSessionPanel() {
       <div className="flex items-center justify-between">
         <div>
           <div className="text-lg font-semibold text-textMain">Session 流</div>
-          <div className="text-sm text-textMuted">保留现有模块，不扩展自动化和加群能力</div>
+          <div className="text-sm text-textMuted">当前桌面框架预留区</div>
         </div>
         <RadioTower className="text-neonSoft" size={18} />
       </div>
@@ -71,13 +71,11 @@ const DashboardPreviewTable = memo(function DashboardPreviewTable() {
   const init = useAccountStore((state) => state.init)
   const accounts = useAccountStore((state) => state.accounts)
 
-  const preview = useMemo(() => accounts.slice(0, 8), [accounts])
-
   useEffect(() => {
     void init()
   }, [init])
 
-  return <AccountsTable accounts={preview} />
+  return <AccountsTable accounts={accounts.slice(0, 8)} />
 })
 
 export function DashboardView() {
