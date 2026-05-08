@@ -62,47 +62,25 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
 })
 
 export const AccountTable = memo(function AccountTable() {
-  const {
-    accounts,
-    loading,
-    busy,
-    search,
-    statusFilter,
-    countryFilter,
-    selectedIds,
-    checkState,
-    setSearch,
-    setStatusFilter,
-    setCountryFilter,
-    setSelectedIds,
-    refresh,
-    importFiles,
-    importFolder,
-    exportSelected,
-    deleteSelected,
-    deleteAll,
-    startSelectedCheck
-  } = useAccountStore((state) => ({
-    accounts: state.accounts,
-    loading: state.loading,
-    busy: state.busy,
-    search: state.search,
-    statusFilter: state.statusFilter,
-    countryFilter: state.countryFilter,
-    selectedIds: state.selectedIds,
-    checkState: state.checkState,
-    setSearch: state.setSearch,
-    setStatusFilter: state.setStatusFilter,
-    setCountryFilter: state.setCountryFilter,
-    setSelectedIds: state.setSelectedIds,
-    refresh: state.refresh,
-    importFiles: state.importFiles,
-    importFolder: state.importFolder,
-    exportSelected: state.exportSelected,
-    deleteSelected: state.deleteSelected,
-    deleteAll: state.deleteAll,
-    startSelectedCheck: state.startSelectedCheck
-  }))
+  const accounts = useAccountStore((state) => state.accounts)
+  const loading = useAccountStore((state) => state.loading)
+  const busy = useAccountStore((state) => state.busy)
+  const search = useAccountStore((state) => state.search)
+  const statusFilter = useAccountStore((state) => state.statusFilter)
+  const countryFilter = useAccountStore((state) => state.countryFilter)
+  const selectedIds = useAccountStore((state) => state.selectedIds)
+  const checkState = useAccountStore((state) => state.checkState)
+  const setSearch = useAccountStore((state) => state.setSearch)
+  const setStatusFilter = useAccountStore((state) => state.setStatusFilter)
+  const setCountryFilter = useAccountStore((state) => state.setCountryFilter)
+  const setSelectedIds = useAccountStore((state) => state.setSelectedIds)
+  const refresh = useAccountStore((state) => state.refresh)
+  const importFiles = useAccountStore((state) => state.importFiles)
+  const importFolder = useAccountStore((state) => state.importFolder)
+  const exportSelected = useAccountStore((state) => state.exportSelected)
+  const deleteSelected = useAccountStore((state) => state.deleteSelected)
+  const deleteAll = useAccountStore((state) => state.deleteAll)
+  const startSelectedCheck = useAccountStore((state) => state.startSelectedCheck)
 
   const deferredSearch = useDeferredValue(search)
   const data = useMemo(
