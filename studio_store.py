@@ -2,11 +2,13 @@ import os
 import random
 import shutil
 import sqlite3
+import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from telethon import TelegramClient
 from telethon.errors import AuthKeyError, FloodWaitError, RPCError, SessionPasswordNeededError
+from telethon.tl.functions.users import GetFullUserRequest
 
 
 STATUS_OPTIONS = ['未检查', '正常', '受限', '失效', '需重新登录', '检查失败']
@@ -43,8 +45,11 @@ class StudioStore:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     display_name TEXT NOT NULL,
                     phone TEXT DEFAULT '',
+                    username TEXT DEFAULT '',
+                    bio TEXT DEFAULT '',
                     session_name TEXT NOT NULL,
                     session_path TEXT NOT NULL,
+                    joined_groups_json TEXT DEFAULT '[]',
                     status TEXT NOT NULL DEFAULT '未检查',
                     last_check_at TEXT DEFAULT '',
                     last_check_result TEXT DEFAULT '',
@@ -113,6 +118,18 @@ class StudioStore:
                 );
                 '''
             )
+            self._ensure_account_columns(conn)
+
+    def _ensure_account_columns(self, conn):
+        existing = {row['name'] for row in conn.execute('PRAGMA table_info(accounts)').fetchall()}
+        migrations = {
+            'username': "ALTER TABLE accounts ADD COLUMN username TEXT DEFAULT ''",
+            'bio': "ALTER TABLE accounts ADD COLUMN bio TEXT DEFAULT ''",
+            'joined_groups_json': "ALTER TABLE accounts ADD COLUMN joined_groups_json TEXT DEFAULT '[]'",
+        }
+        for column, sql in migrations.items():
+            if column not in existing:
+                conn.execute(sql)
 
     def _init_defaults(self):
         defaults = {
@@ -131,6 +148,40 @@ class StudioStore:
 
     def now(self):
         return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    def normalize_joined_groups(self, value):
+        if isinstance(value, str):
+            try:
+                value = json.loads(value or '[]')
+            except Exception:
+                value = []
+        if not isinstance(value, list):
+            value = []
+        normalized = []
+        for item in value:
+            if isinstance(item, str):
+                normalized.append({'id': '', 'title': item, 'username': '', 'selected': False})
+                continue
+            if not isinstance(item, dict):
+                continue
+            normalized.append({
+                'id': str(item.get('id', '') or ''),
+                'title': str(item.get('title', '') or '').strip(),
+                'username': str(item.get('username', '') or '').strip(),
+                'selected': bool(item.get('selected', False)),
+            })
+        return normalized
+
+    def encode_joined_groups(self, value):
+        return json.dumps(self.normalize_joined_groups(value), ensure_ascii=False)
+
+    def selected_groups_summary(self, joined_groups):
+        groups = [item for item in self.normalize_joined_groups(joined_groups) if item.get('selected')]
+        if not groups:
+            return ''
+        titles = [item.get('title') or (f"@{item.get('username')}" if item.get('username') else '') for item in groups]
+        titles = [item for item in titles if item]
+        return ' | '.join(titles[:3]) + (f' 等{len(titles)}个' if len(titles) > 3 else '')
 
     def add_log(self, action: str, result: str, detail: str = '', account_name: str = ''):
         with self.connect() as conn:
@@ -177,25 +228,38 @@ class StudioStore:
             'last_check_at': row['last_check_at'] if row else '-',
         }
 
-    def list_accounts(self, status: str = '', keyword: str = ''):
+    def list_accounts(self, status: str = '', keyword: str = '', enabled_filter: str = ''):
         query = 'SELECT * FROM accounts WHERE 1=1'
         params = []
         if status and status != '全部状态':
             query += ' AND status = ?'
             params.append(status)
+        if enabled_filter == '已启用':
+            query += ' AND enabled = 1'
+        elif enabled_filter == '已停用':
+            query += ' AND enabled = 0'
         if keyword:
-            query += ' AND (display_name LIKE ? OR phone LIKE ? OR session_name LIKE ? OR target_chat LIKE ?)'
+            query += ' AND (display_name LIKE ? OR phone LIKE ? OR username LIKE ? OR session_name LIKE ? OR target_chat LIKE ?)'
             like = f'%{keyword.strip()}%'
-            params.extend([like, like, like, like])
+            params.extend([like, like, like, like, like])
         query += ' ORDER BY id DESC'
         with self.connect() as conn:
             rows = conn.execute(query, params).fetchall()
-        return [dict(row) for row in rows]
+        result = []
+        for row in rows:
+            item = dict(row)
+            item['joined_groups'] = self.normalize_joined_groups(item.get('joined_groups_json'))
+            result.append(item)
+        return result
 
     def get_account(self, account_id: int):
         with self.connect() as conn:
             row = conn.execute('SELECT * FROM accounts WHERE id = ?', (account_id,)).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        item = dict(row)
+        item['joined_groups'] = self.normalize_joined_groups(item.get('joined_groups_json'))
+        return item
 
     def save_account(self, payload: dict):
         now = self.now()
@@ -204,17 +268,20 @@ class StudioStore:
                 conn.execute(
                     '''
                     UPDATE accounts
-                    SET display_name=?, phone=?, status=?, last_check_at=?, last_check_result=?, last_error=?, target_chat=?, enabled=?, updated_at=?
+                    SET display_name=?, phone=?, username=?, bio=?, status=?, last_check_at=?, last_check_result=?, last_error=?, target_chat=?, joined_groups_json=?, enabled=?, updated_at=?
                     WHERE id=?
                     ''',
                     (
                         payload.get('display_name', '').strip() or '未命名账号',
                         payload.get('phone', '').strip(),
+                        payload.get('username', '').strip(),
+                        payload.get('bio', '').strip(),
                         payload.get('status', '未检查').strip() or '未检查',
                         payload.get('last_check_at', '').strip(),
                         payload.get('last_check_result', '').strip(),
                         payload.get('last_error', '').strip(),
                         payload.get('target_chat', '').strip(),
+                        self.encode_joined_groups(payload.get('joined_groups', payload.get('joined_groups_json', []))),
                         1 if payload.get('enabled', True) else 0,
                         now,
                         payload['id'],
@@ -224,14 +291,17 @@ class StudioStore:
             else:
                 conn.execute(
                     '''
-                    INSERT INTO accounts(display_name, phone, session_name, session_path, status, last_check_at, last_check_result, last_error, target_chat, enabled, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO accounts(display_name, phone, username, bio, session_name, session_path, joined_groups_json, status, last_check_at, last_check_result, last_error, target_chat, enabled, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''',
                     (
                         payload.get('display_name', '').strip() or '未命名账号',
                         payload.get('phone', '').strip(),
+                        payload.get('username', '').strip(),
+                        payload.get('bio', '').strip(),
                         payload.get('session_name', '').strip() or 'manual.session',
                         payload.get('session_path', '').strip() or '',
+                        self.encode_joined_groups(payload.get('joined_groups', payload.get('joined_groups_json', []))),
                         payload.get('status', '未检查').strip() or '未检查',
                         payload.get('last_check_at', '').strip(),
                         payload.get('last_check_result', '').strip(),
@@ -526,11 +596,44 @@ class StudioStore:
                 me = client.get_me()
                 phone = str(getattr(me, 'phone', '') or account.get('phone') or '').strip()
                 display_name = str(getattr(me, 'first_name', '') or '').strip() or account.get('display_name') or '未命名账号'
+                username = str(getattr(me, 'username', '') or account.get('username') or '').strip()
+                bio = str(account.get('bio') or '').strip()
+                joined_groups = self.normalize_joined_groups(account.get('joined_groups'))
+                try:
+                    full = client(GetFullUserRequest('me'))
+                    bio = str(getattr(getattr(full, 'full_user', None), 'about', '') or bio).strip()
+                except Exception:
+                    pass
+                try:
+                    existing_selected = {str(item.get('id') or item.get('title') or ''): bool(item.get('selected')) for item in joined_groups}
+                    joined_groups = []
+                    for dialog in client.get_dialogs(limit=300):
+                        entity = getattr(dialog, 'entity', None)
+                        if not entity:
+                            continue
+                        if not (getattr(dialog, 'is_group', False) or getattr(dialog, 'is_channel', False)):
+                            continue
+                        group_id = str(getattr(entity, 'id', '') or '')
+                        title = str(getattr(entity, 'title', '') or '').strip()
+                        group_username = str(getattr(entity, 'username', '') or '').strip()
+                        key = group_id or title
+                        joined_groups.append({
+                            'id': group_id,
+                            'title': title,
+                            'username': group_username,
+                            'selected': existing_selected.get(key, False),
+                        })
+                except Exception:
+                    pass
                 status = '正常'
                 check_result = 'session 可正常连接'
                 last_error = ''
                 account['phone'] = phone
                 account['display_name'] = display_name
+                account['username'] = username
+                account['bio'] = bio
+                account['joined_groups'] = joined_groups
+                account['target_chat'] = self.selected_groups_summary(joined_groups)
         except SessionPasswordNeededError:
             status = '需重新登录'
             check_result = '该账号需要两步验证密码'
