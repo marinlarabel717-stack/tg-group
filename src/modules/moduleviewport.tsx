@@ -25,8 +25,10 @@ export const ModuleViewport = memo(function ModuleViewport() {
   const ActiveComponent = useMemo(() => moduleMap[activeModule], [activeModule])
 
   return (
-    <Suspense fallback={<ModuleLoading title={moduleLabelMap[activeModule]} />}>
-      <ActiveComponent />
-    </Suspense>
+    <div className="min-h-0 h-full overflow-auto">
+      <Suspense fallback={<ModuleLoading title={moduleLabelMap[activeModule]} />}>
+        <ActiveComponent />
+      </Suspense>
+    </div>
   )
 })
