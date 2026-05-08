@@ -70,16 +70,16 @@ export class AccountRepository {
         @phone, @username, @userId, @country, @sessionPath, @jsonPath, @status, @profileJson, @profileSource, @lastCheckTime, @lastOnlineTime, @createdAt, @updatedAt
       )
       ON CONFLICT(session_path) DO UPDATE SET
-        phone = excluded.phone,
-        username = excluded.username,
-        user_id = excluded.user_id,
-        country = excluded.country,
+        phone = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.phone ELSE excluded.phone END,
+        username = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.username ELSE excluded.username END,
+        user_id = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.user_id ELSE excluded.user_id END,
+        country = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.country ELSE excluded.country END,
         json_path = excluded.json_path,
-        status = excluded.status,
-        profile_json = excluded.profile_json,
-        profile_source = excluded.profile_source,
-        last_check_time = excluded.last_check_time,
-        last_online_time = excluded.last_online_time,
+        status = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.status ELSE excluded.status END,
+        profile_json = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.profile_json ELSE excluded.profile_json END,
+        profile_source = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.profile_source ELSE excluded.profile_source END,
+        last_check_time = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.last_check_time ELSE excluded.last_check_time END,
+        last_online_time = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.last_online_time ELSE excluded.last_online_time END,
         updated_at = excluded.updated_at
     `)
 

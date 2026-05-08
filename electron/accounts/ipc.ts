@@ -27,7 +27,6 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
     mainWindow.webContents.send('accounts:check-state', checkQueue.getState())
-    mainWindow.webContents.send('accounts:updated', accountRepository.list())
   }
 
   checkQueue.on('state', emitCheckState)

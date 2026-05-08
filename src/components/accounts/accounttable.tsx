@@ -31,8 +31,8 @@ import { filterAccounts, useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatProfileSource } from '../../lib/ui-text'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '60px 176px 120px 136px 136px 136px 172px 212px 140px'
-const ACCOUNT_GRID_WIDTH = 1288
+const ACCOUNT_GRID_TEMPLATE = '60px 172px 132px 128px 128px 128px 160px 188px 124px'
+const ACCOUNT_GRID_WIDTH = 1220
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -45,7 +45,7 @@ function checkboxClass() {
 }
 
 function actionButtonClass() {
-  return 'flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft'
+  return 'flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft'
 }
 
 function cellTextClass(extra = '') {
@@ -59,15 +59,15 @@ function cellShellClass(columnId: string, isHeader = false) {
 
   if (columnId === 'status') {
     return isHeader
-      ? 'flex h-full w-full items-center justify-center px-3'
-      : 'flex h-full w-full items-center justify-center px-3'
+      ? 'flex h-full w-full items-center justify-center px-2.5'
+      : 'flex h-full w-full items-center justify-center px-2.5'
   }
 
   if (columnId === 'actions') {
-    return 'flex h-full w-full items-center justify-start px-3'
+    return 'flex h-full w-full items-center justify-start px-2.5'
   }
 
-  return 'flex h-full w-full min-w-0 items-center justify-start px-3'
+  return 'flex h-full w-full min-w-0 items-center justify-start px-2.5'
 }
 
 function readProxy(account: AccountRecord) {
@@ -91,7 +91,7 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
   const revealPath = useAccountStore((state) => state.revealPath)
 
   return (
-    <div className="flex w-full items-center justify-start gap-2 overflow-hidden">
+    <div className="flex w-full items-center justify-start gap-1.5 overflow-hidden">
       <button title="打开目录" className={actionButtonClass()} onClick={() => void revealPath(account.sessionPath)}>
         <FolderOpen size={15} />
       </button>
@@ -210,7 +210,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'country',
         header: '国家',
-        size: 120,
+        size: 132,
         cell: ({ row }) => {
           const value = formatCountryDisplay(row.original.country, row.original.phone)
           return <div className={cellTextClass('country-flag-text')} title={value}>{value}</div>
@@ -243,7 +243,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'lastOnlineTime',
         header: '最后活跃',
-        size: 180,
+        size: 160,
         cell: ({ row }) => {
           const value = formatDateTime(row.original.lastOnlineTime || row.original.lastCheckTime)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -252,7 +252,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'username',
         header: '用户名',
-        size: 240,
+        size: 188,
         cell: ({ row }) => {
           const value = row.original.username || '—'
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -261,7 +261,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'actions',
         header: '操作',
-        size: 180,
+        size: 124,
         enableSorting: false,
         cell: ({ row }) => <TableRowActions account={row.original} />
       }
@@ -293,7 +293,7 @@ export const AccountTable = memo(function AccountTable() {
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => viewportRef.current,
-    estimateSize: () => 54,
+    estimateSize: () => 52,
     overscan: 4,
     paddingStart: 0
   })
@@ -411,7 +411,7 @@ export const AccountTable = memo(function AccountTable() {
       <GlassPanel className="overflow-hidden p-0">
         <div className="min-w-0">
           <div ref={viewportRef} className="virtual-scroll-shell min-w-0 max-h-[580px] overflow-y-auto overflow-x-hidden" onWheel={handleViewportWheel}>
-            <div className="relative overflow-hidden" style={{ height: `${tableLoading ? 8 * 54 + 56 : totalSize + 56}px` }}>
+            <div className="relative overflow-hidden" style={{ height: `${tableLoading ? 8 * 52 + 56 : totalSize + 56}px` }}>
               <div
                 className="absolute left-0 top-0"
                 style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content', transform: `translateX(-${scrollLeft}px)` }}
@@ -448,13 +448,13 @@ export const AccountTable = memo(function AccountTable() {
                   ))}
                 </div>
 
-                <div className="relative" style={{ height: `${tableLoading ? 8 * 54 : totalSize}px` }}>
+                <div className="relative" style={{ height: `${tableLoading ? 8 * 52 : totalSize}px` }}>
                   {tableLoading
                     ? Array.from({ length: 8 }).map((_, index) => (
                         <div
                           key={`skeleton-${index}`}
                           className="absolute left-0 top-0 px-3 py-[3px]"
-                          style={{ transform: `translateY(${index * 54}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
+                          style={{ transform: `translateY(${index * 52}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
                         >
                           <SkeletonRow columns={9} />
                         </div>
@@ -470,13 +470,13 @@ export const AccountTable = memo(function AccountTable() {
                             style={{ transform: `translateY(${virtualRow.start}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
                           >
                             <div
-                              className={`grid min-h-[54px] shrink-0 items-center gap-0 rounded-[10px] transition ${
+                              className={`grid min-h-[52px] shrink-0 items-center gap-0 rounded-[10px] transition ${
                                 row.getIsSelected() ? 'bg-neon/8' : 'bg-panel hover:bg-hover'
                               }`}
                               style={ACCOUNT_GRID_STYLE}
                             >
                               {row.getVisibleCells().map((cell) => (
-                                <div key={cell.id} className={`${cellShellClass(cell.column.id)} shrink-0 py-2.5 text-[13px] text-textMain`}>
+                                <div key={cell.id} className={`${cellShellClass(cell.column.id)} shrink-0 py-2 text-[13px] text-textMain`}>
                                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                 </div>
                               ))}

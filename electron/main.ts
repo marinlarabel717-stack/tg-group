@@ -136,7 +136,9 @@ async function bootstrap() {
   const spamBotChecker = new SpamBotChecker()
   const statusResolver = new StatusResolver()
   const updateService = new AccountUpdateService()
-  const resultWriter = new CheckResultWriter(repository)
+  const resultWriter = new CheckResultWriter(repository, {
+    onWrite: (accounts) => emitAccountsUpdated(accounts)
+  })
   const checkEngine = new AccountCheckEngine(
     repository,
     sessionLoader,

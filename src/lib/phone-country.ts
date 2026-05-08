@@ -71,7 +71,10 @@ for (const country of PHONE_COUNTRIES) {
 }
 
 function normalizeCountryToken(value: string) {
-  return value.toLowerCase().replace(/[\s_\-()（）]+/g, '')
+  return value
+    .toLowerCase()
+    .replace(/[\u{1F1E6}-\u{1F1FF}]/gu, '')
+    .replace(/[\s_\-()（）]+/g, '')
 }
 
 function isoToFlag(iso2: string) {
@@ -112,7 +115,24 @@ export function findCountryByLabel(value: string | null | undefined) {
   if (!value) return null
   const trimmed = value.trim()
   if (!trimmed) return null
-  return COUNTRY_ALIAS_INDEX.get(normalizeCountryToken(trimmed)) ?? null
+
+  const normalized = normalizeCountryToken(trimmed)
+  const directMatch = COUNTRY_ALIAS_INDEX.get(normalized)
+  if (directMatch) return directMatch
+
+  const leadingIso2 = trimmed.match(/^[\s(（]*([A-Za-z]{2})\b/)
+  if (leadingIso2) {
+    const byIso = COUNTRY_ALIAS_INDEX.get(leadingIso2[1].toLowerCase())
+    if (byIso) return byIso
+  }
+
+  const compactLeadingIso2 = normalized.match(/^([a-z]{2})/)
+  if (compactLeadingIso2) {
+    const byIso = COUNTRY_ALIAS_INDEX.get(compactLeadingIso2[1])
+    if (byIso) return byIso
+  }
+
+  return null
 }
 
 export function formatCountryDisplay(country: PhoneCountryMeta) {
