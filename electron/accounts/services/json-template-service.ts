@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { inferCountryDisplay, inferPhoneFromText } from '../../../src/lib/phone-country'
 import type { AccountJsonProfile } from '../types'
 
 const DEFAULT_JSON_TEMPLATE: AccountJsonProfile = {
@@ -40,7 +41,7 @@ const DEFAULT_JSON_TEMPLATE: AccountJsonProfile = {
 }
 
 function inferPhoneFromBaseName(baseName: string) {
-  return /^\d{5,}$/.test(baseName) ? baseName : ''
+  return inferPhoneFromText(baseName)
 }
 
 function formatOffsetDate(date: Date) {
@@ -81,13 +82,15 @@ export class JsonTemplateService {
     const baseName = path.basename(sessionPath, path.extname(sessionPath))
     const now = new Date()
     const nowUnix = Math.floor(now.getTime() / 1000)
-    const normalizedPhone = typeof partial?.phone === 'string' && partial.phone.trim() ? partial.phone.trim() : inferPhoneFromBaseName(baseName)
+    const normalizedPhone = typeof partial?.phone === 'string' && partial.phone.trim() ? inferPhoneFromText(partial.phone) : inferPhoneFromBaseName(baseName)
+    const inferredCountry = inferCountryDisplay(normalizedPhone, typeof partial?.country === 'string' ? partial.country : null)
 
     return {
       ...DEFAULT_JSON_TEMPLATE,
       ...partial,
       id: partial?.id ?? '',
       phone: normalizedPhone,
+      country: inferredCountry,
       username: partial?.username ?? null,
       date_of_birth: partial?.date_of_birth ?? null,
       date_of_birth_integrity: partial?.date_of_birth_integrity ?? null,

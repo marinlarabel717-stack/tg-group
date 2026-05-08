@@ -64,7 +64,7 @@ export const Sidebar = memo(function Sidebar() {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar)
 
   return (
-    <aside className={`relative flex flex-col rounded-[16px] bg-panel/95 contain-layout transition-[width,padding] duration-200 ${sidebarCollapsed ? 'w-[84px] p-3' : 'w-[224px] p-3.5'}`}>
+    <aside className={`relative flex flex-col rounded-[16px] bg-panel/95 contain-layout transition-[width,padding] duration-200 ${sidebarCollapsed ? 'w-[84px] p-3' : 'w-[212px] p-3'}`}>
       <div className={`mb-3 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between gap-2'}`}>
         <SidebarBrand collapsed={sidebarCollapsed} />
         {!sidebarCollapsed ? (

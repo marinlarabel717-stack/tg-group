@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { inferCountryDisplay, inferPhoneFromText } from '../../../src/lib/phone-country'
 import type { AccountJsonProfile, AccountStatus, ImportAccountsResult, UpsertAccountInput } from '../types'
 import type { AccountRepository } from './account-repository'
 import { FileScanner } from './file-scanner'
@@ -14,8 +15,9 @@ function readStringField(profile: AccountJsonProfile, ...keys: string[]) {
   return ''
 }
 
-function inferCountry(profile: AccountJsonProfile) {
-  return readStringField(profile, 'country', 'countryCode', 'country_name')
+function inferCountry(profile: AccountJsonProfile, sessionPath: string) {
+  const phone = inferPhone(profile, sessionPath)
+  return inferCountryDisplay(phone, readStringField(profile, 'country', 'countryCode', 'country_name'))
 }
 
 function parseDateValue(value: unknown) {
@@ -60,11 +62,11 @@ function inferStatus(profile: AccountJsonProfile): AccountStatus {
 }
 
 function inferPhone(profile: AccountJsonProfile, sessionPath: string) {
-  const explicitPhone = readStringField(profile, 'phone', 'tel', 'mobile')
+  const explicitPhone = inferPhoneFromText(readStringField(profile, 'phone', 'tel', 'mobile'))
   if (explicitPhone) return explicitPhone
 
   const baseName = path.basename(sessionPath, path.extname(sessionPath))
-  return /^\d{5,}$/.test(baseName) ? baseName : ''
+  return inferPhoneFromText(baseName)
 }
 
 function inferUsername(profile: AccountJsonProfile) {
@@ -121,7 +123,7 @@ export class AccountImportService {
           phone: inferPhone(profile, candidate.sessionPath),
           username: username || displayName,
           userId: inferUserId(profile),
-          country: inferCountry(profile),
+          country: inferCountry(profile, candidate.sessionPath),
           sessionPath: candidate.sessionPath,
           jsonPath: ensured.jsonPath,
           status: inferStatus(profile),

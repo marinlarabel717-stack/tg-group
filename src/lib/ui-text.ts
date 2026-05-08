@@ -1,3 +1,4 @@
+import { inferCountryDisplay as inferCountryDisplayFromPhone } from './phone-country'
 import type { AccountStatus, CheckLogLevel, ProfileSource } from '../types'
 
 export const moduleLabelMap = {
@@ -33,6 +34,10 @@ export function formatAccountStatus(status: AccountStatus) {
 
 export function formatProfileSource(source: ProfileSource) {
   return profileSourceLabelMap[source]
+}
+
+export function formatCountryDisplay(country: string | null | undefined, phone?: string | null) {
+  return inferCountryDisplayFromPhone(phone ?? '', country ?? '') || '—'
 }
 
 export function formatDateTime(value: string | null) {

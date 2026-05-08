@@ -28,7 +28,7 @@ import { TableFilters } from './tablefilters'
 import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
 import { filterAccounts, useAccountStore } from '../../stores/accountstore'
-import { formatAccountStatus, formatDateTime, formatProfileSource } from '../../lib/ui-text'
+import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatProfileSource } from '../../lib/ui-text'
 
 const ACCOUNT_GRID_TEMPLATE = '60px 180px 120px 140px 140px 140px 180px 240px 180px'
 const ACCOUNT_GRID_WIDTH = 1380
@@ -210,7 +210,7 @@ export const AccountTable = memo(function AccountTable() {
         header: '国家',
         size: 120,
         cell: ({ row }) => {
-          const value = row.original.country || '—'
+          const value = formatCountryDisplay(row.original.country, row.original.phone)
           return <div className={cellTextClass()} title={value}>{value}</div>
         }
       },
@@ -300,7 +300,7 @@ export const AccountTable = memo(function AccountTable() {
   const totalSize = rowVirtualizer.getTotalSize()
 
   const countries = useMemo(
-    () => Array.from(new Set(accounts.map((item) => item.country).filter(Boolean))).map((value) => ({ label: value, value })),
+    () => Array.from(new Set(accounts.map((item) => formatCountryDisplay(item.country, item.phone)).filter(Boolean))).map((value) => ({ label: value, value })),
     [accounts]
   )
   const statuses = useMemo(
@@ -386,7 +386,7 @@ export const AccountTable = memo(function AccountTable() {
                 className="absolute left-0 top-0"
                 style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content', transform: `translateX(-${scrollLeft}px)` }}
               >
-                <div className="sticky top-0 z-10 bg-card px-3 pb-1 pt-1" style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content' }}>
+                <div className="sticky top-0 z-10 bg-card px-3 pb-[2px] pt-[2px]" style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content' }}>
                   {table.getHeaderGroups().map((headerGroup) => (
                     <div key={headerGroup.id} className="grid shrink-0" style={ACCOUNT_GRID_STYLE}>
                       {headerGroup.headers.map((header) => (
@@ -418,7 +418,7 @@ export const AccountTable = memo(function AccountTable() {
                   ))}
                 </div>
 
-                <div className="relative" style={{ height: `${tableLoading ? 8 * 62 : totalSize}px` }}>
+                <div className="relative" style={{ height: `${tableLoading ? 8 * 54 : totalSize}px` }}>
                   {tableLoading
                     ? Array.from({ length: 8 }).map((_, index) => (
                         <div
@@ -466,7 +466,7 @@ export const AccountTable = memo(function AccountTable() {
               <div className="max-w-md text-sm text-textMuted">请尝试调整状态、资料来源、Proxy 或搜索关键词后再查看结果。</div>
             </div>
           ) : (
-            <div className="border-t border-white/5 px-3 pb-3 pt-2">
+            <div className="border-t border-white/5 px-3 pb-2 pt-1.5">
               <div ref={scrollbarRef} className="account-table-scrollbar h-4 overflow-x-auto overflow-y-hidden" onScroll={handleScrollbarScroll}>
                 <div style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, height: '1px' }} />
               </div>

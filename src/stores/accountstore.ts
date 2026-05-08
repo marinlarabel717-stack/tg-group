@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { formatCountryDisplay } from '../lib/ui-text'
 import type { AccountRecord, AccountStatus, CheckQueueState } from '../types'
 
 function getDesktopAccountsApi() {
@@ -249,7 +250,7 @@ export function filterAccounts(accounts: AccountRecord[], filters: {
       return false
     }
 
-    if (filters.countryFilter && account.country !== filters.countryFilter) {
+    if (filters.countryFilter && formatCountryDisplay(account.country, account.phone) !== filters.countryFilter) {
       return false
     }
 
@@ -259,7 +260,7 @@ export function filterAccounts(accounts: AccountRecord[], filters: {
       account.phone,
       account.username,
       account.userId,
-      account.country,
+      formatCountryDisplay(account.country, account.phone),
       account.status,
       account.sessionPath,
       account.jsonPath,

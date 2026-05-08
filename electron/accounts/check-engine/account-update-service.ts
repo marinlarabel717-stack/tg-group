@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { inferCountryDisplay, inferPhoneFromText } from '../../../src/lib/phone-country'
 import type { AccountJsonProfile, AccountRecord, AccountStatus } from '../types'
 import { formatOffsetDate, toUnixSeconds } from './time'
 
@@ -47,7 +48,7 @@ export class AccountUpdateService {
     const firstName = pickString(liveUserRecord.firstName, liveUserRecord.first_name, args.account.profile.first_name)
     const lastName = pickString(liveUserRecord.lastName, liveUserRecord.last_name, args.account.profile.last_name)
     const rawUsername = pickString(liveUserRecord.username, args.account.profile.username)
-    const phone = pickString(liveUserRecord.phone, args.account.profile.phone, args.account.phone)
+    const phone = inferPhoneFromText(pickString(liveUserRecord.phone, args.account.profile.phone, args.account.phone))
     const userId = pickString(liveUserRecord.id, args.account.profile.id, args.account.userId)
     const bio = pickString(fullUserInner.about, args.account.profile.bio)
     const profile = {
@@ -67,14 +68,15 @@ export class AccountUpdateService {
       last_check_time: toUnixSeconds(now),
       check_status: args.status,
       check_error: null,
-      check_duration_ms: args.durationMs
+      check_duration_ms: args.durationMs,
+      country: inferCountryDisplay(phone, pickString(args.account.profile.country, args.account.country))
     } satisfies AccountJsonProfile
 
     return {
       phone,
       username: buildUsername(rawUsername) || buildDisplayName(firstName, lastName),
       userId,
-      country: pickString(args.account.profile.country, args.account.country),
+      country: inferCountryDisplay(phone, pickString(args.account.profile.country, args.account.country)),
       lastCheckTime: now.toISOString(),
       lastOnlineTime: now.toISOString(),
       profile
@@ -95,14 +97,15 @@ export class AccountUpdateService {
       check_error: args.errorMessage || null,
       check_duration_ms: args.durationMs,
       spamblock: args.status === 'timeout' ? args.account.profile.spamblock ?? 'unknown' : args.status,
-      spambot_reply: args.account.profile.spambot_reply ?? null
+      spambot_reply: args.account.profile.spambot_reply ?? null,
+      country: inferCountryDisplay(args.account.phone, args.account.country)
     } satisfies AccountJsonProfile
 
     return {
-      phone: args.account.phone,
+      phone: inferPhoneFromText(args.account.phone),
       username: args.account.username,
       userId: args.account.userId,
-      country: args.account.country,
+      country: inferCountryDisplay(args.account.phone, args.account.country),
       lastCheckTime: now.toISOString(),
       lastOnlineTime: args.status === 'alive' ? now.toISOString() : args.account.lastOnlineTime,
       profile

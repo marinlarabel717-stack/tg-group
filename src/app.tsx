@@ -13,7 +13,7 @@ function App() {
         <Topbar />
       </DraggableTopbar>
 
-      <div className={`relative grid min-h-0 flex-1 gap-5 overflow-hidden px-5 py-5 ${sidebarCollapsed ? 'grid-cols-[84px_1fr]' : 'grid-cols-[224px_1fr]'}`}>
+      <div className={`relative grid min-h-0 flex-1 gap-5 overflow-hidden px-5 py-5 ${sidebarCollapsed ? 'grid-cols-[84px_1fr]' : 'grid-cols-[212px_1fr]'}`}>
         <Sidebar />
 
         <main className="flex min-h-0 min-w-0 flex-col gap-5 overflow-hidden rounded-[16px] bg-panel/95 p-5 contain-layout">
