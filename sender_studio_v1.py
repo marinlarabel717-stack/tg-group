@@ -308,6 +308,7 @@ class SenderStudioV1(QMainWindow):
         self.current_text_material_id = None
         self.current_image_material_id = None
         self.current_rule_id = None
+        self.account_inspector_visible = False
         self.account_profile_autosave_timer = QTimer(self)
         self.account_profile_autosave_timer.setSingleShot(True)
         self.account_profile_autosave_timer.timeout.connect(self.auto_save_account_profile)
@@ -463,7 +464,7 @@ class SenderStudioV1(QMainWindow):
                     item.setBackground(QBrush(bg))
                     if col != 4:
                         item.setForeground(QBrush(fg))
-            name_widget = self.accounts_table.cellWidget(row, 2)
+            name_widget = self.accounts_table.cellWidget(row, 7)
             if name_widget and name_widget.layout() and name_widget.layout().count() >= 2:
                 text_col = name_widget.layout().itemAt(1).layout()
                 if text_col:
@@ -473,6 +474,11 @@ class SenderStudioV1(QMainWindow):
                 widget = self.accounts_table.cellWidget(row, col)
                 if widget:
                     widget.setStyleSheet(widget.styleSheet() + (";opacity:1;" if row_selected else ''))
+
+    def toggle_account_inspector(self):
+        self.account_inspector_visible = not self.account_inspector_visible
+        self.account_detail_card.setVisible(self.account_inspector_visible)
+        self.account_detail_toggle_btn.setText('详情' if not self.account_inspector_visible else '收起')
 
     def format_check_summary(self, results):
         summary = {key: 0 for key in STATUS_OPTIONS}
@@ -711,7 +717,7 @@ class SenderStudioV1(QMainWindow):
         title_box = QVBoxLayout()
         title = QLabel('账号')
         title.setStyleSheet('font-size:20px;font-weight:800;color:white;')
-        subtitle = QLabel('桌面列表视图')
+        subtitle = QLabel('LIST VIEW')
         subtitle.setProperty('soft', 'true')
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
@@ -766,7 +772,7 @@ class SenderStudioV1(QMainWindow):
         toolbar_layout.addLayout(filter_row)
 
         self.account_check_summary_label = QLabel('状态摘要会显示在这里')
-        self.account_check_summary_label.setStyleSheet('color:#93c5fd;background:#0f172a;border:1px solid #1d4ed8;border-radius:12px;padding:12px 14px;')
+        self.account_check_summary_label.setStyleSheet('color:#cbd5e1;background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:8px 12px;font-size:12px;')
         toolbar_layout.addWidget(self.account_check_summary_label)
 
         stats_row = QHBoxLayout()
@@ -825,10 +831,12 @@ class SenderStudioV1(QMainWindow):
         self.btn_footer_check = self._icon_button('⟳', self.check_current_account)
         self.btn_footer_materials = self._icon_button('⌁', lambda: self.jump_to_materials(self.current_account_id))
         self.btn_footer_rules = self._icon_button('⇄', lambda: self.jump_to_rules(self.current_account_id))
+        self.account_detail_toggle_btn = QPushButton('详情')
+        self.account_detail_toggle_btn.clicked.connect(self.toggle_account_inspector)
         self.btn_footer_save = QPushButton('行动')
         self.btn_footer_save.setProperty('role', 'primary')
         self.btn_footer_save.clicked.connect(self.save_current_account)
-        for btn in [self.btn_footer_check, self.btn_footer_materials, self.btn_footer_rules, self.btn_footer_save]:
+        for btn in [self.account_detail_toggle_btn, self.btn_footer_check, self.btn_footer_materials, self.btn_footer_rules, self.btn_footer_save]:
             bottom_layout.addWidget(btn)
         layout.addWidget(bottom_bar)
 
@@ -936,6 +944,8 @@ class SenderStudioV1(QMainWindow):
         hint = QLabel('检查的是 session 可用性与授权状态。')
         hint.setProperty('soft', 'true')
         detail_layout.addWidget(hint)
+        detail_card.setVisible(False)
+        self.account_detail_card = detail_card
         layout.addWidget(detail_card)
         return page
 
@@ -1215,7 +1225,7 @@ class SenderStudioV1(QMainWindow):
 
             self.accounts_table.setCellWidget(r, 7, self._make_name_cell(row.get('display_name') or '未命名', row.get('username') or ''))
             self.accounts_table.setItem(r, 7, self._table_text_item('', Qt.AlignCenter, '#ffffff'))
-            self.accounts_table.setRowHeight(r, 58)
+            self.accounts_table.setRowHeight(r, 52)
 
         self.account_visible_count_label.setText(f"显示账号：{len(rows)} / {metrics['total']}")
         self.account_check_summary_label.setText(
