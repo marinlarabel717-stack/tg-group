@@ -24,11 +24,12 @@ export function TableToolbar({
         <input
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Search by phone, country, username, proxy"
+          placeholder="按手机号、国家、用户名、Proxy 搜索"
           className="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/45 pl-11 pr-10 text-sm text-textMain outline-none transition hover:border-neon/30 focus:border-neon/50 focus:shadow-neon"
         />
         {search ? (
           <button
+            title="清空搜索"
             onClick={() => onSearchChange('')}
             className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-textMuted transition hover:bg-white/10 hover:text-white"
           >
@@ -39,19 +40,20 @@ export function TableToolbar({
 
       <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.2em] text-textMuted">Selection</div>
+          <div className="text-[11px] tracking-[0.2em] text-textMuted">已选统计</div>
           <div className="mt-1 text-sm font-medium text-white">
-            {selectedCount} selected / {totalCount} rows
+            已选 {selectedCount} 项 / 共 {totalCount} 行
           </div>
         </div>
       </div>
 
       <button
+        title="刷新数据"
         onClick={onRefresh}
         className="flex h-12 items-center gap-2 rounded-2xl border border-neon/20 bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:border-neon/40 hover:bg-neon/15 hover:shadow-neon"
       >
         {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
-        Refresh
+        刷新
       </button>
     </div>
   )

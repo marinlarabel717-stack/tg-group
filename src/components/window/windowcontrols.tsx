@@ -31,20 +31,21 @@ export function WindowControls() {
 
   return (
     <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
-      <button onClick={() => desktopWindow?.minimize()} className={controlClass()} aria-label="Minimize">
+      <button title="最小化" onClick={() => desktopWindow?.minimize()} className={controlClass()} aria-label="最小化">
         <Minus size={16} />
       </button>
       <button
+        title={maximized ? '还原窗口' : '最大化'}
         onClick={async () => {
           const next = await desktopWindow?.toggleMaximize()
           setMaximized(Boolean(next))
         }}
         className={controlClass()}
-        aria-label="Toggle maximize"
+        aria-label={maximized ? '还原窗口' : '最大化'}
       >
         <Square size={14} className={maximized ? 'scale-90' : ''} />
       </button>
-      <button onClick={() => desktopWindow?.close()} className={controlClass('danger')} aria-label="Close">
+      <button title="关闭" onClick={() => desktopWindow?.close()} className={controlClass('danger')} aria-label="关闭">
         <X size={16} />
       </button>
     </div>

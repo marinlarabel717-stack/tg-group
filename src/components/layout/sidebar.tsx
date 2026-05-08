@@ -3,14 +3,15 @@ import clsx from 'clsx'
 import { motion } from 'framer-motion'
 import { useAppStore } from '../../store/appstore'
 import type { ModuleKey } from '../../types'
+import { moduleLabelMap } from '../../lib/ui-text'
 
 const items: { key: ModuleKey; label: string; icon: typeof ChartColumnBig }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: ChartColumnBig },
-  { key: 'accounts', label: 'Accounts', icon: Users },
-  { key: 'automation', label: 'Automation', icon: Bot },
-  { key: 'proxy-pool', label: 'Proxy Pool', icon: Network },
-  { key: 'session-manager', label: 'Session Manager', icon: Boxes },
-  { key: 'logs', label: 'Logs', icon: FileClock }
+  { key: 'dashboard', label: moduleLabelMap.dashboard, icon: ChartColumnBig },
+  { key: 'accounts', label: moduleLabelMap.accounts, icon: Users },
+  { key: 'automation', label: moduleLabelMap.automation, icon: Bot },
+  { key: 'proxy-pool', label: moduleLabelMap['proxy-pool'], icon: Network },
+  { key: 'session-manager', label: moduleLabelMap['session-manager'], icon: Boxes },
+  { key: 'logs', label: moduleLabelMap.logs, icon: FileClock }
 ]
 
 export function Sidebar() {
@@ -28,7 +29,7 @@ export function Sidebar() {
         </div>
         <div className="text-left">
           <div className="text-xl font-semibold text-textMain">Telegram</div>
-          <div className="text-sm text-textMuted">Multi Account Manager</div>
+          <div className="text-sm text-textMuted">多账号管理</div>
         </div>
       </button>
 
@@ -62,11 +63,11 @@ export function Sidebar() {
       </div>
 
       <div className="mt-auto rounded-3xl border border-cyan-400/15 bg-gradient-to-br from-neon/10 to-transparent p-4">
-        <div className="text-xs uppercase tracking-[0.25em] text-textMuted">System pulse</div>
+        <div className="text-xs tracking-[0.25em] text-textMuted">系统脉冲</div>
         <div className="mt-3 flex items-center justify-between">
           <div>
             <div className="text-2xl font-semibold text-white">99.82%</div>
-            <div className="text-sm text-textMuted">runtime health</div>
+            <div className="text-sm text-textMuted">运行健康度</div>
           </div>
           <div className="h-3 w-3 animate-pulseLine rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(34,211,238,0.8)]" />
         </div>

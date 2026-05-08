@@ -33,13 +33,13 @@ function FilterSelect({
 }) {
   return (
     <label className="flex min-w-[180px] flex-col gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-textMuted">{label}</span>
+      <span className="text-[11px] font-semibold tracking-[0.22em] text-textMuted">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="h-11 rounded-2xl border border-white/10 bg-slate-950/40 px-4 text-sm text-textMain outline-none transition hover:border-neon/30 focus:border-neon/50"
       >
-        <option value="">All</option>
+        <option value="">全部</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -56,8 +56,8 @@ export function TableFilters(props: TableFiltersProps) {
       <div className="mr-1 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/45 text-neonSoft">
         <SlidersHorizontal size={17} />
       </div>
-      <FilterSelect label="Country" value={props.countryFilter} options={props.countries} onChange={props.onCountryChange} />
-      <FilterSelect label="Status" value={props.statusFilter} options={props.statuses} onChange={props.onStatusChange} />
+      <FilterSelect label="国家" value={props.countryFilter} options={props.countries} onChange={props.onCountryChange} />
+      <FilterSelect label="状态" value={props.statusFilter} options={props.statuses} onChange={props.onStatusChange} />
       <FilterSelect label="Session" value={props.sessionFilter} options={props.sessions} onChange={props.onSessionChange} />
       <FilterSelect label="Proxy" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
     </div>

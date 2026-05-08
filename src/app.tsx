@@ -6,32 +6,33 @@ import { DashboardView } from './components/dashboard/dashboardview'
 import { AccountsView } from './components/accounts/accountsview'
 import { PlaceholderModule } from './components/layout/placeholdermodule'
 import { useAppStore } from './store/appstore'
+import { moduleLabelMap } from './lib/ui-text'
 
 const moduleContent = {
   dashboard: <DashboardView />,
   accounts: <AccountsView />,
   automation: (
     <PlaceholderModule
-      title="Automation Center"
-      subtitle="Build cyber automation flows, trigger orchestration rules, queue bulk actions, and coordinate advanced Telegram task pipelines."
+      title={moduleLabelMap.automation}
+      subtitle="构建自动化流程、触发编排规则、批量下发任务，并统一协调 Telegram 相关执行链路。"
     />
   ),
   'proxy-pool': (
     <PlaceholderModule
-      title="Proxy Pool"
-      subtitle="Monitor proxy health, region availability, rotation pools, and latency maps inside a true desktop operations console."
+      title={moduleLabelMap['proxy-pool']}
+      subtitle="集中查看 Proxy 健康度、区域分布、轮换池与延迟表现，保持客户端级运营视图。"
     />
   ),
   'session-manager': (
     <PlaceholderModule
-      title="Session Manager"
-      subtitle="Manage import, session lifecycles, recovery, expiration alerts, and enterprise session inventories from one surface."
+      title={moduleLabelMap['session-manager']}
+      subtitle="管理导入、恢复、失效提醒与 Session 生命周期，统一维护会话资产。"
     />
   ),
   logs: (
     <PlaceholderModule
-      title="Logs & Events"
-      subtitle="Observe operational history, audit events, notifications, and execution diagnostics with a cyber SaaS visual language."
+      title={moduleLabelMap.logs}
+      subtitle="查看运行日志、审计事件、通知记录与执行诊断，保持全局可观察性。"
     />
   )
 } as const

@@ -1,5 +1,6 @@
 import clsx from 'clsx'
 import type { AccountStatus } from '../../types'
+import { formatAccountStatus } from '../../lib/ui-text'
 
 const styles: Record<AccountStatus, string> = {
   Online: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20',
@@ -14,11 +15,11 @@ export function StatusBadge({ status }: { status: AccountStatus }) {
   return (
     <span
       className={clsx(
-        'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.18em] uppercase',
+        'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.12em]',
         styles[status]
       )}
     >
-      {status}
+      {formatAccountStatus(status)}
     </span>
   )
 }

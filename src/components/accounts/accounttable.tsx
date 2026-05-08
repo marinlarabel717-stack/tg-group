@@ -18,6 +18,7 @@ import { StatusBadge } from './statusbadge'
 import { TableFilters } from './tablefilters'
 import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
+import { formatAccountStatus, formatProxyStatus, formatSessionStatus } from '../../lib/ui-text'
 
 interface AccountTableProps {
   data: AccountRecord[]
@@ -71,6 +72,7 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
         header: ({ table }) => (
           <input
             type="checkbox"
+            title="全选当前页"
             className={checkboxClass()}
             checked={table.getIsAllPageRowsSelected()}
             ref={(input) => {
@@ -82,6 +84,7 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
         cell: ({ row }) => (
           <input
             type="checkbox"
+            title="选择当前行"
             className={checkboxClass()}
             checked={row.getIsSelected()}
             disabled={!row.getCanSelect()}
@@ -91,28 +94,36 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
         enableSorting: false,
         enableColumnFilter: false
       },
-      { accessorKey: 'phone', header: 'Phone' },
-      { accessorKey: 'country', header: 'Country' },
+      { accessorKey: 'phone', header: '手机号' },
+      { accessorKey: 'country', header: '国家' },
       {
         accessorKey: 'status',
-        header: 'Status',
+        header: '状态',
         cell: ({ row }) => <StatusBadge status={row.original.status} />
       },
-      { accessorKey: 'session', header: 'Session' },
-      { accessorKey: 'proxy', header: 'Proxy' },
-      { accessorKey: 'lastActive', header: 'Last Active' },
-      { accessorKey: 'username', header: 'Username' },
+      {
+        accessorKey: 'session',
+        header: 'Session',
+        cell: ({ row }) => formatSessionStatus(row.original.session)
+      },
+      {
+        accessorKey: 'proxy',
+        header: 'Proxy',
+        cell: ({ row }) => formatProxyStatus(row.original.proxy)
+      },
+      { accessorKey: 'lastActive', header: '最后活跃' },
+      { accessorKey: 'username', header: '用户名' },
       {
         id: 'actions',
-        header: 'Actions',
+        header: '操作',
         enableSorting: false,
         enableColumnFilter: false,
         cell: () => (
           <div className="flex items-center gap-2">
-            <button className={actionButtonClass()}><FolderOpen size={15} /></button>
-            <button className={actionButtonClass()}><Lock size={15} /></button>
-            <button className={actionButtonClass()}><Info size={15} /></button>
-            <button className={actionButtonClass()}><ExternalLink size={15} /></button>
+            <button title="打开目录" className={actionButtonClass()}><FolderOpen size={15} /></button>
+            <button title="锁定账号" className={actionButtonClass()}><Lock size={15} /></button>
+            <button title="查看详情" className={actionButtonClass()}><Info size={15} /></button>
+            <button title="跳转外部" className={actionButtonClass()}><ExternalLink size={15} /></button>
           </div>
         )
       }
@@ -158,15 +169,15 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
     [data]
   )
   const statuses = useMemo(
-    () => Array.from(new Set(data.map((item) => item.status))).map((value) => ({ label: value, value })),
+    () => Array.from(new Set(data.map((item) => item.status))).map((value) => ({ label: formatAccountStatus(value), value })),
     [data]
   )
   const sessions = useMemo(
-    () => Array.from(new Set(data.map((item) => item.session))).map((value) => ({ label: value, value })),
+    () => Array.from(new Set(data.map((item) => item.session))).map((value) => ({ label: formatSessionStatus(value), value })),
     [data]
   )
   const proxies = useMemo(
-    () => Array.from(new Set(data.map((item) => item.proxy))).map((value) => ({ label: value, value })),
+    () => Array.from(new Set(data.map((item) => item.proxy))).map((value) => ({ label: formatProxyStatus(value), value })),
     [data]
   )
 
@@ -208,7 +219,7 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
                     <th
                       key={header.id}
                       style={{ width: header.getSize() === 150 ? undefined : header.getSize() }}
-                      className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.24em] text-textMuted"
+                      className="px-4 py-4 text-left text-xs font-semibold tracking-[0.24em] text-textMuted"
                     >
                       {header.isPlaceholder ? null : (
                         <button
@@ -267,8 +278,8 @@ export function AccountTable({ data, externalSearch = '', onExternalSearchChange
           {!loading && rows.length === 0 ? (
             <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center">
               <Loader2 className="animate-spin text-neonSoft" size={22} />
-              <div className="text-base font-medium text-white">No accounts matched your filters</div>
-              <div className="max-w-md text-sm text-textMuted">Try changing status, session, proxy, or global search to reveal more enterprise account records.</div>
+              <div className="text-base font-medium text-white">没有符合筛选条件的账号</div>
+              <div className="max-w-md text-sm text-textMuted">请尝试调整状态、Session、Proxy 或搜索关键词后再查看结果。</div>
             </div>
           ) : null}
         </div>
