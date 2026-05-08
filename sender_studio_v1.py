@@ -397,11 +397,15 @@ class SenderStudioV1(QMainWindow):
         self.btn_import_session = QPushButton('导入 Session')
         self.btn_import_session.setProperty('role', 'primary')
         self.btn_import_session.clicked.connect(self.import_sessions)
+        self.btn_check_account = QPushButton('检查选中状态')
+        self.btn_check_account.clicked.connect(self.check_selected_accounts)
+        self.btn_check_all_accounts = QPushButton('检查全部状态')
+        self.btn_check_all_accounts.clicked.connect(self.check_all_accounts)
         self.btn_delete_account = QPushButton('删除选中')
         self.btn_delete_account.clicked.connect(self.delete_selected_accounts)
         self.btn_new_account = QPushButton('新增空白账号')
         self.btn_new_account.clicked.connect(self.new_account)
-        for btn in [self.btn_import_session, self.btn_delete_account, self.btn_new_account]:
+        for btn in [self.btn_import_session, self.btn_check_account, self.btn_check_all_accounts, self.btn_delete_account, self.btn_new_account]:
             toolbar.addWidget(btn)
         toolbar.addStretch()
         header.body.addLayout(toolbar)
@@ -421,6 +425,7 @@ class SenderStudioV1(QMainWindow):
         splitter = QSplitter(Qt.Horizontal)
         table_panel = Panel('账号列表')
         self.accounts_table = self._create_table(['ID', '备注名', '手机号', 'Session', '状态', '目标群', '最近检查'])
+        self.accounts_table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.accounts_table.cellClicked.connect(self.on_account_row_clicked)
         table_panel.body.addWidget(self.accounts_table)
         splitter.addWidget(table_panel)
@@ -630,12 +635,16 @@ class SenderStudioV1(QMainWindow):
         self.setting_sessions_dir = QLineEdit()
         self.setting_images_dir = QLineEdit()
         self.setting_logs_dir = QLineEdit()
+        self.setting_api_id = QLineEdit()
+        self.setting_api_hash = QLineEdit()
         self.setting_theme_combo = QComboBox(); self.setting_theme_combo.addItems(['深色 · 默认', '浅色 · 后续'])
         self.setting_density_combo = QComboBox(); self.setting_density_combo.addItems(['舒适', '紧凑'])
         form.addRow('数据目录', self.setting_data_dir)
         form.addRow('Session 目录', self.setting_sessions_dir)
         form.addRow('图片目录', self.setting_images_dir)
         form.addRow('日志目录', self.setting_logs_dir)
+        form.addRow('API ID', self.setting_api_id)
+        form.addRow('API HASH', self.setting_api_hash)
         form.addRow('主题', self.setting_theme_combo)
         form.addRow('显示密度', self.setting_density_combo)
         panel.body.addLayout(form)
@@ -714,6 +723,15 @@ class SenderStudioV1(QMainWindow):
         item = self.accounts_table.item(row, 0)
         return item.data(Qt.UserRole) if item else None
 
+    def selected_account_ids(self):
+        rows = self.accounts_table.selectionModel().selectedRows(0)
+        ids = []
+        for model_index in rows:
+            item = self.accounts_table.item(model_index.row(), 0)
+            if item:
+                ids.append(item.data(Qt.UserRole))
+        return ids
+
     def on_account_row_clicked(self, row, column):
         account_id = self.selected_account_id_from_table()
         if account_id:
@@ -786,6 +804,38 @@ class SenderStudioV1(QMainWindow):
         imported = self.store.import_session_files(paths)
         self.refresh_all()
         QMessageBox.information(self, '导入完成', f'已导入 {len(imported)} 个 session。')
+
+    def check_selected_accounts(self):
+        account_ids = self.selected_account_ids()
+        if not account_ids:
+            account_id = self.selected_account_id_from_table()
+            if account_id:
+                account_ids = [account_id]
+        if not account_ids:
+            QMessageBox.warning(self, '提示', '先选中一个或多个账号。')
+            return
+        try:
+            results = self.store.check_accounts_status(account_ids)
+        except Exception as exc:
+            QMessageBox.critical(self, '检查失败', str(exc))
+            return
+        self.refresh_all()
+        normal_count = sum(1 for row in results if row and row.get('status') == '正常')
+        QMessageBox.information(self, '检查完成', f'已检查 {len(results)} 个账号，其中正常 {normal_count} 个。')
+
+    def check_all_accounts(self):
+        rows = self.store.list_accounts()
+        if not rows:
+            QMessageBox.warning(self, '提示', '当前还没有账号。')
+            return
+        try:
+            results = self.store.check_accounts_status([row['id'] for row in rows])
+        except Exception as exc:
+            QMessageBox.critical(self, '检查失败', str(exc))
+            return
+        self.refresh_all()
+        normal_count = sum(1 for row in results if row and row.get('status') == '正常')
+        QMessageBox.information(self, '检查完成', f'已检查全部 {len(results)} 个账号，其中正常 {normal_count} 个。')
 
     def delete_selected_accounts(self):
         account_id = self.selected_account_id_from_table()
@@ -1126,6 +1176,8 @@ class SenderStudioV1(QMainWindow):
         self.setting_sessions_dir.setText(settings.get('sessions_dir', str(BASE_DIR / 'sessions')))
         self.setting_images_dir.setText(settings.get('images_dir', str(BASE_DIR / 'images')))
         self.setting_logs_dir.setText(settings.get('logs_dir', str(BASE_DIR / 'logs')))
+        self.setting_api_id.setText(settings.get('api_id', ''))
+        self.setting_api_hash.setText(settings.get('api_hash', ''))
         self.setting_theme_combo.setCurrentText(settings.get('theme', '深色 · 默认'))
         self.setting_density_combo.setCurrentText(settings.get('density', '舒适'))
 
@@ -1135,6 +1187,8 @@ class SenderStudioV1(QMainWindow):
             'sessions_dir': self.setting_sessions_dir.text().strip(),
             'images_dir': self.setting_images_dir.text().strip(),
             'logs_dir': self.setting_logs_dir.text().strip(),
+            'api_id': self.setting_api_id.text().strip(),
+            'api_hash': self.setting_api_hash.text().strip(),
             'theme': self.setting_theme_combo.currentText(),
             'density': self.setting_density_combo.currentText(),
         }

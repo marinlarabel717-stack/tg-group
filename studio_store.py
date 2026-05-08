@@ -5,6 +5,9 @@ import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from telethon import TelegramClient
+from telethon.errors import AuthKeyError, FloodWaitError, RpcError, SessionPasswordNeededError
+
 
 STATUS_OPTIONS = ['未检查', '正常', '受限', '失效', '需重新登录', '检查失败']
 
@@ -117,6 +120,8 @@ class StudioStore:
             'sessions_dir': str(self.sessions_dir),
             'images_dir': str(self.images_dir),
             'logs_dir': str(self.logs_dir),
+            'api_id': '',
+            'api_hash': '',
             'theme': '深色 · 默认',
             'density': '舒适',
         }
@@ -430,6 +435,18 @@ class StudioStore:
             rows = conn.execute('SELECT key, value FROM settings').fetchall()
         return {row['key']: row['value'] for row in rows}
 
+    def get_api_credentials(self):
+        settings = self.get_settings()
+        api_id = str(settings.get('api_id', '') or '').strip()
+        api_hash = str(settings.get('api_hash', '') or '').strip()
+        if not api_id or not api_hash:
+            raise RuntimeError('请先到设置页填写 API ID 和 API HASH，再检查账号状态。')
+        try:
+            api_id_int = int(api_id)
+        except ValueError as exc:
+            raise RuntimeError('API ID 必须是数字。') from exc
+        return api_id_int, api_hash
+
     def save_settings(self, payload: dict):
         with self.connect() as conn:
             for key, value in payload.items():
@@ -438,6 +455,89 @@ class StudioStore:
                     (key, str(value)),
                 )
         self.add_log('保存设置', '成功', '更新本地设置')
+
+    def check_account_status(self, account_id: int):
+        account = self.get_account(account_id)
+        if not account:
+            raise RuntimeError(f'账号不存在：{account_id}')
+
+        api_id, api_hash = self.get_api_credentials()
+        session_path = str(account.get('session_path') or '').strip()
+        if not session_path:
+            raise RuntimeError('当前账号没有 session 路径。')
+        if not os.path.exists(session_path):
+            result = {
+                'status': '失效',
+                'last_check_result': 'session 文件不存在',
+                'last_error': session_path,
+            }
+            self.save_account({**account, **result, 'last_check_at': self.now(), 'enabled': bool(account.get('enabled'))})
+            self.add_log('检查状态', '失败', f"{account['display_name']} · session 文件不存在", account['display_name'])
+            return self.get_account(account_id)
+
+        client = TelegramClient(session_path, api_id, api_hash)
+        try:
+            client.connect()
+            if not client.is_user_authorized():
+                status = '需重新登录'
+                check_result = 'session 已失效或未授权'
+                last_error = '当前 session 需要重新登录'
+            else:
+                me = client.get_me()
+                phone = str(getattr(me, 'phone', '') or account.get('phone') or '').strip()
+                display_name = str(getattr(me, 'first_name', '') or '').strip() or account.get('display_name') or '未命名账号'
+                status = '正常'
+                check_result = 'session 可正常连接'
+                last_error = ''
+                account['phone'] = phone
+                account['display_name'] = display_name
+        except SessionPasswordNeededError:
+            status = '需重新登录'
+            check_result = '该账号需要两步验证密码'
+            last_error = 'session 需要重新登录并完成两步验证'
+        except FloodWaitError as exc:
+            status = '检查失败'
+            check_result = f'触发频率限制，需等待 {exc.seconds} 秒'
+            last_error = str(exc)
+        except (AuthKeyError, sqlite3.DatabaseError):
+            status = '失效'
+            check_result = 'session 文件损坏或不可用'
+            last_error = 'session 文件损坏 / 不可读取'
+        except RpcError as exc:
+            status = '检查失败'
+            check_result = f'检查失败：{exc.__class__.__name__}'
+            last_error = str(exc)
+        except Exception as exc:
+            status = '检查失败'
+            check_result = f'连接失败：{exc.__class__.__name__}'
+            last_error = str(exc)
+        finally:
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+
+        payload = {
+            **account,
+            'status': status,
+            'last_check_at': self.now(),
+            'last_check_result': check_result,
+            'last_error': last_error,
+            'enabled': bool(account.get('enabled')),
+        }
+        self.save_account(payload)
+        self.add_log('检查状态', '成功' if status == '正常' else '完成', f"{payload['display_name']} · {check_result}", payload['display_name'])
+        return self.get_account(account_id)
+
+    def check_accounts_status(self, account_ids=None):
+        if account_ids:
+            ids = list(account_ids)
+        else:
+            ids = [row['id'] for row in self.list_accounts()]
+        results = []
+        for account_id in ids:
+            results.append(self.check_account_status(int(account_id)))
+        return results
 
     def list_logs(self, limit: int = 300):
         with self.connect() as conn:
