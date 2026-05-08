@@ -108,10 +108,10 @@ QToolButton[active='true'] {
     font-weight: 600;
 }
 QLineEdit, QTextEdit, QComboBox {
-    background: #0f172a;
-    border: 1px solid #334155;
-    border-radius: 12px;
-    padding: 10px 12px;
+    background: #1a2236;
+    border: 1px solid #2d3855;
+    border-radius: 10px;
+    padding: 8px 12px;
     selection-background-color: #2563eb;
 }
 QTextEdit {
@@ -131,16 +131,16 @@ QTableWidget {
     selection-color: white;
 }
 QHeaderView::section {
-    background: #0f172a;
-    color: #94a3b8;
+    background: #27314a;
+    color: #d4dcf2;
     border: none;
-    border-bottom: 1px solid #1f2937;
-    padding: 12px;
+    border-bottom: 1px solid #394562;
+    padding: 14px 12px;
     font-weight: 600;
 }
 QTableWidget::item {
-    border-bottom: 1px solid #182233;
-    padding: 10px;
+    border-bottom: 1px solid #202b43;
+    padding: 8px;
 }
 QTableWidget::item:selected {
     background: #2c3854;
@@ -168,19 +168,19 @@ QCheckBox {
     spacing: 8px;
 }
 QFrame[variant='toolbar'] {
-    background: #182235;
-    border: 1px solid #233048;
+    background: #1b2440;
+    border: 1px solid #273250;
     border-radius: 16px;
 }
 QFrame[variant='statusbar'] {
-    background: #182235;
-    border: 1px solid #233048;
+    background: #1b2440;
+    border: 1px solid #273250;
     border-radius: 16px;
 }
 QFrame[variant='miniCard'] {
-    background: #1d2740;
-    border: 1px solid #2a3650;
-    border-radius: 14px;
+    background: #202944;
+    border: 1px solid #2d3855;
+    border-radius: 12px;
 }
 QFrame[variant='inspector'] {
     background: #121a2c;
@@ -291,6 +291,34 @@ class MetricCard(QFrame):
         layout.addWidget(self.title_label)
         layout.addWidget(self.value_label)
         layout.addWidget(self.subtitle_label)
+        layout.addStretch()
+
+    def update_value(self, value: str, subtitle: str | None = None):
+        self.value_label.setText(str(value))
+        if subtitle is not None:
+            self.subtitle_label.setText(str(subtitle))
+
+
+class AccountOverviewCard(QFrame):
+    def __init__(self, title: str, subtitle: str = '', active: bool = False):
+        super().__init__()
+        self.setProperty('variant', 'miniCard')
+        self.setStyleSheet(
+            "background:#202944;border:1px solid %s;border-radius:12px;" % ('#4f9cff' if active else '#2b3654')
+        )
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(4)
+        self.value_label = QLabel('0')
+        self.value_label.setStyleSheet("color:%s;font-size:20px;font-weight:800;" % ('#63a5ff' if active else '#ffffff'))
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet('color:#e5e7eb;font-size:13px;font-weight:700;')
+        self.subtitle_label = QLabel(subtitle)
+        self.subtitle_label.setStyleSheet('color:#98a4c3;font-size:11px;')
+        layout.addWidget(self.value_label)
+        layout.addWidget(self.title_label)
+        if subtitle:
+            layout.addWidget(self.subtitle_label)
         layout.addStretch()
 
     def update_value(self, value: str, subtitle: str | None = None):
@@ -416,6 +444,7 @@ class SenderStudioV1(QMainWindow):
     def infer_account_region(self, phone: str):
         phone = str(phone or '').strip().replace(' ', '')
         mapping = [
+            ('+20', '🇪🇬 EG'),
             ('+1', '🇺🇸 US'),
             ('+44', '🇬🇧 UK'),
             ('+86', '🇨🇳 CN'),
@@ -431,6 +460,64 @@ class SenderStudioV1(QMainWindow):
             if phone.startswith(prefix):
                 return label
         return '🌐 --'
+
+    def format_account_status_badge(self, status: str):
+        mapping = {
+            '正常': ('在线', '#14324a', '#38bdf8', '#0ea5e9'),
+            '受限': ('冷冻', '#102840', '#38bdf8', '#0ea5e9'),
+            '失效': ('失效', '#3a0f12', '#ef4444', '#b91c1c'),
+            '需重新登录': ('登录', '#3b2206', '#f59e0b', '#92400e'),
+            '检查失败': ('异常', '#3b2206', '#f59e0b', '#92400e'),
+            '未检查': ('未测', '#162033', '#94a3b8', '#334155'),
+        }
+        return mapping.get(status, ('未知', '#162033', '#94a3b8', '#334155'))
+
+    def format_last_used_text(self, last_check_at: str):
+        text = str(last_check_at or '').strip()
+        if not text:
+            return '-'
+        try:
+            dt = datetime.strptime(text, '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            return text
+        now = datetime.now()
+        if dt.date() == now.date():
+            return dt.strftime('今天下午 %#I:%M').replace('AM', '上午').replace('PM', '下午')
+        return dt.strftime('%m-%d %H:%M')
+
+    def build_account_overview_stats(self, rows):
+        status_counter = {}
+        enabled_count = 0
+        for row in rows:
+            status = row.get('status') or '未检查'
+            status_counter[status] = status_counter.get(status, 0) + 1
+            if row.get('enabled'):
+                enabled_count += 1
+        abnormal = sum(count for key, count in status_counter.items() if key not in ('正常', '未检查'))
+        return {
+            'all': len(rows),
+            'work': enabled_count,
+            'spam': 0,
+            'unlimited': max(status_counter.get('正常', 0) - abnormal, 0),
+            'frozen': status_counter.get('受限', 0),
+            'member': 0,
+            'no2fa': 0,
+            'unlimited_ok': status_counter.get('正常', 0),
+            'spam_ok': 0,
+            'unlimited_fail': status_counter.get('检查失败', 0),
+            'spam_fail': 0,
+            'untested': status_counter.get('未检查', 0),
+            'years_1_2': 0,
+            'years_3_plus': 0,
+            'years_10_ok': 0,
+        }
+
+    def refresh_account_overview_cards(self, rows):
+        stats = self.build_account_overview_stats(rows)
+        for key, value in stats.items():
+            card = self.account_overview_cards.get(key)
+            if card:
+                card.update_value(value)
 
     def format_relative_check_time(self, last_check_at: str):
         text = str(last_check_at or '').strip()
@@ -464,13 +551,13 @@ class SenderStudioV1(QMainWindow):
                     item.setBackground(QBrush(bg))
                     if col != 4:
                         item.setForeground(QBrush(fg))
-            name_widget = self.accounts_table.cellWidget(row, 7)
+            name_widget = self.accounts_table.cellWidget(row, 8)
             if name_widget and name_widget.layout() and name_widget.layout().count() >= 2:
                 text_col = name_widget.layout().itemAt(1).layout()
                 if text_col:
                     text_col.itemAt(0).widget().setStyleSheet(f"color:{'#ffffff' if row_selected else '#e5e7eb'};font-weight:700;")
                     text_col.itemAt(1).widget().setStyleSheet(f"color:{'#cbd5e1' if row_selected else '#94a3b8'};font-size:12px;")
-            for col in [4, 5, 6]:
+            for col in [4, 8]:
                 widget = self.accounts_table.cellWidget(row, col)
                 if widget:
                     widget.setStyleSheet(widget.styleSheet() + (";opacity:1;" if row_selected else ''))
@@ -707,104 +794,107 @@ class SenderStudioV1(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setSpacing(14)
 
-        toolbar_frame = QFrame()
-        toolbar_frame.setProperty('variant', 'toolbar')
-        toolbar_layout = QVBoxLayout(toolbar_frame)
-        toolbar_layout.setContentsMargins(16, 16, 16, 16)
-        toolbar_layout.setSpacing(14)
+        overview_wrap = QFrame()
+        overview_wrap.setProperty('variant', 'toolbar')
+        overview_layout = QGridLayout(overview_wrap)
+        overview_layout.setContentsMargins(0, 0, 0, 0)
+        overview_layout.setHorizontalSpacing(14)
+        overview_layout.setVerticalSpacing(14)
+        self.account_overview_cards = {}
+        overview_specs = [
+            ('all', 'Все аккаунты', '全部账号', False),
+            ('work', 'Для работы', '工作', False),
+            ('spam', '垃圾邮件', '垃圾邮件', False),
+            ('unlimited', '无限制', '无限制', False),
+            ('frozen', '冻结', '冻结', True),
+            ('member', '会员', '会员', False),
+            ('no2fa', '无2FA', '无2FA', False),
+            ('unlimited_ok', '无限制成功', '无限制成功', False),
+            ('spam_ok', '垃圾邮件成功', '垃圾邮件成功', False),
+            ('unlimited_fail', '无限制失败', '无限制失败', False),
+            ('spam_fail', '垃圾邮件失败', '垃圾邮件失败', False),
+            ('untested', '未测试', '未测试', False),
+            ('years_1_2', '1-2年', '1-2年 无限制', False),
+            ('years_3_plus', '3年以上', '3年以上 无限制', False),
+            ('years_10_ok', '10年', '10年无限制成功', False),
+        ]
+        for idx, (key, title, subtitle, active) in enumerate(overview_specs):
+            card = AccountOverviewCard(title, subtitle, active=active)
+            self.account_overview_cards[key] = card
+            overview_layout.addWidget(card, idx // 6, idx % 6)
+        layout.addWidget(overview_wrap)
 
-        title_row = QHBoxLayout()
-        title_box = QVBoxLayout()
-        title = QLabel('账号')
-        title.setStyleSheet('font-size:20px;font-weight:800;color:white;')
-        subtitle = QLabel('LIST VIEW')
-        subtitle.setProperty('soft', 'true')
-        title_box.addWidget(title)
-        title_box.addWidget(subtitle)
-        title_row.addLayout(title_box)
-        title_row.addStretch()
-        self.account_visible_count_label = QLabel('显示账号：0 / 0')
-        self.account_visible_count_label.setProperty('chip', 'true')
-        self.account_selected_count_label = QLabel('已选：0')
-        self.account_selected_count_label.setProperty('chip', 'true')
-        title_row.addWidget(self.account_visible_count_label)
-        title_row.addWidget(self.account_selected_count_label)
-        toolbar_layout.addLayout(title_row)
+        action_bar = QFrame()
+        action_bar.setProperty('variant', 'toolbar')
+        action_layout = QHBoxLayout(action_bar)
+        action_layout.setContentsMargins(14, 12, 14, 12)
+        action_layout.setSpacing(8)
+        self.btn_import_session = self._icon_button('+', self.import_sessions)
+        self.btn_new_account = self._icon_button('⌂', self.new_account)
+        self.btn_refresh_accounts = self._icon_button('⟳', self.refresh_accounts)
+        self.btn_check_account = self._icon_button('✓', self.check_selected_accounts)
+        self.btn_check_all_accounts = self._icon_button('✔', self.check_all_accounts)
+        for btn in [self.btn_import_session, self.btn_new_account, self.btn_refresh_accounts, self.btn_check_account, self.btn_check_all_accounts]:
+            action_layout.addWidget(btn)
+        action_layout.addStretch()
+        self.account_visible_count_label = QLabel('显示账户：0 / 0')
+        self.account_visible_count_label.setStyleSheet('color:#cbd5e1;font-size:13px;font-weight:600;padding-right:8px;')
+        action_layout.addWidget(self.account_visible_count_label)
+        layout.addWidget(action_bar)
 
-        tool_row = QHBoxLayout()
-        tool_row.setSpacing(10)
-        self.btn_import_session = self._icon_button('＋', self.import_sessions, primary=True)
-        self.btn_refresh_accounts = self._icon_button('↻', self.refresh_accounts)
-        self.btn_check_account = QPushButton('检查')
-        self.btn_check_account.clicked.connect(self.check_selected_accounts)
-        self.btn_check_all_accounts = QPushButton('全部')
-        self.btn_check_all_accounts.clicked.connect(self.check_all_accounts)
-        self.btn_enable_accounts = QPushButton('启用')
-        self.btn_enable_accounts.clicked.connect(lambda: self.set_selected_accounts_enabled(True))
-        self.btn_disable_accounts = QPushButton('停用')
-        self.btn_disable_accounts.clicked.connect(lambda: self.set_selected_accounts_enabled(False))
-        self.btn_delete_account = self._icon_button('✕', self.delete_selected_accounts)
-        self.btn_new_account = self._icon_button('▣', self.new_account)
-        for btn in [self.btn_import_session, self.btn_new_account, self.btn_refresh_accounts, self.btn_check_account, self.btn_check_all_accounts, self.btn_enable_accounts, self.btn_disable_accounts, self.btn_delete_account]:
-            tool_row.addWidget(btn)
-        tool_row.addStretch()
-        toolbar_layout.addLayout(tool_row)
+        filter_bar = QFrame()
+        filter_bar.setProperty('variant', 'toolbar')
+        filter_layout = QHBoxLayout(filter_bar)
+        filter_layout.setContentsMargins(14, 12, 14, 12)
+        filter_layout.setSpacing(10)
+        self.btn_delete_account = self._icon_button('🗑', self.delete_selected_accounts, width=44)
+        self.btn_delete_account.setStyleSheet('background:#1a2033;border:1px solid #a74a63;border-radius:12px;color:#ff6b8b;font-size:16px;')
+        filter_layout.addWidget(self.btn_delete_account)
 
-        filter_row = QHBoxLayout()
-        filter_row.setSpacing(10)
-        self.account_status_filter = QComboBox()
-        self.account_status_filter.addItems(['全部状态'] + STATUS_OPTIONS)
-        self.account_status_filter.currentIndexChanged.connect(self.refresh_accounts)
-        self.account_enabled_filter = QComboBox()
-        self.account_enabled_filter.addItems(['全部启用状态', '已启用', '已停用'])
-        self.account_enabled_filter.currentIndexChanged.connect(self.refresh_accounts)
+        self.account_role_filter = QComboBox()
+        self.account_role_filter.addItems(['角色', '全部'])
+        self.account_geo_filter = QComboBox()
+        self.account_geo_filter.addItems(['地理', 'EG', 'US', 'CN'])
+        self.account_geo_filter.currentIndexChanged.connect(self.refresh_accounts)
+
         self.account_group_filter = QComboBox()
-        self.account_group_filter.addItems(['全部群组', '已选群组>0', '未选群组'])
+        self.account_group_filter.addItems(['休息处', '已选群组>0', '未选群组'])
         self.account_group_filter.currentIndexChanged.connect(self.refresh_accounts)
+
+        self.account_status_filter = QComboBox()
+        self.account_status_filter.addItems(['限制：冷冻'] + STATUS_OPTIONS)
+        self.account_status_filter.currentIndexChanged.connect(self.refresh_accounts)
+
+        self.account_enabled_filter = QComboBox()
+        self.account_enabled_filter.addItems(['文件夹', '已启用', '已停用'])
+        self.account_enabled_filter.currentIndexChanged.connect(self.refresh_accounts)
+
+        self.account_more_filter = QPushButton('...')
+        self.account_more_filter.setFixedHeight(40)
+
+        for widget in [self.account_role_filter, self.account_geo_filter, self.account_group_filter, self.account_status_filter, self.account_enabled_filter, self.account_more_filter]:
+            widget.setFixedHeight(40)
+            filter_layout.addWidget(widget)
+
+        filter_layout.addStretch()
         self.account_search = QLineEdit()
-        self.account_search.setPlaceholderText('Search')
+        self.account_search.setPlaceholderText('搜索...')
+        self.account_search.setFixedWidth(300)
+        self.account_search.setFixedHeight(40)
         self.account_search.returnPressed.connect(self.refresh_accounts)
-        filter_row.addWidget(self.account_status_filter)
-        filter_row.addWidget(self.account_enabled_filter)
-        filter_row.addWidget(self.account_group_filter)
-        filter_row.addStretch()
-        filter_row.addWidget(self.account_search, 1)
-        toolbar_layout.addLayout(filter_row)
+        filter_layout.addWidget(self.account_search)
+        layout.addWidget(filter_bar)
 
         self.account_check_summary_label = QLabel('状态摘要会显示在这里')
-        self.account_check_summary_label.setStyleSheet('color:#cbd5e1;background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:8px 12px;font-size:12px;')
-        toolbar_layout.addWidget(self.account_check_summary_label)
-
-        stats_row = QHBoxLayout()
-        self.account_stat_total_chip = QLabel('总数 0'); self.account_stat_total_chip.setProperty('chip', 'true')
-        self.account_stat_ok_chip = QLabel('正常 0'); self.account_stat_ok_chip.setProperty('chip', 'true')
-        self.account_stat_bad_chip = QLabel('异常 0'); self.account_stat_bad_chip.setProperty('chip', 'true')
-        self.account_stat_enabled_chip = QLabel('启用 0'); self.account_stat_enabled_chip.setProperty('chip', 'true')
-        for chip in [self.account_stat_total_chip, self.account_stat_ok_chip, self.account_stat_bad_chip, self.account_stat_enabled_chip]:
-            stats_row.addWidget(chip)
-        stats_row.addStretch()
-        self.account_selected_info_chip = QLabel('选中 0')
-        self.account_selected_info_chip.setProperty('chip', 'true')
-        stats_row.addWidget(self.account_selected_info_chip)
-        toolbar_layout.addLayout(stats_row)
-        layout.addWidget(toolbar_frame)
+        self.account_check_summary_label.setStyleSheet('color:#93a1c4;padding:0 2px 2px 4px;font-size:12px;')
+        layout.addWidget(self.account_check_summary_label)
 
         table_card = QFrame()
         table_card.setObjectName('Card')
         table_layout = QVBoxLayout(table_card)
-        table_layout.setContentsMargins(14, 14, 14, 14)
-        table_layout.setSpacing(12)
-        custom_header = QFrame()
-        custom_header.setProperty('variant', 'miniCard')
-        custom_header_layout = QHBoxLayout(custom_header)
-        custom_header_layout.setContentsMargins(14, 10, 14, 10)
-        custom_header_layout.setSpacing(18)
-        for text, stretch in [('', 0), ('ID', 0), ('PHONE', 1), ('AREA', 0), ('STATUS', 0), ('REST', 0), ('ROLE', 0), ('NAME', 2)]:
-            label = QLabel(text)
-            label.setProperty('tableHeader', 'true')
-            custom_header_layout.addWidget(label, stretch)
-        table_layout.addWidget(custom_header)
-        self.accounts_table = self._create_table(['', 'ID', '电话', '地区', '状态', '休息', '角色', '姓名'])
+        table_layout.setContentsMargins(0, 0, 0, 0)
+        table_layout.setSpacing(0)
+        self.accounts_table = self._create_table(['', '#', '电话', '地理', '地位', '休息处', '角色', '用过的', '姓名', '各种各样的'])
         self.accounts_table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.accounts_table.itemSelectionChanged.connect(self.on_account_selection_changed)
         self.accounts_table.cellClicked.connect(lambda row, _col: self.on_account_row_clicked(row))
@@ -1133,27 +1223,33 @@ class SenderStudioV1(QMainWindow):
     def _create_table(self, headers):
         table = QTableWidget(0, len(headers))
         table.setHorizontalHeaderLabels(headers)
-        table.horizontalHeader().setVisible(False)
+        table.horizontalHeader().setVisible(True)
         table.verticalHeader().setVisible(False)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.ExtendedSelection)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
         table.setShowGrid(False)
         table.setAlternatingRowColors(True)
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Stretch)
+        table.horizontalHeader().setStretchLastSection(False)
+        table.horizontalHeader().setDefaultSectionSize(96)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         table.setMinimumHeight(320)
         table.setFocusPolicy(Qt.StrongFocus)
-        table.setColumnWidth(0, 42)
-        table.setColumnWidth(1, 52)
+        if len(headers) >= 10:
+            table.setColumnWidth(0, 42)
+            table.setColumnWidth(1, 46)
+            table.setColumnWidth(2, 160)
+            table.setColumnWidth(3, 86)
+            table.setColumnWidth(4, 92)
+            table.setColumnWidth(5, 104)
+            table.setColumnWidth(6, 70)
+            table.setColumnWidth(7, 132)
+            table.setColumnWidth(8, 220)
+            table.setColumnWidth(9, 140)
+        else:
+            table.setColumnWidth(0, 42)
+            table.setColumnWidth(1, 52)
         return table
 
     def _set_page(self, index: int):
@@ -1192,18 +1288,27 @@ class SenderStudioV1(QMainWindow):
     def refresh_accounts(self):
         selected_id = self.current_account_id
         metrics = self.store.account_metrics()
-        rows = self.store.list_accounts(self.account_status_filter.currentText(), self.account_search.text().strip(), self.account_enabled_filter.currentText())
+        status_filter = self.account_status_filter.currentText()
+        if status_filter == '限制：冷冻':
+            status_filter = '全部状态'
+        enabled_filter = self.account_enabled_filter.currentText()
+        if enabled_filter == '文件夹':
+            enabled_filter = '全部启用状态'
+        rows = self.store.list_accounts(status_filter, self.account_search.text().strip(), enabled_filter)
         group_filter = self.account_group_filter.currentText()
         if group_filter == '已选群组>0':
             rows = [row for row in rows if any(g.get('selected') for g in (row.get('joined_groups') or []))]
         elif group_filter == '未选群组':
             rows = [row for row in rows if not any(g.get('selected') for g in (row.get('joined_groups') or []))]
+        geo_filter = self.account_geo_filter.currentText()
+        if geo_filter not in ('地理', '全部'):
+            rows = [row for row in rows if self.infer_account_region(row.get('phone') or '').endswith(geo_filter)]
         self.accounts_table.setSortingEnabled(False)
         self.accounts_table.clearSelection()
         self.accounts_table.setRowCount(len(rows))
         self.account_table_empty_label.setVisible(len(rows) == 0)
+        self.refresh_account_overview_cards(rows)
         for r, row in enumerate(rows):
-            checked_groups = len([g for g in (row.get('joined_groups') or []) if g.get('selected')])
             self.accounts_table.setCellWidget(r, 0, self._make_table_checkbox(True))
 
             index_item = self._table_text_item(str(r + 1), Qt.AlignCenter)
@@ -1213,28 +1318,27 @@ class SenderStudioV1(QMainWindow):
             self.accounts_table.setItem(r, 2, self._table_text_item(row['phone'] or '未同步', Qt.AlignLeft | Qt.AlignVCenter))
             self.accounts_table.setItem(r, 3, self._table_text_item(self.infer_account_region(row.get('phone') or ''), Qt.AlignCenter, '#cbd5e1'))
 
-            self.accounts_table.setCellWidget(r, 4, self._make_status_chip(row['status'], row['status']))
-            self.accounts_table.setItem(r, 4, self._table_text_item(row['status'], Qt.AlignCenter, '#ffffff'))
+            badge_text, badge_bg, badge_fg, badge_border = self.format_account_status_badge(row['status'])
+            self.accounts_table.setCellWidget(r, 4, self._make_tag_chip(badge_text, badge_fg, badge_bg, badge_border))
+            self.accounts_table.setItem(r, 4, self._table_text_item(badge_text, Qt.AlignCenter, '#ffffff'))
             self.accounts_table.item(r, 4).setText('')
 
             self.accounts_table.setItem(r, 5, self._table_text_item(self.format_relative_check_time(row.get('last_check_at') or ''), Qt.AlignCenter, '#cbd5e1'))
 
-            self.accounts_table.setCellWidget(r, 6, self._make_tag_chip('启用' if row['enabled'] else '停用', '#22c55e' if row['enabled'] else '#94a3b8', '#10231b' if row['enabled'] else '#1a2233', '#1f4d36' if row['enabled'] else '#334155'))
-            self.accounts_table.setItem(r, 6, self._table_text_item('', Qt.AlignCenter, '#ffffff'))
-            self.accounts_table.item(r, 6).setText('')
+            self.accounts_table.setItem(r, 6, self._table_text_item('-', Qt.AlignCenter, '#cbd5e1'))
+            self.accounts_table.setItem(r, 7, self._table_text_item(self.format_last_used_text(row.get('last_check_at') or ''), Qt.AlignCenter, '#dbe4ff'))
 
-            self.accounts_table.setCellWidget(r, 7, self._make_name_cell(row.get('display_name') or '未命名', row.get('username') or ''))
-            self.accounts_table.setItem(r, 7, self._table_text_item('', Qt.AlignCenter, '#ffffff'))
-            self.accounts_table.setRowHeight(r, 52)
+            self.accounts_table.setCellWidget(r, 8, self._make_name_cell(row.get('display_name') or '未命名', row.get('username') or ''))
+            self.accounts_table.setItem(r, 8, self._table_text_item('', Qt.AlignCenter, '#ffffff'))
 
-        self.account_visible_count_label.setText(f"显示账号：{len(rows)} / {metrics['total']}")
+            misc_text = '◻  🔒  ⓘ  ⎘'
+            self.accounts_table.setItem(r, 9, self._table_text_item(misc_text, Qt.AlignCenter, '#8fb4ff'))
+            self.accounts_table.setRowHeight(r, 54)
+
+        self.account_visible_count_label.setText(f"显示账户： {len(rows)} / {metrics['total']}")
         self.account_check_summary_label.setText(
             f"账号总数 {metrics['total']} · 正常 {metrics['normal']} · 异常 {metrics['abnormal']} · 启用 {metrics['enabled']} · 最近检查 {metrics['last_check_at']}"
         )
-        self.account_stat_total_chip.setText(f"总数 {metrics['total']}")
-        self.account_stat_ok_chip.setText(f"正常 {metrics['normal']}")
-        self.account_stat_bad_chip.setText(f"异常 {metrics['abnormal']}")
-        self.account_stat_enabled_chip.setText(f"启用 {metrics['enabled']}")
         self.refresh_dashboard()
         if rows and selected_id:
             for r, row in enumerate(rows):
@@ -1286,8 +1390,6 @@ class SenderStudioV1(QMainWindow):
     def refresh_account_selection_status(self):
         selected_ids = self.selected_account_ids()
         self._apply_accounts_table_row_styles()
-        self.account_selected_count_label.setText(f'已选：{len(selected_ids)}')
-        self.account_selected_info_chip.setText(f'选中 {len(selected_ids)}')
         total_rows = self.accounts_table.rowCount()
         self.account_bottom_status_label.setText(f'专用账号：{total_rows} / {total_rows}')
         if len(selected_ids) == 1 and self.current_account_id:
