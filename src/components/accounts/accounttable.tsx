@@ -12,7 +12,6 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowUpDown, ExternalLink, FolderOpen, Info, Lock, Loader2 } from 'lucide-react'
-import { shallow } from 'zustand/shallow'
 import type { AccountRecord } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
@@ -52,14 +51,9 @@ const TableRowActions = memo(function TableRowActions() {
 })
 
 export const AccountTable = memo(function AccountTable() {
-  const { accounts, searchTerm, setSearchTerm } = useAccountStore(
-    (state) => ({
-      accounts: state.accounts,
-      searchTerm: state.searchTerm,
-      setSearchTerm: state.setSearchTerm
-    }),
-    shallow
-  )
+  const accounts = useAccountStore((state) => state.accounts)
+  const searchTerm = useAccountStore((state) => state.searchTerm)
+  const setSearchTerm = useAccountStore((state) => state.setSearchTerm)
 
   const deferredSearch = useDeferredValue(searchTerm)
   const data = useMemo(() => filterAccounts(accounts, deferredSearch), [accounts, deferredSearch])

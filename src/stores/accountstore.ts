@@ -1,4 +1,4 @@
-import { createWithEqualityFn } from 'zustand/traditional'
+import { create } from 'zustand'
 import type { AccountRecord, ProxyStatus, SessionStatus } from '../types'
 
 const countries = ['美国', '英国', '新加坡', '德国', '阿联酋', '荷兰', '日本', '加拿大']
@@ -35,7 +35,7 @@ interface AccountState {
   setSearchTerm: (value: string) => void
 }
 
-export const useAccountStore = createWithEqualityFn<AccountState>()((set) => ({
+export const useAccountStore = create<AccountState>((set) => ({
   accounts: mockAccounts,
   searchTerm: '',
   setSearchTerm: (value) => set({ searchTerm: value })

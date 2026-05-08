@@ -1,4 +1,4 @@
-import { createWithEqualityFn } from 'zustand/traditional'
+import { create } from 'zustand'
 
 export interface SessionStreamItem {
   id: string
@@ -18,6 +18,6 @@ const sessionStream: SessionStreamItem[] = [
   { id: 'automation-bus', title: '自动化总线', status: '运行中', meta: '24 个任务' }
 ]
 
-export const useSessionStore = createWithEqualityFn<SessionState>()(() => ({
+export const useSessionStore = create<SessionState>(() => ({
   stream: sessionStream
 }))

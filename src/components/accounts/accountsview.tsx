@@ -1,31 +1,28 @@
-import { memo } from 'react'
-import { shallow } from 'zustand/shallow'
+import { memo, useMemo } from 'react'
 import { MonitorCog, ShieldCheck, Sparkles } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { AccountTable } from './accounttable'
 import { useAccountStore } from '../../stores/accountstore'
 
 const AccountsSummary = memo(function AccountsSummary() {
-  const { onlineCount, frozenCount, healthyCount } = useAccountStore(
-    (state) => {
-      let online = 0
-      let frozen = 0
-      let healthy = 0
+  const accounts = useAccountStore((state) => state.accounts)
+  const { onlineCount, frozenCount, healthyCount } = useMemo(() => {
+    let online = 0
+    let frozen = 0
+    let healthy = 0
 
-      for (const item of state.accounts) {
-        if (item.status === 'Online') online += 1
-        if (item.status === 'Frozen') frozen += 1
-        if (item.session === 'Healthy') healthy += 1
-      }
+    for (const item of accounts) {
+      if (item.status === 'Online') online += 1
+      if (item.status === 'Frozen') frozen += 1
+      if (item.session === 'Healthy') healthy += 1
+    }
 
-      return {
-        onlineCount: online,
-        frozenCount: frozen,
-        healthyCount: healthy
-      }
-    },
-    shallow
-  )
+    return {
+      onlineCount: online,
+      frozenCount: frozen,
+      healthyCount: healthy
+    }
+  }, [accounts])
 
   return (
     <GlassPanel className="overflow-hidden bg-gradient-to-r from-neon/10 via-white/[0.03] to-transparent">

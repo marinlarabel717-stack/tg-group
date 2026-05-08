@@ -1,4 +1,4 @@
-import { createWithEqualityFn } from 'zustand/traditional'
+import { create } from 'zustand'
 import type { ModuleKey } from '../types'
 
 interface UIState {
@@ -9,7 +9,7 @@ interface UIState {
   setNotificationCount: (count: number) => void
 }
 
-export const useUIStore = createWithEqualityFn<UIState>()((set) => ({
+export const useUIStore = create<UIState>((set) => ({
   activeModule: 'dashboard',
   notificationCount: 6,
   userName: '总控席',

@@ -1,4 +1,4 @@
-import { createWithEqualityFn } from 'zustand/traditional'
+import { create } from 'zustand'
 import type { StatRecord } from '../types'
 
 interface DashboardState {
@@ -12,6 +12,6 @@ const baseStats: StatRecord[] = [
   { id: 'realtime', label: '实时吞吐', value: '18.4k', delta: '+9.9%', tone: 'warning' }
 ]
 
-export const useDashboardStore = createWithEqualityFn<DashboardState>()(() => ({
+export const useDashboardStore = create<DashboardState>(() => ({
   stats: baseStats
 }))

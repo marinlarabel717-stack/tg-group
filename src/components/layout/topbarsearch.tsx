@@ -1,15 +1,12 @@
 import { memo, useCallback, type CSSProperties } from 'react'
 import { Search } from 'lucide-react'
-import { shallow } from 'zustand/shallow'
 import { useUIStore } from '../../stores/uistore'
 import { useAccountStore } from '../../stores/accountstore'
 
 export const TopbarSearch = memo(function TopbarSearch() {
   const activeModule = useUIStore((state) => state.activeModule)
-  const { searchTerm, setSearchTerm } = useAccountStore(
-    (state) => ({ searchTerm: state.searchTerm, setSearchTerm: state.setSearchTerm }),
-    shallow
-  )
+  const searchTerm = useAccountStore((state) => state.searchTerm)
+  const setSearchTerm = useAccountStore((state) => state.setSearchTerm)
 
   const isAccountModule = activeModule === 'accounts'
   const handleChange = useCallback((value: string) => {

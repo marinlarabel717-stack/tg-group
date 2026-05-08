@@ -1,13 +1,10 @@
 import { memo, type CSSProperties } from 'react'
 import { Bell, Settings } from 'lucide-react'
-import { shallow } from 'zustand/shallow'
 import { useUIStore } from '../../stores/uistore'
 
 export const TopbarActions = memo(function TopbarActions() {
-  const { notificationCount, userName } = useUIStore(
-    (state) => ({ notificationCount: state.notificationCount, userName: state.userName }),
-    shallow
-  )
+  const notificationCount = useUIStore((state) => state.notificationCount)
+  const userName = useUIStore((state) => state.userName)
 
   return (
     <>
