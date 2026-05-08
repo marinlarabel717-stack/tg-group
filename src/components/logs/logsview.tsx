@@ -3,6 +3,18 @@ import { FileClock } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useAccountStore } from '../../stores/accountstore'
 
+function formatLogTimestamp(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '[--:--:--]'
+
+  return `[${new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(date)}]`
+}
+
 export default memo(function LogsView() {
   const checkState = useAccountStore((state) => state.checkState)
 
@@ -23,7 +35,8 @@ export default memo(function LogsView() {
             <div className="space-y-2">
               {checkState.logs.map((log) => (
                 <div key={log.id} className="text-sm leading-7 text-white">
-                  {log.message}
+                  <span className="mr-2 text-textMuted">{formatLogTimestamp(log.createdAt)}</span>
+                  <span>{log.message}</span>
                 </div>
               ))}
             </div>
