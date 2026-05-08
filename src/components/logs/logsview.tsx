@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { FileClock } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useAccountStore } from '../../stores/accountstore'
+import type { CheckLogEntry } from '../../types'
 
 function formatLogTimestamp(value: string) {
   const date = new Date(value)
@@ -13,6 +14,21 @@ function formatLogTimestamp(value: string) {
     second: '2-digit',
     hour12: false
   }).format(date)}]`
+}
+
+function getLogLineClass(log: CheckLogEntry) {
+  if (log.status === 'alive') return 'text-emerald-300'
+  if (log.status === 'limited' || log.status === 'temporary_limited') return 'text-yellow-300'
+  if (log.status === 'frozen') return 'text-sky-300'
+  if (log.status === 'banned') return 'text-rose-300'
+  if (log.status === 'timeout') return 'text-orange-300'
+
+  if (log.message.includes('本次检测已完成')) return 'text-emerald-300'
+  if (log.message.startsWith('总数量') || log.message.startsWith('无限制') || log.message.startsWith('双向') || log.message.startsWith('临时双向') || log.message.startsWith('冻结') || log.message.startsWith('封禁') || log.message.startsWith('超时')) {
+    return 'text-slate-200'
+  }
+
+  return 'text-white'
 }
 
 export default memo(function LogsView() {
@@ -33,12 +49,15 @@ export default memo(function LogsView() {
             </div>
           ) : (
             <div className="space-y-2">
-              {checkState.logs.map((log) => (
-                <div key={log.id} className="text-sm leading-7 text-white">
-                  <span className="mr-2 text-textMuted">{formatLogTimestamp(log.createdAt)}</span>
-                  <span>{log.message}</span>
-                </div>
-              ))}
+              {checkState.logs.map((log) => {
+                const lineClass = getLogLineClass(log)
+                return (
+                  <div key={log.id} className={`text-sm leading-7 ${lineClass}`}>
+                    <span className={`mr-2 ${lineClass}`}>{formatLogTimestamp(log.createdAt)}</span>
+                    <span>{log.message}</span>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
