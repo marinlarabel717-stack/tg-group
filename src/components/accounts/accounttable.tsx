@@ -61,17 +61,17 @@ function CountryCell({ country, phone }: { country: string; phone: string }) {
   const value = formatCountryDisplay(country, phone)
 
   if (!meta) {
-    return <div className={`${cellTextClass()} text-center`} title={value}>{value}</div>
+    return <div className={cellTextClass()} title={value}>{value}</div>
   }
 
   const FlagComponent = FlagIcons[meta.iso2 as keyof typeof FlagIcons] as ((props: { title?: string; className?: string }) => JSX.Element) | undefined
 
   return (
-    <div className="flex min-w-0 items-center justify-center gap-2" title={value}>
+    <div className="flex min-w-0 items-center gap-2" title={value}>
       {FlagComponent ? (
         <FlagComponent className="h-3.5 w-5 shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]" title={meta.nameZh} />
       ) : null}
-      <span className={cellTextClass('text-center')}>{meta.nameZh}</span>
+      <span className={cellTextClass()}>{meta.nameZh}</span>
     </div>
   )
 }
@@ -81,14 +81,10 @@ function cellShellClass(columnId: string, isHeader = false) {
     return 'flex h-full w-full items-center justify-center px-0'
   }
 
-  if (columnId === 'phone' || columnId === 'country') {
+  if (columnId === 'status') {
     return isHeader
       ? 'flex h-full w-full items-center justify-center px-2'
       : 'flex h-full w-full items-center justify-center px-2'
-  }
-
-  if (columnId === 'status') {
-    return 'flex h-full w-full items-center justify-start px-2'
   }
 
   if (columnId === 'nickname') {
@@ -264,7 +260,7 @@ export const AccountTable = memo(function AccountTable() {
         size: 176,
         cell: ({ row }) => {
           const value = row.original.phone || '—'
-          return <div className={`${cellTextClass()} text-center`} title={value}>{value}</div>
+          return <div className={cellTextClass()} title={value}>{value}</div>
         }
       },
       {
