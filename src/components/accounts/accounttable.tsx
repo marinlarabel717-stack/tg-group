@@ -1,4 +1,4 @@
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   type ColumnDef,
   type RowSelectionState,
@@ -19,8 +19,10 @@ import { TableToolbar } from './tabletoolbar'
 import { filterAccounts, useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatDateTime, formatProfileSource } from '../../lib/ui-text'
 
-const ACCOUNT_GRID_TEMPLATE = 'grid-cols-[60px_180px_120px_140px_140px_140px_180px_240px_180px]'
-const ACCOUNT_GRID_WIDTH = 'w-[1380px]'
+const ACCOUNT_GRID_TEMPLATE = '60px 180px 120px 140px 140px 140px 180px 240px 180px'
+const ACCOUNT_GRID_STYLE: CSSProperties = {
+  gridTemplateColumns: ACCOUNT_GRID_TEMPLATE
+}
 
 function checkboxClass() {
   return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
@@ -41,7 +43,10 @@ function readProxy(account: AccountRecord) {
 
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
-    <div className={`grid ${ACCOUNT_GRID_TEMPLATE} ${ACCOUNT_GRID_WIDTH} min-h-[60px] animate-pulse items-center gap-0 rounded-[10px] bg-panel px-0 py-0`}>
+    <div
+      className="grid min-h-[60px] min-w-max animate-pulse items-center gap-0 rounded-[10px] bg-panel px-0 py-0"
+      style={ACCOUNT_GRID_STYLE}
+    >
       {Array.from({ length: columns }).map((_, index) => (
         <div key={index} className="px-4 py-3.5">
           <div className="h-9 rounded-[8px] bg-white/[0.03]" />
@@ -316,19 +321,19 @@ export const AccountTable = memo(function AccountTable() {
       />
 
       <GlassPanel className="p-0">
-        <div ref={parentRef} className="virtual-scroll-shell max-h-[640px] overflow-auto">
-          <div className="relative min-w-[1404px]">
-            <div className="sticky top-0 z-10 bg-card px-3 pb-1 pt-1">
+        <div ref={parentRef} className="virtual-scroll-shell min-w-0 max-h-[640px] overflow-x-auto overflow-y-auto">
+          <div className="relative min-w-max">
+            <div className="sticky top-0 z-10 min-w-max bg-card px-3 pb-1 pt-1">
               {table.getHeaderGroups().map((headerGroup) => (
-                <div key={headerGroup.id} className={`grid ${ACCOUNT_GRID_TEMPLATE} ${ACCOUNT_GRID_WIDTH}`}>
+                <div key={headerGroup.id} className="grid min-w-max" style={ACCOUNT_GRID_STYLE}>
                   {headerGroup.headers.map((header) => (
                     <div
                       key={header.id}
-                      className="flex h-[56px] min-w-0 items-center px-4 text-left text-xs font-semibold tracking-[0.24em] text-textMuted"
+                      className="flex h-[56px] min-w-0 shrink-0 items-center px-4 text-left text-xs font-semibold tracking-[0.24em] text-textMuted"
                     >
                       {header.isPlaceholder ? null : header.column.getCanSort() ? (
                         <button
-                          className="flex min-w-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap transition hover:text-white"
+                          className="flex min-w-0 shrink-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap transition hover:text-white"
                           onClick={header.column.getToggleSortingHandler()}
                           title={String(header.column.columnDef.header ?? '')}
                         >
@@ -370,12 +375,13 @@ export const AccountTable = memo(function AccountTable() {
                         style={{ transform: `translateY(${virtualRow.start}px)` }}
                       >
                         <div
-                          className={`grid ${ACCOUNT_GRID_TEMPLATE} ${ACCOUNT_GRID_WIDTH} min-h-[62px] items-center gap-0 rounded-[10px] px-0 py-0 transition ${
+                          className={`grid min-h-[62px] min-w-max items-center gap-0 rounded-[10px] px-0 py-0 transition ${
                             row.getIsSelected() ? 'bg-neon/8' : 'bg-panel hover:bg-hover'
                           }`}
+                          style={ACCOUNT_GRID_STYLE}
                         >
                           {row.getVisibleCells().map((cell) => (
-                            <div key={cell.id} className="flex min-w-0 items-center px-4 py-3.5 text-sm text-textMain">
+                            <div key={cell.id} className="flex min-w-0 shrink-0 items-center px-4 py-3.5 text-sm text-textMain">
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </div>
                           ))}
