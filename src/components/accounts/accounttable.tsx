@@ -107,12 +107,7 @@ function readNickname(account: AccountRecord) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
   const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
-  if (fullName) return fullName
-
-  const username = account.username?.trim() ?? ''
-  if (username) return username.replace(/^@/, '')
-
-  return '—'
+  return fullName || '-'
 }
 
 function readUsername(account: AccountRecord) {
@@ -122,7 +117,7 @@ function readUsername(account: AccountRecord) {
   const profileUsername = typeof account.profile?.username === 'string' ? account.profile.username.trim() : ''
   if (profileUsername) return profileUsername.startsWith('@') ? profileUsername : `@${profileUsername}`
 
-  return ''
+  return '-'
 }
 
 function readTwoFactor(account: AccountRecord) {
@@ -154,7 +149,7 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
 
   return (
     <div className="flex w-full items-center justify-start gap-1.5 overflow-hidden">
-      <span title={username ? `用户名：${username}` : '用户名：未设置'} className={actionButtonClass(Boolean(username))}>@</span>
+      <span title={`用户名：${username}`} className={actionButtonClass(username !== '-')}>@</span>
       <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>🔓</span>
       <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>
       <span title="跳转（后续接功能）" className={actionButtonClass(false)}>↗</span>
