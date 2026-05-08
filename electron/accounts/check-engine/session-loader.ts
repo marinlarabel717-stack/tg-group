@@ -1,8 +1,7 @@
 import fs from 'node:fs/promises'
 import Database from 'better-sqlite3'
-import { AuthKey } from 'telegram/crypto/AuthKey'
 import type { Session } from 'telegram/sessions'
-import { StringSession } from 'telegram/sessions'
+import { getAuthKeyModule, getSessionsModule } from './gramjs-runtime'
 
 interface TelethonSessionRow {
   dc_id: number
@@ -44,6 +43,7 @@ export class SessionLoader {
       throw new Error('不支持的 Session 文件格式')
     }
 
+    const { StringSession } = getSessionsModule()
     const session = new StringSession(sessionValue)
     await session.load()
     return session
@@ -57,6 +57,9 @@ export class SessionLoader {
       if (!row || !row.auth_key) {
         throw new Error('Session 数据库缺少 auth_key')
       }
+
+      const { StringSession } = getSessionsModule()
+      const { AuthKey } = getAuthKeyModule()
 
       const session = new StringSession('')
       session.setDC(row.dc_id, row.server_address, row.port)

@@ -1,7 +1,8 @@
 import os from 'node:os'
-import { TelegramClient } from 'telegram'
+import type { TelegramClient } from 'telegram'
 import type { Session } from 'telegram/sessions'
 import type { AccountJsonProfile } from '../types'
+import { getTelegramModule } from './gramjs-runtime'
 
 interface ClientConfig {
   apiId: number
@@ -45,6 +46,8 @@ export class TelegramClientManager {
       systemLangCode: readString(profile.system_lang_pack, DEFAULT_CLIENT_CONFIG.systemLangCode),
       useIPV6: Boolean(profile.ipv6 ?? DEFAULT_CLIENT_CONFIG.useIPV6)
     }
+
+    const { TelegramClient } = getTelegramModule()
 
     return new TelegramClient(session, config.apiId, config.apiHash, {
       connectionRetries: 1,
