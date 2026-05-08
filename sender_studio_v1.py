@@ -177,12 +177,21 @@ QFrame[variant='statusbar'] {
     border: 1px solid #233048;
     border-radius: 16px;
 }
+QFrame[variant='miniCard'] {
+    background: #1d2740;
+    border: 1px solid #2a3650;
+    border-radius: 14px;
+}
 QLabel[chip='true'] {
     background: #111827;
     border: 1px solid #233048;
     border-radius: 12px;
     padding: 8px 12px;
     color: #cbd5e1;
+}
+QLabel[soft='true'] {
+    color: #cbd5e1;
+    font-size: 13px;
 }
 QLabel[dim='true'] {
     color: #94a3b8;
@@ -216,6 +225,20 @@ QLabel[status='muted'] {
 }
 QSplitter::handle {
     background: #0f172a;
+}
+QCheckBox[table='true']::indicator {
+    width: 16px;
+    height: 16px;
+}
+QCheckBox[table='true']::indicator:unchecked {
+    border-radius: 8px;
+    border: 1px solid #4b5b79;
+    background: #141c2f;
+}
+QCheckBox[table='true']::indicator:checked {
+    border-radius: 8px;
+    border: 1px solid #4c8dff;
+    background: #3b82f6;
 }
 """
 
@@ -308,6 +331,87 @@ class SenderStudioV1(QMainWindow):
         palette = self.status_palette(status)
         item.setBackground(QBrush(QColor(palette['bg'])))
         item.setForeground(QBrush(QColor(palette['fg'])))
+
+    def _icon_button(self, text: str, handler=None, primary: bool = False, width: int = 42):
+        btn = QPushButton(text)
+        btn.setFixedSize(width, 42)
+        if primary:
+            btn.setProperty('role', 'primary')
+        else:
+            btn.setProperty('ghost', True)
+            btn.setStyleSheet('padding:0 0; font-size:16px;')
+        if handler:
+            btn.clicked.connect(handler)
+        return btn
+
+    def _table_text_item(self, text: str, align=Qt.AlignLeft | Qt.AlignVCenter, color: str = '#e5e7eb'):
+        item = QTableWidgetItem(text)
+        item.setTextAlignment(int(align))
+        item.setForeground(QBrush(QColor(color)))
+        return item
+
+    def _make_table_checkbox(self, checked: bool = True):
+        host = QWidget()
+        layout = QHBoxLayout(host)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setAlignment(Qt.AlignCenter)
+        cb = QCheckBox()
+        cb.setProperty('table', 'true')
+        cb.setChecked(checked)
+        cb.setEnabled(False)
+        layout.addWidget(cb)
+        return host
+
+    def _make_name_cell(self, display_name: str, username: str, selected: bool = False):
+        host = QWidget()
+        layout = QHBoxLayout(host)
+        layout.setContentsMargins(8, 2, 8, 2)
+        layout.setSpacing(10)
+        avatar = QLabel((display_name[:1] or 'A').upper())
+        avatar.setFixedSize(28, 28)
+        avatar.setAlignment(Qt.AlignCenter)
+        avatar.setStyleSheet('background:qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #fb7185, stop:1 #8b5cf6);border-radius:14px;color:white;font-size:12px;font-weight:800;')
+        layout.addWidget(avatar)
+        text_col = QVBoxLayout()
+        text_col.setContentsMargins(0, 0, 0, 0)
+        text_col.setSpacing(2)
+        name_label = QLabel(display_name or '未命名')
+        name_label.setStyleSheet(f"color:{'#ffffff' if selected else '#e5e7eb'};font-weight:700;")
+        meta_label = QLabel(('@' + username) if username else '无用户名')
+        meta_label.setStyleSheet(f"color:{'#cbd5e1' if selected else '#94a3b8'};font-size:12px;")
+        text_col.addWidget(name_label)
+        text_col.addWidget(meta_label)
+        layout.addLayout(text_col)
+        layout.addStretch()
+        return host
+
+    def _make_status_chip(self, text: str, status: str):
+        palette = self.status_palette(status)
+        label = QLabel(text)
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet(
+            f"background:{palette['bg']};border:1px solid {palette['fg']};border-radius:10px;padding:6px 10px;color:{palette['fg']};font-weight:700;"
+        )
+        return label
+
+    def _apply_accounts_table_row_styles(self):
+        selected_rows = {index.row() for index in self.accounts_table.selectionModel().selectedRows()}
+        for row in range(self.accounts_table.rowCount()):
+            row_selected = row in selected_rows
+            bg = QColor('#2c3854' if row_selected else ('#182235' if row % 2 else '#141c2f'))
+            fg = QColor('#ffffff' if row_selected else '#e5e7eb')
+            for col in range(self.accounts_table.columnCount()):
+                item = self.accounts_table.item(row, col)
+                if item:
+                    item.setBackground(QBrush(bg))
+                    if col != 4:
+                        item.setForeground(QBrush(fg))
+            name_widget = self.accounts_table.cellWidget(row, 2)
+            if name_widget and name_widget.layout() and name_widget.layout().count() >= 2:
+                text_col = name_widget.layout().itemAt(1).layout()
+                if text_col:
+                    text_col.itemAt(0).widget().setStyleSheet(f"color:{'#ffffff' if row_selected else '#e5e7eb'};font-weight:700;")
+                    text_col.itemAt(1).widget().setStyleSheet(f"color:{'#cbd5e1' if row_selected else '#94a3b8'};font-size:12px;")
 
     def format_check_summary(self, results):
         summary = {key: 0 for key in STATUS_OPTIONS}
@@ -546,7 +650,7 @@ class SenderStudioV1(QMainWindow):
         title_box = QVBoxLayout()
         title = QLabel('账号管理')
         title.setStyleSheet('font-size:22px;font-weight:800;color:white;')
-        subtitle = QLabel('按你给的参考图，当前这页改成“表格主视图 + 深色选中 + 底部动作条”方向。')
+        subtitle = QLabel('账号列表 / 批量动作 / 深色选中 / 底部动作条')
         subtitle.setProperty('dim', 'true')
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
@@ -562,24 +666,19 @@ class SenderStudioV1(QMainWindow):
 
         tool_row = QHBoxLayout()
         tool_row.setSpacing(10)
-        self.btn_import_session = QPushButton('＋ 导入')
-        self.btn_import_session.setProperty('role', 'primary')
-        self.btn_import_session.clicked.connect(self.import_sessions)
-        self.btn_refresh_accounts = QPushButton('↻ 刷新')
-        self.btn_refresh_accounts.clicked.connect(self.refresh_accounts)
-        self.btn_check_account = QPushButton('✓ 检查选中')
+        self.btn_import_session = self._icon_button('＋', self.import_sessions, primary=True)
+        self.btn_refresh_accounts = self._icon_button('↻', self.refresh_accounts)
+        self.btn_check_account = QPushButton('✓ 选中')
         self.btn_check_account.clicked.connect(self.check_selected_accounts)
-        self.btn_check_all_accounts = QPushButton('◎ 检查全部')
+        self.btn_check_all_accounts = QPushButton('✓ 全部')
         self.btn_check_all_accounts.clicked.connect(self.check_all_accounts)
         self.btn_enable_accounts = QPushButton('启用')
         self.btn_enable_accounts.clicked.connect(lambda: self.set_selected_accounts_enabled(True))
         self.btn_disable_accounts = QPushButton('停用')
         self.btn_disable_accounts.clicked.connect(lambda: self.set_selected_accounts_enabled(False))
-        self.btn_delete_account = QPushButton('删除')
-        self.btn_delete_account.clicked.connect(self.delete_selected_accounts)
-        self.btn_new_account = QPushButton('＋ 空白账号')
-        self.btn_new_account.clicked.connect(self.new_account)
-        for btn in [self.btn_import_session, self.btn_refresh_accounts, self.btn_check_account, self.btn_check_all_accounts, self.btn_enable_accounts, self.btn_disable_accounts, self.btn_delete_account, self.btn_new_account]:
+        self.btn_delete_account = self._icon_button('✕', self.delete_selected_accounts)
+        self.btn_new_account = self._icon_button('▣', self.new_account)
+        for btn in [self.btn_import_session, self.btn_new_account, self.btn_refresh_accounts, self.btn_check_account, self.btn_check_all_accounts, self.btn_enable_accounts, self.btn_disable_accounts, self.btn_delete_account]:
             tool_row.addWidget(btn)
         tool_row.addStretch()
         toolbar_layout.addLayout(tool_row)
@@ -592,11 +691,15 @@ class SenderStudioV1(QMainWindow):
         self.account_enabled_filter = QComboBox()
         self.account_enabled_filter.addItems(['全部启用状态', '已启用', '已停用'])
         self.account_enabled_filter.currentIndexChanged.connect(self.refresh_accounts)
+        self.account_group_filter = QComboBox()
+        self.account_group_filter.addItems(['全部群组', '已选群组>0', '未选群组'])
+        self.account_group_filter.currentIndexChanged.connect(self.refresh_accounts)
         self.account_search = QLineEdit()
         self.account_search.setPlaceholderText('搜索手机号 / 名称 / 用户名 / session')
         self.account_search.returnPressed.connect(self.refresh_accounts)
         filter_row.addWidget(self.account_status_filter)
         filter_row.addWidget(self.account_enabled_filter)
+        filter_row.addWidget(self.account_group_filter)
         filter_row.addStretch()
         filter_row.addWidget(self.account_search, 1)
         toolbar_layout.addLayout(filter_row)
@@ -611,7 +714,7 @@ class SenderStudioV1(QMainWindow):
         table_layout = QVBoxLayout(table_card)
         table_layout.setContentsMargins(14, 14, 14, 14)
         table_layout.setSpacing(12)
-        self.accounts_table = self._create_table(['#', '手机号', '名称', '用户名', '状态', '启用', '群组', '最近检查'])
+        self.accounts_table = self._create_table(['', '#', '电话', '姓名', '状态', '启用', '群组', '用过的'])
         self.accounts_table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.accounts_table.itemSelectionChanged.connect(self.on_account_selection_changed)
         self.accounts_table.cellClicked.connect(lambda row, _col: self.on_account_row_clicked(row))
@@ -642,6 +745,15 @@ class SenderStudioV1(QMainWindow):
         self.account_status_badge = QLabel('未检查')
         hero_row.addWidget(self.account_status_badge, 0, Qt.AlignRight)
         detail_layout.addLayout(hero_row)
+
+        quick_stats_row = QHBoxLayout()
+        self.account_quick_phone_chip = QLabel('电话：-'); self.account_quick_phone_chip.setProperty('chip', 'true')
+        self.account_quick_user_chip = QLabel('用户名：-'); self.account_quick_user_chip.setProperty('chip', 'true')
+        self.account_quick_group_chip = QLabel('群组：0'); self.account_quick_group_chip.setProperty('chip', 'true')
+        for chip in [self.account_quick_phone_chip, self.account_quick_user_chip, self.account_quick_group_chip]:
+            quick_stats_row.addWidget(chip)
+        quick_stats_row.addStretch()
+        detail_layout.addLayout(quick_stats_row)
 
         fields_row = QHBoxLayout()
         fields_row.setSpacing(14)
@@ -719,10 +831,10 @@ class SenderStudioV1(QMainWindow):
         self.account_bottom_status_label.setStyleSheet('font-size:15px;font-weight:700;color:white;')
         bottom_layout.addWidget(self.account_bottom_status_label)
         bottom_layout.addStretch()
-        save = QPushButton('保存账号'); save.setProperty('role', 'primary'); save.clicked.connect(self.save_current_account)
-        check_now = QPushButton('立即检查'); check_now.clicked.connect(self.check_current_account)
-        go_materials = QPushButton('去素材配置'); go_materials.clicked.connect(lambda: self.jump_to_materials(self.current_account_id))
-        go_rules = QPushButton('去定时规则'); go_rules.clicked.connect(lambda: self.jump_to_rules(self.current_account_id))
+        save = QPushButton('◎ 行动'); save.setProperty('role', 'primary'); save.clicked.connect(self.save_current_account)
+        check_now = self._icon_button('⟳', self.check_current_account)
+        go_materials = self._icon_button('⌁', lambda: self.jump_to_materials(self.current_account_id))
+        go_rules = self._icon_button('⇄', lambda: self.jump_to_rules(self.current_account_id))
         for btn in [check_now, go_materials, go_rules, save]:
             bottom_layout.addWidget(btn)
         detail_layout.addWidget(bottom_bar)
@@ -924,9 +1036,17 @@ class SenderStudioV1(QMainWindow):
         table.setShowGrid(False)
         table.setAlternatingRowColors(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeToContents)
         table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         table.setMinimumHeight(320)
         table.setFocusPolicy(Qt.StrongFocus)
+        table.setColumnWidth(0, 42)
+        table.setColumnWidth(1, 52)
         return table
 
     def _set_page(self, index: int):
@@ -966,30 +1086,38 @@ class SenderStudioV1(QMainWindow):
         selected_id = self.current_account_id
         metrics = self.store.account_metrics()
         rows = self.store.list_accounts(self.account_status_filter.currentText(), self.account_search.text().strip(), self.account_enabled_filter.currentText())
+        group_filter = self.account_group_filter.currentText()
+        if group_filter == '已选群组>0':
+            rows = [row for row in rows if any(g.get('selected') for g in (row.get('joined_groups') or []))]
+        elif group_filter == '未选群组':
+            rows = [row for row in rows if not any(g.get('selected') for g in (row.get('joined_groups') or []))]
         self.accounts_table.setSortingEnabled(False)
+        self.accounts_table.clearSelection()
         self.accounts_table.setRowCount(len(rows))
         for r, row in enumerate(rows):
-            values = [
-                r + 1,
-                row['phone'] or '未同步',
-                row['display_name'] or '未命名',
-                ('@' + row['username']) if row.get('username') else '-',
-                row['status'],
-                '启用' if row['enabled'] else '停用',
-                str(len([g for g in (row.get('joined_groups') or []) if g.get('selected')])) if row.get('joined_groups') else '0',
-                row['last_check_at'] or '-',
-            ]
-            for c, value in enumerate(values):
-                item = QTableWidgetItem(str(value))
-                if c == 0:
-                    item.setData(Qt.UserRole, row['id'])
-                if c == 4:
-                    self.paint_status_item(item, row['status'])
-                if c == 5:
-                    item.setForeground(QBrush(QColor('#22c55e' if row['enabled'] else '#94a3b8')))
-                self.accounts_table.setItem(r, c, item)
-            self.accounts_table.setRowHeight(r, 52)
-        self.accounts_table.resizeRowsToContents()
+            checked_groups = len([g for g in (row.get('joined_groups') or []) if g.get('selected')])
+            self.accounts_table.setCellWidget(r, 0, self._make_table_checkbox(True))
+
+            index_item = self._table_text_item(str(r + 1), Qt.AlignCenter)
+            index_item.setData(Qt.UserRole, row['id'])
+            self.accounts_table.setItem(r, 1, index_item)
+
+            self.accounts_table.setItem(r, 2, self._table_text_item(row['phone'] or '未同步', Qt.AlignLeft | Qt.AlignVCenter))
+            self.accounts_table.setCellWidget(r, 3, self._make_name_cell(row.get('display_name') or '未命名', row.get('username') or ''))
+
+            status_item = self._table_text_item(row['status'], Qt.AlignCenter)
+            self.paint_status_item(status_item, row['status'])
+            self.accounts_table.setItem(r, 4, status_item)
+
+            enabled_item = self._table_text_item('启用' if row['enabled'] else '停用', Qt.AlignCenter, '#22c55e' if row['enabled'] else '#94a3b8')
+            self.accounts_table.setItem(r, 5, enabled_item)
+
+            groups_item = self._table_text_item(f'{checked_groups} 个', Qt.AlignCenter, '#cbd5e1' if checked_groups else '#64748b')
+            self.accounts_table.setItem(r, 6, groups_item)
+
+            self.accounts_table.setItem(r, 7, self._table_text_item(row['last_check_at'] or '-', Qt.AlignCenter, '#cbd5e1'))
+            self.accounts_table.setRowHeight(r, 58)
+
         self.account_visible_count_label.setText(f"显示账号：{len(rows)} / {metrics['total']}")
         self.account_check_summary_label.setText(
             f"账号总数 {metrics['total']} · 正常 {metrics['normal']} · 异常 {metrics['abnormal']} · 启用 {metrics['enabled']} · 最近检查 {metrics['last_check_at']}"
@@ -1009,20 +1137,21 @@ class SenderStudioV1(QMainWindow):
             self.clear_account_form()
         elif not rows:
             self.clear_account_form()
+        self._apply_accounts_table_row_styles()
         self.refresh_account_selection_status()
 
     def selected_account_id_from_table(self):
         row = self.accounts_table.currentRow()
         if row < 0:
             return None
-        item = self.accounts_table.item(row, 0)
+        item = self.accounts_table.item(row, 1)
         return item.data(Qt.UserRole) if item else None
 
     def selected_account_ids(self):
-        rows = self.accounts_table.selectionModel().selectedRows(0)
+        rows = self.accounts_table.selectionModel().selectedRows(1)
         ids = []
         for model_index in rows:
-            item = self.accounts_table.item(model_index.row(), 0)
+            item = self.accounts_table.item(model_index.row(), 1)
             if item:
                 ids.append(item.data(Qt.UserRole))
         return ids
@@ -1034,7 +1163,7 @@ class SenderStudioV1(QMainWindow):
             self.load_account_detail(account_id)
 
     def on_account_row_clicked(self, row):
-        item = self.accounts_table.item(row, 0)
+        item = self.accounts_table.item(row, 1)
         if not item:
             return
         account_id = item.data(Qt.UserRole)
@@ -1043,6 +1172,7 @@ class SenderStudioV1(QMainWindow):
 
     def refresh_account_selection_status(self):
         selected_ids = self.selected_account_ids()
+        self._apply_accounts_table_row_styles()
         self.account_selected_count_label.setText(f'已选：{len(selected_ids)}')
         if selected_ids:
             self.account_bottom_status_label.setText(f'已选中 {len(selected_ids)} 个账号')
@@ -1055,12 +1185,14 @@ class SenderStudioV1(QMainWindow):
         display_name = data.get('display_name') or '未命名账号'
         phone = data.get('phone') or '未同步手机号'
         username = ('@' + data.get('username')) if data.get('username') else '无用户名'
+        selected_groups = len([g for g in (data.get('joined_groups') or []) if g.get('selected')])
         self.account_detail_name_label.setText(display_name)
         self.account_detail_meta_label.setText(f'{phone}  ·  {username}')
         self.account_avatar_label.setText((display_name[:1] or 'A').upper())
-        self.account_selected_groups_label.setText(
-            f"已选群：{len([g for g in (data.get('joined_groups') or []) if g.get('selected')])}"
-        )
+        self.account_selected_groups_label.setText(f"已选群：{selected_groups}")
+        self.account_quick_phone_chip.setText(f'电话：{phone}')
+        self.account_quick_user_chip.setText(f'用户名：{username}')
+        self.account_quick_group_chip.setText(f'群组：{selected_groups}')
 
     def load_account_detail(self, account_id: int):
         data = self.store.get_account(account_id)
@@ -1092,6 +1224,9 @@ class SenderStudioV1(QMainWindow):
         self.account_detail_meta_label.setText('点击左侧表格任意一行后，这里显示账号名称、手机号、用户名和状态。')
         self.account_avatar_label.setText('A')
         self.account_selected_groups_label.setText('已选群：0')
+        self.account_quick_phone_chip.setText('电话：-')
+        self.account_quick_user_chip.setText('用户名：-')
+        self.account_quick_group_chip.setText('群组：0')
         self.account_id_label.setText('-')
         self.account_name_edit.clear()
         self.account_bio_edit.blockSignals(True)
