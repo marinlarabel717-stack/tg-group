@@ -123,6 +123,8 @@ export class AccountImportService {
           sessionPath: candidate.sessionPath,
           jsonPath: ensured.jsonPath,
           status: inferStatus(profile),
+          profile,
+          profileSource: 'json_import',
           lastCheckTime: parseDateValue(profile.last_check_time),
           lastOnlineTime: parseDateValue(profile.last_connect_date)
         })

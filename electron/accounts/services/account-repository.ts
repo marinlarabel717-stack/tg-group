@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type Database from 'better-sqlite3'
-import type { AccountRecord, AccountStatus, UpsertAccountInput } from '../types'
+import type { AccountJsonProfile, AccountRecord, AccountStatus, CheckResultInput, UpsertAccountInput } from '../types'
 
 interface AccountRow {
   id: number
@@ -12,10 +12,21 @@ interface AccountRow {
   session_path: string
   json_path: string
   status: AccountStatus
+  profile_json: string
+  profile_source: 'json_import' | 'login_check'
   last_check_time: string | null
   last_online_time: string | null
   created_at: string
   updated_at: string
+}
+
+function parseProfileJson(raw: string): AccountJsonProfile {
+  try {
+    const parsed = JSON.parse(raw) as AccountJsonProfile
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
 }
 
 function mapRow(row: AccountRow): AccountRecord {
@@ -28,6 +39,8 @@ function mapRow(row: AccountRow): AccountRecord {
     sessionPath: row.session_path,
     jsonPath: row.json_path,
     status: row.status,
+    profile: parseProfileJson(row.profile_json),
+    profileSource: row.profile_source,
     lastCheckTime: row.last_check_time,
     lastOnlineTime: row.last_online_time,
     createdAt: row.created_at,
@@ -37,30 +50,24 @@ function mapRow(row: AccountRow): AccountRecord {
 
 export class AccountRepository {
   private readonly listStatement
-  private readonly listByIdsStatement
   private readonly upsertStatement
   private readonly deleteByIdStatement
   private readonly deleteAllStatement
   private readonly updateStatusStatement
+  private readonly applyCheckResultStatement
 
   constructor(private readonly database: Database.Database) {
     this.listStatement = this.database.prepare(`
-      SELECT id, phone, username, user_id, country, session_path, json_path, status, last_check_time, last_online_time, created_at, updated_at
+      SELECT id, phone, username, user_id, country, session_path, json_path, status, profile_json, profile_source, last_check_time, last_online_time, created_at, updated_at
       FROM accounts
       ORDER BY created_at DESC, id DESC
     `)
 
-    this.listByIdsStatement = this.database.prepare(`
-      SELECT id, phone, username, user_id, country, session_path, json_path, status, last_check_time, last_online_time, created_at, updated_at
-      FROM accounts
-      WHERE id IN (${Array.from({ length: 500 }, (_, index) => `@id${index}`).join(', ')})
-    `)
-
     this.upsertStatement = this.database.prepare(`
       INSERT INTO accounts (
-        phone, username, user_id, country, session_path, json_path, status, last_check_time, last_online_time, created_at, updated_at
+        phone, username, user_id, country, session_path, json_path, status, profile_json, profile_source, last_check_time, last_online_time, created_at, updated_at
       ) VALUES (
-        @phone, @username, @userId, @country, @sessionPath, @jsonPath, @status, @lastCheckTime, @lastOnlineTime, @createdAt, @updatedAt
+        @phone, @username, @userId, @country, @sessionPath, @jsonPath, @status, @profileJson, @profileSource, @lastCheckTime, @lastOnlineTime, @createdAt, @updatedAt
       )
       ON CONFLICT(session_path) DO UPDATE SET
         phone = excluded.phone,
@@ -69,6 +76,8 @@ export class AccountRepository {
         country = excluded.country,
         json_path = excluded.json_path,
         status = excluded.status,
+        profile_json = excluded.profile_json,
+        profile_source = excluded.profile_source,
         last_check_time = excluded.last_check_time,
         last_online_time = excluded.last_online_time,
         updated_at = excluded.updated_at
@@ -79,6 +88,21 @@ export class AccountRepository {
     this.updateStatusStatement = this.database.prepare(`
       UPDATE accounts
       SET status = @status,
+          last_check_time = @lastCheckTime,
+          last_online_time = @lastOnlineTime,
+          updated_at = @updatedAt
+      WHERE id = @id
+    `)
+
+    this.applyCheckResultStatement = this.database.prepare(`
+      UPDATE accounts
+      SET phone = @phone,
+          username = @username,
+          user_id = @userId,
+          country = @country,
+          status = @status,
+          profile_json = @profileJson,
+          profile_source = 'login_check',
           last_check_time = @lastCheckTime,
           last_online_time = @lastOnlineTime,
           updated_at = @updatedAt
@@ -96,6 +120,7 @@ export class AccountRepository {
       for (const item of batch) {
         this.upsertStatement.run({
           ...item,
+          profileJson: JSON.stringify(item.profile ?? {}),
           createdAt: now,
           updatedAt: now
         })
@@ -142,6 +167,30 @@ export class AccountRepository {
     return this.list()
   }
 
+  applyCheckResults(items: CheckResultInput[]) {
+    const now = new Date().toISOString()
+
+    const transaction = this.database.transaction((batch: CheckResultInput[]) => {
+      for (const item of batch) {
+        this.applyCheckResultStatement.run({
+          id: item.id,
+          phone: item.phone ?? '',
+          username: item.username ?? '',
+          userId: item.userId ?? '',
+          country: item.country ?? '',
+          status: item.status,
+          profileJson: JSON.stringify(item.profile ?? {}),
+          lastCheckTime: item.lastCheckTime ?? now,
+          lastOnlineTime: item.lastOnlineTime ?? null,
+          updatedAt: now
+        })
+      }
+    })
+
+    transaction(items)
+    return this.list()
+  }
+
   async exportByIds(ids: number[], targetDirectory: string) {
     const accounts = this.getByIds(ids)
     await fs.mkdir(targetDirectory, { recursive: true })
@@ -164,9 +213,9 @@ export class AccountRepository {
   getByIds(ids: number[]) {
     if (ids.length === 0) return []
 
-    const placeholders = ids.map((_, index) => `?`).join(', ')
+    const placeholders = ids.map(() => '?').join(', ')
     const statement = this.database.prepare(`
-      SELECT id, phone, username, user_id, country, session_path, json_path, status, last_check_time, last_online_time, created_at, updated_at
+      SELECT id, phone, username, user_id, country, session_path, json_path, status, profile_json, profile_source, last_check_time, last_online_time, created_at, updated_at
       FROM accounts
       WHERE id IN (${placeholders})
       ORDER BY created_at DESC, id DESC

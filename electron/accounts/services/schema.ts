@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   session_path TEXT NOT NULL UNIQUE,
   json_path TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'unknown',
+  profile_json TEXT NOT NULL DEFAULT '{}',
+  profile_source TEXT NOT NULL DEFAULT 'json_import',
   last_check_time TEXT,
   last_online_time TEXT,
   created_at TEXT NOT NULL,

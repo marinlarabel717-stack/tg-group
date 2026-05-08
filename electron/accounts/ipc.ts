@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
+import type { CheckResultInput } from './types'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
 import type { AccountStatusService } from './services/account-status-service'
@@ -68,6 +69,10 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
   ipcMain.handle('accounts:apply-spambot-reply', (_event, payload: { ids: number[]; replyText: string }) => {
     return accountStatusService.applySpamBotReply(payload.ids, payload.replyText)
+  })
+
+  ipcMain.handle('accounts:apply-check-results', (_event, items: CheckResultInput[]) => {
+    return accountStatusService.applyCheckResults(items)
   })
 
   ipcMain.handle('accounts:export', async (_event, ids: number[]) => {

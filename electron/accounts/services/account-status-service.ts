@@ -1,5 +1,5 @@
 import type { AccountRepository } from './account-repository'
-import type { StatusUpdateResult } from '../types'
+import type { CheckResultInput, StatusUpdateResult } from '../types'
 import { parseSpamBotStatus } from './spam-bot-status-parser'
 
 export class AccountStatusService {
@@ -20,6 +20,18 @@ export class AccountStatusService {
 
     return {
       updatedCount: ids.length,
+      status,
+      accounts
+    }
+  }
+
+  applyCheckResults(items: CheckResultInput[]): StatusUpdateResult {
+    const normalizedItems = items.filter((item) => Number.isFinite(item.id))
+    const accounts = this.repository.applyCheckResults(normalizedItems)
+    const status = normalizedItems.length > 0 ? normalizedItems[0].status : 'unknown'
+
+    return {
+      updatedCount: normalizedItems.length,
       status,
       accounts
     }

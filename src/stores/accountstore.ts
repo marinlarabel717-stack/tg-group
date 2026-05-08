@@ -228,7 +228,8 @@ export function filterAccounts(accounts: AccountRecord[], filters: {
       account.country,
       account.status,
       account.sessionPath,
-      account.jsonPath
+      account.jsonPath,
+      JSON.stringify(account.profile ?? {})
     ]
       .join(' ')
       .toLowerCase()

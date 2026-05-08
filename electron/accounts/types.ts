@@ -22,6 +22,8 @@ export interface AccountRecord {
   sessionPath: string
   jsonPath: string
   status: AccountStatus
+  profile: AccountJsonProfile
+  profileSource: 'json_import' | 'login_check'
   lastCheckTime: string | null
   lastOnlineTime: string | null
   createdAt: string
@@ -97,8 +99,22 @@ export interface UpsertAccountInput {
   sessionPath: string
   jsonPath: string
   status: AccountStatus
+  profile: AccountJsonProfile
+  profileSource: 'json_import' | 'login_check'
   lastCheckTime: string | null
   lastOnlineTime: string | null
+}
+
+export interface CheckResultInput {
+  id: number
+  profile: AccountJsonProfile
+  status: AccountStatus
+  phone?: string
+  username?: string
+  userId?: string
+  country?: string
+  lastCheckTime?: string | null
+  lastOnlineTime?: string | null
 }
 
 export interface StatusUpdateResult {

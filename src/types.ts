@@ -18,6 +18,32 @@ export type AccountStatus =
   | 'checking'
   | 'unknown'
 
+export interface AccountJsonProfile extends Record<string, unknown> {
+  app_id?: number
+  app_hash?: string
+  sdk?: string
+  device?: string
+  app_version?: string
+  lang_pack?: string
+  system_lang_pack?: string
+  twoFA?: string | null
+  role?: string | null
+  id?: number | string
+  phone?: string
+  username?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  spamblock?: string | null
+  session_file?: string
+  last_connect_date?: string | null
+  session_created_date?: string | null
+  register_time?: number | string | null
+  last_check_time?: number | string | null
+  proxy?: string | null
+  ipv6?: boolean
+  [key: string]: unknown
+}
+
 export interface AccountRecord {
   id: number
   phone: string
@@ -27,6 +53,8 @@ export interface AccountRecord {
   sessionPath: string
   jsonPath: string
   status: AccountStatus
+  profile: AccountJsonProfile
+  profileSource: 'json_import' | 'login_check'
   lastCheckTime: string | null
   lastOnlineTime: string | null
   createdAt: string
@@ -63,6 +91,18 @@ export interface ImportAccountsResult {
   accounts: AccountRecord[]
 }
 
+export interface CheckResultInput {
+  id: number
+  profile: AccountJsonProfile
+  status: AccountStatus
+  phone?: string
+  username?: string
+  userId?: string
+  country?: string
+  lastCheckTime?: string | null
+  lastOnlineTime?: string | null
+}
+
 export interface StatusUpdateResult {
   updatedCount: number
   status: AccountStatus
@@ -84,6 +124,7 @@ export interface DesktopAccountsApi {
   deleteAll: () => Promise<AccountRecord[]>
   markChecking: (ids: number[]) => Promise<StatusUpdateResult>
   applySpamBotReply: (payload: { ids: number[]; replyText: string }) => Promise<StatusUpdateResult>
+  applyCheckResults: (items: CheckResultInput[]) => Promise<StatusUpdateResult>
   exportByIds: (ids: number[]) => Promise<ExportAccountsResult>
   revealPath: (targetPath: string) => Promise<boolean>
 }
