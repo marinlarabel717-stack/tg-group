@@ -317,41 +317,9 @@ const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }
 
 const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose }: { account: AccountRecord; onClose: () => void }) {
   const nickname = readNickname(account)
-  const [desktopReading, setDesktopReading] = useState(false)
-  const [desktopMessage, setDesktopMessage] = useState('')
-  const [desktopExpiry, setDesktopExpiry] = useState<string | null>(null)
-  const [desktopScreenshotPath, setDesktopScreenshotPath] = useState<string | null>(null)
-  const premiumExpiryRaw = desktopExpiry ?? readPremiumExpiry(account)
+  const premiumExpiryRaw = readPremiumExpiry(account)
   const premiumExpiry = formatDateTimeFull(premiumExpiryRaw)
-  const premiumExpiryDisplay = desktopReading
-    ? '正在从官方 Telegram Desktop 读取…'
-    : premiumExpiry !== '—'
-      ? premiumExpiry
-      : '暂未读取到会员到期时间'
-
-  const handleReadFromDesktop = useCallback(async () => {
-    setDesktopReading(true)
-    setDesktopMessage('')
-    try {
-      const result = await window.desktopAccounts?.readPremiumExpiryFromDesktop(account.id)
-      if (!result) {
-        setDesktopMessage('读取失败：桌面账号 API 未返回结果')
-        return
-      }
-
-      if (result.premiumExpiry) {
-        setDesktopExpiry(result.premiumExpiry)
-      }
-      setDesktopScreenshotPath(result.screenshotPath ?? null)
-      setDesktopMessage(result.message)
-    } finally {
-      setDesktopReading(false)
-    }
-  }, [account.id])
-
-  useEffect(() => {
-    void handleReadFromDesktop()
-  }, [handleReadFromDesktop])
+  const premiumExpiryDisplay = premiumExpiry !== '—' ? premiumExpiry : '暂未读取到会员到期时间'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={onClose}>
@@ -384,17 +352,7 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
           <div className="rounded-[12px] bg-panel px-4 py-3">
             <div className="text-xs text-textMuted">到期时间</div>
             <div className="mt-1 font-medium text-white">{premiumExpiryDisplay}</div>
-            {premiumExpiry === '—' ? <div className="mt-2 text-xs text-textMuted">当前资料同步链路还没拿到时间，可以点下面按钮改走官方 Telegram Desktop 页面识别。</div> : null}
-          </div>
-
-          <div className="rounded-[12px] bg-panel px-4 py-3">
-            <div className="text-xs text-textMuted">官方客户端读取</div>
-            <div className="mt-1 flex items-center gap-2 text-xs text-textMuted">
-              {desktopReading ? <Loader2 size={13} className="animate-spin text-fuchsia-300" /> : null}
-              <span>{desktopReading ? '正在自动打开官方 Telegram Desktop 并读取会员时间…' : '点开弹窗后已自动尝试读取官方 Telegram Desktop 里的会员时间。'}</span>
-            </div>
-            {desktopMessage ? <div className="mt-3 text-xs text-textMuted">{desktopMessage}</div> : null}
-            {desktopScreenshotPath ? <div className="mt-2 break-all text-[11px] text-textMuted">识别截图：{desktopScreenshotPath}</div> : null}
+            {premiumExpiry === '—' ? <div className="mt-2 text-xs text-textMuted">当前只同步到会员状态，还没接到不依赖本地 Telegram 客户端的到期时间来源。</div> : null}
           </div>
         </div>
       </div>
