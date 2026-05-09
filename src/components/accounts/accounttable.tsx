@@ -33,8 +33,8 @@ import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTi
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '56px 84px 176px 120px 124px 96px 220px 144px 228px'
-const ACCOUNT_GRID_WIDTH = 1248
+const ACCOUNT_GRID_TEMPLATE = '56px 84px 176px 120px 124px 96px 184px 132px 228px'
+const ACCOUNT_GRID_WIDTH = 1200
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -126,11 +126,11 @@ function cellShellClass(columnId: string, isHeader = false) {
   }
 
   if (columnId === 'nickname') {
-    return 'flex h-full w-full min-w-0 items-center justify-start px-4'
+    return 'flex h-full w-full min-w-0 items-center justify-start pr-2 pl-4'
   }
 
   if (columnId === 'proxy') {
-    return 'flex h-full w-full min-w-0 items-center justify-start pr-2 pl-4'
+    return 'flex h-full w-full min-w-0 items-center justify-start pr-2 pl-2'
   }
 
   if (columnId === 'actions') {
@@ -240,15 +240,6 @@ function readPremiumExpiry(account: AccountRecord) {
   return null
 }
 
-function readPremiumTooltip(account: AccountRecord) {
-  const premiumExpiry = formatDateTimeFull(readPremiumExpiry(account))
-  if (premiumExpiry !== '—') {
-    return `高级会员\n到期时间：${premiumExpiry}`
-  }
-
-  return '高级会员\n到期时间：暂未同步'
-}
-
 function isPremiumAccount(account: AccountRecord) {
   return Boolean(account.profile?.is_premium)
 }
@@ -324,6 +315,48 @@ const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }
   )
 })
 
+const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose }: { account: AccountRecord; onClose: () => void }) {
+  const nickname = readNickname(account)
+  const premiumExpiry = formatDateTimeFull(readPremiumExpiry(account))
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={onClose}>
+      <div className="w-full max-w-[420px] rounded-[18px] border border-fuchsia-400/20 bg-card shadow-[0_16px_48px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+          <div>
+            <div className="text-sm font-semibold text-fuchsia-300">会员详情</div>
+            <div className="mt-1 text-xs text-textMuted">点击紫色星星可查看该账号的会员到期时间</div>
+          </div>
+          <button type="button" className="rounded-[8px] px-2 py-1 text-sm text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}>关闭</button>
+        </div>
+
+        <div className="space-y-3 px-5 py-5 text-sm text-textMain">
+          <div className="rounded-[12px] bg-panel px-4 py-3">
+            <div className="text-xs text-textMuted">账号</div>
+            <div className="mt-1 font-medium text-white">{account.phone || '—'}</div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-[12px] bg-panel px-4 py-3">
+              <div className="text-xs text-textMuted">昵称</div>
+              <div className="mt-1 font-medium text-white">{nickname}</div>
+            </div>
+            <div className="rounded-[12px] bg-panel px-4 py-3">
+              <div className="text-xs text-textMuted">会员状态</div>
+              <div className="mt-1 font-medium text-fuchsia-300">高级会员</div>
+            </div>
+          </div>
+
+          <div className="rounded-[12px] bg-panel px-4 py-3">
+            <div className="text-xs text-textMuted">到期时间</div>
+            <div className="mt-1 font-medium text-white">{premiumExpiry}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+})
+
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
     <div className="grid min-h-[52px] shrink-0 items-center gap-0 rounded-[10px] bg-panel" style={ACCOUNT_GRID_STYLE}>
@@ -336,12 +369,11 @@ const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) 
   )
 })
 
-const TableRowActions = memo(function TableRowActions({ account }: { account: AccountRecord }) {
+const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }: { account: AccountRecord; onOpenPremium: (account: AccountRecord) => void }) {
   const username = readUsername(account)
   const twoFactor = readTwoFactor(account)
   const lastLogin = readLastLogin(account)
   const premium = isPremiumAccount(account)
-  const premiumTooltip = readPremiumTooltip(account)
   const [openingWeb, setOpeningWeb] = useState(false)
 
   const handleOpenTelegramWeb = useCallback(async () => {
@@ -360,19 +392,14 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
       <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>🔓</span>
       <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>
       {premium ? (
-        <div className="group relative flex shrink-0">
-          <span
-            title={premiumTooltip.replace(/\n/g, ' ｜ ')}
-            className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-[8px] border border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300"
-          >
-            <Star size={12} className="fill-current" />
-          </span>
-          <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 hidden min-w-[168px] -translate-x-1/2 rounded-[10px] border border-fuchsia-400/20 bg-slate-950/95 px-3 py-2 text-[11px] leading-4 text-fuchsia-100 shadow-[0_10px_24px_rgba(0,0,0,0.35)] group-hover:block">
-            {premiumTooltip.split('\n').map((line) => (
-              <div key={line}>{line}</div>
-            ))}
-          </div>
-        </div>
+        <button
+          type="button"
+          title="查看会员详情"
+          onClick={() => onOpenPremium(account)}
+          className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-[8px] border border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300 transition hover:brightness-110"
+        >
+          <Star size={12} className="fill-current" />
+        </button>
       ) : null}
       <button
         type="button"
@@ -418,6 +445,7 @@ export const AccountTable = memo(function AccountTable() {
   const [tableLoading, setTableLoading] = useState(true)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [frozenDialogAccount, setFrozenDialogAccount] = useState<AccountRecord | null>(null)
+  const [premiumDialogAccount, setPremiumDialogAccount] = useState<AccountRecord | null>(null)
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null)
   const deferredSearch = useDeferredValue(search)
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -562,7 +590,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'nickname',
         header: '昵称',
-        size: 220,
+        size: 184,
         cell: ({ row }) => {
           const value = readNickname(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -571,7 +599,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'proxy',
         header: '代理',
-        size: 144,
+        size: 132,
         cell: ({ row }) => {
           const value = readProxy(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -582,8 +610,8 @@ export const AccountTable = memo(function AccountTable() {
         header: '操作',
         size: 228,
         enableSorting: false,
-        cell: ({ row }) => <TableRowActions account={row.original} />
-      }
+          cell: ({ row }) => <TableRowActions account={row.original} onOpenPremium={setPremiumDialogAccount} />
+        }
     ],
     []
   )
@@ -700,6 +728,7 @@ export const AccountTable = memo(function AccountTable() {
     setScrollLeft(0)
     setCopiedPhone(null)
     setFrozenDialogAccount(null)
+    setPremiumDialogAccount(null)
 
     if (viewportRef.current) {
       viewportRef.current.scrollTop = 0
@@ -876,6 +905,7 @@ export const AccountTable = memo(function AccountTable() {
       />
 
       {frozenDialogAccount ? <FrozenStatusDialog account={frozenDialogAccount} onClose={() => setFrozenDialogAccount(null)} /> : null}
+      {premiumDialogAccount ? <PremiumStatusDialog account={premiumDialogAccount} onClose={() => setPremiumDialogAccount(null)} /> : null}
     </div>
   )
 })
