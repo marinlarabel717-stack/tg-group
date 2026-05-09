@@ -42,6 +42,11 @@ const ACCOUNT_GRID_STYLE: CSSProperties = {
   minWidth: 'max-content'
 }
 
+interface PremiumDialogState {
+  account: AccountRecord
+  premiumExpiryOverride?: string | null
+}
+
 function createDefaultSorting() {
   return [{ id: 'lastOnlineTime', desc: true }]
 }
@@ -315,44 +320,11 @@ const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }
   )
 })
 
-const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose }: { account: AccountRecord; onClose: () => void }) {
+const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, premiumExpiryOverride, onClose }: { account: AccountRecord; premiumExpiryOverride?: string | null; onClose: () => void }) {
   const nickname = readNickname(account)
-  const [reading, setReading] = useState(false)
-  const [localPremiumExpiry, setLocalPremiumExpiry] = useState<string | null>(readPremiumExpiry(account))
-  const premiumExpiryRaw = localPremiumExpiry ?? readPremiumExpiry(account)
+  const premiumExpiryRaw = premiumExpiryOverride ?? readPremiumExpiry(account)
   const premiumExpiry = formatDateTimeFull(premiumExpiryRaw)
-  const premiumExpiryDisplay = reading
-    ? 'MTProto 会员状态读取中…'
-    : premiumExpiry !== '—'
-      ? premiumExpiry
-      : '暂未读取到会员到期时间'
-
-  useEffect(() => {
-    let disposed = false
-
-    const run = async () => {
-      if (!window.desktopAccounts?.readPremiumExpiryFromDesktop) return
-      setReading(true)
-      try {
-        const result = await window.desktopAccounts.readPremiumExpiryFromDesktop(account.id)
-        if (disposed || !result) return
-
-        if (result.premiumExpiry) {
-          setLocalPremiumExpiry(result.premiumExpiry)
-        }
-      } finally {
-        if (!disposed) {
-          setReading(false)
-        }
-      }
-    }
-
-    void run()
-
-    return () => {
-      disposed = true
-    }
-  }, [account.id])
+  const premiumExpiryDisplay = premiumExpiry !== '—' ? premiumExpiry : '暂未读取到会员到期时间'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={onClose}>
@@ -384,13 +356,6 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
           <div className="rounded-[12px] bg-panel px-4 py-3">
             <div className="text-xs text-textMuted">到期时间</div>
             <div className="mt-1 font-medium text-white">{premiumExpiryDisplay}</div>
-            {reading ? (
-              <div className="mt-2 flex items-center gap-2 text-xs text-fuchsia-200">
-                <Loader2 size={12} className="animate-spin" />
-                <span>正在通过 MTProto 请求 Telegram Premium 状态文本并解析到期时间…</span>
-              </div>
-            ) : null}
-            {!reading && premiumExpiry === '—' ? <div className="mt-2 text-xs text-textMuted">当前没解析到时间；这版不再拉本地客户端，也不再走隐藏 Web。</div> : null}
           </div>
 
         </div>
@@ -411,7 +376,7 @@ const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) 
   )
 })
 
-const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }: { account: AccountRecord; onOpenPremium: (account: AccountRecord) => void }) {
+const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }: { account: AccountRecord; onOpenPremium: (account: AccountRecord) => void | Promise<void> }) {
   const username = readUsername(account)
   const twoFactor = readTwoFactor(account)
   const lastLogin = readLastLogin(account)
@@ -437,7 +402,7 @@ const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }
         <button
           type="button"
           title="查看会员详情"
-          onClick={() => onOpenPremium(account)}
+          onClick={() => void onOpenPremium(account)}
           className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-[8px] border border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300 transition hover:brightness-110"
         >
           <Star size={12} className="fill-current" />
@@ -487,7 +452,7 @@ export const AccountTable = memo(function AccountTable() {
   const [tableLoading, setTableLoading] = useState(true)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [frozenDialogAccount, setFrozenDialogAccount] = useState<AccountRecord | null>(null)
-  const [premiumDialogAccount, setPremiumDialogAccount] = useState<AccountRecord | null>(null)
+  const [premiumDialogAccount, setPremiumDialogAccount] = useState<PremiumDialogState | null>(null)
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null)
   const deferredSearch = useDeferredValue(search)
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -652,7 +617,7 @@ export const AccountTable = memo(function AccountTable() {
         header: '操作',
         size: 228,
         enableSorting: false,
-          cell: ({ row }) => <TableRowActions account={row.original} onOpenPremium={setPremiumDialogAccount} />
+          cell: ({ row }) => <TableRowActions account={row.original} onOpenPremium={handleOpenPremiumDialog} />
         }
     ],
     []
@@ -765,6 +730,19 @@ export const AccountTable = memo(function AccountTable() {
     setActiveModule('logs')
     void startSelectedCheck(actions)
   }, [setActiveModule, startSelectedCheck])
+
+  const handleOpenPremiumDialog = useCallback(async (account: AccountRecord) => {
+    let premiumExpiryOverride: string | null | undefined = readPremiumExpiry(account)
+
+    if (window.desktopAccounts?.readPremiumExpiryFromDesktop) {
+      const result = await window.desktopAccounts.readPremiumExpiryFromDesktop(account.id)
+      if (result?.premiumExpiry) {
+        premiumExpiryOverride = result.premiumExpiry
+      }
+    }
+
+    setPremiumDialogAccount({ account, premiumExpiryOverride })
+  }, [])
 
   const handleRefresh = useCallback(() => {
     setSearch('')
@@ -955,7 +933,13 @@ export const AccountTable = memo(function AccountTable() {
       />
 
       {frozenDialogAccount ? <FrozenStatusDialog account={frozenDialogAccount} onClose={() => setFrozenDialogAccount(null)} /> : null}
-      {premiumDialogAccount ? <PremiumStatusDialog account={premiumDialogAccount} onClose={() => setPremiumDialogAccount(null)} /> : null}
+      {premiumDialogAccount ? (
+        <PremiumStatusDialog
+          account={premiumDialogAccount.account}
+          premiumExpiryOverride={premiumDialogAccount.premiumExpiryOverride}
+          onClose={() => setPremiumDialogAccount(null)}
+        />
+      ) : null}
     </div>
   )
 })
