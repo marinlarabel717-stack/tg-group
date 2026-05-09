@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   username TEXT NOT NULL DEFAULT '',
   user_id TEXT NOT NULL DEFAULT '',
   country TEXT NOT NULL DEFAULT '',
+  proxy_display TEXT NOT NULL DEFAULT '',
   session_path TEXT NOT NULL UNIQUE,
   json_path TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'unknown',

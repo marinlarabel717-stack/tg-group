@@ -58,7 +58,7 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   session_created_date?: string | null
   register_time?: number | string | null
   last_check_time?: number | string | null
-  proxy?: string | null
+  proxy?: boolean | string | null
   account_ttl_days?: number | null
   check_mode?: 'account-status' | 'account-survival' | null
   ipv6?: boolean
@@ -74,6 +74,7 @@ export interface AccountRecord {
   username: string
   userId: string
   country: string
+  proxyDisplay: string | null
   sessionPath: string
   jsonPath: string
   status: AccountStatus

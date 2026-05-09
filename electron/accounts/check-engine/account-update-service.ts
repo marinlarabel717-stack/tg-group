@@ -61,6 +61,8 @@ export class AccountUpdateService {
     premiumExpiryOverride?: string | null
     premiumExpirySource?: string | null
     premiumExpirySyncedAt?: string | null
+    proxyUsed?: boolean
+    proxyDisplay?: string | null
     durationMs: number
   }) {
     const now = new Date()
@@ -96,6 +98,7 @@ export class AccountUpdateService {
       bio: bio || null,
       avatar,
       has_profile_pic: Boolean(liveUserRecord.photo ?? args.account.profile.has_profile_pic),
+      proxy: Boolean(args.proxyUsed),
       is_premium: Boolean(liveUserRecord.premium ?? args.account.profile.is_premium),
       premium_expiry: premiumExpiry || null,
       premium_expiry_source: args.premiumExpirySource ?? args.account.profile.premium_expiry_source ?? null,
@@ -120,6 +123,7 @@ export class AccountUpdateService {
       username: buildUsername(rawUsername),
       userId,
       country: inferCountryDisplay(phone, pickString(args.account.profile.country, args.account.country)),
+      proxyDisplay: args.proxyDisplay ?? null,
       lastCheckTime: now.toISOString(),
       lastOnlineTime: now.toISOString(),
       profile
@@ -172,6 +176,8 @@ export class AccountUpdateService {
     status: AccountStatus
     checkMode?: 'account-status' | 'account-survival'
     errorMessage: string
+    proxyUsed?: boolean
+    proxyDisplay?: string | null
     durationMs: number
   }) {
     const now = new Date()
@@ -182,6 +188,7 @@ export class AccountUpdateService {
       check_status: args.status,
       check_error: args.errorMessage || null,
       check_duration_ms: args.durationMs,
+      proxy: Boolean(args.proxyUsed),
       spamblock: args.status === 'timeout' ? args.account.profile.spamblock ?? 'unknown' : args.status,
       spambot_reply: args.account.profile.spambot_reply ?? null,
       country: inferCountryDisplay(args.account.phone, args.account.country)
@@ -192,6 +199,7 @@ export class AccountUpdateService {
       username: args.account.username,
       userId: args.account.userId,
       country: inferCountryDisplay(args.account.phone, args.account.country),
+      proxyDisplay: args.proxyDisplay ?? null,
       lastCheckTime: now.toISOString(),
       lastOnlineTime: args.status === 'alive' ? now.toISOString() : args.account.lastOnlineTime,
       profile

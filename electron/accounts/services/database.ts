@@ -36,6 +36,7 @@ export async function createAccountsDatabase(dbFilePath: string) {
     database.exec(ACCOUNT_SCHEMA_SQL)
     ensureColumn(database, 'profile_json', "profile_json TEXT NOT NULL DEFAULT '{}' ")
     ensureColumn(database, 'profile_source', "profile_source TEXT NOT NULL DEFAULT 'json_import'")
+    ensureColumn(database, 'proxy_display', "proxy_display TEXT NOT NULL DEFAULT ''")
     return database
   } catch (error) {
     throw new Error(normalizeNativeModuleError(error))

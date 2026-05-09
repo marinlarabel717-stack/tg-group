@@ -165,7 +165,8 @@ async function bootstrap() {
     spamBotChecker,
     statusResolver,
     updateService,
-    resultWriter
+    resultWriter,
+    proxyPoolService
   )
   const checkQueue = new CheckQueue(checkEngine, {
     concurrency: appSettings.checkConcurrency,

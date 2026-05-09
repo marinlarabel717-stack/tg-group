@@ -28,6 +28,17 @@ interface ProxyCheckResult {
   errorMessage: string | null
 }
 
+export interface AccountCheckProxy {
+  id: string
+  value: string
+  type: ProxyType
+  ipVersion: ProxyIpVersion
+  host: string
+  port: number
+  username: string | null
+  password: string | null
+}
+
 interface PersistedProxyPoolData {
   settings?: Partial<ProxyPoolSettings>
   proxies?: ProxyRecord[]
@@ -330,7 +341,42 @@ function shuffleArray<T>(items: T[]) {
   return next
 }
 
+function maskToken(value: string, keepStart = 2, keepEnd = 1) {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (trimmed.length <= keepStart + keepEnd) return '*'.repeat(Math.max(trimmed.length, 3))
+  return `${trimmed.slice(0, keepStart)}***${trimmed.slice(-keepEnd)}`
+}
+
+function maskHost(host: string) {
+  if (!host) return '***'
+  if (host.includes(':')) {
+    const parts = host.split(':').filter(Boolean)
+    if (parts.length <= 2) return '****:****'
+    return `${parts[0]}:${parts[1]}:***:${parts[parts.length - 1]}`
+  }
+
+  const parts = host.split('.')
+  if (parts.length >= 4 && parts.every((item) => /^\d+$/.test(item))) {
+    return `${parts[0]}.${parts[1]}.*.*`
+  }
+
+  if (parts.length >= 2) {
+    return `${maskToken(parts[0], 1, 0)}.${parts.slice(1).join('.')}`
+  }
+
+  return maskToken(host, 1, 0)
+}
+
+export function formatMaskedProxyLabel(proxy: Pick<AccountCheckProxy, 'type' | 'host' | 'port' | 'username' | 'password'>) {
+  const authPart = proxy.username
+    ? `${maskToken(proxy.username)}:${proxy.password ? '***' : '***'}@`
+    : ''
+  return `${proxy.type}://${authPart}${maskHost(proxy.host)}:${proxy.port}`
+}
+
 export class ProxyPoolService extends EventEmitter {
+  private roundRobinCursor = 0
   private state: ProxyPoolState = {
     proxies: [],
     settings: createDefaultSettings(),
@@ -359,6 +405,31 @@ export class ProxyPoolService extends EventEmitter {
 
   getState() {
     return cloneState(this.state)
+  }
+
+  getAccountCheckProxy(excludedIds: string[] = []): AccountCheckProxy | null {
+    const excluded = new Set(excludedIds)
+    const preferred = this.state.proxies.filter((proxy) => proxy.status === 'alive' && !excluded.has(proxy.id))
+    const fallback = this.state.proxies.filter((proxy) => proxy.status !== 'dead' && proxy.status !== 'checking' && !excluded.has(proxy.id))
+    const pool = preferred.length > 0 ? preferred : fallback
+    if (pool.length === 0) return null
+
+    const selected = this.state.settings.randomize
+      ? pool[Math.floor(Math.random() * pool.length)]
+      : pool[this.roundRobinCursor++ % pool.length]
+
+    if (!selected) return null
+
+    return {
+      id: selected.id,
+      value: selected.value,
+      type: selected.type,
+      ipVersion: selected.ipVersion,
+      host: selected.host,
+      port: selected.port,
+      username: selected.username,
+      password: selected.password
+    }
   }
 
   async replaceProxyList(text: string) {

@@ -146,8 +146,15 @@ function cellShellClass(columnId: string, isHeader = false) {
 }
 
 function readProxy(account: AccountRecord) {
-  const proxy = account.profile?.proxy
-  return typeof proxy === 'string' && proxy.trim() ? proxy.trim() : '未配置'
+  if (typeof account.proxyDisplay === 'string' && account.proxyDisplay.trim()) {
+    return account.proxyDisplay.trim()
+  }
+
+  if (account.profile?.proxy === true) {
+    return '已连接代理'
+  }
+
+  return '未使用'
 }
 
 function readNickname(account: AccountRecord) {

@@ -2,6 +2,16 @@ import os from 'node:os'
 import type { TelegramClient } from 'telegram'
 import type { Session } from 'telegram/sessions'
 import { getSessionsModule, getTelegramModule } from './gramjs-runtime'
+import { HttpProxyPromisedNetSockets } from './http-proxy-net-socket'
+
+export interface AccountClientProxyOptions {
+  type: 'http' | 'https' | 'socks5'
+  ip: string
+  port: number
+  username?: string | null
+  password?: string | null
+  ipVersion?: 'ipv4' | 'ipv6'
+}
 
 interface ClientConfig {
   apiId: number
@@ -26,7 +36,7 @@ const DEFAULT_CLIENT_CONFIG: ClientConfig = {
 }
 
 export class TelegramClientManager {
-  createClient(session: Session) {
+  createClient(session: Session, options?: { proxy?: AccountClientProxyOptions | null }) {
     const config: ClientConfig = { ...DEFAULT_CLIENT_CONFIG }
 
     const { TelegramClient } = getTelegramModule()
@@ -38,7 +48,12 @@ export class TelegramClientManager {
       normalizedSession = new StringSession(sessionWithSave.save())
     }
 
-    return new TelegramClient(normalizedSession, config.apiId, config.apiHash, {
+    const proxy = options?.proxy ?? null
+    if (proxy?.ipVersion === 'ipv6') {
+      config.useIPV6 = true
+    }
+
+    const clientOptions: Record<string, unknown> = {
       connectionRetries: 1,
       reconnectRetries: 0,
       requestRetries: 1,
@@ -52,6 +67,33 @@ export class TelegramClientManager {
       langCode: config.langCode,
       systemLangCode: config.systemLangCode,
       useIPV6: config.useIPV6
+    }
+
+    if (proxy) {
+      if (proxy.type === 'socks5') {
+        clientOptions.proxy = {
+          ip: proxy.ip,
+          port: proxy.port,
+          socksType: 5,
+          username: proxy.username ?? undefined,
+          password: proxy.password ?? undefined,
+          timeout: 8
+        }
+      } else {
+        clientOptions.proxy = {
+          ip: proxy.ip,
+          port: proxy.port,
+          username: proxy.username ?? undefined,
+          password: proxy.password ?? undefined,
+          timeout: 8,
+          protocol: proxy.type
+        }
+        clientOptions.networkSocket = HttpProxyPromisedNetSockets
+      }
+    }
+
+    return new TelegramClient(normalizedSession, config.apiId, config.apiHash, {
+      ...clientOptions
     })
   }
 

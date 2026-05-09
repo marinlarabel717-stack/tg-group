@@ -9,6 +9,7 @@ interface AccountRow {
   username: string
   user_id: string
   country: string
+  proxy_display: string
   session_path: string
   json_path: string
   status: AccountStatus | 'duo'
@@ -38,6 +39,7 @@ function mapRow(row: AccountRow): AccountRecord {
     username: row.username,
     userId: row.user_id,
     country: row.country,
+    proxyDisplay: row.proxy_display || null,
     sessionPath: row.session_path,
     jsonPath: row.json_path,
     status: normalizedStatus,
@@ -60,22 +62,23 @@ export class AccountRepository {
 
   constructor(private readonly database: Database.Database) {
     this.listStatement = this.database.prepare(`
-      SELECT id, phone, username, user_id, country, session_path, json_path, status, profile_json, profile_source, last_check_time, last_online_time, created_at, updated_at
+      SELECT id, phone, username, user_id, country, proxy_display, session_path, json_path, status, profile_json, profile_source, last_check_time, last_online_time, created_at, updated_at
       FROM accounts
       ORDER BY created_at DESC, id DESC
     `)
 
     this.upsertStatement = this.database.prepare(`
       INSERT INTO accounts (
-        phone, username, user_id, country, session_path, json_path, status, profile_json, profile_source, last_check_time, last_online_time, created_at, updated_at
+        phone, username, user_id, country, proxy_display, session_path, json_path, status, profile_json, profile_source, last_check_time, last_online_time, created_at, updated_at
       ) VALUES (
-        @phone, @username, @userId, @country, @sessionPath, @jsonPath, @status, @profileJson, @profileSource, @lastCheckTime, @lastOnlineTime, @createdAt, @updatedAt
+        @phone, @username, @userId, @country, @proxyDisplay, @sessionPath, @jsonPath, @status, @profileJson, @profileSource, @lastCheckTime, @lastOnlineTime, @createdAt, @updatedAt
       )
       ON CONFLICT(session_path) DO UPDATE SET
         phone = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.phone ELSE excluded.phone END,
         username = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.username ELSE excluded.username END,
         user_id = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.user_id ELSE excluded.user_id END,
         country = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.country ELSE excluded.country END,
+        proxy_display = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.proxy_display ELSE excluded.proxy_display END,
         json_path = excluded.json_path,
         status = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.status ELSE excluded.status END,
         profile_json = CASE WHEN accounts.profile_source = 'login_check' THEN accounts.profile_json ELSE excluded.profile_json END,
@@ -102,6 +105,7 @@ export class AccountRepository {
           username = @username,
           user_id = @userId,
           country = @country,
+          proxy_display = @proxyDisplay,
           status = @status,
           profile_json = @profileJson,
           profile_source = 'login_check',
@@ -122,6 +126,7 @@ export class AccountRepository {
       for (const item of batch) {
         this.upsertStatement.run({
           ...item,
+          proxyDisplay: item.proxyDisplay ?? '',
           profileJson: JSON.stringify(item.profile ?? {}),
           createdAt: now,
           updatedAt: now
@@ -180,6 +185,7 @@ export class AccountRepository {
           username: item.username ?? '',
           userId: item.userId ?? '',
           country: item.country ?? '',
+          proxyDisplay: item.proxyDisplay ?? '',
           status: item.status,
           profileJson: JSON.stringify(item.profile ?? {}),
           lastCheckTime: item.lastCheckTime ?? now,
@@ -217,7 +223,7 @@ export class AccountRepository {
 
     const placeholders = ids.map(() => '?').join(', ')
     const statement = this.database.prepare(`
-      SELECT id, phone, username, user_id, country, session_path, json_path, status, profile_json, profile_source, last_check_time, last_online_time, created_at, updated_at
+      SELECT id, phone, username, user_id, country, proxy_display, session_path, json_path, status, profile_json, profile_source, last_check_time, last_online_time, created_at, updated_at
       FROM accounts
       WHERE id IN (${placeholders})
       ORDER BY created_at DESC, id DESC

@@ -55,7 +55,7 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   last_check_time?: number | string | null
   avatar?: string | null
   sex?: string | null
-  proxy?: string | null
+  proxy?: boolean | string | null
   account_ttl_days?: number | null
   check_mode?: 'account-status' | 'account-survival' | null
   ipv6?: boolean
@@ -72,6 +72,7 @@ export interface AccountRecord {
   username: string
   userId: string
   country: string
+  proxyDisplay: string | null
   sessionPath: string
   jsonPath: string
   status: AccountStatus
@@ -120,6 +121,7 @@ export interface UpsertAccountInput {
   username: string
   userId: string
   country: string
+  proxyDisplay?: string | null
   sessionPath: string
   jsonPath: string
   status: AccountStatus
@@ -137,6 +139,7 @@ export interface CheckResultInput {
   username?: string
   userId?: string
   country?: string
+  proxyDisplay?: string | null
   lastCheckTime?: string | null
   lastOnlineTime?: string | null
 }
@@ -201,6 +204,7 @@ export interface AccountCheckResult {
   username: string
   userId: string
   country: string
+  proxyDisplay?: string | null
   lastCheckTime: string | null
   lastOnlineTime: string | null
   durationMs: number
