@@ -146,8 +146,8 @@ export function AccountsView() {
                   <CheckCircle2 size={18} />
                 </div>
                 <div>
-                  <div className="text-base font-semibold">导入完成</div>
-                  <div className="mt-1 text-xs text-textMuted">本次导入结果如下</div>
+                  <div className="text-base font-semibold text-white">导入完成</div>
+                  <div className="mt-1 text-xs text-slate-300">本次导入结果如下</div>
                 </div>
               </div>
 
@@ -204,8 +204,8 @@ export function AccountsView() {
                   <Download size={18} />
                 </div>
                 <div>
-                  <div className="text-base font-semibold">导出完成</div>
-                  <div className="mt-1 text-xs text-textMuted">导出的账号已从当前列表移出</div>
+                  <div className="text-base font-semibold text-white">导出完成</div>
+                  <div className="mt-1 text-xs text-slate-300">导出的账号已从当前列表移出</div>
                 </div>
               </div>
 
@@ -250,8 +250,8 @@ export function AccountsView() {
                   <Trash2 size={18} />
                 </div>
                 <div>
-                  <div className="text-base font-semibold">删除完成</div>
-                  <div className="mt-1 text-xs text-textMuted">
+                  <div className="text-base font-semibold text-white">删除完成</div>
+                  <div className="mt-1 text-xs text-slate-300">
                     {deleteResultDialog.mode === 'all' ? '当前账号已全部清空' : '已删除所选账号'}
                   </div>
                 </div>
