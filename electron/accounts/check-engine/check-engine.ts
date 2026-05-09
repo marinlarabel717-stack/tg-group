@@ -110,6 +110,9 @@ export class AccountCheckEngine {
       } else {
         probes.push('冻结探针未命中')
       }
+      if (frozenState.appConfigSummary) {
+        probes.push(`AppConfig:${frozenState.appConfigSummary}`)
+      }
 
       const loginPhone = String((typeof liveUser === 'object' && liveUser && 'phone' in liveUser && typeof (liveUser as { phone?: unknown }).phone === 'string'
         ? (liveUser as { phone?: string }).phone
@@ -165,6 +168,9 @@ export class AccountCheckEngine {
         probes.push(`冻结发送探针命中:${selfProbe.reason ?? 'FROZEN_RPC'}`)
       } else {
         probes.push(`冻结发送探针未命中:${selfProbe.reason ?? 'SELF_PROBE_OK'}`)
+      }
+      if (selfProbe.appConfigSummary) {
+        probes.push(`冻结探针AppConfig:${selfProbe.appConfigSummary}`)
       }
 
       if (selfProbe.frozen) {

@@ -1,4 +1,5 @@
 import { Api, TelegramClient } from 'telegram'
+import bigInt from 'big-integer'
 import { parseSpamBotReply, type SpamBotParseResult } from './spam-bot-parser'
 
 function sleep(ms: number) {
@@ -40,6 +41,7 @@ interface FrozenStateInfo {
   freezeAppealUrl: string | null
   errorMessage?: string | null
   reason?: string | null
+  appConfigSummary?: string | null
 }
 
 const HIGH_CONFIDENCE_FREEZE_TOKENS = [
@@ -145,6 +147,36 @@ function hasHighConfidenceFreezeSignal(value: unknown) {
   return HIGH_CONFIDENCE_FREEZE_TOKENS.some((token) => haystack.includes(token))
 }
 
+function buildAppConfigSummary(value: unknown) {
+  const summary: string[] = []
+
+  const walk = (input: unknown, parentKey = '') => {
+    if (!input || typeof input !== 'object' || summary.length >= 8) return
+
+    for (const [key, item] of Object.entries(input as Record<string, unknown>)) {
+      const fullKey = parentKey ? `${parentKey}.${key}` : key
+      const normalizedKey = key.toLowerCase()
+
+      if (normalizedKey.includes('freeze') || normalizedKey.includes('frozen')) {
+        if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+          summary.push(`${fullKey}=${String(item)}`)
+        } else {
+          summary.push(fullKey)
+        }
+      }
+
+      if (item && typeof item === 'object') {
+        walk(item, fullKey)
+      }
+
+      if (summary.length >= 8) break
+    }
+  }
+
+  walk(value)
+  return summary.length > 0 ? summary.join(', ') : '无冻结字段'
+}
+
 function normalizeTimestamp(value: unknown) {
   if (value === null || value === undefined || value === '') return null
 
@@ -245,7 +277,8 @@ export class SpamBotChecker {
         ...extracted,
         frozen: highConfidenceFrozen || extracted.frozen || /frozen|freeze_state|freeze/.test(haystack),
         errorMessage: null,
-        reason: highConfidenceFrozen ? 'FREEZE_STATE_IN_APP_CONFIG' : null
+        reason: highConfidenceFrozen ? 'FREEZE_STATE_IN_APP_CONFIG' : null,
+        appConfigSummary: buildAppConfigSummary(plainConfig)
       }
     } catch (error) {
       return {
@@ -254,18 +287,30 @@ export class SpamBotChecker {
         freezeUntil: null,
         freezeAppealUrl: null,
         errorMessage: error instanceof Error ? error.message : String(error),
-        reason: null
+        reason: null,
+        appConfigSummary: null
       }
     }
   }
 
   async probeFrozenBySelfMessage(client: TelegramClient): Promise<FrozenStateInfo> {
     const probeText = `health-check-${Date.now().toString(36)}`
+    const randomId = bigInt(Date.now()).multiply(1000).add(Math.floor(Math.random() * 1000))
 
     try {
-      const message = await client.sendMessage('me', { message: probeText })
+      const message = await client.invoke(new Api.messages.SendMessage({
+        peer: new Api.InputPeerSelf(),
+        message: probeText,
+        randomId,
+        noWebpage: true,
+        silent: true,
+        clearDraft: true
+      }))
       try {
-        await client.deleteMessages('me', [readMessageId(message)].filter(Boolean), { revoke: true })
+        const messageId = readMessageId(message)
+        if (messageId) {
+          await client.deleteMessages('me', [messageId], { revoke: true })
+        }
       } catch {
         // ignore cleanup failure
       }
@@ -276,7 +321,8 @@ export class SpamBotChecker {
         freezeUntil: null,
         freezeAppealUrl: null,
         errorMessage: null,
-        reason: 'SELF_PROBE_OK'
+        reason: 'SELF_PROBE_OK',
+        appConfigSummary: null
       }
     } catch (error) {
       if (isFrozenRpcError(error)) {
@@ -295,7 +341,8 @@ export class SpamBotChecker {
         freezeUntil: null,
         freezeAppealUrl: null,
         errorMessage: error instanceof Error ? error.message : String(error),
-        reason: extractRpcErrorName(error) || 'SELF_PROBE_FAILED'
+        reason: extractRpcErrorName(error) || 'SELF_PROBE_FAILED',
+        appConfigSummary: null
       }
     }
   }
