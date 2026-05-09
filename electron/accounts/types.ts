@@ -1,7 +1,6 @@
 export const ACCOUNT_STATUS_VALUES = [
   'alive',
   'banned',
-  'duo',
   'limited',
   'temporary_limited',
   'frozen',
@@ -172,11 +171,11 @@ export interface CheckQueueState {
   resultSummary: {
     total: number
     alive: number
-    duo: number
     limited: number
     temporary_limited: number
     frozen: number
     banned: number
+    multi_ip: number
     timeout: number
     unknown: number
   }

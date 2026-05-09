@@ -18,8 +18,8 @@ function formatLogTimestamp(value: string) {
 
 function getLogLineClass(log: CheckLogEntry) {
   if (log.status === 'alive') return 'text-emerald-300'
-  if (log.status === 'duo') return 'text-indigo-300'
   if (log.status === 'limited' || log.status === 'temporary_limited') return 'text-yellow-300'
+  if (log.status === 'multi_ip') return 'text-violet-300'
   if (log.status === 'frozen') return 'text-sky-300'
   if (log.status === 'banned') return 'text-rose-300'
   if (log.status === 'timeout') return 'text-orange-300'

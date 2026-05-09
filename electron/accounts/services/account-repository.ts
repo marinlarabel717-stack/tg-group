@@ -11,7 +11,7 @@ interface AccountRow {
   country: string
   session_path: string
   json_path: string
-  status: AccountStatus
+  status: AccountStatus | 'duo'
   profile_json: string
   profile_source: 'json_import' | 'login_check'
   last_check_time: string | null
@@ -30,6 +30,8 @@ function parseProfileJson(raw: string): AccountJsonProfile {
 }
 
 function mapRow(row: AccountRow): AccountRecord {
+  const normalizedStatus: AccountStatus = row.status === 'duo' ? 'multi_ip' : row.status
+
   return {
     id: row.id,
     phone: row.phone,
@@ -38,7 +40,7 @@ function mapRow(row: AccountRow): AccountRecord {
     country: row.country,
     sessionPath: row.session_path,
     jsonPath: row.json_path,
-    status: row.status,
+    status: normalizedStatus,
     profile: parseProfileJson(row.profile_json),
     profileSource: row.profile_source,
     lastCheckTime: row.last_check_time,

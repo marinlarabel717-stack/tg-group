@@ -14,7 +14,7 @@ const AccountsSummary = memo(function AccountsSummary() {
     for (const item of accounts) {
       if (item.status === 'alive') alive += 1
       if (item.profileSource === 'login_check') checked += 1
-      if (['banned', 'duo', 'limited', 'temporary_limited', 'frozen', 'session_expired', 'not_logged_in', 'multi_ip', 'timeout'].includes(item.status)) {
+      if (['banned', 'limited', 'temporary_limited', 'frozen', 'session_expired', 'not_logged_in', 'multi_ip', 'timeout'].includes(item.status)) {
         risk += 1
       }
     }

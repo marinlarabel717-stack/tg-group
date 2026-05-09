@@ -44,11 +44,11 @@ function createEmptyCheckState(): CheckQueueState {
     resultSummary: {
       total: 0,
       alive: 0,
-      duo: 0,
       limited: 0,
       temporary_limited: 0,
       frozen: 0,
       banned: 0,
+      multi_ip: 0,
       timeout: 0,
       unknown: 0
     },
