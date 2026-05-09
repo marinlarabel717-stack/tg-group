@@ -6,8 +6,8 @@ import type { AccountRepository } from './account-repository'
 import { FileScanner } from './file-scanner'
 import { JsonTemplateService } from './json-template-service'
 
-const IMPORT_CONCURRENCY = 8
-const IMPORT_PROGRESS_CHUNK = 25
+const IMPORT_CONCURRENCY = 24
+const IMPORT_PROGRESS_CHUNK = 100
 
 function readStringField(profile: AccountJsonProfile, ...keys: string[]) {
   for (const key of keys) {
@@ -195,15 +195,14 @@ export class AccountImportService {
     const targetSessionPath = path.join(this.managedSessionsDirectory, `${candidate.baseName}.session`)
     const targetJsonPath = path.join(this.managedSessionsDirectory, `${candidate.baseName}.json`)
 
-    if (path.resolve(candidate.sessionPath) !== path.resolve(targetSessionPath)) {
-      await fs.copyFile(candidate.sessionPath, targetSessionPath)
-    }
-
-    if (candidate.jsonPath) {
-      if (path.resolve(candidate.jsonPath) !== path.resolve(targetJsonPath)) {
-        await fs.copyFile(candidate.jsonPath, targetJsonPath)
-      }
-    }
+    await Promise.all([
+      path.resolve(candidate.sessionPath) !== path.resolve(targetSessionPath)
+        ? fs.copyFile(candidate.sessionPath, targetSessionPath)
+        : Promise.resolve(),
+      candidate.jsonPath && path.resolve(candidate.jsonPath) !== path.resolve(targetJsonPath)
+        ? fs.copyFile(candidate.jsonPath, targetJsonPath)
+        : Promise.resolve()
+    ])
 
     return {
       ...candidate,

@@ -93,8 +93,8 @@ export function AccountsView() {
                   <Upload size={18} />
                 </div>
                 <div>
-                  <div className="text-base font-semibold">正在导入账号</div>
-                  <div className="mt-1 text-xs text-textMuted">请稍等，正在处理你刚导入的账号文件</div>
+                  <div className="text-base font-semibold text-white">正在导入账号</div>
+                  <div className="mt-1 text-xs text-slate-300">请稍等，正在处理你刚导入的账号文件</div>
                 </div>
               </div>
             </div>
