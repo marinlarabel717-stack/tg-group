@@ -88,6 +88,12 @@ function unwrapTlJsonValue(value: unknown): unknown {
     return unwrapTlJsonValue(candidate.config)
   }
 
+  if (className === 'JsonObjectValue' && typeof candidate.key === 'string') {
+    return {
+      [candidate.key]: unwrapTlJsonValue(candidate.value)
+    }
+  }
+
   if (className === 'JsonObject' && Array.isArray(candidate.value)) {
     const output: Record<string, unknown> = {}
     for (const entry of candidate.value as Array<{ key?: unknown; value?: unknown }>) {
@@ -189,7 +195,7 @@ function normalizeTimestamp(value: unknown) {
   if (typeof value === 'string') {
     const trimmed = value.trim()
     if (!trimmed) return null
-    if (/^\d+$/.test(trimmed)) return normalizeTimestamp(Number(trimmed))
+    if (/^\d+(?:\.\d+)?$/.test(trimmed)) return normalizeTimestamp(Number(trimmed))
 
     const normalized = trimmed.replace(/([+-]\d{2})(\d{2})$/, '$1:$2')
     const date = new Date(normalized)
@@ -199,12 +205,57 @@ function normalizeTimestamp(value: unknown) {
   return null
 }
 
+function findFreezeField(value: unknown, fieldNames: string[], visited = new Set<object>()): unknown {
+  if (value === null || value === undefined) return undefined
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findFreezeField(item, fieldNames, visited)
+      if (found !== undefined && found !== null && found !== '') return found
+    }
+    return undefined
+  }
+
+  if (typeof value !== 'object') return undefined
+
+  if (visited.has(value as object)) return undefined
+  visited.add(value as object)
+
+  const candidate = value as Record<string, unknown>
+  for (const [rawKey, item] of Object.entries(candidate)) {
+    const key = rawKey.toLowerCase()
+    if (fieldNames.includes(key)) {
+      return item
+    }
+  }
+
+  for (const item of Object.values(candidate)) {
+    const found = findFreezeField(item, fieldNames, visited)
+    if (found !== undefined && found !== null && found !== '') return found
+  }
+
+  return undefined
+}
+
+function extractFreezeMetadata(value: unknown) {
+  const freezeSinceRaw = findFreezeField(value, ['freeze_since_date', 'freeze_since', 'frozen_since_date', 'frozen_since'])
+  const freezeUntilRaw = findFreezeField(value, ['freeze_until_date', 'freeze_until', 'frozen_until_date', 'frozen_until'])
+  const freezeAppealRaw = findFreezeField(value, ['freeze_appeal_url', 'frozen_appeal_url', 'appeal_url'])
+
+  return {
+    freezeSince: normalizeTimestamp(freezeSinceRaw),
+    freezeUntil: normalizeTimestamp(freezeUntilRaw),
+    freezeAppealUrl: typeof freezeAppealRaw === 'string' && freezeAppealRaw.trim() ? freezeAppealRaw.trim() : null
+  }
+}
+
 function extractFrozenStateInfo(value: unknown, visited = new Set<object>()) {
+  const exactMetadata = extractFreezeMetadata(value)
   const info: FrozenStateInfo = {
     frozen: false,
-    freezeSince: null,
-    freezeUntil: null,
-    freezeAppealUrl: null
+    freezeSince: exactMetadata.freezeSince,
+    freezeUntil: exactMetadata.freezeUntil,
+    freezeAppealUrl: exactMetadata.freezeAppealUrl
   }
 
   const walk = (input: unknown) => {
