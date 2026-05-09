@@ -132,7 +132,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }
 
     const targetDirectory = result.filePaths[0]
-    const exportedCount = await accountRepository.exportByIds(ids, targetDirectory)
+    const accounts = accountRepository.getByIds(ids)
+    const exportedCount = await accountImportService.exportManagedAccounts(accounts, targetDirectory)
+    accountRepository.deleteByIds(ids)
     return { exportedCount, targetDirectory }
   })
 

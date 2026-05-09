@@ -94,6 +94,18 @@ async function pathExists(targetPath: string) {
   }
 }
 
+async function moveFile(sourcePath: string, targetPath: string) {
+  await fs.mkdir(path.dirname(targetPath), { recursive: true })
+
+  try {
+    await fs.rename(sourcePath, targetPath)
+    return
+  } catch {
+    await fs.copyFile(sourcePath, targetPath)
+    await fs.rm(sourcePath, { force: true })
+  }
+}
+
 function isInsideDirectory(filePath: string, directoryPath: string) {
   const relativePath = path.relative(directoryPath, filePath)
   return relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
@@ -151,6 +163,27 @@ export class AccountImportService {
         await fs.rm(account.jsonPath, { force: true })
       }
     }
+  }
+
+  async exportManagedAccounts(accounts: AccountRecord[], targetDirectory: string) {
+    await fs.mkdir(targetDirectory, { recursive: true })
+
+    let exportedCount = 0
+    for (const account of accounts) {
+      if (account.sessionPath && await pathExists(account.sessionPath)) {
+        const sessionTargetPath = path.join(targetDirectory, path.basename(account.sessionPath))
+        await moveFile(account.sessionPath, sessionTargetPath)
+      }
+
+      if (account.jsonPath && await pathExists(account.jsonPath)) {
+        const jsonTargetPath = path.join(targetDirectory, path.basename(account.jsonPath))
+        await moveFile(account.jsonPath, jsonTargetPath)
+      }
+
+      exportedCount += 1
+    }
+
+    return exportedCount
   }
 
   private async mirrorCandidateToManagedDirectory(candidate: ScanCandidate) {

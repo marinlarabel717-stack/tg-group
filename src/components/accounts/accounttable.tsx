@@ -42,6 +42,14 @@ const ACCOUNT_GRID_STYLE: CSSProperties = {
   minWidth: 'max-content'
 }
 
+function createDefaultSorting() {
+  return [{ id: 'lastOnlineTime', desc: true }]
+}
+
+function createDefaultPagination() {
+  return { pageIndex: 0, pageSize: 20 }
+}
+
 function checkboxClass() {
   return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
 }
@@ -282,8 +290,8 @@ export const AccountTable = memo(function AccountTable() {
 
   const [sourceFilter, setSourceFilter] = useState('')
   const [proxyFilter, setProxyFilter] = useState('')
-  const [sorting, setSorting] = useState([{ id: 'lastOnlineTime', desc: true }])
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
+  const [sorting, setSorting] = useState(createDefaultSorting)
+  const [pagination, setPagination] = useState(createDefaultPagination)
   const [tableLoading, setTableLoading] = useState(true)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [frozenDialogAccount, setFrozenDialogAccount] = useState<AccountRecord | null>(null)
@@ -521,6 +529,29 @@ export const AccountTable = memo(function AccountTable() {
     void startSelectedCheck()
   }, [setActiveModule, startSelectedCheck])
 
+  const handleRefresh = useCallback(() => {
+    setSearch('')
+    setStatusFilter('all')
+    setCountryFilter('')
+    setSourceFilter('')
+    setProxyFilter('')
+    setSelectedIds([])
+    setSorting(createDefaultSorting())
+    setPagination(createDefaultPagination())
+    setScrollLeft(0)
+    setCopiedPhone(null)
+    setFrozenDialogAccount(null)
+
+    if (viewportRef.current) {
+      viewportRef.current.scrollTop = 0
+    }
+    if (scrollbarRef.current) {
+      scrollbarRef.current.scrollLeft = 0
+    }
+
+    void refresh()
+  }, [refresh, setCountryFilter, setSearch, setSelectedIds, setStatusFilter])
+
   const handleScrollbarScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     setScrollLeft(event.currentTarget.scrollLeft)
   }, [])
@@ -558,7 +589,7 @@ export const AccountTable = memo(function AccountTable() {
         onClearSelection={handleClearSelection}
         onSelectRange={handleSelectRange}
         onStartCheck={handleStartCheck}
-        onRefresh={() => void refresh()}
+        onRefresh={handleRefresh}
       />
 
       <TableFilters

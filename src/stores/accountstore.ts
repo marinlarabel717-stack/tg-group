@@ -270,7 +270,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
 
       const result = await getDesktopAccountsApi()?.exportByIds(ids)
       if (!result || !result.targetDirectory) return
-      set({ lastActionMessage: `已导出 ${result.exportedCount} 个账号到：${result.targetDirectory}` })
+      await syncAccounts(set, get)
+      set({ selectedIds: [], lastActionMessage: `已导出并移出 ${result.exportedCount} 个账号到：${result.targetDirectory}` })
     })
   },
   deleteSelected: async () => {
