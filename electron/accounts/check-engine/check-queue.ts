@@ -259,7 +259,8 @@ export class CheckQueue extends EventEmitter {
 
     const level: CheckLogLevel = displayStatus === 'alive' ? 'success' : displayStatus === 'timeout' ? 'error' : 'warning'
     const reasonSuffix = displayStatus === 'timeout' || displayStatus === 'unknown' ? `（${this.formatFailureReason(result)}）` : ''
-    this.appendLog(level, task.accountId, `${phoneLabel} ---- ${STATUS_LABELS[displayStatus]}${reasonSuffix}`, task.attempt + 1, {
+    const progressPrefix = `${this.state.completedCount}/${this.state.totalCount}`
+    this.appendLog(level, task.accountId, `${progressPrefix} ${phoneLabel} ---- ${STATUS_LABELS[displayStatus]}${reasonSuffix}`, task.attempt + 1, {
       phone: result.phone,
       status: displayStatus
     })

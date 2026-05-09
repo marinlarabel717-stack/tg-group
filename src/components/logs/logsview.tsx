@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { FileClock } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useAccountStore } from '../../stores/accountstore'
@@ -31,6 +31,13 @@ function getLogLineClass(log: CheckLogEntry) {
 
 export default memo(function LogsView() {
   const checkState = useAccountStore((state) => state.checkState)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const element = scrollContainerRef.current
+    if (!element) return
+    element.scrollTop = element.scrollHeight
+  }, [checkState.logs.length])
 
   return (
     <div className="contain-layout">
@@ -39,7 +46,7 @@ export default memo(function LogsView() {
           <div className="text-sm font-medium text-white">运行日志</div>
         </div>
 
-        <div className="max-h-[760px] overflow-y-auto px-5 py-4">
+        <div ref={scrollContainerRef} className="max-h-[760px] overflow-y-auto px-5 py-4">
           {checkState.logs.length === 0 ? (
             <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center text-textMuted">
               <FileClock size={24} className="text-neonSoft" />
