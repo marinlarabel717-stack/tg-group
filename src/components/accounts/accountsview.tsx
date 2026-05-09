@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react'
-import { CheckCircle2, Loader2, MonitorCog, ShieldCheck, Sparkles, Upload, X } from 'lucide-react'
+import { CheckCircle2, Download, Loader2, MonitorCog, ShieldCheck, Sparkles, Upload, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { AccountTable } from './accounttable'
 import { useAccountStore } from '../../stores/accountstore'
@@ -61,18 +61,21 @@ const AccountsSummary = memo(function AccountsSummary() {
 export function AccountsView() {
   const importProgress = useAccountStore((state) => state.importProgress)
   const importResultDialog = useAccountStore((state) => state.importResultDialog)
+  const exportResultDialog = useAccountStore((state) => state.exportResultDialog)
   const closeImportResultDialog = useAccountStore((state) => state.closeImportResultDialog)
+  const closeExportResultDialog = useAccountStore((state) => state.closeExportResultDialog)
   const lastActionMessage = useAccountStore((state) => state.lastActionMessage)
   const errorMessage = useAccountStore((state) => state.errorMessage)
 
   const showImportProgressDialog = Boolean(importProgress && importProgress.phase !== 'completed')
   const showImportResultDialog = importResultDialog.open
+  const showExportResultDialog = exportResultDialog.open
 
   return (
     <div className="space-y-5 contain-layout">
       <AccountsSummary />
 
-      {!showImportResultDialog && lastActionMessage ? (
+      {!showImportResultDialog && !showExportResultDialog && lastActionMessage ? (
         <GlassPanel className="bg-card py-0">
           <div className="text-sm font-medium text-white">{lastActionMessage}</div>
           {errorMessage ? <div className="mt-1 text-sm text-amber-300">{errorMessage}</div> : null}
@@ -181,6 +184,52 @@ export function AccountsView() {
                 type="button"
                 onClick={closeImportResultDialog}
                 className="h-11 w-full rounded-[12px] bg-emerald-400/12 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/16"
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showExportResultDialog ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4" onClick={closeExportResultDialog}>
+          <div className="w-full max-w-[460px] rounded-[20px] border border-sky-400/20 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+              <div className="flex items-center gap-3 text-white">
+                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-sky-400/10 text-sky-300">
+                  <Download size={18} />
+                </div>
+                <div>
+                  <div className="text-base font-semibold">导出完成</div>
+                  <div className="mt-1 text-xs text-textMuted">导出的账号已从当前列表移出</div>
+                </div>
+              </div>
+
+              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={closeExportResultDialog}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+              <div className="rounded-[16px] bg-sky-400/10 px-4 py-4 text-center">
+                <div className="text-xs tracking-[0.18em] text-sky-200/80">导出结果</div>
+                <div className="mt-2 text-2xl font-semibold text-sky-300">本次成功导出 {exportResultDialog.exportedCount} 个</div>
+              </div>
+
+              <div className="rounded-[12px] bg-panel px-4 py-4 text-sm">
+                <div className="text-xs text-textMuted">导出目录</div>
+                <div className="mt-2 break-all font-medium text-white">{exportResultDialog.targetDirectory}</div>
+              </div>
+
+              <div className="rounded-[12px] border border-sky-300/15 bg-sky-300/8 px-4 py-3 text-sm text-sky-100">
+                已导出的账号文件已移动到目标目录，当前账号列表不再显示这些账号。
+              </div>
+
+              <button
+                type="button"
+                onClick={closeExportResultDialog}
+                className="h-11 w-full rounded-[12px] bg-sky-400/12 text-sm font-medium text-sky-300 transition hover:bg-sky-400/16"
               >
                 知道了
               </button>

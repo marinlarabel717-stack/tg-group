@@ -11,6 +11,12 @@ interface ImportResultDialogState {
   warning: string
 }
 
+interface ExportResultDialogState {
+  open: boolean
+  exportedCount: number
+  targetDirectory: string
+}
+
 function getDesktopAccountsApi() {
   return window.desktopAccounts
 }
@@ -80,6 +86,7 @@ interface AccountStoreState {
   checkState: CheckQueueState
   importProgress: ImportProgressPayload | null
   importResultDialog: ImportResultDialogState
+  exportResultDialog: ExportResultDialogState
   lastActionMessage: string
   errorMessage: string
   init: () => Promise<void>
@@ -93,6 +100,7 @@ interface AccountStoreState {
   importFolder: () => Promise<void>
   importDroppedPaths: (paths: string[]) => Promise<void>
   closeImportResultDialog: () => void
+  closeExportResultDialog: () => void
   exportSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
   deleteAll: () => Promise<void>
@@ -145,6 +153,11 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     generatedJsonCount: 0,
     skippedCount: 0,
     warning: ''
+  },
+  exportResultDialog: {
+    open: false,
+    exportedCount: 0,
+    targetDirectory: ''
   },
   lastActionMessage: '',
   errorMessage: '',
@@ -260,6 +273,14 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       }
     }))
   },
+  closeExportResultDialog: () => {
+    set((state) => ({
+      exportResultDialog: {
+        ...state.exportResultDialog,
+        open: false
+      }
+    }))
+  },
   exportSelected: async () => {
     await runBusyAction(set, async () => {
       const ids = get().selectedIds
@@ -271,7 +292,15 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       const result = await getDesktopAccountsApi()?.exportByIds(ids)
       if (!result || !result.targetDirectory) return
       await syncAccounts(set, get)
-      set({ selectedIds: [], lastActionMessage: `已导出并移出 ${result.exportedCount} 个账号到：${result.targetDirectory}` })
+      set({
+        selectedIds: [],
+        exportResultDialog: {
+          open: true,
+          exportedCount: result.exportedCount,
+          targetDirectory: result.targetDirectory
+        },
+        lastActionMessage: `已导出并移出 ${result.exportedCount} 个账号到：${result.targetDirectory}`
+      })
     })
   },
   deleteSelected: async () => {
