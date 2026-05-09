@@ -217,13 +217,32 @@ export class TelegramDesktopPremiumService {
         screenshotPath: null
       }
     } finally {
+      try {
+        window.webContents.stop()
+      } catch {
+        // ignore stop failures during hidden web cleanup
+      }
+
       if (!window.isDestroyed()) {
         window.destroy()
       }
+
       try {
         await session.clearStorageData()
       } catch {
         // ignore hidden session cleanup failures
+      }
+
+      try {
+        await session.clearCache()
+      } catch {
+        // ignore hidden cache cleanup failures
+      }
+
+      try {
+        await session.closeAllConnections()
+      } catch {
+        // ignore hidden network cleanup failures
       }
     }
   }
