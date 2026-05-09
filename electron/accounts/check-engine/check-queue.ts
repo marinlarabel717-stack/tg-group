@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type { AccountCheckResult, CheckLogEntry, CheckLogLevel, CheckQueueState } from '../types'
 import { AccountCheckEngine } from './check-engine'
+import { resolveAccountStatusLabel } from '../../../src/lib/ui-text'
 
 interface QueueTask {
   accountId: number
@@ -296,11 +297,12 @@ export class CheckQueue extends EventEmitter {
     this.state.resultSummary[displayStatus] += 1
 
     const level: CheckLogLevel = displayStatus === 'alive' ? 'success' : displayStatus === 'timeout' ? 'error' : 'warning'
+    const displayLabel = resolveAccountStatusLabel(displayStatus, result.errorMessage)
     const reasonSuffix = displayStatus === 'timeout' || displayStatus === 'unknown' ? `（${this.formatFailureReason(result)}）` : ''
     const frozenSince = displayStatus === 'frozen' ? formatFrozenSince(result.profile?.freeze_since_date) : ''
     const frozenSinceSuffix = frozenSince ? `（${frozenSince}）` : ''
     const progressPrefix = `${this.state.completedCount}/${this.state.totalCount}`
-    this.appendLog(level, task.accountId, `${progressPrefix} — ${phoneLabel} ---- ${STATUS_LABELS[displayStatus]}${frozenSinceSuffix}${reasonSuffix}`, task.attempt + 1, {
+    this.appendLog(level, task.accountId, `${progressPrefix} — ${phoneLabel} ---- ${displayLabel}${frozenSinceSuffix}${reasonSuffix}`, task.attempt + 1, {
       phone: result.phone,
       status: displayStatus
     })
