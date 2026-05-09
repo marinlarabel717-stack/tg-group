@@ -59,9 +59,36 @@ const AccountsSummary = memo(function AccountsSummary() {
 })
 
 export function AccountsView() {
+  const importProgress = useAccountStore((state) => state.importProgress)
+  const lastActionMessage = useAccountStore((state) => state.lastActionMessage)
+  const errorMessage = useAccountStore((state) => state.errorMessage)
+
   return (
     <div className="space-y-5 contain-layout">
       <AccountsSummary />
+
+      {importProgress ? (
+        <GlassPanel className="bg-card py-0">
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <div>
+              <div className="font-medium text-white">{importProgress.phase === 'completed' ? '导入完成' : '正在导入账号'}</div>
+              <div className="mt-1 text-textMuted">{importProgress.message}</div>
+            </div>
+            <div className="text-right text-textMuted">
+              <div>{importProgress.current} / {importProgress.total}</div>
+              <div className="mt-1">已导入 {importProgress.importedCount} 个</div>
+            </div>
+          </div>
+        </GlassPanel>
+      ) : null}
+
+      {!importProgress && lastActionMessage ? (
+        <GlassPanel className="bg-card py-0">
+          <div className="text-sm font-medium text-white">{lastActionMessage}</div>
+          {errorMessage ? <div className="mt-1 text-sm text-amber-300">{errorMessage}</div> : null}
+        </GlassPanel>
+      ) : null}
+
       <AccountTable />
     </div>
   )

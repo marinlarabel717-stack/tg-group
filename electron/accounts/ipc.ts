@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { CheckResultInput } from './types'
+import type { CheckResultInput, ImportProgressPayload } from './types'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
 import type { AccountStatusService } from './services/account-status-service'
@@ -27,6 +27,12 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
     mainWindow.webContents.send('accounts:check-state', checkQueue.getState())
+  }
+
+  const emitImportProgress = (payload: ImportProgressPayload) => {
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('accounts:import-progress', payload)
   }
 
   checkQueue.on('state', emitCheckState)
@@ -57,7 +63,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     })
 
     if (result.canceled || result.filePaths.length === 0) return null
-    return accountImportService.importFromPaths(result.filePaths)
+    return accountImportService.importFromPaths(result.filePaths, emitImportProgress)
   })
 
   ipcMain.handle('accounts:pick-import-folder', async () => {
@@ -67,7 +73,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     })
 
     if (result.canceled || result.filePaths.length === 0) return null
-    return accountImportService.importFromFolder(result.filePaths[0])
+    return accountImportService.importFromFolder(result.filePaths[0], emitImportProgress)
   })
 
   ipcMain.handle('accounts:scan-folder', async (_event, folderPath: string) => {
@@ -75,7 +81,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   })
 
   ipcMain.handle('accounts:import-dropped-paths', async (_event, inputPaths: string[]) => {
-    return accountImportService.importFromPaths(inputPaths)
+    return accountImportService.importFromPaths(inputPaths, emitImportProgress)
   })
 
   ipcMain.handle('accounts:delete', async (_event, ids: number[]) => {

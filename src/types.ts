@@ -106,6 +106,16 @@ export interface ImportAccountsResult {
   accounts: AccountRecord[]
 }
 
+export interface ImportProgressPayload {
+  phase: 'start' | 'progress' | 'completed'
+  total: number
+  current: number
+  importedCount: number
+  generatedJsonCount: number
+  skippedCount: number
+  message: string
+}
+
 export interface CheckResultInput {
   id: number
   profile: AccountJsonProfile
@@ -181,6 +191,7 @@ export interface DesktopAccountsApi {
   clearCheckLogs: () => Promise<CheckQueueState>
   onCheckState: (callback: (state: CheckQueueState) => void) => () => void
   onAccountsUpdated: (callback: (accounts: AccountRecord[]) => void) => () => void
+  onImportProgress: (callback: (payload: ImportProgressPayload) => void) => () => void
   exportByIds: (ids: number[]) => Promise<ExportAccountsResult>
   revealPath: (targetPath: string) => Promise<boolean>
 }

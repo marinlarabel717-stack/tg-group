@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { formatCountryDisplay } from '../lib/ui-text'
-import type { AccountRecord, AccountStatus, CheckQueueState } from '../types'
+import type { AccountRecord, AccountStatus, CheckQueueState, ImportProgressPayload } from '../types'
 
 function getDesktopAccountsApi() {
   return window.desktopAccounts
@@ -68,6 +68,7 @@ interface AccountStoreState {
   selectedIds: number[]
   selectedProfileAccountId: number | null
   checkState: CheckQueueState
+  importProgress: ImportProgressPayload | null
   lastActionMessage: string
   errorMessage: string
   init: () => Promise<void>
@@ -124,6 +125,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   selectedIds: [],
   selectedProfileAccountId: null,
   checkState: createEmptyCheckState(),
+  importProgress: null,
   lastActionMessage: '',
   errorMessage: '',
   init: async () => {
@@ -141,6 +143,13 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         applyAccountSnapshot(accounts, set, get, isChecking
           ? undefined
           : { lastActionMessage: 'sessions 目录检测到变更，列表已自动同步。' })
+      })
+      window.desktopAccounts?.onImportProgress((importProgress) => {
+        set({
+          importProgress,
+          busy: importProgress.phase !== 'completed',
+          lastActionMessage: importProgress.phase === 'completed' ? importProgress.message : get().lastActionMessage
+        })
       })
       subscribed = true
     }
@@ -168,7 +177,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       if (!result) return
       await syncAccounts(set, get)
       set({
-        lastActionMessage: `导入完成：扫描 ${result.scannedCount}，入库 ${result.importedCount}，自动补 JSON ${result.generatedJsonCount}。`,
+        importProgress: null,
+        lastActionMessage: `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}，自动补 JSON ${result.generatedJsonCount}）`,
         errorMessage: result.warnings[0] ?? ''
       })
     })
@@ -179,7 +189,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       if (!result) return
       await syncAccounts(set, get)
       set({
-        lastActionMessage: `文件夹导入完成：扫描 ${result.scannedCount}，入库 ${result.importedCount}，自动补 JSON ${result.generatedJsonCount}。`,
+        importProgress: null,
+        lastActionMessage: `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}，自动补 JSON ${result.generatedJsonCount}）`,
         errorMessage: result.warnings[0] ?? ''
       })
     })
@@ -191,7 +202,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       if (!result) return
       await syncAccounts(set, get)
       set({
-        lastActionMessage: `拖拽导入完成：扫描 ${result.scannedCount}，入库 ${result.importedCount}。`,
+        importProgress: null,
+        lastActionMessage: `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}）`,
         errorMessage: result.warnings[0] ?? ''
       })
     })

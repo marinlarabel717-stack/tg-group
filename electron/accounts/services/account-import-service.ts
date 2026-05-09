@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { inferCountryDisplay, inferPhoneFromText } from '../../../src/lib/phone-country'
-import type { AccountJsonProfile, AccountRecord, AccountStatus, ImportAccountsResult, ScanCandidate, UpsertAccountInput } from '../types'
+import type { AccountJsonProfile, AccountRecord, AccountStatus, ImportAccountsResult, ImportProgressPayload, ScanCandidate, UpsertAccountInput } from '../types'
 import type { AccountRepository } from './account-repository'
 import { FileScanner } from './file-scanner'
 import { JsonTemplateService } from './json-template-service'
@@ -107,14 +107,14 @@ export class AccountImportService {
     private readonly managedSessionsDirectory: string
   ) {}
 
-  async importFromPaths(inputPaths: string[]): Promise<ImportAccountsResult> {
+  async importFromPaths(inputPaths: string[], onProgress?: (payload: ImportProgressPayload) => void): Promise<ImportAccountsResult> {
     const scanResult = await this.scanner.scanPaths(inputPaths)
-    return this.importScanResult(scanResult.candidates, scanResult.ignoredPaths, { mirrorToManagedDirectory: true })
+    return this.importScanResult(scanResult.candidates, scanResult.ignoredPaths, { mirrorToManagedDirectory: true, onProgress })
   }
 
-  async importFromFolder(folderPath: string): Promise<ImportAccountsResult> {
+  async importFromFolder(folderPath: string, onProgress?: (payload: ImportProgressPayload) => void): Promise<ImportAccountsResult> {
     const scanResult = await this.scanner.scanFolder(folderPath)
-    return this.importScanResult(scanResult.candidates, scanResult.ignoredPaths, { mirrorToManagedDirectory: true })
+    return this.importScanResult(scanResult.candidates, scanResult.ignoredPaths, { mirrorToManagedDirectory: true, onProgress })
   }
 
   async scanFolder(folderPath: string) {
@@ -180,13 +180,24 @@ export class AccountImportService {
   private async importScanResult(
     candidates: Awaited<ReturnType<FileScanner['scanPaths']>>['candidates'],
     ignoredPaths: string[],
-    options: { mirrorToManagedDirectory: boolean }
+    options: { mirrorToManagedDirectory: boolean; onProgress?: (payload: ImportProgressPayload) => void }
   ) {
     const warnings = [...ignoredPaths.map((item) => `已忽略非账号文件：${item}`)]
     const inputs: UpsertAccountInput[] = []
     let generatedJsonCount = 0
+    let skippedCount = Math.max(candidates.length - inputs.length, 0)
 
-    for (const sourceCandidate of candidates) {
+    options.onProgress?.({
+      phase: 'start',
+      total: candidates.length,
+      current: 0,
+      importedCount: 0,
+      generatedJsonCount: 0,
+      skippedCount: ignoredPaths.length,
+      message: candidates.length > 0 ? `正在导入账号，准备处理 0 / ${candidates.length}` : '正在导入账号'
+    })
+
+    for (const [index, sourceCandidate] of candidates.entries()) {
       try {
         const candidate = options.mirrorToManagedDirectory
           ? await this.mirrorCandidateToManagedDirectory(sourceCandidate)
@@ -215,15 +226,37 @@ export class AccountImportService {
         const reason = error instanceof Error ? error.message : '未知错误'
         warnings.push(`导入失败：${sourceCandidate.sessionPath} -> ${reason}`)
       }
+
+      skippedCount = Math.max(candidates.length - inputs.length, 0)
+      options.onProgress?.({
+        phase: 'progress',
+        total: candidates.length,
+        current: index + 1,
+        importedCount: inputs.length,
+        generatedJsonCount,
+        skippedCount,
+        message: `正在导入账号 ${index + 1} / ${candidates.length}`
+      })
     }
 
     const accounts = inputs.length > 0 ? this.repository.upsertMany(inputs) : this.repository.list()
+
+    skippedCount = Math.max(candidates.length - inputs.length, 0)
+    options.onProgress?.({
+      phase: 'completed',
+      total: candidates.length,
+      current: candidates.length,
+      importedCount: inputs.length,
+      generatedJsonCount,
+      skippedCount,
+      message: `本次成功导入 ${inputs.length} 个账号`
+    })
 
     return {
       scannedCount: candidates.length,
       importedCount: inputs.length,
       generatedJsonCount,
-      skippedCount: Math.max(candidates.length - inputs.length, 0),
+      skippedCount,
       warnings,
       accounts
     }

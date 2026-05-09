@@ -174,6 +174,20 @@ export class SpamBotChecker {
   }
 
   async check(client: TelegramClient): Promise<SpamBotCheckResult> {
+    const frozenStateBeforeSpamBot = await this.detectFrozenState(client)
+    if (frozenStateBeforeSpamBot.frozen) {
+      return {
+        status: 'frozen',
+        normalizedText: '',
+        summary: '账号处于冻结状态',
+        replyText: '',
+        frozenByAppConfig: true,
+        freezeSince: frozenStateBeforeSpamBot.freezeSince,
+        freezeUntil: frozenStateBeforeSpamBot.freezeUntil,
+        freezeAppealUrl: frozenStateBeforeSpamBot.freezeAppealUrl
+      }
+    }
+
     const entity = await client.getEntity('SpamBot')
     const beforeMessages = await client.getMessages(entity, { limit: 1 })
     const beforeId = beforeMessages[0] ? readMessageId(beforeMessages[0]) : 0
@@ -217,6 +231,20 @@ export class SpamBotChecker {
         freezeSince: frozenState.freezeSince,
         freezeUntil: frozenState.freezeUntil,
         freezeAppealUrl: frozenState.freezeAppealUrl
+      }
+    }
+
+    const frozenStateAfterTimeout = await this.detectFrozenState(client)
+    if (frozenStateAfterTimeout.frozen) {
+      return {
+        status: 'frozen',
+        normalizedText: '',
+        summary: '账号处于冻结状态',
+        replyText: '',
+        frozenByAppConfig: true,
+        freezeSince: frozenStateAfterTimeout.freezeSince,
+        freezeUntil: frozenStateAfterTimeout.freezeUntil,
+        freezeAppealUrl: frozenStateAfterTimeout.freezeAppealUrl
       }
     }
 

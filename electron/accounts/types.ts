@@ -102,6 +102,16 @@ export interface ImportAccountsResult {
   accounts: AccountRecord[]
 }
 
+export interface ImportProgressPayload {
+  phase: 'start' | 'progress' | 'completed'
+  total: number
+  current: number
+  importedCount: number
+  generatedJsonCount: number
+  skippedCount: number
+  message: string
+}
+
 export interface UpsertAccountInput {
   phone: string
   username: string
