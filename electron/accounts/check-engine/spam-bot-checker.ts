@@ -38,6 +38,7 @@ interface FrozenStateInfo {
   freezeSince: string | null
   freezeUntil: string | null
   freezeAppealUrl: string | null
+  errorMessage?: string | null
 }
 
 function unwrapTlJsonValue(value: unknown): unknown {
@@ -207,14 +208,16 @@ export class SpamBotChecker {
       const haystack = extractPrimitiveTokens(plainConfig).join(' ').toLowerCase()
       return {
         ...extracted,
-        frozen: extracted.frozen || /frozen|freeze_state|freeze/.test(haystack)
+        frozen: extracted.frozen || /frozen|freeze_state|freeze/.test(haystack),
+        errorMessage: null
       }
-    } catch {
+    } catch (error) {
       return {
         frozen: false,
         freezeSince: null,
         freezeUntil: null,
-        freezeAppealUrl: null
+        freezeAppealUrl: null,
+        errorMessage: error instanceof Error ? error.message : String(error)
       }
     }
   }

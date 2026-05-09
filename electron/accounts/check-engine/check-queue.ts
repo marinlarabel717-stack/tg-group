@@ -210,6 +210,7 @@ export class CheckQueue extends EventEmitter {
     if (normalized.includes('telegram 连接')) return '连接 Telegram 超时'
     if (normalized.includes('session 校验')) return 'Session 校验超时'
     if (normalized.includes('账号资料读取')) return '读取账号资料超时'
+    if (normalized.includes('冻结状态检测')) return '冻结状态检测超时'
     if (normalized.includes('完整资料读取')) return '读取完整资料超时'
     if (normalized.includes('spambot 检测')) return 'SpamBot 检测超时'
     if (normalized.includes('session 未登录')) return 'Session 未登录'

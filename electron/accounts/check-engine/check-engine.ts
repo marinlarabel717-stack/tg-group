@@ -87,12 +87,56 @@ export class AccountCheckEngine {
       }
 
       const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')
-      const fullUser = await withStepTimeout(this.spamBotChecker.getFullProfile(client), this.timeoutMs, '完整资料读取')
+      const frozenState = await withStepTimeout(this.spamBotChecker.detectFrozenState(client), this.timeoutMs, '冻结状态检测')
 
       const loginPhone = String((typeof liveUser === 'object' && liveUser && 'phone' in liveUser && typeof (liveUser as { phone?: unknown }).phone === 'string'
         ? (liveUser as { phone?: string }).phone
         : account.phone) || `账号#${account.id}`)
       logger({ type: 'login_success', phone: loginPhone })
+
+      if (frozenState.frozen) {
+        const updated = this.updateService.buildSuccessProfile({
+          account,
+          liveUser,
+          fullUser: null,
+          spambotReply: '',
+          status: 'frozen',
+          freezeSince: frozenState.freezeSince,
+          freezeUntil: frozenState.freezeUntil,
+          freezeAppealUrl: frozenState.freezeAppealUrl,
+          durationMs: Date.now() - startedAt
+        })
+
+        const payload: CheckResultInput = {
+          id: account.id,
+          profile: updated.profile,
+          status: 'frozen',
+          phone: updated.phone,
+          username: updated.username,
+          userId: updated.userId,
+          country: updated.country,
+          lastCheckTime: updated.lastCheckTime,
+          lastOnlineTime: updated.lastOnlineTime
+        }
+
+        this.resultWriter.write(payload)
+
+        return {
+          accountId: account.id,
+          status: 'frozen',
+          profile: updated.profile,
+          phone: updated.phone,
+          username: updated.username,
+          userId: updated.userId,
+          country: updated.country,
+          lastCheckTime: updated.lastCheckTime,
+          lastOnlineTime: updated.lastOnlineTime,
+          durationMs: Date.now() - startedAt,
+          retryable: false
+        }
+      }
+
+      const fullUser = await withStepTimeout(this.spamBotChecker.getFullProfile(client), this.timeoutMs, '完整资料读取')
 
       const spamResult = await withStepTimeout(this.spamBotChecker.check(client), this.timeoutMs, 'SpamBot 检测')
       const updated = this.updateService.buildSuccessProfile({
