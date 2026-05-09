@@ -8,6 +8,7 @@ import { SpamBotChecker } from './spam-bot-checker'
 import { StatusResolver } from './status-resolver'
 import { TelegramClientManager } from './telegram-client-manager'
 import { TelethonFreezeChecker } from './telethon-freeze-checker'
+import { readPremiumExpiryViaClient } from '../telegram-desktop-premium-service'
 
 interface CheckLogger {
   (payload: { type: 'login_success'; phone: string } | { type: 'login_failed'; phone: string; reason: string }): void
@@ -86,6 +87,36 @@ export class AccountCheckEngine {
     return 730
   }
 
+  private async readPremiumExpiryForPremiumAccount(account: AccountRecord, client: TelegramClient, liveUser: unknown, probes: string[]) {
+    const liveUserRecord = typeof liveUser === 'object' && liveUser ? liveUser as { premium?: unknown } : null
+    const isPremium = Boolean(liveUserRecord?.premium ?? account.profile.is_premium)
+
+    if (!isPremium) {
+      return {
+        premiumExpiry: null,
+        premiumExpirySource: null,
+        premiumExpirySyncedAt: null
+      }
+    }
+
+    const result = await withStepTimeout(readPremiumExpiryViaClient(client), this.timeoutMs, '会员到期时间读取')
+    if (result.ok && result.premiumExpiry) {
+      probes.push('Premium 到期时间读取成功')
+      return {
+        premiumExpiry: result.premiumExpiry,
+        premiumExpirySource: 'mtproto-premium-promo',
+        premiumExpirySyncedAt: new Date().toISOString()
+      }
+    }
+
+    probes.push(`Premium 到期时间未命中:${result.message}`)
+    return {
+      premiumExpiry: null,
+      premiumExpirySource: null,
+      premiumExpirySyncedAt: null
+    }
+  }
+
   private async runAccountSurvivalCheck(account: AccountRecord, client: TelegramClient, startedAt: number, logger: CheckLogger) {
     const probes: string[] = ['账号存活模式']
 
@@ -110,6 +141,7 @@ export class AccountCheckEngine {
 
     const ttlDays = await withStepTimeout(this.applyAccountSurvivalTtl(client), this.timeoutMs, '账号存活检测')
     probes.push(`自动注销期限已改为 ${ttlDays} 天`)
+    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes)
 
     const updated = await this.updateService.buildSuccessProfile({
       account,
@@ -119,6 +151,9 @@ export class AccountCheckEngine {
       spambotReply: '',
       status: 'alive',
       checkMode: 'account-survival',
+      premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
+      premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
+      premiumExpirySyncedAt: premiumExpiryMeta.premiumExpirySyncedAt,
       durationMs: Date.now() - startedAt
     })
 
@@ -228,6 +263,7 @@ export class AccountCheckEngine {
         if (telethonFrozen?.status) {
           probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
         }
+        const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes)
         const updated = await this.updateService.buildSuccessProfile({
           account,
           client,
@@ -239,6 +275,9 @@ export class AccountCheckEngine {
           freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? frozenState.freezeSince,
           freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? frozenState.freezeUntil,
           freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? frozenState.freezeAppealUrl,
+          premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
+          premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
+          premiumExpirySyncedAt: premiumExpiryMeta.premiumExpirySyncedAt,
           durationMs: Date.now() - startedAt
         })
 
@@ -288,6 +327,7 @@ export class AccountCheckEngine {
         if (telethonFrozen?.status) {
           probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
         }
+        const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes)
         const updated = await this.updateService.buildSuccessProfile({
           account,
           client,
@@ -299,6 +339,9 @@ export class AccountCheckEngine {
           freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? selfProbe.freezeSince,
           freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? selfProbe.freezeUntil,
           freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? selfProbe.freezeAppealUrl,
+          premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
+          premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
+          premiumExpirySyncedAt: premiumExpiryMeta.premiumExpirySyncedAt,
           durationMs: Date.now() - startedAt
         })
 
@@ -342,6 +385,7 @@ export class AccountCheckEngine {
       if (telethonFrozen?.status) {
         probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
       }
+      const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes)
       const updated = await this.updateService.buildSuccessProfile({
         account,
         client,
@@ -353,6 +397,9 @@ export class AccountCheckEngine {
         freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? spamResult.freezeSince,
         freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? spamResult.freezeUntil,
         freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? spamResult.freezeAppealUrl,
+        premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
+        premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
+        premiumExpirySyncedAt: premiumExpiryMeta.premiumExpirySyncedAt,
         durationMs: Date.now() - startedAt
       })
 

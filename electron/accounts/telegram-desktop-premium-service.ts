@@ -31,7 +31,7 @@ function sanitizeExtractedExpiry(value: string) {
   return trimmed.slice(0, 80)
 }
 
-function resolvePremiumExpiryFromText(text: string) {
+export function resolvePremiumExpiryFromText(text: string) {
   if (!text) return null
 
   const normalized = text.replace(/\u00A0/g, ' ').replace(/\r/g, '')
@@ -68,7 +68,7 @@ function resolvePremiumExpiryFromText(text: string) {
   return null
 }
 
-function formatPremiumReadError(error: unknown) {
+export function formatPremiumReadError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const lower = message.toLowerCase()
 
@@ -87,6 +87,57 @@ function formatPremiumReadError(error: unknown) {
   return `MTProto 读取会员时间失败：${message}`
 }
 
+async function maybeWriteDebugText(debugDirectory: string, accountId: number, statusText: string) {
+  await fs.mkdir(debugDirectory, { recursive: true })
+  const debugPath = path.join(debugDirectory, `premium-promo-${accountId}-${Date.now()}.txt`)
+  await fs.writeFile(debugPath, statusText || '', 'utf8')
+  return debugPath
+}
+
+export async function readPremiumExpiryViaClient(
+  client: { invoke: (request: any) => Promise<any> },
+  options?: { debugDirectory?: string; accountId?: number }
+): Promise<PremiumExpiryReadResult> {
+  try {
+    const { Api } = getTelegramModule()
+    const response = await client.invoke(new Api.help.GetPremiumPromo())
+    const statusText = typeof (response as any)?.statusText === 'string' ? (response as any).statusText : ''
+    const expiry = resolvePremiumExpiryFromText(statusText)
+
+    if (expiry) {
+      return {
+        ok: true,
+        premiumExpiry: expiry,
+        message: '已从 MTProto 的 Premium 状态文本读取到到期时间',
+        rawText: trimRawText(statusText),
+        screenshotPath: null
+      }
+    }
+
+    const debugPath = options?.debugDirectory && options.accountId
+      ? await maybeWriteDebugText(options.debugDirectory, options.accountId, statusText)
+      : null
+
+    return {
+      ok: false,
+      premiumExpiry: null,
+      message: statusText
+        ? '已拿到 Premium 状态文本，但暂未从中解析出到期时间。'
+        : 'Telegram 当前没有返回可解析的 Premium 状态文本。',
+      rawText: trimRawText(statusText),
+      screenshotPath: debugPath
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      premiumExpiry: null,
+      message: formatPremiumReadError(error),
+      rawText: null,
+      screenshotPath: null
+    }
+  }
+}
+
 export class TelegramDesktopPremiumService {
   private readonly debugDirectory: string
 
@@ -99,7 +150,6 @@ export class TelegramDesktopPremiumService {
   }
 
   async readPremiumExpiry(account: AccountRecord): Promise<PremiumExpiryReadResult> {
-    await fs.mkdir(this.debugDirectory, { recursive: true })
     const session = await this.sessionLoader.load(account.sessionPath)
     const client = this.clientManager.createClient(session)
 
@@ -110,41 +160,10 @@ export class TelegramDesktopPremiumService {
         throw new Error('not authorized')
       }
 
-      const { Api } = getTelegramModule()
-      const response = await client.invoke(new Api.help.GetPremiumPromo())
-      const statusText = typeof (response as any)?.statusText === 'string' ? (response as any).statusText : ''
-      const expiry = resolvePremiumExpiryFromText(statusText)
-
-      if (expiry) {
-        return {
-          ok: true,
-          premiumExpiry: expiry,
-          message: '已从 MTProto 的 Premium 状态文本读取到到期时间',
-          rawText: trimRawText(statusText),
-          screenshotPath: null
-        }
-      }
-
-      const debugPath = path.join(this.debugDirectory, `premium-promo-${account.id}-${Date.now()}.txt`)
-      await fs.writeFile(debugPath, statusText || '', 'utf8')
-
-      return {
-        ok: false,
-        premiumExpiry: null,
-        message: statusText
-          ? '已拿到 Premium 状态文本，但暂未从中解析出到期时间。'
-          : 'Telegram 当前没有返回可解析的 Premium 状态文本。',
-        rawText: trimRawText(statusText),
-        screenshotPath: debugPath
-      }
-    } catch (error) {
-      return {
-        ok: false,
-        premiumExpiry: null,
-        message: formatPremiumReadError(error),
-        rawText: null,
-        screenshotPath: null
-      }
+      return await readPremiumExpiryViaClient(client, {
+        debugDirectory: this.debugDirectory,
+        accountId: account.id
+      })
     } finally {
       await this.clientManager.destroyClient(client)
     }

@@ -58,6 +58,9 @@ export class AccountUpdateService {
     freezeSince?: string | null
     freezeUntil?: string | null
     freezeAppealUrl?: string | null
+    premiumExpiryOverride?: string | null
+    premiumExpirySource?: string | null
+    premiumExpirySyncedAt?: string | null
     durationMs: number
   }) {
     const now = new Date()
@@ -72,6 +75,7 @@ export class AccountUpdateService {
     const userId = pickString(liveUserRecord.id, args.account.profile.id, args.account.userId)
     const bio = pickString(fullUserInner.about, args.account.profile.bio)
     const premiumExpiry = pickString(
+      args.premiumExpiryOverride,
       liveUserRecord.premiumUntil,
       liveUserRecord.premium_until,
       liveUserRecord.premium_until_date,
@@ -94,6 +98,8 @@ export class AccountUpdateService {
       has_profile_pic: Boolean(liveUserRecord.photo ?? args.account.profile.has_profile_pic),
       is_premium: Boolean(liveUserRecord.premium ?? args.account.profile.is_premium),
       premium_expiry: premiumExpiry || null,
+      premium_expiry_source: args.premiumExpirySource ?? args.account.profile.premium_expiry_source ?? null,
+      premium_expiry_synced_at: args.premiumExpirySyncedAt ?? args.account.profile.premium_expiry_synced_at ?? null,
       spamblock: args.status === 'alive' ? 'free' : args.status,
       freeze_since_date: args.status === 'frozen' ? args.freezeSince ?? null : null,
       freeze_until_date: args.status === 'frozen' ? args.freezeUntil ?? null : null,

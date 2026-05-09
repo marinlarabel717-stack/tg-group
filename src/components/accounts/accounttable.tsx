@@ -734,6 +734,11 @@ export const AccountTable = memo(function AccountTable() {
   const handleOpenPremiumDialog = useCallback(async (account: AccountRecord) => {
     let premiumExpiryOverride: string | null | undefined = readPremiumExpiry(account)
 
+    if (premiumExpiryOverride) {
+      setPremiumDialogAccount({ account, premiumExpiryOverride })
+      return
+    }
+
     if (window.desktopAccounts?.readPremiumExpiryFromDesktop) {
       const result = await window.desktopAccounts.readPremiumExpiryFromDesktop(account.id)
       if (result?.premiumExpiry) {
