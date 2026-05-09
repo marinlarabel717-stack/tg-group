@@ -102,11 +102,6 @@ export class AccountUpdateService {
     liveUser: unknown,
     userId: string
   ) {
-    const liveUserRecord = toPlainObject(liveUser)
-    if (!liveUserRecord.photo) {
-      return null
-    }
-
     if (!client?.downloadProfilePhoto) {
       return typeof account.profile.avatar === 'string' ? account.profile.avatar : null
     }
@@ -114,13 +109,22 @@ export class AccountUpdateService {
     try {
       await fs.mkdir(this.avatarDirectory, { recursive: true })
       const filePath = path.join(this.avatarDirectory, `${account.id}-${userId || 'unknown'}.jpg`)
-      const downloaded = await client.downloadProfilePhoto(liveUser, {
+      const downloaded = await client.downloadProfilePhoto('me', {
         isBig: false,
         outputFile: filePath
       })
 
       if (typeof downloaded === 'string' && downloaded.trim()) {
         return downloaded
+      }
+
+      const fallbackDownloaded = await client.downloadProfilePhoto(liveUser, {
+        isBig: false,
+        outputFile: filePath
+      })
+
+      if (typeof fallbackDownloaded === 'string' && fallbackDownloaded.trim()) {
+        return fallbackDownloaded
       }
 
       return filePath

@@ -33,8 +33,8 @@ import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTi
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '56px 84px 176px 120px 124px 96px 220px 188px 204px'
-const ACCOUNT_GRID_WIDTH = 1268
+const ACCOUNT_GRID_TEMPLATE = '56px 84px 176px 120px 124px 96px 220px 156px 184px'
+const ACCOUNT_GRID_WIDTH = 1236
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -130,11 +130,11 @@ function cellShellClass(columnId: string, isHeader = false) {
   }
 
   if (columnId === 'proxy') {
-    return 'flex h-full w-full min-w-0 items-center justify-start px-4'
+    return 'flex h-full w-full min-w-0 items-center justify-start pr-2 pl-4'
   }
 
   if (columnId === 'actions') {
-    return 'flex h-full w-full items-center justify-start px-2'
+    return 'flex h-full w-full items-center justify-start pl-1 pr-2'
   }
 
   return 'flex h-full w-full min-w-0 items-center justify-start px-2'
@@ -518,7 +518,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'proxy',
         header: '代理',
-        size: 188,
+        size: 156,
         cell: ({ row }) => {
           const value = readProxy(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -527,7 +527,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'actions',
         header: '操作',
-        size: 204,
+        size: 184,
         enableSorting: false,
         cell: ({ row }) => <TableRowActions account={row.original} />
       }
