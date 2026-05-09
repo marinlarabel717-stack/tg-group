@@ -23,9 +23,14 @@ const TELEGRAM_WEB_API_ID = 1025907
 const TELEGRAM_WEB_API_HASH = '452b0359b988148995f22ff0f4229750'
 const TELEGRAM_WEB_BASE_DC_ID = 2
 const TELEGRAM_WEB_BOOT_DELAY_MS = 3000
+const ZERO_SERVER_SALT = '0000000000000000'
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function encodeWebAuthPayload(payload: Record<string, unknown>) {
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
 }
 
 function formatWebLoginError(error: unknown) {
@@ -73,6 +78,7 @@ export class TelegramWebService {
 
     try {
       const webState = await this.buildWebAccountState(account)
+      const payload = this.buildWindowPayload(webState)
       const partition = `telegram-web-${account.id}-${Date.now()}`
       const window = new BrowserWindow({
         width: 1280,
@@ -86,7 +92,7 @@ export class TelegramWebService {
         webPreferences: {
           partition,
           preload: this.preloadPath,
-          additionalArguments: ['--tg-web-auth=e30'],
+          additionalArguments: [`--tg-web-auth=${encodeWebAuthPayload(payload)}`],
           contextIsolation: true,
           sandbox: true,
           nodeIntegration: false,
@@ -112,8 +118,6 @@ export class TelegramWebService {
 
       await window.loadURL(TELEGRAM_WEB_URL)
       await sleep(TELEGRAM_WEB_BOOT_DELAY_MS)
-      await this.patchWindowAuthState(window, webState)
-      await window.webContents.executeJavaScript('location.reload()')
       await this.waitForMainContent(window)
 
       if (!window.isDestroyed()) {
@@ -205,31 +209,31 @@ export class TelegramWebService {
     return dcOption
   }
 
-  private async patchWindowAuthState(window: BrowserWindow, state: TelegramWebAccountState) {
-    const patch = {
-      userId: Number(state.userId),
-      date: state.date,
+  private buildWindowPayload(state: TelegramWebAccountState) {
+    const accountData = {
+      userId: state.userId,
       dcId: state.dcId,
-      authKeyHex: state.authKeyHex,
-      authKeyFingerprint: state.authKeyFingerprint
+      date: state.date,
+      auth_key_fingerprint: state.authKeyFingerprint,
+      [`dc${state.dcId}_auth_key`]: state.authKeyHex,
+      [`dc${state.dcId}_server_salt`]: ZERO_SERVER_SALT,
     }
 
-    await window.webContents.executeJavaScript(`(() => {
-      const existing = JSON.parse(localStorage.getItem('account1') || '{}')
-      const next = {
-        ...existing,
-        userId: ${JSON.stringify(patch.userId)},
-        date: ${JSON.stringify(patch.date)},
-        dcId: ${JSON.stringify(patch.dcId)},
-        auth_key_fingerprint: ${JSON.stringify(patch.authKeyFingerprint)},
-        dc2_auth_key: ${JSON.stringify(patch.authKeyHex)},
-        dc2_server_salt: existing.dc2_server_salt || '0000000000000000'
-      }
-      localStorage.setItem('account1', JSON.stringify(next))
-      localStorage.setItem('current_account', '1')
-      localStorage.setItem('number_of_accounts', '1')
-      return true
-    })()`)
+    return {
+      account1: accountData,
+      current_account: 1,
+      number_of_accounts: 1,
+      dc: state.dcId,
+      user_auth: {
+        date: state.date,
+        id: state.userId,
+        dcID: state.dcId
+      },
+      auth_key_fingerprint: state.authKeyFingerprint,
+      server_time_offset: 0,
+      [`dc${state.dcId}_auth_key`]: state.authKeyHex,
+      [`dc${state.dcId}_server_salt`]: ZERO_SERVER_SALT,
+    }
   }
 
   private async waitForMainContent(window: BrowserWindow) {
