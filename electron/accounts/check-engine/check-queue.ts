@@ -222,6 +222,7 @@ export class CheckQueue extends EventEmitter {
     if (normalized.includes('session 校验')) return appendProbeHint('Session 校验超时')
     if (normalized.includes('账号资料读取')) return appendProbeHint('读取账号资料超时')
     if (normalized.includes('冻结状态检测')) return appendProbeHint('冻结状态检测超时')
+    if (normalized.includes('冻结发送探针')) return appendProbeHint('冻结发送探针超时')
     if (normalized.includes('完整资料读取')) return appendProbeHint('读取完整资料超时')
     if (normalized.includes('spambot 检测')) return appendProbeHint('SpamBot 检测超时')
     if (normalized.includes('session 未登录')) return 'Session 未登录'

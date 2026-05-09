@@ -96,7 +96,7 @@ export class AccountCheckEngine {
       if (frozenState.errorMessage) {
         probes.push(`冻结探针失败:${frozenState.errorMessage}`)
       } else if (frozenState.frozen) {
-        probes.push('冻结探针命中')
+        probes.push(`冻结探针命中:${frozenState.reason ?? 'APP_CONFIG'}`)
       } else {
         probes.push('冻结探针未命中')
       }
@@ -116,6 +116,57 @@ export class AccountCheckEngine {
           freezeSince: frozenState.freezeSince,
           freezeUntil: frozenState.freezeUntil,
           freezeAppealUrl: frozenState.freezeAppealUrl,
+          durationMs: Date.now() - startedAt
+        })
+
+        const payload: CheckResultInput = {
+          id: account.id,
+          profile: updated.profile,
+          status: 'frozen',
+          phone: updated.phone,
+          username: updated.username,
+          userId: updated.userId,
+          country: updated.country,
+          lastCheckTime: updated.lastCheckTime,
+          lastOnlineTime: updated.lastOnlineTime
+        }
+
+        this.resultWriter.write(payload)
+
+        return {
+          accountId: account.id,
+          status: 'frozen',
+          profile: updated.profile,
+          phone: updated.phone,
+          username: updated.username,
+          userId: updated.userId,
+          country: updated.country,
+          lastCheckTime: updated.lastCheckTime,
+          lastOnlineTime: updated.lastOnlineTime,
+          durationMs: Date.now() - startedAt,
+          retryable: false
+        }
+      }
+
+      const selfProbe = await withStepTimeout(this.spamBotChecker.probeFrozenBySelfMessage(client), this.timeoutMs, '冻结发送探针')
+      if (selfProbe.errorMessage) {
+        probes.push(`冻结发送探针失败:${selfProbe.errorMessage}`)
+      } else if (selfProbe.frozen) {
+        probes.push(`冻结发送探针命中:${selfProbe.reason ?? 'FROZEN_RPC'}`)
+      } else {
+        probes.push(`冻结发送探针未命中:${selfProbe.reason ?? 'SELF_PROBE_OK'}`)
+      }
+
+      if (selfProbe.frozen) {
+        const updated = this.updateService.buildSuccessProfile({
+          account,
+          liveUser,
+          fullUser: null,
+          spambotReply: '',
+          status: 'frozen',
+          freezeSince: selfProbe.freezeSince,
+          freezeUntil: selfProbe.freezeUntil,
+          freezeAppealUrl: selfProbe.freezeAppealUrl,
           durationMs: Date.now() - startedAt
         })
 

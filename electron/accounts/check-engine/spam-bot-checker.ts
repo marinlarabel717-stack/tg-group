@@ -39,16 +39,36 @@ interface FrozenStateInfo {
   freezeUntil: string | null
   freezeAppealUrl: string | null
   errorMessage?: string | null
+  reason?: string | null
 }
 
 const HIGH_CONFIDENCE_FREEZE_TOKENS = [
   'FREEZE_STATE_IN_APP_CONFIG',
   'FROZEN_METHOD_INVALID',
+  'FROZEN_PARTICIPANT_MISSING',
   'FROZEN_KEYWORD',
   'FROZEN_RECOVERY',
   'FROZEN_NOTICE',
   'FROZEN_WARNING'
 ] as const
+
+function extractRpcErrorName(error: unknown) {
+  if (error && typeof error === 'object') {
+    const candidate = error as { message?: unknown; name?: unknown; errorMessage?: unknown }
+    for (const value of [candidate.errorMessage, candidate.message, candidate.name]) {
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim().toUpperCase()
+      }
+    }
+  }
+
+  return String(error ?? '').trim().toUpperCase()
+}
+
+function isFrozenRpcError(error: unknown) {
+  const name = extractRpcErrorName(error)
+  return name.includes('FROZEN_METHOD_INVALID') || name.includes('FROZEN_PARTICIPANT_MISSING')
+}
 
 function unwrapTlJsonValue(value: unknown): unknown {
   if (value === null || value === undefined) return value
@@ -224,7 +244,8 @@ export class SpamBotChecker {
       return {
         ...extracted,
         frozen: highConfidenceFrozen || extracted.frozen || /frozen|freeze_state|freeze/.test(haystack),
-        errorMessage: null
+        errorMessage: null,
+        reason: highConfidenceFrozen ? 'FREEZE_STATE_IN_APP_CONFIG' : null
       }
     } catch (error) {
       return {
@@ -232,7 +253,49 @@ export class SpamBotChecker {
         freezeSince: null,
         freezeUntil: null,
         freezeAppealUrl: null,
-        errorMessage: error instanceof Error ? error.message : String(error)
+        errorMessage: error instanceof Error ? error.message : String(error),
+        reason: null
+      }
+    }
+  }
+
+  async probeFrozenBySelfMessage(client: TelegramClient): Promise<FrozenStateInfo> {
+    const probeText = `health-check-${Date.now().toString(36)}`
+
+    try {
+      const message = await client.sendMessage('me', { message: probeText })
+      try {
+        await client.deleteMessages('me', [readMessageId(message)].filter(Boolean), { revoke: true })
+      } catch {
+        // ignore cleanup failure
+      }
+
+      return {
+        frozen: false,
+        freezeSince: null,
+        freezeUntil: null,
+        freezeAppealUrl: null,
+        errorMessage: null,
+        reason: 'SELF_PROBE_OK'
+      }
+    } catch (error) {
+      if (isFrozenRpcError(error)) {
+        const metadata = await this.detectFrozenState(client)
+        return {
+          ...metadata,
+          frozen: true,
+          errorMessage: null,
+          reason: extractRpcErrorName(error)
+        }
+      }
+
+      return {
+        frozen: false,
+        freezeSince: null,
+        freezeUntil: null,
+        freezeAppealUrl: null,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        reason: extractRpcErrorName(error) || 'SELF_PROBE_FAILED'
       }
     }
   }
