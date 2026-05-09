@@ -40,6 +40,7 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   last_name?: string | null
   bio?: string | null
   has_profile_pic?: boolean
+  avatar?: string | null
   is_premium?: boolean
   spamblock?: string | null
   spamblock_end_date?: string | number | null

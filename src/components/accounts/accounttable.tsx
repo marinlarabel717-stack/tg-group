@@ -33,8 +33,8 @@ import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTi
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '56px 176px 120px 124px 180px 156px 204px'
-const ACCOUNT_GRID_WIDTH = 1016
+const ACCOUNT_GRID_TEMPLATE = '56px 72px 176px 120px 124px 76px 180px 156px 204px'
+const ACCOUNT_GRID_WIDTH = 1164
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -117,14 +117,10 @@ function cellShellClass(columnId: string, isHeader = false) {
     return 'flex h-full w-full items-center justify-center px-0'
   }
 
-  if (columnId === 'status') {
+  if (columnId === 'index' || columnId === 'status' || columnId === 'avatar') {
     return isHeader
       ? 'flex h-full w-full items-center justify-center px-2'
       : 'flex h-full w-full items-center justify-center px-2'
-  }
-
-  if (columnId === 'nickname') {
-    return 'flex h-full w-full min-w-0 items-center justify-start pl-12 pr-2'
   }
 
   if (columnId === 'actions') {
@@ -144,6 +140,51 @@ function readNickname(account: AccountRecord) {
   const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
   return fullName || '-'
+}
+
+function normalizeAvatarSrc(value: unknown) {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('data:') || trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('file://')) {
+    return trimmed
+  }
+  if (/^[A-Za-z]:\\/.test(trimmed)) {
+    return `file:///${trimmed.replace(/\\/g, '/')}`
+  }
+  return trimmed
+}
+
+function readAvatarSrc(account: AccountRecord) {
+  return normalizeAvatarSrc(account.profile?.avatar)
+}
+
+function readAvatarFallback(account: AccountRecord) {
+  const nickname = readNickname(account)
+  if (nickname && nickname !== '-') {
+    return nickname.slice(0, 1).toUpperCase()
+  }
+
+  const phone = (account.phone || '').replace(/\D/g, '')
+  if (phone) return phone.slice(-2)
+  return 'TG'
+}
+
+function AvatarCell({ account }: { account: AccountRecord }) {
+  const [failed, setFailed] = useState(false)
+  const src = readAvatarSrc(account)
+  const fallback = readAvatarFallback(account)
+  const showImage = Boolean(src) && !failed
+
+  return (
+    <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-slate-900/70 ring-1 ring-white/8">
+      {showImage ? (
+        <img src={src} alt={readNickname(account)} className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        <span className="text-[11px] font-semibold tracking-[0.08em] text-slate-200">{fallback}</span>
+      )}
+    </div>
+  )
 }
 
 function readUsername(account: AccountRecord) {
@@ -255,9 +296,17 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
   const username = readUsername(account)
   const twoFactor = readTwoFactor(account)
   const lastLogin = readLastLogin(account)
-  const handleOpenTelegramWeb = useCallback(() => {
-    void window.desktopAccounts?.openTelegramWeb(account.id)
-  }, [account.id])
+  const [openingWeb, setOpeningWeb] = useState(false)
+
+  const handleOpenTelegramWeb = useCallback(async () => {
+    if (openingWeb) return
+    setOpeningWeb(true)
+    try {
+      await window.desktopAccounts?.openTelegramWeb(account.id)
+    } finally {
+      setOpeningWeb(false)
+    }
+  }, [account.id, openingWeb])
 
   return (
     <div className="flex w-full items-center justify-start gap-1.5 overflow-hidden">
@@ -266,11 +315,15 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
       <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>
       <button
         type="button"
-        title="打开 Telegram 网页版"
-        onClick={handleOpenTelegramWeb}
-        className="flex h-7 min-w-[38px] shrink-0 items-center justify-center rounded-[8px] border border-white/10 bg-panel px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-200 transition hover:bg-hover hover:text-neonSoft"
+        title={openingWeb ? '正在打开 Telegram 网页版…' : '打开 Telegram 网页版'}
+        onClick={() => void handleOpenTelegramWeb()}
+        disabled={openingWeb}
+        className={`flex h-7 min-w-[56px] shrink-0 items-center justify-center gap-1 rounded-[8px] border px-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition ${openingWeb
+          ? 'cursor-wait border-sky-400/20 bg-sky-400/10 text-sky-300'
+          : 'border-white/10 bg-panel text-slate-200 hover:bg-hover hover:text-neonSoft'}`}
       >
-        web
+        {openingWeb ? <Loader2 size={12} className="animate-spin" /> : null}
+        <span>{openingWeb ? '打开中' : 'web'}</span>
       </button>
     </div>
   )
@@ -390,6 +443,17 @@ export const AccountTable = memo(function AccountTable() {
         enableSorting: false
       },
       {
+        id: 'index',
+        header: '序号',
+        size: 72,
+        cell: ({ row, table }) => {
+          const pageIndex = table.getState().pagination.pageIndex
+          const pageSize = table.getState().pagination.pageSize
+          const order = pageIndex * pageSize + row.index + 1
+          return <div className="w-full text-center font-medium text-slate-300">{order}</div>
+        }
+      },
+      {
         accessorKey: 'phone',
         header: '手机号',
         size: 176,
@@ -424,6 +488,13 @@ export const AccountTable = memo(function AccountTable() {
             onClick={row.original.status === 'frozen' ? () => setFrozenDialogAccount(row.original) : undefined}
           />
         )
+      },
+      {
+        id: 'avatar',
+        header: '头像',
+        size: 76,
+        enableSorting: false,
+        cell: ({ row }) => <AvatarCell account={row.original} />
       },
       {
         id: 'nickname',
