@@ -336,9 +336,9 @@ export class SpamBotChecker {
           summary: frozenState.frozen ? '账号处于冻结状态' : parsed.summary,
           replyText,
           frozenByAppConfig: frozenState.frozen,
-          freezeSince: frozenState.freezeSince,
-          freezeUntil: frozenState.freezeUntil,
-          freezeAppealUrl: frozenState.freezeAppealUrl
+          freezeSince: frozenState.freezeSince ?? parsed.freezeSince ?? null,
+          freezeUntil: frozenState.freezeUntil ?? parsed.freezeUntil ?? null,
+          freezeAppealUrl: frozenState.freezeAppealUrl ?? parsed.freezeAppealUrl ?? null
         }
       }
     }
@@ -355,9 +355,9 @@ export class SpamBotChecker {
         summary: frozenState.frozen ? '账号处于冻结状态' : parsed.summary,
         replyText,
         frozenByAppConfig: frozenState.frozen,
-        freezeSince: frozenState.freezeSince,
-        freezeUntil: frozenState.freezeUntil,
-        freezeAppealUrl: frozenState.freezeAppealUrl
+        freezeSince: frozenState.freezeSince ?? parsed.freezeSince ?? null,
+        freezeUntil: frozenState.freezeUntil ?? parsed.freezeUntil ?? null,
+        freezeAppealUrl: frozenState.freezeAppealUrl ?? parsed.freezeAppealUrl ?? null
       }
     }
 
