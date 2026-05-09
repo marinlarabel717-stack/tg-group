@@ -143,7 +143,12 @@ async function bootstrap() {
   const clientManager = new TelegramClientManager()
   const telegramWebPreloadPath = path.resolve(__dirname, '../electron/accounts/telegram-web-preload.cjs')
   const telegramWebService = new TelegramWebService(sessionLoader, clientManager, telegramWebPreloadPath)
-  const telegramDesktopPremiumService = new TelegramDesktopPremiumService(accountsRootPath)
+  const telegramDesktopPremiumService = new TelegramDesktopPremiumService(
+    accountsRootPath,
+    sessionLoader,
+    clientManager,
+    telegramWebPreloadPath
+  )
   const spamBotChecker = new SpamBotChecker()
   const statusResolver = new StatusResolver()
   const updateService = new AccountUpdateService(accountsRootPath)

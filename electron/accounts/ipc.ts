@@ -190,7 +190,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
         profile: {
           ...account.profile,
           premium_expiry: result.premiumExpiry,
-          premium_expiry_source: 'telegram-desktop-ui',
+          premium_expiry_source: 'telegram-web-hidden',
           premium_expiry_synced_at: new Date().toISOString()
         }
       }])
