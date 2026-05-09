@@ -58,6 +58,15 @@ export class AccountUpdateService {
     const phone = inferPhoneFromText(pickString(liveUserRecord.phone, args.account.profile.phone, args.account.phone))
     const userId = pickString(liveUserRecord.id, args.account.profile.id, args.account.userId)
     const bio = pickString(fullUserInner.about, args.account.profile.bio)
+    const premiumExpiry = pickString(
+      liveUserRecord.premiumUntil,
+      liveUserRecord.premium_until,
+      liveUserRecord.premium_until_date,
+      fullUserInner.premiumUntil,
+      fullUserInner.premium_until,
+      fullUserInner.premium_until_date,
+      args.account.profile.premium_expiry
+    )
     const avatar = await this.resolveAvatarPath(args.client, args.account, args.liveUser, userId)
 
     const profile = {
@@ -71,6 +80,7 @@ export class AccountUpdateService {
       avatar,
       has_profile_pic: Boolean(liveUserRecord.photo ?? args.account.profile.has_profile_pic),
       is_premium: Boolean(liveUserRecord.premium ?? args.account.profile.is_premium),
+      premium_expiry: premiumExpiry || null,
       spamblock: args.status === 'alive' ? 'free' : args.status,
       freeze_since_date: args.status === 'frozen' ? args.freezeSince ?? null : null,
       freeze_until_date: args.status === 'frozen' ? args.freezeUntil ?? null : null,

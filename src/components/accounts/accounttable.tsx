@@ -20,7 +20,7 @@ import {
   useReactTable
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUpDown, Loader2 } from 'lucide-react'
+import { ArrowUpDown, Loader2, Star } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
 import type { AccountRecord } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
@@ -219,6 +219,28 @@ function readLastLogin(account: AccountRecord) {
   return formatDateTime(account.lastOnlineTime || account.lastCheckTime)
 }
 
+function readPremiumExpiry(account: AccountRecord) {
+  const value = account.profile?.premium_expiry
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1e12 ? new Date(value).toISOString() : new Date(value * 1000).toISOString()
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const trimmed = value.trim()
+    const numeric = Number(trimmed)
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return numeric > 1e12 ? new Date(numeric).toISOString() : new Date(numeric * 1000).toISOString()
+    }
+    return trimmed
+  }
+
+  return null
+}
+
+function isPremiumAccount(account: AccountRecord) {
+  return Boolean(account.profile?.is_premium)
+}
+
 function readFreezeSince(account: AccountRecord) {
   const value = account.profile?.freeze_since_date
   return typeof value === 'string' ? value : typeof value === 'number' ? String(value) : null
@@ -306,6 +328,8 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
   const username = readUsername(account)
   const twoFactor = readTwoFactor(account)
   const lastLogin = readLastLogin(account)
+  const premium = isPremiumAccount(account)
+  const premiumExpiry = formatDateTimeFull(readPremiumExpiry(account))
   const [openingWeb, setOpeningWeb] = useState(false)
 
   const handleOpenTelegramWeb = useCallback(async () => {
@@ -323,6 +347,14 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
       <span title={`用户名：${username}`} className={actionButtonClass(username !== '-')}>@</span>
       <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>🔓</span>
       <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>
+      {premium ? (
+        <span
+          title={`高级会员${premiumExpiry !== '—' ? `，到期时间：${premiumExpiry}` : ''}`}
+          className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-[8px] border border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300"
+        >
+          <Star size={12} className="fill-current" />
+        </span>
+      ) : null}
       <button
         type="button"
         title={openingWeb ? '正在打开 Telegram 网页版…' : '打开 Telegram 网页版'}
