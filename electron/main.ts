@@ -146,8 +146,7 @@ async function bootstrap() {
   const telegramDesktopPremiumService = new TelegramDesktopPremiumService(
     accountsRootPath,
     sessionLoader,
-    clientManager,
-    telegramWebPreloadPath
+    clientManager
   )
   const spamBotChecker = new SpamBotChecker()
   const statusResolver = new StatusResolver()

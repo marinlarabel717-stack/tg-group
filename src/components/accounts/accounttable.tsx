@@ -325,7 +325,7 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
   const premiumExpiryRaw = localPremiumExpiry ?? readPremiumExpiry(account)
   const premiumExpiry = formatDateTimeFull(premiumExpiryRaw)
   const premiumExpiryDisplay = reading
-    ? '后台 Telegram Web 读取中…'
+    ? 'MTProto 会员状态读取中…'
     : premiumExpiry !== '—'
       ? premiumExpiry
       : '暂未读取到会员到期时间'
@@ -370,7 +370,7 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
         <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <div className="text-sm font-semibold text-fuchsia-300">会员详情</div>
-            <div className="mt-1 text-xs text-textMuted">弹窗打开后会自动在后台拉起隐藏 Telegram Web 页面读取会员到期时间</div>
+            <div className="mt-1 text-xs text-textMuted">弹窗打开后会自动通过 MTProto 调 Telegram Premium 状态接口读取时间</div>
           </div>
           <button type="button" className="rounded-[8px] px-2 py-1 text-sm text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}>关闭</button>
         </div>
@@ -398,15 +398,15 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
             {reading ? (
               <div className="mt-2 flex items-center gap-2 text-xs text-fuchsia-200">
                 <Loader2 size={12} className="animate-spin" />
-                <span>正在后台打开 Telegram Web Premium 页面并抓取到期时间…</span>
+                <span>正在通过 MTProto 请求 Telegram Premium 状态文本并解析到期时间…</span>
               </div>
             ) : null}
-            {!reading && premiumExpiry === '—' ? <div className="mt-2 text-xs text-textMuted">当前还没抓到时间，但不会拉起你本地 Telegram 程序。</div> : null}
+            {!reading && premiumExpiry === '—' ? <div className="mt-2 text-xs text-textMuted">当前没解析到时间；这版不再拉本地客户端，也不再走隐藏 Web。</div> : null}
           </div>
 
           {readMessage ? (
             <div className="rounded-[12px] bg-panel px-4 py-3">
-              <div className="text-xs text-textMuted">后台读取结果</div>
+              <div className="text-xs text-textMuted">MTProto 读取结果</div>
               <div className="mt-1 text-xs leading-5 text-textMain">{readMessage}</div>
               {debugPath ? <div className="mt-2 break-all text-[11px] text-textMuted">调试截图：{debugPath}</div> : null}
               {readRawText ? <div className="mt-2 max-h-24 overflow-auto rounded-[8px] bg-slate-950/35 px-2 py-2 text-[11px] leading-5 text-textMuted">{readRawText}</div> : null}
@@ -414,8 +414,8 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
           ) : null}
 
           <div className="rounded-[12px] bg-panel px-4 py-3">
-            <div className="text-xs text-textMuted">识别依据</div>
-            <div className="mt-1 text-xs leading-5 text-textMuted">你发来的 Telegram Web 页面里已经能看到类似 “Your Premium Subscription is active. It expires on 16.05.2026.” 的文案，所以这版会优先直接抓页面文本，不再碰本地客户端。</div>
+            <div className="text-xs text-textMuted">当前方案</div>
+            <div className="mt-1 text-xs leading-5 text-textMuted">这版改成优先走 MTProto 的 Premium 状态文本；如果 Telegram 当前会在 `statusText` 里返回类似 `It expires on ...` 的内容，就能直接解析，不再碰本地客户端，也不再打开隐藏 Web。</div>
           </div>
         </div>
       </div>
