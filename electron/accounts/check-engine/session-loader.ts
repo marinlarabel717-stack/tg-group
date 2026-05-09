@@ -3,6 +3,8 @@ import Database from 'better-sqlite3'
 import type { Session } from 'telegram/sessions'
 import { getAuthKeyModule, getSessionsModule } from './gramjs-runtime'
 
+const SQLITE_HEADER = 'SQLite format 3\u0000'
+
 interface TelethonSessionRow {
   dc_id: number
   server_address: string
@@ -27,10 +29,25 @@ function tryParseJsonStringSession(content: string) {
 
 export class SessionLoader {
   async load(sessionPath: string): Promise<Session> {
-    try {
+    const kind = await this.detectSessionKind(sessionPath)
+
+    if (kind === 'sqlite') {
       return await this.loadSqliteSession(sessionPath)
-    } catch {
-      return this.loadStringSession(sessionPath)
+    }
+
+    return this.loadStringSession(sessionPath)
+  }
+
+  private async detectSessionKind(sessionPath: string) {
+    const handle = await fs.open(sessionPath, 'r')
+
+    try {
+      const buffer = Buffer.alloc(16)
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+      const header = buffer.subarray(0, bytesRead).toString('utf8')
+      return header === SQLITE_HEADER ? 'sqlite' : 'string'
+    } finally {
+      await handle.close()
     }
   }
 
