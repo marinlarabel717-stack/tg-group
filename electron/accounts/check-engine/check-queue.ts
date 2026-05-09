@@ -196,7 +196,8 @@ export class CheckQueue extends EventEmitter {
 
   private formatFailureReason(result: AccountCheckResult) {
     const raw = (result.errorMessage || '').trim()
-    const normalized = raw.toLowerCase()
+    const baseError = raw.includes('| 探针:') ? raw.split('| 探针:')[0]?.trim() ?? raw : raw
+    const normalized = baseError.toLowerCase()
     const probeText = raw.includes('| 探针:') ? raw.split('| 探针:')[1]?.trim() ?? '' : ''
     const appendProbeHint = (reason: string) => {
       if (!probeText) return reason
@@ -209,7 +210,7 @@ export class CheckQueue extends EventEmitter {
       return reason
     }
 
-    if (!raw) {
+    if (!baseError) {
       if (result.status === 'not_logged_in') return 'Session 未登录'
       if (result.status === 'session_expired') return 'Session 已失效'
       if (result.status === 'multi_ip') return '检测到多 IP 登录'
@@ -231,12 +232,12 @@ export class CheckQueue extends EventEmitter {
     if (normalized.includes('network') || normalized.includes('socket') || normalized.includes('disconnect')) return appendProbeHint('网络连接失败')
     if (normalized.includes('timeout') || normalized.includes('timed out')) return appendProbeHint('请求超时')
     if (normalized.includes('spambot 回复未命中规则')) {
-      const replyText = raw.includes('回复:') ? raw.split('回复:')[1]?.split('|')[0]?.trim() ?? '' : ''
+      const replyText = baseError.includes('回复:') ? baseError.split('回复:')[1]?.split('|')[0]?.trim() ?? '' : ''
       const base = replyText ? `SpamBot 返回未命中规则：${replyText}` : 'SpamBot 返回未命中规则'
       return appendProbeHint(base)
     }
 
-    return raw
+    return appendProbeHint(baseError)
   }
 
   private handleResult(task: QueueTask, result: AccountCheckResult) {
