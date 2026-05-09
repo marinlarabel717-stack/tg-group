@@ -41,6 +41,15 @@ interface FrozenStateInfo {
   errorMessage?: string | null
 }
 
+const HIGH_CONFIDENCE_FREEZE_TOKENS = [
+  'FREEZE_STATE_IN_APP_CONFIG',
+  'FROZEN_METHOD_INVALID',
+  'FROZEN_KEYWORD',
+  'FROZEN_RECOVERY',
+  'FROZEN_NOTICE',
+  'FROZEN_WARNING'
+] as const
+
 function unwrapTlJsonValue(value: unknown): unknown {
   if (value === null || value === undefined) return value
 
@@ -109,6 +118,11 @@ function extractPrimitiveTokens(value: unknown, collector: string[] = []) {
   }
 
   return collector
+}
+
+function hasHighConfidenceFreezeSignal(value: unknown) {
+  const haystack = extractPrimitiveTokens(value).join(' ')
+  return HIGH_CONFIDENCE_FREEZE_TOKENS.some((token) => haystack.includes(token))
 }
 
 function normalizeTimestamp(value: unknown) {
@@ -206,9 +220,10 @@ export class SpamBotChecker {
       const plainConfig = unwrapTlJsonValue(appConfig)
       const extracted = extractFrozenStateInfo(plainConfig)
       const haystack = extractPrimitiveTokens(plainConfig).join(' ').toLowerCase()
+      const highConfidenceFrozen = hasHighConfidenceFreezeSignal(plainConfig)
       return {
         ...extracted,
-        frozen: extracted.frozen || /frozen|freeze_state|freeze/.test(haystack),
+        frozen: highConfidenceFrozen || extracted.frozen || /frozen|freeze_state|freeze/.test(haystack),
         errorMessage: null
       }
     } catch (error) {
