@@ -1,7 +1,6 @@
 import os from 'node:os'
 import type { TelegramClient } from 'telegram'
 import type { Session } from 'telegram/sessions'
-import type { AccountJsonProfile } from '../types'
 import { getTelegramModule } from './gramjs-runtime'
 
 interface ClientConfig {
@@ -26,26 +25,9 @@ const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   useIPV6: false
 }
 
-function readString(value: unknown, fallback: string) {
-  return typeof value === 'string' && value.trim() ? value.trim() : fallback
-}
-
-function readNumber(value: unknown, fallback: number) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
-}
-
 export class TelegramClientManager {
-  createClient(session: Session, profile: AccountJsonProfile) {
-    const config: ClientConfig = {
-      apiId: readNumber(profile.app_id, DEFAULT_CLIENT_CONFIG.apiId),
-      apiHash: readString(profile.app_hash, DEFAULT_CLIENT_CONFIG.apiHash),
-      deviceModel: readString(profile.device ?? profile.sdk, DEFAULT_CLIENT_CONFIG.deviceModel),
-      systemVersion: readString(profile.sdk, DEFAULT_CLIENT_CONFIG.systemVersion),
-      appVersion: readString(profile.app_version, DEFAULT_CLIENT_CONFIG.appVersion),
-      langCode: readString(profile.lang_pack, DEFAULT_CLIENT_CONFIG.langCode),
-      systemLangCode: readString(profile.system_lang_pack, DEFAULT_CLIENT_CONFIG.systemLangCode),
-      useIPV6: Boolean(profile.ipv6 ?? DEFAULT_CLIENT_CONFIG.useIPV6)
-    }
+  createClient(session: Session) {
+    const config: ClientConfig = { ...DEFAULT_CLIENT_CONFIG }
 
     const { TelegramClient } = getTelegramModule()
 

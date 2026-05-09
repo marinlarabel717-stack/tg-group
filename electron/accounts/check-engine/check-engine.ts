@@ -85,7 +85,7 @@ export class AccountCheckEngine {
       const session = await withStepTimeout(this.sessionLoader.load(account.sessionPath), this.timeoutMs, 'Session 加载')
       probes.push('Session 加载成功')
 
-      client = this.clientManager.createClient(session, account.profile)
+      client = this.clientManager.createClient(session)
 
       await withStepTimeout(client.connect(), this.timeoutMs, 'Telegram 连接')
       probes.push('Telegram 连接成功')
