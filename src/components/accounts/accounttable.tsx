@@ -317,7 +317,9 @@ const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }
 
 const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose }: { account: AccountRecord; onClose: () => void }) {
   const nickname = readNickname(account)
-  const premiumExpiry = formatDateTimeFull(readPremiumExpiry(account))
+  const premiumExpiryRaw = readPremiumExpiry(account)
+  const premiumExpiry = formatDateTimeFull(premiumExpiryRaw)
+  const premiumExpiryDisplay = premiumExpiry !== '—' ? premiumExpiry : 'Telegram 当前接口未返回到期时间'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={onClose}>
@@ -349,7 +351,8 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
 
           <div className="rounded-[12px] bg-panel px-4 py-3">
             <div className="text-xs text-textMuted">到期时间</div>
-            <div className="mt-1 font-medium text-white">{premiumExpiry}</div>
+            <div className="mt-1 font-medium text-white">{premiumExpiryDisplay}</div>
+            {premiumExpiry === '—' ? <div className="mt-2 text-xs text-textMuted">当前只能判断该账号是否为高级会员，官方接口没有返回具体到期时间。</div> : null}
           </div>
         </div>
       </div>
