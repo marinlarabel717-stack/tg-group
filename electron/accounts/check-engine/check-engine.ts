@@ -1,4 +1,4 @@
-import type { TelegramClient } from 'telegram'
+import { Api, type TelegramClient } from 'telegram'
 import type { AccountCheckResult, AccountRecord, CheckResultInput } from '../types'
 import type { AccountRepository } from '../services/account-repository'
 import { AccountUpdateService } from './account-update-service'
@@ -74,7 +74,88 @@ export class AccountCheckEngine {
     this.timeoutMs = options.timeoutMs ?? 25000
   }
 
-  async run(accountId: number, logger: CheckLogger): Promise<AccountCheckResult> {
+  private async applyAccountSurvivalTtl(client: TelegramClient) {
+    const result = await client.invoke(new Api.account.SetAccountTTL({
+      ttl: new Api.AccountDaysTTL({ days: 730 })
+    }))
+
+    if (!result || (typeof result === 'object' && 'className' in result && (result as { className?: string }).className === 'BoolFalse')) {
+      throw new Error('账号存活检测失败：无法修改自动注销期限为 24 个月')
+    }
+
+    return 730
+  }
+
+  private async runAccountSurvivalCheck(account: AccountRecord, client: TelegramClient, startedAt: number, logger: CheckLogger) {
+    const probes: string[] = ['账号存活模式']
+
+    const authorized = await withStepTimeout(client.checkAuthorization(), this.timeoutMs, 'Session 校验')
+    probes.push(`Session 校验${authorized ? '成功' : '失败'}`)
+    if (!authorized) {
+      const failedPhone = account.phone || account.profile.phone || `账号#${account.id}`
+      logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session 未登录' })
+      return this.persistFailure(account, 'banned', '账号存活检测失败：Session 未登录', Date.now() - startedAt)
+    }
+
+    const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')
+    if (!liveUser) {
+      throw new Error('账号存活检测失败：无法读取账号信息')
+    }
+    probes.push('账号资料读取成功')
+
+    const loginPhone = String((typeof liveUser === 'object' && liveUser && 'phone' in liveUser && typeof (liveUser as { phone?: unknown }).phone === 'string'
+      ? (liveUser as { phone?: string }).phone
+      : account.phone) || `账号#${account.id}`)
+    logger({ type: 'login_success', phone: loginPhone })
+
+    const ttlDays = await withStepTimeout(this.applyAccountSurvivalTtl(client), this.timeoutMs, '账号存活检测')
+    probes.push(`自动注销期限已改为 ${ttlDays} 天`)
+
+    const updated = await this.updateService.buildSuccessProfile({
+      account,
+      client,
+      liveUser,
+      fullUser: null,
+      spambotReply: '',
+      status: 'alive',
+      durationMs: Date.now() - startedAt
+    })
+
+    const profile = {
+      ...updated.profile,
+      account_ttl_days: ttlDays
+    }
+
+    const payload: CheckResultInput = {
+      id: account.id,
+      profile,
+      status: 'alive',
+      phone: updated.phone,
+      username: updated.username,
+      userId: updated.userId,
+      country: updated.country,
+      lastCheckTime: updated.lastCheckTime,
+      lastOnlineTime: updated.lastOnlineTime
+    }
+
+    this.resultWriter.write(payload)
+
+    return {
+      accountId: account.id,
+      status: 'alive' as const,
+      profile,
+      phone: updated.phone,
+      username: updated.username,
+      userId: updated.userId,
+      country: updated.country,
+      lastCheckTime: updated.lastCheckTime,
+      lastOnlineTime: updated.lastOnlineTime,
+      durationMs: Date.now() - startedAt,
+      retryable: false
+    }
+  }
+
+  async run(accountId: number, logger: CheckLogger, mode: 'account-status' | 'account-survival' = 'account-status'): Promise<AccountCheckResult> {
     const startedAt = Date.now()
     const account = this.repository.getByIds([accountId])[0]
 
@@ -106,6 +187,10 @@ export class AccountCheckEngine {
 
       await withStepTimeout(client.connect(), this.timeoutMs, 'Telegram 连接')
       probes.push('Telegram 连接成功')
+
+      if (mode === 'account-survival') {
+        return await this.runAccountSurvivalCheck(account, client, startedAt, logger)
+      }
 
       const authorized = await withStepTimeout(client.checkAuthorization(), this.timeoutMs, 'Session 校验')
       probes.push(`Session 校验${authorized ? '成功' : '失败'}`)
@@ -306,7 +391,9 @@ export class AccountCheckEngine {
       }
     } catch (error) {
       const durationMs = Date.now() - startedAt
-      const status = this.statusResolver.resolveFromError(error)
+      const status = mode === 'account-survival'
+        ? this.statusResolver.resolveHealthCheckError(error)
+        : this.statusResolver.resolveFromError(error)
       const baseErrorMessage = error instanceof Error ? error.message : String(error)
       const probeSuffix = probes.length > 0 ? ` | ${buildProbeSummary(probes)}` : ''
       const errorMessage = `${baseErrorMessage}${probeSuffix}`

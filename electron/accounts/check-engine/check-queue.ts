@@ -5,6 +5,7 @@ import { AccountCheckEngine } from './check-engine'
 interface QueueTask {
   accountId: number
   attempt: number
+  mode: 'account-status' | 'account-survival'
 }
 
 const STATUS_LABELS: Record<AccountCheckResult['status'], string> = {
@@ -129,7 +130,7 @@ export class CheckQueue extends EventEmitter {
     this.bump()
   }
 
-  enqueue(accountIds: number[]) {
+  enqueue(accountIds: number[], mode: 'account-status' | 'account-survival' = 'account-status') {
     const uniqueIds = Array.from(new Set(accountIds))
     let addedCount = 0
 
@@ -150,7 +151,8 @@ export class CheckQueue extends EventEmitter {
         unknown: 0
       }
       if (uniqueIds.length > 0) {
-        this.appendLog('info', null, `已选择 ${uniqueIds.length} 个账号，检查任务进行中，请稍等`)
+        const taskLabel = mode === 'account-survival' ? '账号存活检测' : '账号状态检测'
+        this.appendLog('info', null, `已选择 ${uniqueIds.length} 个账号，${taskLabel}任务进行中，请稍等`)
       }
     }
 
@@ -159,7 +161,7 @@ export class CheckQueue extends EventEmitter {
       const alreadyRunning = this.active.has(accountId)
       if (alreadyQueued || alreadyRunning) continue
 
-      this.pending.push({ accountId, attempt: 0 })
+      this.pending.push({ accountId, attempt: 0, mode })
       addedCount += 1
     }
 
@@ -194,7 +196,7 @@ export class CheckQueue extends EventEmitter {
           phone: payload.phone,
           status: null
         })
-      })
+      }, task.mode)
       this.handleResult(task, result)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -277,7 +279,7 @@ export class CheckQueue extends EventEmitter {
 
   private handleResult(task: QueueTask, result: AccountCheckResult) {
     if (result.retryable && task.attempt + 1 <= this.options.retryLimit) {
-      const retryTask = { accountId: task.accountId, attempt: task.attempt + 1 }
+        const retryTask = { accountId: task.accountId, attempt: task.attempt + 1, mode: task.mode }
       this.pending.push(retryTask)
       this.syncCounters()
       return

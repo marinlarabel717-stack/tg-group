@@ -22,7 +22,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowUpDown, Loader2, Star } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
-import type { AccountRecord } from '../../types'
+import type { AccountRecord, CheckAction } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
 import { TableFilters } from './tablefilters'
@@ -647,9 +647,9 @@ export const AccountTable = memo(function AccountTable() {
     setSelectedIds(ids)
   }, [orderedIds, setSelectedIds])
 
-  const handleStartCheck = useCallback((_actions: string[]) => {
+  const handleStartCheck = useCallback((actions: CheckAction[]) => {
     setActiveModule('logs')
-    void startSelectedCheck()
+    void startSelectedCheck(actions)
   }, [setActiveModule, startSelectedCheck])
 
   const handleRefresh = useCallback(() => {

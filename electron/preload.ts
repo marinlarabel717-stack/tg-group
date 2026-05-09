@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, CheckQueueState, CheckResultInput, ImportProgressPayload } from '../src/types'
+import type { AccountRecord, CheckAction, CheckQueueState, CheckResultInput, ImportProgressPayload } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'Telegram Multi Account Manager',
@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
   markChecking: (ids: number[]) => ipcRenderer.invoke('accounts:mark-checking', ids),
   applySpamBotReply: (payload: { ids: number[]; replyText: string }) => ipcRenderer.invoke('accounts:apply-spambot-reply', payload),
   applyCheckResults: (items: CheckResultInput[]) => ipcRenderer.invoke('accounts:apply-check-results', items),
-  startCheck: (ids: number[]) => ipcRenderer.invoke('accounts:start-check', ids),
+  startCheck: (payload: { ids: number[]; actions: CheckAction[] }) => ipcRenderer.invoke('accounts:start-check', payload),
   getCheckState: () => ipcRenderer.invoke('accounts:get-check-state'),
   clearCheckLogs: () => ipcRenderer.invoke('accounts:clear-check-logs'),
   onCheckState: (callback: (state: CheckQueueState) => void) => {

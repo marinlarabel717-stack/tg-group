@@ -15,6 +15,7 @@ export const ACCOUNT_STATUS_VALUES = [
 export type AccountStatus = (typeof ACCOUNT_STATUS_VALUES)[number]
 export type ProfileSource = 'json_import' | 'login_check'
 export type CheckLogLevel = 'info' | 'success' | 'warning' | 'error'
+export type CheckAction = 'account-status' | 'account-survival' | 'profile-refresh' | 'proxy-health'
 
 export interface AccountJsonProfile extends Record<string, unknown> {
   app_id?: number
@@ -55,6 +56,7 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   avatar?: string | null
   sex?: string | null
   proxy?: string | null
+  account_ttl_days?: number | null
   ipv6?: boolean
   userId?: string
   country?: string

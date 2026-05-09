@@ -29,6 +29,18 @@ export class StatusResolver {
     return 'unknown'
   }
 
+  resolveHealthCheckError(error: unknown): AccountStatus {
+    const text = normalizeError(error).toLowerCase()
+
+    if (!text) return 'banned'
+    if (text.includes('auth_key_duplicated')) return 'multi_ip'
+    if (text.includes('multiple ip') || text.includes('different ip') || text.includes('many locations')) return 'multi_ip'
+    if (text.includes('timeout') || text.includes('timed out') || text.includes('etimedout')) return 'timeout'
+    if (text.includes('network') || text.includes('socket') || text.includes('disconnect')) return 'timeout'
+
+    return 'banned'
+  }
+
   isRetryable(status: AccountStatus, error?: unknown) {
     if (status === 'timeout') return true
 

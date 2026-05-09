@@ -22,6 +22,7 @@ export type AccountStatus =
 
 export type ProfileSource = 'json_import' | 'login_check'
 export type CheckLogLevel = 'info' | 'success' | 'warning' | 'error'
+export type CheckAction = 'account-status' | 'account-survival' | 'profile-refresh' | 'proxy-health'
 
 export interface AccountJsonProfile extends Record<string, unknown> {
   app_id?: number
@@ -42,6 +43,7 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   has_profile_pic?: boolean
   avatar?: string | null
   is_premium?: boolean
+  premium_expiry?: string | number | null
   spamblock?: string | null
   spamblock_end_date?: string | number | null
   freeze_since_date?: string | number | null
@@ -54,6 +56,7 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   register_time?: number | string | null
   last_check_time?: number | string | null
   proxy?: string | null
+  account_ttl_days?: number | null
   ipv6?: boolean
   check_error?: string | null
   check_status?: AccountStatus
@@ -190,7 +193,7 @@ export interface DesktopAccountsApi {
   markChecking: (ids: number[]) => Promise<StatusUpdateResult>
   applySpamBotReply: (payload: { ids: number[]; replyText: string }) => Promise<StatusUpdateResult>
   applyCheckResults: (items: CheckResultInput[]) => Promise<StatusUpdateResult>
-  startCheck: (ids: number[]) => Promise<CheckQueueState>
+  startCheck: (payload: { ids: number[]; actions: CheckAction[] }) => Promise<CheckQueueState>
   getCheckState: () => Promise<CheckQueueState>
   clearCheckLogs: () => Promise<CheckQueueState>
   onCheckState: (callback: (state: CheckQueueState) => void) => () => void

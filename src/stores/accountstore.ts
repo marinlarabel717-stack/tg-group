@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { formatCountryDisplay } from '../lib/ui-text'
-import type { AccountRecord, AccountStatus, CheckQueueState, ImportProgressPayload } from '../types'
+import type { AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload } from '../types'
 
 interface ImportResultDialogState {
   open: boolean
@@ -113,7 +113,7 @@ interface AccountStoreState {
   exportSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
   deleteAll: () => Promise<void>
-  startSelectedCheck: () => Promise<void>
+  startSelectedCheck: (actions: CheckAction[]) => Promise<void>
   clearCheckLogs: () => Promise<void>
   revealPath: (targetPath: string) => Promise<void>
 }
@@ -362,7 +362,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       })
     })
   },
-  startSelectedCheck: async () => {
+  startSelectedCheck: async (actions) => {
     await runBusyAction(set, async () => {
       const ids = get().selectedIds
       if (ids.length === 0) {
@@ -370,11 +370,13 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      const checkState = await getDesktopAccountsApi()?.startCheck(ids)
+      const normalizedActions: CheckAction[] = actions.length > 0 ? actions : ['account-status']
+      const checkState = await getDesktopAccountsApi()?.startCheck({ ids, actions: normalizedActions })
       if (!checkState) return
+      const actionLabel = normalizedActions.includes('account-survival') ? '账号存活检测' : '账号状态检测'
       set({
         checkState,
-        lastActionMessage: `已启动 ${ids.length} 个账号的登录检查任务。`
+        lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务。`
       })
       await syncAccounts(set, get)
     })

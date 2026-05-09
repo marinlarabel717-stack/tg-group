@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { CheckResultInput, ImportProgressPayload } from './types'
+import type { CheckAction, CheckResultInput, ImportProgressPayload } from './types'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
 import type { AccountStatusService } from './services/account-status-service'
@@ -57,8 +57,15 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     checkQueue.clearLogs()
     return checkQueue.getState()
   })
-  ipcMain.handle('accounts:start-check', (_event, ids: number[]) => {
-    const state = checkQueue.enqueue(ids)
+  ipcMain.handle('accounts:start-check', (_event, payload: number[] | { ids: number[]; actions?: CheckAction[] }) => {
+    const ids = Array.isArray(payload) ? payload : payload?.ids ?? []
+    const actions: CheckAction[] = Array.isArray(payload)
+      ? ['account-status']
+      : payload?.actions?.length
+        ? payload.actions
+        : ['account-status']
+    const mode = actions.includes('account-survival') ? 'account-survival' : 'account-status'
+    const state = checkQueue.enqueue(ids, mode)
     emitCheckState()
     return state
   })

@@ -13,6 +13,7 @@ import {
   WandSparkles,
   X
 } from 'lucide-react'
+import type { CheckAction } from '../../types'
 
 interface TableToolbarProps {
   search: string
@@ -29,7 +30,7 @@ interface TableToolbarProps {
   onSelectAll: () => void
   onClearSelection: () => void
   onSelectRange: (start: number, end: number) => void
-  onStartCheck: (actions: string[]) => void
+  onStartCheck: (actions: CheckAction[]) => void
   onRefresh: () => void
 }
 
@@ -83,13 +84,14 @@ export const TableToolbar = memo(function TableToolbar({
   const [rangeEnd, setRangeEnd] = useState('20')
   const [rangeMenuOpen, setRangeMenuOpen] = useState(false)
   const [checkMenuOpen, setCheckMenuOpen] = useState(false)
-  const [selectedActions, setSelectedActions] = useState<string[]>(['login-check'])
+  const [selectedActions, setSelectedActions] = useState<CheckAction[]>(['account-status'])
 
   const checkActions = useMemo(
     () => [
-      { id: 'login-check', label: '登录状态检测', description: '登录 + SpamBot + 资料回写', disabled: false },
-      { id: 'profile-refresh', label: '资料补全', description: '后续添加', disabled: true },
-      { id: 'proxy-health', label: '代理连通性', description: '后续添加', disabled: true }
+      { id: 'account-status' as const, label: '检测账号状态', description: '登录 + SpamBot + 资料回写', disabled: false },
+      { id: 'account-survival' as const, label: '检查账号存活', description: '尝试把自动注销期限改成 24 个月，仅显示存活/封禁/多 IP/超时', disabled: false },
+      { id: 'profile-refresh' as const, label: '资料补全', description: '后续添加', disabled: true },
+      { id: 'proxy-health' as const, label: '代理连通性', description: '后续添加', disabled: true }
     ],
     []
   )
@@ -101,12 +103,8 @@ export const TableToolbar = memo(function TableToolbar({
     onSelectRange(start, end)
   }
 
-  const toggleAction = (actionId: string) => {
-    setSelectedActions((current) =>
-      current.includes(actionId)
-        ? current.filter((item) => item !== actionId)
-        : [...current, actionId]
-    )
+  const toggleAction = (actionId: CheckAction) => {
+    setSelectedActions((current) => (current.includes(actionId) ? current : [actionId]))
   }
 
   const handleStartCheck = () => {
