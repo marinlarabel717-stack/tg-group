@@ -17,6 +17,12 @@ interface ExportResultDialogState {
   targetDirectory: string
 }
 
+interface DeleteResultDialogState {
+  open: boolean
+  deletedCount: number
+  mode: 'selected' | 'all'
+}
+
 function getDesktopAccountsApi() {
   return window.desktopAccounts
 }
@@ -87,6 +93,7 @@ interface AccountStoreState {
   importProgress: ImportProgressPayload | null
   importResultDialog: ImportResultDialogState
   exportResultDialog: ExportResultDialogState
+  deleteResultDialog: DeleteResultDialogState
   lastActionMessage: string
   errorMessage: string
   init: () => Promise<void>
@@ -101,6 +108,7 @@ interface AccountStoreState {
   importDroppedPaths: (paths: string[]) => Promise<void>
   closeImportResultDialog: () => void
   closeExportResultDialog: () => void
+  closeDeleteResultDialog: () => void
   exportSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
   deleteAll: () => Promise<void>
@@ -158,6 +166,11 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     open: false,
     exportedCount: 0,
     targetDirectory: ''
+  },
+  deleteResultDialog: {
+    open: false,
+    deletedCount: 0,
+    mode: 'selected'
   },
   lastActionMessage: '',
   errorMessage: '',
@@ -281,6 +294,14 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       }
     }))
   },
+  closeDeleteResultDialog: () => {
+    set((state) => ({
+      deleteResultDialog: {
+        ...state.deleteResultDialog,
+        open: false
+      }
+    }))
+  },
   exportSelected: async () => {
     await runBusyAction(set, async () => {
       const ids = get().selectedIds
@@ -313,14 +334,31 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
 
       await getDesktopAccountsApi()?.deleteByIds(ids)
       await syncAccounts(set, get)
-      set({ selectedIds: [], lastActionMessage: `已删除 ${ids.length} 个账号。` })
+      set({
+        selectedIds: [],
+        deleteResultDialog: {
+          open: true,
+          deletedCount: ids.length,
+          mode: 'selected'
+        },
+        lastActionMessage: `已删除 ${ids.length} 个账号。`
+      })
     })
   },
   deleteAll: async () => {
     await runBusyAction(set, async () => {
+      const deletedCount = get().accounts.length
       await getDesktopAccountsApi()?.deleteAll()
       await syncAccounts(set, get)
-      set({ selectedIds: [], lastActionMessage: '账号数据已全部清空。' })
+      set({
+        selectedIds: [],
+        deleteResultDialog: {
+          open: true,
+          deletedCount,
+          mode: 'all'
+        },
+        lastActionMessage: '账号数据已全部清空。'
+      })
     })
   },
   startSelectedCheck: async () => {

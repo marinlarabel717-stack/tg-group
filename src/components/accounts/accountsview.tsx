@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react'
-import { CheckCircle2, Download, Loader2, MonitorCog, ShieldCheck, Sparkles, Upload, X } from 'lucide-react'
+import { CheckCircle2, Download, Loader2, MonitorCog, ShieldCheck, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { AccountTable } from './accounttable'
 import { useAccountStore } from '../../stores/accountstore'
@@ -62,20 +62,23 @@ export function AccountsView() {
   const importProgress = useAccountStore((state) => state.importProgress)
   const importResultDialog = useAccountStore((state) => state.importResultDialog)
   const exportResultDialog = useAccountStore((state) => state.exportResultDialog)
+  const deleteResultDialog = useAccountStore((state) => state.deleteResultDialog)
   const closeImportResultDialog = useAccountStore((state) => state.closeImportResultDialog)
   const closeExportResultDialog = useAccountStore((state) => state.closeExportResultDialog)
+  const closeDeleteResultDialog = useAccountStore((state) => state.closeDeleteResultDialog)
   const lastActionMessage = useAccountStore((state) => state.lastActionMessage)
   const errorMessage = useAccountStore((state) => state.errorMessage)
 
   const showImportProgressDialog = Boolean(importProgress && importProgress.phase !== 'completed')
   const showImportResultDialog = importResultDialog.open
   const showExportResultDialog = exportResultDialog.open
+  const showDeleteResultDialog = deleteResultDialog.open
 
   return (
     <div className="space-y-5 contain-layout">
       <AccountsSummary />
 
-      {!showImportResultDialog && !showExportResultDialog && lastActionMessage ? (
+      {!showImportResultDialog && !showExportResultDialog && !showDeleteResultDialog && lastActionMessage ? (
         <GlassPanel className="bg-card py-0">
           <div className="text-sm font-medium text-white">{lastActionMessage}</div>
           {errorMessage ? <div className="mt-1 text-sm text-amber-300">{errorMessage}</div> : null}
@@ -230,6 +233,52 @@ export function AccountsView() {
                 type="button"
                 onClick={closeExportResultDialog}
                 className="h-11 w-full rounded-[12px] bg-sky-400/12 text-sm font-medium text-sky-300 transition hover:bg-sky-400/16"
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDeleteResultDialog ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4" onClick={closeDeleteResultDialog}>
+          <div className="w-full max-w-[420px] rounded-[20px] border border-rose-400/20 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+              <div className="flex items-center gap-3 text-white">
+                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-rose-400/10 text-rose-300">
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <div className="text-base font-semibold">删除完成</div>
+                  <div className="mt-1 text-xs text-textMuted">
+                    {deleteResultDialog.mode === 'all' ? '当前账号已全部清空' : '已删除所选账号'}
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={closeDeleteResultDialog}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+              <div className="rounded-[16px] bg-rose-400/10 px-4 py-4 text-center">
+                <div className="text-xs tracking-[0.18em] text-rose-200/80">删除结果</div>
+                <div className="mt-2 text-2xl font-semibold text-rose-300">
+                  {deleteResultDialog.mode === 'all' ? '本次已全部删除' : `本次成功删除 ${deleteResultDialog.deletedCount} 个`}
+                </div>
+              </div>
+
+              <div className="rounded-[12px] bg-panel px-4 py-4 text-sm text-white">
+                <div className="text-xs text-textMuted">删除数量</div>
+                <div className="mt-2 text-lg font-semibold">{deleteResultDialog.deletedCount}</div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeDeleteResultDialog}
+                className="h-11 w-full rounded-[12px] bg-rose-400/12 text-sm font-medium text-rose-300 transition hover:bg-rose-400/16"
               >
                 知道了
               </button>
