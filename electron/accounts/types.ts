@@ -147,6 +147,14 @@ export interface StatusUpdateResult {
   accounts: AccountRecord[]
 }
 
+export interface PremiumExpiryReadResult {
+  ok: boolean
+  premiumExpiry: string | null
+  message: string
+  rawText?: string | null
+  screenshotPath?: string | null
+}
+
 export interface CheckLogEntry {
   id: string
   accountId: number | null

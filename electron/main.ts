@@ -20,6 +20,7 @@ import { createAccountsDatabase } from './accounts/services/database'
 import { FileScanner } from './accounts/services/file-scanner'
 import { JsonTemplateService } from './accounts/services/json-template-service'
 import { TelegramWebService } from './accounts/telegram-web-service'
+import { TelegramDesktopPremiumService } from './accounts/telegram-desktop-premium-service'
 import { AppSettingsStore } from './app-settings-store'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -142,6 +143,7 @@ async function bootstrap() {
   const clientManager = new TelegramClientManager()
   const telegramWebPreloadPath = path.resolve(__dirname, '../electron/accounts/telegram-web-preload.cjs')
   const telegramWebService = new TelegramWebService(sessionLoader, clientManager, telegramWebPreloadPath)
+  const telegramDesktopPremiumService = new TelegramDesktopPremiumService(accountsRootPath)
   const spamBotChecker = new SpamBotChecker()
   const statusResolver = new StatusResolver()
   const updateService = new AccountUpdateService(accountsRootPath)
@@ -175,7 +177,9 @@ async function bootstrap() {
     accountStatusService: statusService,
     checkQueue,
     appSettingsStore,
-    telegramWebService
+    telegramWebService,
+    telegramDesktopPremiumService,
+    emitAccountsUpdated
   })
   createWindow()
 

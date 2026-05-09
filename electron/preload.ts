@@ -44,7 +44,8 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
   },
   exportByIds: (ids: number[]) => ipcRenderer.invoke('accounts:export', ids),
   revealPath: (targetPath: string) => ipcRenderer.invoke('accounts:reveal-path', targetPath),
-  openTelegramWeb: (accountId: number) => ipcRenderer.invoke('accounts:open-telegram-web', accountId)
+  openTelegramWeb: (accountId: number) => ipcRenderer.invoke('accounts:open-telegram-web', accountId),
+  readPremiumExpiryFromDesktop: (accountId: number) => ipcRenderer.invoke('accounts:read-premium-expiry-from-desktop', accountId)
 })
 
 contextBridge.exposeInMainWorld('desktopSettings', {

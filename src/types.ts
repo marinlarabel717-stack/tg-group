@@ -145,6 +145,14 @@ export interface ExportAccountsResult {
   targetDirectory: string
 }
 
+export interface PremiumExpiryReadResult {
+  ok: boolean
+  premiumExpiry: string | null
+  message: string
+  rawText?: string | null
+  screenshotPath?: string | null
+}
+
 export interface CheckLogEntry {
   id: string
   accountId: number | null
@@ -203,6 +211,7 @@ export interface DesktopAccountsApi {
   exportByIds: (ids: number[]) => Promise<ExportAccountsResult>
   revealPath: (targetPath: string) => Promise<boolean>
   openTelegramWeb: (accountId: number) => Promise<boolean>
+  readPremiumExpiryFromDesktop: (accountId: number) => Promise<PremiumExpiryReadResult>
 }
 
 export interface DesktopAppSettings {

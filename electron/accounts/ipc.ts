@@ -8,6 +8,7 @@ import type { AccountStatusService } from './services/account-status-service'
 import type { CheckQueue } from './check-engine/check-queue'
 import type { AppSettingsStore } from '../app-settings-store'
 import type { TelegramWebService } from './telegram-web-service'
+import type { TelegramDesktopPremiumService } from './telegram-desktop-premium-service'
 
 interface RegisterAccountIpcOptions {
   getMainWindow: () => BrowserWindow | null
@@ -17,10 +18,12 @@ interface RegisterAccountIpcOptions {
   checkQueue: CheckQueue
   appSettingsStore: AppSettingsStore
   telegramWebService: TelegramWebService
+  telegramDesktopPremiumService: TelegramDesktopPremiumService
+  emitAccountsUpdated: (accounts: ReturnType<AccountRepository['list']>) => void
 }
 
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
-  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, telegramWebService } = options
+  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, telegramWebService, telegramDesktopPremiumService, emitAccountsUpdated } = options
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
     const mainWindow = getMainWindow()
@@ -158,5 +161,42 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     const account = accountRepository.getByIds([accountId])[0]
     if (!account) return false
     return telegramWebService.openAccountWeb(account)
+  })
+
+  ipcMain.handle('accounts:read-premium-expiry-from-desktop', async (_event, accountId: number) => {
+    const account = accountRepository.getByIds([accountId])[0]
+    if (!account) {
+      return {
+        ok: false,
+        premiumExpiry: null,
+        message: '账号不存在',
+        rawText: null,
+        screenshotPath: null
+      }
+    }
+
+    const result = await telegramDesktopPremiumService.readPremiumExpiry(account)
+
+    if (result.ok && result.premiumExpiry) {
+      const accounts = accountRepository.applyCheckResults([{
+        id: account.id,
+        status: account.status,
+        phone: account.phone,
+        username: account.username,
+        userId: account.userId,
+        country: account.country,
+        lastCheckTime: account.lastCheckTime,
+        lastOnlineTime: account.lastOnlineTime,
+        profile: {
+          ...account.profile,
+          premium_expiry: result.premiumExpiry,
+          premium_expiry_source: 'telegram-desktop-ui',
+          premium_expiry_synced_at: new Date().toISOString()
+        }
+      }])
+      emitAccountsUpdated(accounts)
+    }
+
+    return result
   })
 }

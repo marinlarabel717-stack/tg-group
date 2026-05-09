@@ -317,9 +317,34 @@ const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }
 
 const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose }: { account: AccountRecord; onClose: () => void }) {
   const nickname = readNickname(account)
-  const premiumExpiryRaw = readPremiumExpiry(account)
+  const [desktopReading, setDesktopReading] = useState(false)
+  const [desktopMessage, setDesktopMessage] = useState('')
+  const [desktopExpiry, setDesktopExpiry] = useState<string | null>(null)
+  const [desktopScreenshotPath, setDesktopScreenshotPath] = useState<string | null>(null)
+  const premiumExpiryRaw = desktopExpiry ?? readPremiumExpiry(account)
   const premiumExpiry = formatDateTimeFull(premiumExpiryRaw)
-  const premiumExpiryDisplay = premiumExpiry !== '—' ? premiumExpiry : 'Telegram 当前接口未返回到期时间'
+  const premiumExpiryDisplay = premiumExpiry !== '—' ? premiumExpiry : '暂未读取到会员到期时间'
+
+  const handleReadFromDesktop = useCallback(async () => {
+    if (desktopReading) return
+    setDesktopReading(true)
+    setDesktopMessage('')
+    try {
+      const result = await window.desktopAccounts?.readPremiumExpiryFromDesktop(account.id)
+      if (!result) {
+        setDesktopMessage('读取失败：桌面账号 API 未返回结果')
+        return
+      }
+
+      if (result.premiumExpiry) {
+        setDesktopExpiry(result.premiumExpiry)
+      }
+      setDesktopScreenshotPath(result.screenshotPath ?? null)
+      setDesktopMessage(result.message)
+    } finally {
+      setDesktopReading(false)
+    }
+  }, [account.id, desktopReading])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={onClose}>
@@ -327,7 +352,7 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
         <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <div className="text-sm font-semibold text-fuchsia-300">会员详情</div>
-            <div className="mt-1 text-xs text-textMuted">点击紫色星星可查看该账号的会员到期时间</div>
+            <div className="mt-1 text-xs text-textMuted">可尝试调用官方 Telegram Desktop 的 Premium 页面读取时间</div>
           </div>
           <button type="button" className="rounded-[8px] px-2 py-1 text-sm text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}>关闭</button>
         </div>
@@ -352,7 +377,25 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
           <div className="rounded-[12px] bg-panel px-4 py-3">
             <div className="text-xs text-textMuted">到期时间</div>
             <div className="mt-1 font-medium text-white">{premiumExpiryDisplay}</div>
-            {premiumExpiry === '—' ? <div className="mt-2 text-xs text-textMuted">当前只能判断该账号是否为高级会员，官方接口没有返回具体到期时间。</div> : null}
+            {premiumExpiry === '—' ? <div className="mt-2 text-xs text-textMuted">当前资料同步链路还没拿到时间，可以点下面按钮改走官方 Telegram Desktop 页面识别。</div> : null}
+          </div>
+
+          <div className="rounded-[12px] bg-panel px-4 py-3">
+            <div className="text-xs text-textMuted">官方客户端读取</div>
+            <div className="mt-1 text-xs text-textMuted">会打开当前系统默认的 Telegram Desktop Premium 页面，并尝试识别当前活动账号的到期时间。</div>
+            <button
+              type="button"
+              onClick={() => void handleReadFromDesktop()}
+              disabled={desktopReading}
+              className={`mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-[10px] border text-sm font-medium transition ${desktopReading
+                ? 'cursor-wait border-fuchsia-400/15 bg-fuchsia-500/10 text-fuchsia-200'
+                : 'border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300 hover:brightness-110'}`}
+            >
+              {desktopReading ? <Loader2 size={14} className="animate-spin" /> : null}
+              <span>{desktopReading ? '读取中…' : '从官方 Telegram Desktop 读取'}</span>
+            </button>
+            {desktopMessage ? <div className="mt-3 text-xs text-textMuted">{desktopMessage}</div> : null}
+            {desktopScreenshotPath ? <div className="mt-2 break-all text-[11px] text-textMuted">识别截图：{desktopScreenshotPath}</div> : null}
           </div>
         </div>
       </div>
