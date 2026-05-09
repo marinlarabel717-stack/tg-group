@@ -7,7 +7,8 @@ export const moduleLabelMap = {
   automation: '自动化',
   'proxy-pool': '代理池',
   'session-manager': '会话管理',
-  logs: '日志中心'
+  logs: '日志中心',
+  settings: '设置'
 } as const
 
 export const accountStatusLabelMap: Record<AccountStatus, string> = {

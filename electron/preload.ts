@@ -45,3 +45,8 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
   exportByIds: (ids: number[]) => ipcRenderer.invoke('accounts:export', ids),
   revealPath: (targetPath: string) => ipcRenderer.invoke('accounts:reveal-path', targetPath)
 })
+
+contextBridge.exposeInMainWorld('desktopSettings', {
+  get: () => ipcRenderer.invoke('app-settings:get'),
+  update: (patch: { checkConcurrency?: number }) => ipcRenderer.invoke('app-settings:update', patch)
+})

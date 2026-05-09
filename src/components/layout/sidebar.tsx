@@ -1,4 +1,4 @@
-import { Bot, Boxes, ChartColumnBig, ChevronLeft, ChevronRight, FileClock, Network, Users } from 'lucide-react'
+import { Bot, Boxes, ChartColumnBig, ChevronLeft, ChevronRight, FileClock, Network, Settings2, Users } from 'lucide-react'
 import { memo } from 'react'
 import type { ModuleKey } from '../../types'
 import { moduleLabelMap } from '../../lib/ui-text'
@@ -11,7 +11,8 @@ const items: { key: ModuleKey; label: string; icon: typeof ChartColumnBig }[] = 
   { key: 'automation', label: moduleLabelMap.automation, icon: Bot },
   { key: 'proxy-pool', label: moduleLabelMap['proxy-pool'], icon: Network },
   { key: 'session-manager', label: moduleLabelMap['session-manager'], icon: Boxes },
-  { key: 'logs', label: moduleLabelMap.logs, icon: FileClock }
+  { key: 'logs', label: moduleLabelMap.logs, icon: FileClock },
+  { key: 'settings', label: moduleLabelMap.settings, icon: Settings2 }
 ]
 
 const SidebarBrand = memo(function SidebarBrand({ collapsed }: { collapsed: boolean }) {

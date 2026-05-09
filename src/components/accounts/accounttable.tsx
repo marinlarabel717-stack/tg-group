@@ -56,6 +56,34 @@ function cellTextClass(extra = '') {
   return `block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${extra}`.trim()
 }
 
+async function copyText(value: string) {
+  if (!value) return false
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+      return true
+    }
+  } catch {
+    // ignore and fallback below
+  }
+
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = value
+    textarea.setAttribute('readonly', 'true')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const copied = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return copied
+  } catch {
+    return false
+  }
+}
+
 function CountryCell({ country, phone }: { country: string; phone: string }) {
   const meta = resolveCountryMeta(phone, country)
   const value = formatCountryDisplay(country, phone)
@@ -259,6 +287,7 @@ export const AccountTable = memo(function AccountTable() {
   const [tableLoading, setTableLoading] = useState(true)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [frozenDialogAccount, setFrozenDialogAccount] = useState<AccountRecord | null>(null)
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null)
   const deferredSearch = useDeferredValue(search)
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const scrollbarRef = useRef<HTMLDivElement | null>(null)
@@ -292,6 +321,21 @@ export const AccountTable = memo(function AccountTable() {
       scrollbarRef.current.scrollLeft = scrollLeft
     }
   }, [scrollLeft])
+
+  useEffect(() => {
+    if (!copiedPhone) return
+    const timer = window.setTimeout(() => setCopiedPhone(null), 1200)
+    return () => window.clearTimeout(timer)
+  }, [copiedPhone])
+
+  const handlePhoneCopy = useCallback(async (phone: string) => {
+    const normalizedPhone = phone.trim()
+    if (!normalizedPhone) return
+    const copied = await copyText(normalizedPhone)
+    if (copied) {
+      setCopiedPhone(normalizedPhone)
+    }
+  }, [])
 
   const rowSelection = useMemo<RowSelectionState>(() => Object.fromEntries(selectedIds.map((id) => [String(id), true])), [selectedIds])
 
@@ -334,7 +378,17 @@ export const AccountTable = memo(function AccountTable() {
         size: 176,
         cell: ({ row }) => {
           const value = row.original.phone || '—'
-          return <div className={cellTextClass()} title={value}>{value}</div>
+          const copied = copiedPhone === value
+          return (
+            <button
+              type="button"
+              title={copied ? '已复制' : '点击复制手机号'}
+              onClick={() => void handlePhoneCopy(value)}
+              className={cellTextClass(`cursor-copy text-left transition ${copied ? 'text-sky-300' : 'hover:text-sky-300'}`)}
+            >
+              {value}
+            </button>
+          )
         }
       },
       {

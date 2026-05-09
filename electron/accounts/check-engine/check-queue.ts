@@ -91,6 +91,27 @@ export class CheckQueue extends EventEmitter {
     }
   }
 
+  updateOptions(options: CheckQueueOptions) {
+    if (options.concurrency !== undefined) {
+      this.options.concurrency = Math.min(20, Math.max(1, Math.trunc(options.concurrency)))
+      this.state.concurrency = this.options.concurrency
+    }
+
+    if (options.timeoutMs !== undefined) {
+      this.options.timeoutMs = Math.max(5000, Math.trunc(options.timeoutMs))
+      this.state.timeoutMs = this.options.timeoutMs
+    }
+
+    if (options.retryLimit !== undefined) {
+      this.options.retryLimit = Math.max(0, Math.trunc(options.retryLimit))
+      this.state.retryLimit = this.options.retryLimit
+    }
+
+    void this.drain()
+    this.bump()
+    return this.getState()
+  }
+
   clearLogs() {
     this.state.logs = []
     this.state.resultSummary = {

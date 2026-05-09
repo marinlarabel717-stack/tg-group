@@ -6,6 +6,7 @@ import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
 import type { AccountStatusService } from './services/account-status-service'
 import type { CheckQueue } from './check-engine/check-queue'
+import type { AppSettingsStore } from '../app-settings-store'
 
 interface RegisterAccountIpcOptions {
   getMainWindow: () => BrowserWindow | null
@@ -13,10 +14,11 @@ interface RegisterAccountIpcOptions {
   accountImportService: AccountImportService
   accountStatusService: AccountStatusService
   checkQueue: CheckQueue
+  appSettingsStore: AppSettingsStore
 }
 
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
-  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue } = options
+  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore } = options
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
     const mainWindow = getMainWindow()
@@ -42,6 +44,13 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     return accountRepository.list()
   })
   ipcMain.handle('accounts:get-check-state', () => checkQueue.getState())
+  ipcMain.handle('app-settings:get', () => appSettingsStore.get())
+  ipcMain.handle('app-settings:update', (_event, patch: { checkConcurrency?: number }) => {
+    const next = appSettingsStore.update(patch)
+    checkQueue.updateOptions({ concurrency: next.checkConcurrency })
+    emitCheckState()
+    return next
+  })
   ipcMain.handle('accounts:clear-check-logs', () => {
     checkQueue.clearLogs()
     return checkQueue.getState()

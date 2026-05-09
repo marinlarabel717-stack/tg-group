@@ -10,6 +10,7 @@ const AutomationModule = lazy(() => import('./automation-module'))
 const ProxyPoolModule = lazy(() => import('./proxy-pool-module'))
 const SessionManagerModule = lazy(() => import('./session-manager-module'))
 const LogsModule = lazy(() => import('./logs-module'))
+const SettingsModule = lazy(() => import('./settings-module'))
 
 const moduleMap: Record<ModuleKey, LazyExoticComponent<ComponentType>> = {
   dashboard: DashboardModule,
@@ -17,7 +18,8 @@ const moduleMap: Record<ModuleKey, LazyExoticComponent<ComponentType>> = {
   automation: AutomationModule,
   'proxy-pool': ProxyPoolModule,
   'session-manager': SessionManagerModule,
-  logs: LogsModule
+  logs: LogsModule,
+  settings: SettingsModule
 }
 
 export const ModuleViewport = memo(function ModuleViewport() {

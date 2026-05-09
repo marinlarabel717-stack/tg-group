@@ -5,6 +5,7 @@ export type ModuleKey =
   | 'proxy-pool'
   | 'session-manager'
   | 'logs'
+  | 'settings'
 
 export type AccountStatus =
   | 'alive'
@@ -197,6 +198,15 @@ export interface DesktopAccountsApi {
   revealPath: (targetPath: string) => Promise<boolean>
 }
 
+export interface DesktopAppSettings {
+  checkConcurrency: number
+}
+
+export interface DesktopSettingsApi {
+  get: () => Promise<DesktopAppSettings>
+  update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
+}
+
 export interface DesktopWindowApi {
   minimize: () => Promise<void>
   toggleMaximize: () => Promise<boolean>
@@ -207,6 +217,7 @@ export interface DesktopWindowApi {
 declare global {
   interface Window {
     desktopAccounts?: DesktopAccountsApi
+    desktopSettings?: DesktopSettingsApi
     desktopWindow?: DesktopWindowApi
     desktopInfo?: {
       appName: string

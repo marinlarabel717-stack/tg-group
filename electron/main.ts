@@ -19,6 +19,7 @@ import { AccountStatusService } from './accounts/services/account-status-service
 import { createAccountsDatabase } from './accounts/services/database'
 import { FileScanner } from './accounts/services/file-scanner'
 import { JsonTemplateService } from './accounts/services/json-template-service'
+import { AppSettingsStore } from './app-settings-store'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -125,7 +126,10 @@ async function bootstrap() {
   const accountsRootPath = path.join(app.getPath('userData'), 'accounts')
   const databasePath = path.join(accountsRootPath, 'accounts.db')
   const managedSessionsDirectory = path.join(accountsRootPath, 'sessions')
+  const settingsPath = path.join(app.getPath('userData'), 'settings.json')
   const database = await createAccountsDatabase(databasePath)
+  const appSettingsStore = new AppSettingsStore(settingsPath)
+  const appSettings = appSettingsStore.get()
   const repository = new AccountRepository(database)
   const scanner = new FileScanner()
   const jsonTemplateService = new JsonTemplateService()
@@ -152,7 +156,7 @@ async function bootstrap() {
     resultWriter
   )
   const checkQueue = new CheckQueue(checkEngine, {
-    concurrency: 3,
+    concurrency: appSettings.checkConcurrency,
     timeoutMs: 25000,
     retryLimit: 2
   })
@@ -166,7 +170,8 @@ async function bootstrap() {
     accountRepository: repository,
     accountImportService: importService,
     accountStatusService: statusService,
-    checkQueue
+    checkQueue,
+    appSettingsStore
   })
   createWindow()
 
