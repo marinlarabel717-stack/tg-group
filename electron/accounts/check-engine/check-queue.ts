@@ -27,6 +27,16 @@ interface CheckQueueOptions {
   retryLimit?: number
 }
 
+function formatFrozenSince(value: unknown) {
+  if (typeof value !== 'string' && typeof value !== 'number') return ''
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
 function createInitialState(options: Required<CheckQueueOptions>): CheckQueueState {
   return {
     running: false,
@@ -260,8 +270,10 @@ export class CheckQueue extends EventEmitter {
 
     const level: CheckLogLevel = displayStatus === 'alive' ? 'success' : displayStatus === 'timeout' ? 'error' : 'warning'
     const reasonSuffix = displayStatus === 'timeout' || displayStatus === 'unknown' ? `（${this.formatFailureReason(result)}）` : ''
+    const frozenSince = displayStatus === 'frozen' ? formatFrozenSince(result.profile?.freeze_since_date) : ''
+    const frozenSinceSuffix = frozenSince ? `（${frozenSince}）` : ''
     const progressPrefix = `${this.state.completedCount}/${this.state.totalCount}`
-    this.appendLog(level, task.accountId, `${progressPrefix} — ${phoneLabel} ---- ${STATUS_LABELS[displayStatus]}${reasonSuffix}`, task.attempt + 1, {
+    this.appendLog(level, task.accountId, `${progressPrefix} — ${phoneLabel} ---- ${STATUS_LABELS[displayStatus]}${frozenSinceSuffix}${reasonSuffix}`, task.attempt + 1, {
       phone: result.phone,
       status: displayStatus
     })
