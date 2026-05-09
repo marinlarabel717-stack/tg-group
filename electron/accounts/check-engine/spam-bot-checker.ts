@@ -40,6 +40,51 @@ interface FrozenStateInfo {
   freezeAppealUrl: string | null
 }
 
+function unwrapTlJsonValue(value: unknown): unknown {
+  if (value === null || value === undefined) return value
+
+  if (Array.isArray(value)) {
+    return value.map((item) => unwrapTlJsonValue(item))
+  }
+
+  if (typeof value !== 'object') return value
+
+  const candidate = value as { className?: unknown; value?: unknown; config?: unknown; key?: unknown }
+  const className = typeof candidate.className === 'string' ? candidate.className : ''
+
+  if (className === 'help.AppConfig' && 'config' in candidate) {
+    return unwrapTlJsonValue(candidate.config)
+  }
+
+  if (className === 'JsonObject' && Array.isArray(candidate.value)) {
+    const output: Record<string, unknown> = {}
+    for (const entry of candidate.value as Array<{ key?: unknown; value?: unknown }>) {
+      if (typeof entry?.key === 'string') {
+        output[entry.key] = unwrapTlJsonValue(entry.value)
+      }
+    }
+    return output
+  }
+
+  if (className === 'JsonArray' && Array.isArray(candidate.value)) {
+    return candidate.value.map((item) => unwrapTlJsonValue(item))
+  }
+
+  if (className === 'JsonString' || className === 'JsonNumber' || className === 'JsonBool') {
+    return candidate.value
+  }
+
+  if (className === 'JsonNull') {
+    return null
+  }
+
+  const output: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    output[key] = unwrapTlJsonValue(item)
+  }
+  return output
+}
+
 function extractPrimitiveTokens(value: unknown, collector: string[] = []) {
   if (value === null || value === undefined) return collector
 
@@ -157,8 +202,9 @@ export class SpamBotChecker {
   async detectFrozenState(client: TelegramClient) {
     try {
       const appConfig = await client.invoke(new Api.help.GetAppConfig({ hash: 0 }))
-      const extracted = extractFrozenStateInfo(appConfig)
-      const haystack = extractPrimitiveTokens(appConfig).join(' ').toLowerCase()
+      const plainConfig = unwrapTlJsonValue(appConfig)
+      const extracted = extractFrozenStateInfo(plainConfig)
+      const haystack = extractPrimitiveTokens(plainConfig).join(' ').toLowerCase()
       return {
         ...extracted,
         frozen: extracted.frozen || /frozen|freeze_state|freeze/.test(haystack)

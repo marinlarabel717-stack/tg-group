@@ -184,7 +184,7 @@ export class CheckQueue extends EventEmitter {
   }
 
   private normalizeDisplayStatus(status: AccountCheckResult['status']) {
-    if (status === 'alive' || status === 'limited' || status === 'temporary_limited' || status === 'frozen' || status === 'banned' || status === 'timeout') {
+    if (status === 'alive' || status === 'limited' || status === 'temporary_limited' || status === 'frozen' || status === 'banned' || status === 'timeout' || status === 'unknown') {
       return status
     }
 
@@ -234,10 +234,12 @@ export class CheckQueue extends EventEmitter {
       this.state.failedCount += 1
     }
     this.state.resultSummary.total += 1
-    this.state.resultSummary[displayStatus] += 1
+    if (displayStatus !== 'unknown') {
+      this.state.resultSummary[displayStatus] += 1
+    }
 
     const level: CheckLogLevel = displayStatus === 'alive' ? 'success' : displayStatus === 'timeout' ? 'error' : 'warning'
-    const reasonSuffix = displayStatus === 'timeout' ? `（${this.formatFailureReason(result)}）` : ''
+    const reasonSuffix = displayStatus === 'timeout' || displayStatus === 'unknown' ? `（${this.formatFailureReason(result)}）` : ''
     this.appendLog(level, task.accountId, `${phoneLabel} ---- ${STATUS_LABELS[displayStatus]}${reasonSuffix}`, task.attempt + 1, {
       phone: result.phone,
       status: displayStatus
