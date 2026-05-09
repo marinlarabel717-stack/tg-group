@@ -141,8 +141,9 @@ export class AccountCheckEngine {
         if (telethonFrozen?.status) {
           probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
         }
-        const updated = this.updateService.buildSuccessProfile({
+        const updated = await this.updateService.buildSuccessProfile({
           account,
+          client,
           liveUser,
           fullUser: null,
           spambotReply: '',
@@ -199,8 +200,9 @@ export class AccountCheckEngine {
         if (telethonFrozen?.status) {
           probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
         }
-        const updated = this.updateService.buildSuccessProfile({
+        const updated = await this.updateService.buildSuccessProfile({
           account,
+          client,
           liveUser,
           fullUser: null,
           spambotReply: '',
@@ -251,8 +253,9 @@ export class AccountCheckEngine {
       if (telethonFrozen?.status) {
         probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
       }
-      const updated = this.updateService.buildSuccessProfile({
+      const updated = await this.updateService.buildSuccessProfile({
         account,
+        client,
         liveUser,
         fullUser,
         spambotReply: spamResult.replyText,

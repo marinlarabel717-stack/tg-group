@@ -33,8 +33,8 @@ import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTi
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '56px 72px 176px 120px 124px 76px 180px 156px 204px'
-const ACCOUNT_GRID_WIDTH = 1164
+const ACCOUNT_GRID_TEMPLATE = '56px 84px 176px 120px 124px 96px 220px 188px 204px'
+const ACCOUNT_GRID_WIDTH = 1268
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -112,15 +112,25 @@ function CountryCell({ country, phone }: { country: string; phone: string }) {
   )
 }
 
+function isCenteredColumn(columnId: string) {
+  return columnId === 'index' || columnId === 'status' || columnId === 'avatar'
+}
+
 function cellShellClass(columnId: string, isHeader = false) {
   if (columnId === 'select') {
     return 'flex h-full w-full items-center justify-center px-0'
   }
 
-  if (columnId === 'index' || columnId === 'status' || columnId === 'avatar') {
-    return isHeader
-      ? 'flex h-full w-full items-center justify-center px-2'
-      : 'flex h-full w-full items-center justify-center px-2'
+  if (isCenteredColumn(columnId)) {
+    return 'flex h-full w-full items-center justify-center px-2'
+  }
+
+  if (columnId === 'nickname') {
+    return 'flex h-full w-full min-w-0 items-center justify-start px-4'
+  }
+
+  if (columnId === 'proxy') {
+    return 'flex h-full w-full min-w-0 items-center justify-start px-4'
   }
 
   if (columnId === 'actions') {
@@ -177,7 +187,7 @@ function AvatarCell({ account }: { account: AccountRecord }) {
   const showImage = Boolean(src) && !failed
 
   return (
-    <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-slate-900/70 ring-1 ring-white/8">
+    <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-slate-900/70 ring-1 ring-white/8 shadow-[0_0_0_1px_rgba(59,130,246,0.08)]">
       {showImage ? (
         <img src={src} alt={readNickname(account)} className="h-full w-full object-cover" onError={() => setFailed(true)} />
       ) : (
@@ -445,7 +455,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'index',
         header: '序号',
-        size: 72,
+        size: 84,
         cell: ({ row, table }) => {
           const pageIndex = table.getState().pagination.pageIndex
           const pageSize = table.getState().pagination.pageSize
@@ -492,14 +502,14 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'avatar',
         header: '头像',
-        size: 76,
+        size: 96,
         enableSorting: false,
         cell: ({ row }) => <AvatarCell account={row.original} />
       },
       {
         id: 'nickname',
         header: '昵称',
-        size: 180,
+        size: 220,
         cell: ({ row }) => {
           const value = readNickname(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -508,7 +518,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'proxy',
         header: '代理',
-        size: 156,
+        size: 188,
         cell: ({ row }) => {
           const value = readProxy(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -705,8 +715,8 @@ export const AccountTable = memo(function AccountTable() {
                         >
                           {header.isPlaceholder ? null : header.column.getCanSort() ? (
                             <button
-                              className={header.column.id === 'status'
-                                ? 'flex min-w-0 items-center justify-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-left transition hover:text-white'
+                              className={isCenteredColumn(header.column.id)
+                                ? 'flex min-w-0 items-center justify-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-center transition hover:text-white'
                                 : 'flex w-full min-w-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-left transition hover:text-white'}
                               onClick={header.column.getToggleSortingHandler()}
                               title={String(header.column.columnDef.header ?? '')}
@@ -717,7 +727,7 @@ export const AccountTable = memo(function AccountTable() {
                               <ArrowUpDown size={14} className="shrink-0" />
                             </button>
                           ) : (
-                            <div className="w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                            <div className={`${isCenteredColumn(header.column.id) ? 'w-full text-center' : 'w-full'} min-w-0 overflow-hidden text-ellipsis whitespace-nowrap`}>
                               {flexRender(header.column.columnDef.header, header.getContext())}
                             </div>
                           )}

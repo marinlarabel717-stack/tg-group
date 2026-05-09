@@ -144,7 +144,7 @@ async function bootstrap() {
   const telegramWebService = new TelegramWebService(sessionLoader, clientManager, telegramWebPreloadPath)
   const spamBotChecker = new SpamBotChecker()
   const statusResolver = new StatusResolver()
-  const updateService = new AccountUpdateService()
+  const updateService = new AccountUpdateService(accountsRootPath)
   const resultWriter = new CheckResultWriter(repository, {
     onWrite: (accounts) => emitAccountsUpdated(accounts)
   })

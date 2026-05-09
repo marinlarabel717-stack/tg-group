@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { inferCountryDisplay, inferPhoneFromText } from '../../../src/lib/phone-country'
 import type { AccountJsonProfile, AccountRecord, AccountStatus } from '../types'
@@ -27,13 +28,16 @@ function buildUsername(rawUsername: string) {
   return rawUsername.startsWith('@') ? rawUsername : `@${rawUsername}`
 }
 
-function buildDisplayName(firstName: string, lastName: string) {
-  return [firstName, lastName].filter(Boolean).join(' ').trim()
-}
-
 export class AccountUpdateService {
-  buildSuccessProfile(args: {
+  private readonly avatarDirectory: string
+
+  constructor(accountsRootPath: string) {
+    this.avatarDirectory = path.join(accountsRootPath, 'avatars')
+  }
+
+  async buildSuccessProfile(args: {
     account: AccountRecord
+    client?: any
     liveUser: unknown
     fullUser: unknown
     spambotReply: string
@@ -54,6 +58,8 @@ export class AccountUpdateService {
     const phone = inferPhoneFromText(pickString(liveUserRecord.phone, args.account.profile.phone, args.account.phone))
     const userId = pickString(liveUserRecord.id, args.account.profile.id, args.account.userId)
     const bio = pickString(fullUserInner.about, args.account.profile.bio)
+    const avatar = await this.resolveAvatarPath(args.client, args.account, args.liveUser, userId)
+
     const profile = {
       ...args.account.profile,
       id: userId || args.account.profile.id || '',
@@ -62,6 +68,7 @@ export class AccountUpdateService {
       first_name: firstName || null,
       last_name: lastName || null,
       bio: bio || null,
+      avatar,
       has_profile_pic: Boolean(liveUserRecord.photo ?? args.account.profile.has_profile_pic),
       is_premium: Boolean(liveUserRecord.premium ?? args.account.profile.is_premium),
       spamblock: args.status === 'alive' ? 'free' : args.status,
@@ -86,6 +93,39 @@ export class AccountUpdateService {
       lastCheckTime: now.toISOString(),
       lastOnlineTime: now.toISOString(),
       profile
+    }
+  }
+
+  private async resolveAvatarPath(
+    client: any,
+    account: AccountRecord,
+    liveUser: unknown,
+    userId: string
+  ) {
+    const liveUserRecord = toPlainObject(liveUser)
+    if (!liveUserRecord.photo) {
+      return null
+    }
+
+    if (!client?.downloadProfilePhoto) {
+      return typeof account.profile.avatar === 'string' ? account.profile.avatar : null
+    }
+
+    try {
+      await fs.mkdir(this.avatarDirectory, { recursive: true })
+      const filePath = path.join(this.avatarDirectory, `${account.id}-${userId || 'unknown'}.jpg`)
+      const downloaded = await client.downloadProfilePhoto(liveUser, {
+        isBig: false,
+        outputFile: filePath
+      })
+
+      if (typeof downloaded === 'string' && downloaded.trim()) {
+        return downloaded
+      }
+
+      return filePath
+    } catch {
+      return typeof account.profile.avatar === 'string' ? account.profile.avatar : null
     }
   }
 
