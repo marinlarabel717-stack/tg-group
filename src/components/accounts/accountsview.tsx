@@ -100,15 +100,15 @@ export function AccountsView() {
             </div>
 
             <div className="space-y-4 px-5 py-5">
-              <div className="flex items-center justify-between rounded-[14px] bg-white px-4 py-3 text-sm shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                <div className="flex items-center gap-2 text-slate-900">
+              <div className="flex items-center justify-between rounded-[14px] bg-panel px-4 py-3 text-sm">
+                <div className="flex items-center gap-2 text-white">
                   <Loader2 size={16} className="animate-spin text-neonSoft" />
                   <span>{importProgress.message}</span>
                 </div>
                 <div className="font-medium text-neonSoft">{importProgress.current} / {importProgress.total}</div>
               </div>
 
-              <div className="h-2 overflow-hidden rounded-full bg-white/80">
+              <div className="h-2 overflow-hidden rounded-full bg-panel">
                 <div
                   className="h-full rounded-full bg-neonSoft transition-all duration-300"
                   style={{ width: `${importProgress.total > 0 ? Math.min((importProgress.current / importProgress.total) * 100, 100) : 0}%` }}
@@ -116,17 +116,17 @@ export function AccountsView() {
               </div>
 
               <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                  <div className="text-xs text-slate-500">已导入</div>
-                  <div className="mt-1 font-semibold text-slate-900">{importProgress.importedCount}</div>
+                <div className="rounded-[12px] bg-panel px-3 py-3">
+                  <div className="text-xs text-textMuted">已导入</div>
+                  <div className="mt-1 font-semibold text-white">{importProgress.importedCount}</div>
                 </div>
-                <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                  <div className="text-xs text-slate-500">补 JSON</div>
-                  <div className="mt-1 font-semibold text-slate-900">{importProgress.generatedJsonCount}</div>
+                <div className="rounded-[12px] bg-panel px-3 py-3">
+                  <div className="text-xs text-textMuted">补 JSON</div>
+                  <div className="mt-1 font-semibold text-white">{importProgress.generatedJsonCount}</div>
                 </div>
-                <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                  <div className="text-xs text-slate-500">跳过</div>
-                  <div className="mt-1 font-semibold text-slate-900">{importProgress.skippedCount}</div>
+                <div className="rounded-[12px] bg-panel px-3 py-3">
+                  <div className="text-xs text-textMuted">跳过</div>
+                  <div className="mt-1 font-semibold text-white">{importProgress.skippedCount}</div>
                 </div>
               </div>
             </div>
