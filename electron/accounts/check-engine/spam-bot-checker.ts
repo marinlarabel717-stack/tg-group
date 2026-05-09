@@ -205,6 +205,25 @@ function normalizeTimestamp(value: unknown) {
   return null
 }
 
+function safeInt(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value)
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return 0
+    const parsed = Number(trimmed)
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : 0
+  }
+
+  if (typeof value === 'bigint') {
+    return Number(value)
+  }
+
+  return 0
+}
+
 function findFreezeField(value: unknown, fieldNames: string[], visited = new Set<object>()): unknown {
   if (value === null || value === undefined) return undefined
 
@@ -246,6 +265,34 @@ function extractFreezeMetadata(value: unknown) {
     freezeSince: normalizeTimestamp(freezeSinceRaw),
     freezeUntil: normalizeTimestamp(freezeUntilRaw),
     freezeAppealUrl: typeof freezeAppealRaw === 'string' && freezeAppealRaw.trim() ? freezeAppealRaw.trim() : null
+  }
+}
+
+function fetchFreezeMetadataFromConfig(value: unknown) {
+  const configMap = unwrapTlJsonValue(value)
+  if (!configMap || typeof configMap !== 'object' || Array.isArray(configMap)) {
+    return {
+      freezeSince: null,
+      freezeUntil: null,
+      freezeAppealUrl: null,
+      hasFreezeDate: false,
+      plainConfig: configMap
+    }
+  }
+
+  const map = configMap as Record<string, unknown>
+  const freezeSinceDate = safeInt(map.freeze_since_date)
+  const freezeUntilDate = safeInt(map.freeze_until_date)
+  const freezeAppealUrl = typeof map.freeze_appeal_url === 'string' && map.freeze_appeal_url.trim()
+    ? map.freeze_appeal_url.trim()
+    : null
+
+  return {
+    freezeSince: normalizeTimestamp(freezeSinceDate),
+    freezeUntil: normalizeTimestamp(freezeUntilDate),
+    freezeAppealUrl,
+    hasFreezeDate: freezeSinceDate > 0 || freezeUntilDate > 0,
+    plainConfig: configMap
   }
 }
 
@@ -342,15 +389,19 @@ export class SpamBotChecker {
   async detectFrozenState(client: TelegramClient) {
     try {
       const appConfig = await client.invoke(new Api.help.GetAppConfig({ hash: 0 }))
-      const plainConfig = unwrapTlJsonValue(appConfig)
+      const metadata = fetchFreezeMetadataFromConfig(appConfig)
+      const plainConfig = metadata.plainConfig
       const extracted = extractFrozenStateInfo(plainConfig)
       const haystack = extractPrimitiveTokens(plainConfig).join(' ').toLowerCase()
       const highConfidenceFrozen = hasHighConfidenceFreezeSignal(plainConfig)
       return {
         ...extracted,
-        frozen: highConfidenceFrozen || extracted.frozen || /frozen|freeze_state|freeze/.test(haystack),
+        freezeSince: metadata.freezeSince ?? extracted.freezeSince,
+        freezeUntil: metadata.freezeUntil ?? extracted.freezeUntil,
+        freezeAppealUrl: metadata.freezeAppealUrl ?? extracted.freezeAppealUrl,
+        frozen: metadata.hasFreezeDate || highConfidenceFrozen || extracted.frozen || /frozen|freeze_state|freeze/.test(haystack),
         errorMessage: null,
-        reason: highConfidenceFrozen ? 'FREEZE_STATE_IN_APP_CONFIG' : null,
+        reason: metadata.hasFreezeDate ? 'FREEZE_STATE_IN_APP_CONFIG' : highConfidenceFrozen ? 'FREEZE_STATE_IN_APP_CONFIG' : null,
         appConfigSummary: buildAppConfigSummary(plainConfig)
       }
     } catch (error) {
