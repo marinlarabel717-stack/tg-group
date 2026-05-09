@@ -187,6 +187,7 @@ function normalizeTimestamp(value: unknown) {
   if (value === null || value === undefined || value === '') return null
 
   if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0) return null
     const timestamp = value > 10_000_000_000 ? value : value * 1000
     const date = new Date(timestamp)
     return Number.isNaN(date.getTime()) ? null : date.toISOString()
