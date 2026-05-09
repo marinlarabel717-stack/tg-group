@@ -1,9 +1,8 @@
 import { BrowserWindow, dialog } from 'electron'
-import { Api, TelegramClient } from 'telegram'
-import { StringSession } from 'telegram/sessions'
 import type { AccountRecord } from './types'
 import { SessionLoader } from './check-engine/session-loader'
 import { TelegramClientManager } from './check-engine/telegram-client-manager'
+import { getSessionsModule, getTelegramModule } from './check-engine/gramjs-runtime'
 
 interface TelegramWebAccountState {
   userId: string
@@ -148,6 +147,9 @@ export class TelegramWebService {
         throw new Error('missing user id')
       }
 
+      const { Api, TelegramClient } = getTelegramModule()
+      const { StringSession } = getSessionsModule()
+
       const dcOption = await this.resolveDcOption(sourceClient, TELEGRAM_WEB_BASE_DC_ID)
       const exported = await sourceClient.invoke(new Api.auth.ExportAuthorization({
         dcId: TELEGRAM_WEB_BASE_DC_ID
@@ -193,9 +195,10 @@ export class TelegramWebService {
     }
   }
 
-  private async resolveDcOption(client: TelegramClient, dcId: number) {
+  private async resolveDcOption(client: any, dcId: number) {
+    const { Api } = getTelegramModule()
     const config = await client.invoke(new Api.help.GetConfig())
-    const dcOption = config.dcOptions.find((option) => (
+    const dcOption = config.dcOptions.find((option: any) => (
       option.id === dcId &&
       !option.ipv6 &&
       !option.mediaOnly &&

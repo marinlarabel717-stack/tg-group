@@ -1,7 +1,7 @@
 import os from 'node:os'
 import type { TelegramClient } from 'telegram'
 import type { Session } from 'telegram/sessions'
-import { getTelegramModule } from './gramjs-runtime'
+import { getSessionsModule, getTelegramModule } from './gramjs-runtime'
 
 interface ClientConfig {
   apiId: number
@@ -30,8 +30,15 @@ export class TelegramClientManager {
     const config: ClientConfig = { ...DEFAULT_CLIENT_CONFIG }
 
     const { TelegramClient } = getTelegramModule()
+    const { StringSession } = getSessionsModule()
 
-    return new TelegramClient(session, config.apiId, config.apiHash, {
+    let normalizedSession: Session = session
+    const sessionWithSave = session as any
+    if (sessionWithSave && typeof sessionWithSave.save === 'function') {
+      normalizedSession = new StringSession(sessionWithSave.save())
+    }
+
+    return new TelegramClient(normalizedSession, config.apiId, config.apiHash, {
       connectionRetries: 1,
       reconnectRetries: 0,
       requestRetries: 1,
