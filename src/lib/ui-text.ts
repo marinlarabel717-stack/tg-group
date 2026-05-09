@@ -38,7 +38,15 @@ export function isGeoRestrictedError(errorMessage?: string | null) {
   return GEO_RESTRICTED_MARKERS.some((marker) => value.includes(marker.toLowerCase()))
 }
 
-export function resolveAccountStatusLabel(status: AccountStatus, errorMessage?: string | null) {
+export function resolveAccountStatusLabel(
+  status: AccountStatus,
+  errorMessage?: string | null,
+  checkMode?: 'account-status' | 'account-survival' | null
+) {
+  if (status === 'alive' && checkMode === 'account-survival') {
+    return '存活'
+  }
+
   if (status === 'unknown' && isGeoRestrictedError(errorMessage)) {
     return '地理位置限制'
   }
@@ -51,8 +59,12 @@ export const profileSourceLabelMap: Record<ProfileSource, string> = {
   login_check: '登录检查'
 }
 
-export function formatAccountStatus(status: AccountStatus, errorMessage?: string | null) {
-  return resolveAccountStatusLabel(status, errorMessage)
+export function formatAccountStatus(
+  status: AccountStatus,
+  errorMessage?: string | null,
+  checkMode?: 'account-status' | 'account-survival' | null
+) {
+  return resolveAccountStatusLabel(status, errorMessage, checkMode)
 }
 
 export function formatProfileSource(source: ProfileSource) {

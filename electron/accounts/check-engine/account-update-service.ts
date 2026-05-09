@@ -54,6 +54,7 @@ export class AccountUpdateService {
     fullUser: unknown
     spambotReply: string
     status: AccountStatus
+    checkMode?: 'account-status' | 'account-survival'
     freezeSince?: string | null
     freezeUntil?: string | null
     freezeAppealUrl?: string | null
@@ -101,6 +102,7 @@ export class AccountUpdateService {
       session_file: readString(args.account.profile.session_file) || path.basename(args.account.sessionPath, path.extname(args.account.sessionPath)),
       last_connect_date: formatOffsetDate(now),
       last_check_time: toUnixSeconds(now),
+      check_mode: args.checkMode ?? 'account-status',
       check_status: args.status,
       check_error: null,
       check_duration_ms: args.durationMs,
@@ -162,6 +164,7 @@ export class AccountUpdateService {
   buildFailureProfile(args: {
     account: AccountRecord
     status: AccountStatus
+    checkMode?: 'account-status' | 'account-survival'
     errorMessage: string
     durationMs: number
   }) {
@@ -169,6 +172,7 @@ export class AccountUpdateService {
     const profile = {
       ...args.account.profile,
       last_check_time: toUnixSeconds(now),
+      check_mode: args.checkMode ?? 'account-status',
       check_status: args.status,
       check_error: args.errorMessage || null,
       check_duration_ms: args.durationMs,

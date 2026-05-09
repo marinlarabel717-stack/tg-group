@@ -74,6 +74,7 @@ export class CheckQueue extends EventEmitter {
   private readonly active = new Map<number, QueueTask>()
   private readonly state: CheckQueueState
   private logSerial = 0
+  private currentRunMode: 'account-status' | 'account-survival' = 'account-status'
 
   constructor(private readonly engine: AccountCheckEngine, options: CheckQueueOptions = {}) {
     super()
@@ -136,6 +137,7 @@ export class CheckQueue extends EventEmitter {
     let addedCount = 0
 
     if (!this.state.running && this.pending.length === 0 && this.active.size === 0) {
+      this.currentRunMode = mode
       this.state.completedCount = 0
       this.state.failedCount = 0
       this.state.totalCount = 0
@@ -297,7 +299,11 @@ export class CheckQueue extends EventEmitter {
     this.state.resultSummary[displayStatus] += 1
 
     const level: CheckLogLevel = displayStatus === 'alive' ? 'success' : displayStatus === 'timeout' ? 'error' : 'warning'
-    const displayLabel = resolveAccountStatusLabel(displayStatus, result.errorMessage)
+    const displayLabel = resolveAccountStatusLabel(
+      displayStatus,
+      result.errorMessage,
+      task.mode === 'account-survival' ? 'account-survival' : result.profile?.check_mode === 'account-survival' ? 'account-survival' : 'account-status'
+    )
     const reasonSuffix = displayStatus === 'timeout' || displayStatus === 'unknown' ? `（${this.formatFailureReason(result)}）` : ''
     const frozenSince = displayStatus === 'frozen' ? formatFrozenSince(result.profile?.freeze_since_date) : ''
     const frozenSinceSuffix = frozenSince ? `（${frozenSince}）` : ''
@@ -348,7 +354,8 @@ export class CheckQueue extends EventEmitter {
       for (const item of summaryItems) {
         if (item.count <= 0) continue
         const level: CheckLogLevel = item.status === 'alive' ? 'success' : item.status === 'timeout' ? 'error' : 'warning'
-        this.appendLog(level, null, `${STATUS_LABELS[item.status]} ${item.count}`, undefined, { status: item.status })
+        const summaryLabel = resolveAccountStatusLabel(item.status, null, this.currentRunMode)
+        this.appendLog(level, null, `${summaryLabel} ${item.count}`, undefined, { status: item.status })
       }
     }
   }

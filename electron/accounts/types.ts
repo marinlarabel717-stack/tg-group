@@ -57,6 +57,7 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   sex?: string | null
   proxy?: string | null
   account_ttl_days?: number | null
+  check_mode?: 'account-status' | 'account-survival' | null
   ipv6?: boolean
   userId?: string
   country?: string

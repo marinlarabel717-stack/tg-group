@@ -94,7 +94,7 @@ export class AccountCheckEngine {
     if (!authorized) {
       const failedPhone = account.phone || account.profile.phone || `账号#${account.id}`
       logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session 未登录' })
-      return this.persistFailure(account, 'banned', '账号存活检测失败：Session 未登录', Date.now() - startedAt)
+      return this.persistFailure(account, 'banned', '账号存活检测失败：Session 未登录', Date.now() - startedAt, false, 'account-survival')
     }
 
     const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')
@@ -118,12 +118,14 @@ export class AccountCheckEngine {
       fullUser: null,
       spambotReply: '',
       status: 'alive',
+      checkMode: 'account-survival',
       durationMs: Date.now() - startedAt
     })
 
     const profile = {
       ...updated.profile,
-      account_ttl_days: ttlDays
+      account_ttl_days: ttlDays,
+      check_mode: 'account-survival' as const
     }
 
     const payload: CheckResultInput = {
@@ -199,7 +201,7 @@ export class AccountCheckEngine {
         const failedPhone = account.phone || account.profile.phone || `账号#${account.id}`
         logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session 未登录' })
         const durationMs = Date.now() - startedAt
-        return this.persistFailure(account, authorizationStatus, 'Session 未登录', durationMs)
+        return this.persistFailure(account, authorizationStatus, 'Session 未登录', durationMs, false, 'account-status')
       }
 
       const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')
@@ -233,6 +235,7 @@ export class AccountCheckEngine {
           fullUser: null,
           spambotReply: '',
           status: 'frozen',
+          checkMode: 'account-status',
           freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? frozenState.freezeSince,
           freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? frozenState.freezeUntil,
           freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? frozenState.freezeAppealUrl,
@@ -292,6 +295,7 @@ export class AccountCheckEngine {
           fullUser: null,
           spambotReply: '',
           status: 'frozen',
+          checkMode: 'account-status',
           freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? selfProbe.freezeSince,
           freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? selfProbe.freezeUntil,
           freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? selfProbe.freezeAppealUrl,
@@ -345,6 +349,7 @@ export class AccountCheckEngine {
         fullUser,
         spambotReply: spamResult.replyText,
         status: spamResult.status,
+        checkMode: 'account-status',
         freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? spamResult.freezeSince,
         freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? spamResult.freezeUntil,
         freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? spamResult.freezeAppealUrl,
@@ -397,7 +402,7 @@ export class AccountCheckEngine {
       const baseErrorMessage = error instanceof Error ? error.message : String(error)
       const probeSuffix = probes.length > 0 ? ` | ${buildProbeSummary(probes)}` : ''
       const errorMessage = `${baseErrorMessage}${probeSuffix}`
-      return this.persistFailure(account, status, errorMessage, durationMs, this.statusResolver.isRetryable(status, error))
+      return this.persistFailure(account, status, errorMessage, durationMs, this.statusResolver.isRetryable(status, error), mode)
     } finally {
       if (client) {
         await this.clientManager.destroyClient(client)
@@ -405,10 +410,18 @@ export class AccountCheckEngine {
     }
   }
 
-  private persistFailure(account: AccountRecord, status: AccountCheckResult['status'], errorMessage: string, durationMs: number, retryable = false) {
+  private persistFailure(
+    account: AccountRecord,
+    status: AccountCheckResult['status'],
+    errorMessage: string,
+    durationMs: number,
+    retryable = false,
+    mode: 'account-status' | 'account-survival' = 'account-status'
+  ) {
     const updated = this.updateService.buildFailureProfile({
       account,
       status,
+      checkMode: mode,
       errorMessage,
       durationMs
     })

@@ -57,6 +57,7 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   last_check_time?: number | string | null
   proxy?: string | null
   account_ttl_days?: number | null
+  check_mode?: 'account-status' | 'account-survival' | null
   ipv6?: boolean
   check_error?: string | null
   check_status?: AccountStatus

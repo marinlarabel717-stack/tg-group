@@ -53,7 +53,11 @@ export const AccountsTable = memo(function AccountsTable({ accounts }: { account
                     <div className="mt-1 text-xs text-textMuted">{formatRelativePath(account.sessionPath)}</div>
                   </td>
                   <td className="bg-panel px-4 py-4 transition group-hover:bg-hover">
-                    <StatusBadge status={account.status} errorMessage={typeof account.profile?.check_error === 'string' ? account.profile.check_error : null} />
+                    <StatusBadge
+                      status={account.status}
+                      errorMessage={typeof account.profile?.check_error === 'string' ? account.profile.check_error : null}
+                      checkMode={account.profile?.check_mode === 'account-survival' ? 'account-survival' : account.profile?.check_mode === 'account-status' ? 'account-status' : null}
+                    />
                   </td>
                   <td className="bg-panel px-4 py-4 transition group-hover:bg-hover">
                     {account.country || '未识别'}

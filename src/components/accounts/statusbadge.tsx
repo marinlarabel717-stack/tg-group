@@ -17,9 +17,19 @@ const styles: Record<AccountStatus, string> = {
   unknown: 'bg-white/10 text-slate-200'
 }
 
-export const StatusBadge = memo(function StatusBadge({ status, errorMessage, onClick }: { status: AccountStatus; errorMessage?: string | null; onClick?: () => void }) {
+export const StatusBadge = memo(function StatusBadge({
+  status,
+  errorMessage,
+  checkMode,
+  onClick
+}: {
+  status: AccountStatus
+  errorMessage?: string | null
+  checkMode?: 'account-status' | 'account-survival' | null
+  onClick?: () => void
+}) {
   const geoRestricted = status === 'unknown' && isGeoRestrictedError(errorMessage)
-  const label = formatAccountStatus(status, errorMessage)
+  const label = formatAccountStatus(status, errorMessage, checkMode)
 
   return (
     <button

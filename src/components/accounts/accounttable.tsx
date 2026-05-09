@@ -528,6 +528,7 @@ export const AccountTable = memo(function AccountTable() {
           <StatusBadge
             status={row.original.status}
             errorMessage={typeof row.original.profile?.check_error === 'string' ? row.original.profile.check_error : null}
+            checkMode={row.original.profile?.check_mode === 'account-survival' ? 'account-survival' : row.original.profile?.check_mode === 'account-status' ? 'account-status' : null}
             onClick={row.original.status === 'frozen' ? () => setFrozenDialogAccount(row.original) : undefined}
           />
         )
@@ -605,7 +606,23 @@ export const AccountTable = memo(function AccountTable() {
     [accounts]
   )
   const statuses = useMemo(
-    () => Array.from(new Set(accounts.map((item) => item.status))).map((value) => ({ label: formatAccountStatus(value), value })),
+    () => Array.from(new Set(accounts.map((item) => item.status))).map((value) => {
+      const sampleAccount = accounts.find((item) => item.status === value)
+      const checkMode = sampleAccount?.profile?.check_mode === 'account-survival'
+        ? 'account-survival'
+        : sampleAccount?.profile?.check_mode === 'account-status'
+          ? 'account-status'
+          : null
+
+      return {
+        label: formatAccountStatus(
+          value,
+          typeof sampleAccount?.profile?.check_error === 'string' ? sampleAccount.profile.check_error : null,
+          checkMode
+        ),
+        value
+      }
+    }),
     [accounts]
   )
   const sources = useMemo(
