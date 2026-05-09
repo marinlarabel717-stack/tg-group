@@ -1,6 +1,13 @@
 import { inferCountryDisplay as inferCountryDisplayFromPhone } from './phone-country'
 import type { AccountStatus, CheckLogLevel, ProfileSource } from '../types'
 
+export const GEO_RESTRICTED_MARKERS = [
+  'anti-spam systems',
+  'harsh response',
+  'some phone numbers may trigger',
+  '地理位置限制'
+] as const
+
 export const moduleLabelMap = {
   dashboard: '仪表盘',
   accounts: '账号管理',
@@ -25,13 +32,27 @@ export const accountStatusLabelMap: Record<AccountStatus, string> = {
   unknown: '未检查'
 }
 
+export function isGeoRestrictedError(errorMessage?: string | null) {
+  const value = (errorMessage || '').toLowerCase()
+  if (!value) return false
+  return GEO_RESTRICTED_MARKERS.some((marker) => value.includes(marker.toLowerCase()))
+}
+
+export function resolveAccountStatusLabel(status: AccountStatus, errorMessage?: string | null) {
+  if (status === 'unknown' && isGeoRestrictedError(errorMessage)) {
+    return '地理位置限制'
+  }
+
+  return accountStatusLabelMap[status]
+}
+
 export const profileSourceLabelMap: Record<ProfileSource, string> = {
   json_import: 'JSON 导入',
   login_check: '登录检查'
 }
 
-export function formatAccountStatus(status: AccountStatus) {
-  return accountStatusLabelMap[status]
+export function formatAccountStatus(status: AccountStatus, errorMessage?: string | null) {
+  return resolveAccountStatusLabel(status, errorMessage)
 }
 
 export function formatProfileSource(source: ProfileSource) {

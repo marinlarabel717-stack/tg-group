@@ -527,6 +527,7 @@ export const AccountTable = memo(function AccountTable() {
         cell: ({ row }) => (
           <StatusBadge
             status={row.original.status}
+            errorMessage={typeof row.original.profile?.check_error === 'string' ? row.original.profile.check_error : null}
             onClick={row.original.status === 'frozen' ? () => setFrozenDialogAccount(row.original) : undefined}
           />
         )

@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import clsx from 'clsx'
 import type { AccountStatus } from '../../types'
-import { formatAccountStatus } from '../../lib/ui-text'
+import { formatAccountStatus, isGeoRestrictedError } from '../../lib/ui-text'
 
 const styles: Record<AccountStatus, string> = {
   alive: 'bg-emerald-500/15 text-emerald-300',
@@ -12,13 +12,14 @@ const styles: Record<AccountStatus, string> = {
   session_expired: 'bg-fuchsia-500/15 text-fuchsia-300',
   not_logged_in: 'bg-amber-500/15 text-amber-300',
   multi_ip: 'bg-violet-500/15 text-violet-300',
-  timeout: 'bg-white/10 text-slate-100',
+  timeout: 'bg-slate-500/15 text-slate-300',
   checking: 'bg-cyan-500/15 text-cyan-300',
   unknown: 'bg-white/10 text-slate-200'
 }
 
-export const StatusBadge = memo(function StatusBadge({ status, onClick }: { status: AccountStatus; onClick?: () => void }) {
-  const label = formatAccountStatus(status)
+export const StatusBadge = memo(function StatusBadge({ status, errorMessage, onClick }: { status: AccountStatus; errorMessage?: string | null; onClick?: () => void }) {
+  const geoRestricted = status === 'unknown' && isGeoRestrictedError(errorMessage)
+  const label = formatAccountStatus(status, errorMessage)
 
   return (
     <button
@@ -29,7 +30,7 @@ export const StatusBadge = memo(function StatusBadge({ status, onClick }: { stat
       className={clsx(
         'inline-flex h-6 w-[102px] items-center justify-center overflow-hidden rounded-full px-2 text-center text-[10px] font-semibold tracking-[0.06em] whitespace-nowrap',
         onClick ? 'cursor-pointer transition hover:brightness-110' : 'cursor-default',
-        styles[status]
+        geoRestricted ? 'bg-amber-400/15 text-amber-200' : styles[status]
       )}
     >
       <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>

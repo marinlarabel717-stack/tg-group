@@ -3,6 +3,7 @@ import { FileClock } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useAccountStore } from '../../stores/accountstore'
 import type { CheckLogEntry } from '../../types'
+import { isGeoRestrictedError } from '../../lib/ui-text'
 
 function formatLogTimestamp(value: string) {
   const date = new Date(value)
@@ -22,7 +23,8 @@ function getLogLineClass(log: CheckLogEntry) {
   if (log.status === 'multi_ip') return 'text-violet-300'
   if (log.status === 'frozen') return 'text-sky-300'
   if (log.status === 'banned') return 'text-rose-300'
-  if (log.status === 'timeout') return 'text-orange-300'
+  if (log.status === 'timeout') return 'text-slate-300'
+  if (log.status === 'unknown' && isGeoRestrictedError(log.message)) return 'text-amber-200'
   if (log.status === 'unknown') return 'text-slate-200'
 
   if (log.message.includes('本次检测已完成')) return 'text-emerald-300'
