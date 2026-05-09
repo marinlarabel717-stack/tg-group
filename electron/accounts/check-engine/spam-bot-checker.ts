@@ -266,6 +266,28 @@ function extractFrozenStateInfo(value: unknown, visited = new Set<object>()) {
 }
 
 export class SpamBotChecker {
+  private buildSpamBotResult(replyText: string, frozenState: FrozenStateInfo): SpamBotCheckResult {
+    const parsed = parseSpamBotReply(replyText)
+    const replyFrozen = parsed.status === 'frozen'
+    const finalFrozen = frozenState.frozen || replyFrozen
+    const hasFreezeTime = Boolean(frozenState.freezeSince || frozenState.freezeUntil || frozenState.freezeAppealUrl)
+
+    return {
+      ...parsed,
+      status: finalFrozen ? 'frozen' : parsed.status,
+      summary: finalFrozen
+        ? hasFreezeTime
+          ? '账号处于冻结状态'
+          : '账号处于冻结状态（冻结时间未返回）'
+        : parsed.summary,
+      replyText,
+      frozenByAppConfig: frozenState.frozen,
+      freezeSince: frozenState.freezeSince ?? null,
+      freezeUntil: frozenState.freezeUntil ?? null,
+      freezeAppealUrl: frozenState.freezeAppealUrl ?? null
+    }
+  }
+
   async detectFrozenState(client: TelegramClient) {
     try {
       const appConfig = await client.invoke(new Api.help.GetAppConfig({ hash: 0 }))
@@ -370,23 +392,7 @@ export class SpamBotChecker {
       if (reply) {
         const replyText = extractMessageText(reply)
         const frozenState = await this.detectFrozenState(client)
-        const parsed = parseSpamBotReply(replyText)
-        const finalStatus = frozenState.frozen ? 'frozen' : parsed.status === 'frozen' ? 'unknown' : parsed.status
-        const finalSummary = frozenState.frozen
-          ? '账号处于冻结状态'
-          : parsed.status === 'frozen'
-            ? 'SpamBot 提示冻结，但实时冻结探针未命中'
-            : parsed.summary
-        return {
-          ...parsed,
-          status: finalStatus,
-          summary: finalSummary,
-          replyText,
-          frozenByAppConfig: frozenState.frozen,
-          freezeSince: frozenState.freezeSince ?? null,
-          freezeUntil: frozenState.freezeUntil ?? null,
-          freezeAppealUrl: frozenState.freezeAppealUrl ?? null
-        }
+        return this.buildSpamBotResult(replyText, frozenState)
       }
     }
 
@@ -395,23 +401,7 @@ export class SpamBotChecker {
     if (fallbackReply) {
       const replyText = extractMessageText(fallbackReply)
       const frozenState = await this.detectFrozenState(client)
-      const parsed = parseSpamBotReply(replyText)
-      const finalStatus = frozenState.frozen ? 'frozen' : parsed.status === 'frozen' ? 'unknown' : parsed.status
-      const finalSummary = frozenState.frozen
-        ? '账号处于冻结状态'
-        : parsed.status === 'frozen'
-          ? 'SpamBot 提示冻结，但实时冻结探针未命中'
-          : parsed.summary
-      return {
-        ...parsed,
-        status: finalStatus,
-        summary: finalSummary,
-        replyText,
-        frozenByAppConfig: frozenState.frozen,
-        freezeSince: frozenState.freezeSince ?? null,
-        freezeUntil: frozenState.freezeUntil ?? null,
-        freezeAppealUrl: frozenState.freezeAppealUrl ?? null
-      }
+      return this.buildSpamBotResult(replyText, frozenState)
     }
 
     const frozenStateAfterTimeout = await this.detectFrozenState(client)
