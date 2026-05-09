@@ -69,15 +69,19 @@ export class AccountCheckEngine {
     }
 
     let client: TelegramClient | null = null
+    const probes: string[] = []
 
     try {
       const session = await withStepTimeout(this.sessionLoader.load(account.sessionPath), this.timeoutMs, 'Session 加载')
+      probes.push('Session 加载成功')
 
       client = this.clientManager.createClient(session, account.profile)
 
       await withStepTimeout(client.connect(), this.timeoutMs, 'Telegram 连接')
+      probes.push('Telegram 连接成功')
 
       const authorized = await withStepTimeout(client.checkAuthorization(), this.timeoutMs, 'Session 校验')
+      probes.push(`Session 校验${authorized ? '成功' : '失败'}`)
       const authorizationStatus = this.statusResolver.resolveAuthorization(authorized)
       if (authorizationStatus === 'not_logged_in') {
         const failedPhone = account.phone || account.profile.phone || `账号#${account.id}`
@@ -87,7 +91,15 @@ export class AccountCheckEngine {
       }
 
       const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')
+      probes.push('账号资料读取成功')
       const frozenState = await withStepTimeout(this.spamBotChecker.detectFrozenState(client), this.timeoutMs, '冻结状态检测')
+      if (frozenState.errorMessage) {
+        probes.push(`冻结探针失败:${frozenState.errorMessage}`)
+      } else if (frozenState.frozen) {
+        probes.push('冻结探针命中')
+      } else {
+        probes.push('冻结探针未命中')
+      }
 
       const loginPhone = String((typeof liveUser === 'object' && liveUser && 'phone' in liveUser && typeof (liveUser as { phone?: unknown }).phone === 'string'
         ? (liveUser as { phone?: string }).phone
@@ -137,8 +149,10 @@ export class AccountCheckEngine {
       }
 
       const fullUser = await withStepTimeout(this.spamBotChecker.getFullProfile(client), this.timeoutMs, '完整资料读取')
+      probes.push('完整资料读取成功')
 
       const spamResult = await withStepTimeout(this.spamBotChecker.check(client), this.timeoutMs, 'SpamBot 检测')
+      probes.push(`SpamBot 检测完成:${spamResult.status}`)
       const updated = this.updateService.buildSuccessProfile({
         account,
         liveUser,
@@ -181,7 +195,9 @@ export class AccountCheckEngine {
     } catch (error) {
       const durationMs = Date.now() - startedAt
       const status = this.statusResolver.resolveFromError(error)
-      const errorMessage = error instanceof Error ? error.message : String(error)
+      const baseErrorMessage = error instanceof Error ? error.message : String(error)
+      const probeSuffix = probes.length > 0 ? ` | 探针:${probes.join(' > ')}` : ''
+      const errorMessage = `${baseErrorMessage}${probeSuffix}`
       return this.persistFailure(account, status, errorMessage, durationMs, this.statusResolver.isRetryable(status, error))
     } finally {
       if (client) {

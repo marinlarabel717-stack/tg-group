@@ -197,6 +197,17 @@ export class CheckQueue extends EventEmitter {
   private formatFailureReason(result: AccountCheckResult) {
     const raw = (result.errorMessage || '').trim()
     const normalized = raw.toLowerCase()
+    const probeText = raw.includes('| 探针:') ? raw.split('| 探针:')[1]?.trim() ?? '' : ''
+    const appendProbeHint = (reason: string) => {
+      if (!probeText) return reason
+      if (probeText.includes('冻结探针命中')) return `${reason}，但冻结探针已命中`
+      if (probeText.includes('冻结探针未命中')) return `${reason}，冻结探针未命中`
+      if (probeText.includes('冻结探针失败:')) {
+        const detail = probeText.split('冻结探针失败:')[1]?.split('>')[0]?.trim()
+        return detail ? `${reason}，冻结探针失败：${detail}` : `${reason}，冻结探针失败`
+      }
+      return reason
+    }
 
     if (!raw) {
       if (result.status === 'not_logged_in') return 'Session 未登录'
@@ -206,18 +217,18 @@ export class CheckQueue extends EventEmitter {
       return STATUS_LABELS[result.status]
     }
 
-    if (normalized.includes('session 加载')) return 'Session 加载超时'
-    if (normalized.includes('telegram 连接')) return '连接 Telegram 超时'
-    if (normalized.includes('session 校验')) return 'Session 校验超时'
-    if (normalized.includes('账号资料读取')) return '读取账号资料超时'
-    if (normalized.includes('冻结状态检测')) return '冻结状态检测超时'
-    if (normalized.includes('完整资料读取')) return '读取完整资料超时'
-    if (normalized.includes('spambot 检测')) return 'SpamBot 检测超时'
+    if (normalized.includes('session 加载')) return appendProbeHint('Session 加载超时')
+    if (normalized.includes('telegram 连接')) return appendProbeHint('连接 Telegram 超时')
+    if (normalized.includes('session 校验')) return appendProbeHint('Session 校验超时')
+    if (normalized.includes('账号资料读取')) return appendProbeHint('读取账号资料超时')
+    if (normalized.includes('冻结状态检测')) return appendProbeHint('冻结状态检测超时')
+    if (normalized.includes('完整资料读取')) return appendProbeHint('读取完整资料超时')
+    if (normalized.includes('spambot 检测')) return appendProbeHint('SpamBot 检测超时')
     if (normalized.includes('session 未登录')) return 'Session 未登录'
     if (normalized.includes('session revoked') || normalized.includes('session expired') || normalized.includes('auth_key_unregistered')) return 'Session 已失效'
     if (normalized.includes('phone number banned') || normalized.includes('user_deactivated_ban') || normalized.includes('banned')) return '账号已封禁'
-    if (normalized.includes('network') || normalized.includes('socket') || normalized.includes('disconnect')) return '网络连接失败'
-    if (normalized.includes('timeout') || normalized.includes('timed out')) return '请求超时'
+    if (normalized.includes('network') || normalized.includes('socket') || normalized.includes('disconnect')) return appendProbeHint('网络连接失败')
+    if (normalized.includes('timeout') || normalized.includes('timed out')) return appendProbeHint('请求超时')
 
     return raw
   }
