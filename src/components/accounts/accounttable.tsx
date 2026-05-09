@@ -318,9 +318,6 @@ const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }
 const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose }: { account: AccountRecord; onClose: () => void }) {
   const nickname = readNickname(account)
   const [reading, setReading] = useState(false)
-  const [readMessage, setReadMessage] = useState('')
-  const [readRawText, setReadRawText] = useState<string | null>(null)
-  const [debugPath, setDebugPath] = useState<string | null>(null)
   const [localPremiumExpiry, setLocalPremiumExpiry] = useState<string | null>(readPremiumExpiry(account))
   const premiumExpiryRaw = localPremiumExpiry ?? readPremiumExpiry(account)
   const premiumExpiry = formatDateTimeFull(premiumExpiryRaw)
@@ -336,10 +333,6 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
     const run = async () => {
       if (!window.desktopAccounts?.readPremiumExpiryFromDesktop) return
       setReading(true)
-      setReadMessage('')
-      setReadRawText(null)
-      setDebugPath(null)
-
       try {
         const result = await window.desktopAccounts.readPremiumExpiryFromDesktop(account.id)
         if (disposed || !result) return
@@ -347,9 +340,6 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
         if (result.premiumExpiry) {
           setLocalPremiumExpiry(result.premiumExpiry)
         }
-        setReadMessage(result.message || '')
-        setReadRawText(result.rawText ?? null)
-        setDebugPath(result.screenshotPath ?? null)
       } finally {
         if (!disposed) {
           setReading(false)
@@ -404,19 +394,6 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
             {!reading && premiumExpiry === '—' ? <div className="mt-2 text-xs text-textMuted">当前没解析到时间；这版不再拉本地客户端，也不再走隐藏 Web。</div> : null}
           </div>
 
-          {readMessage ? (
-            <div className="rounded-[12px] bg-panel px-4 py-3">
-              <div className="text-xs text-textMuted">MTProto 读取结果</div>
-              <div className="mt-1 text-xs leading-5 text-textMain">{readMessage}</div>
-              {debugPath ? <div className="mt-2 break-all text-[11px] text-textMuted">调试截图：{debugPath}</div> : null}
-              {readRawText ? <div className="mt-2 max-h-24 overflow-auto rounded-[8px] bg-slate-950/35 px-2 py-2 text-[11px] leading-5 text-textMuted">{readRawText}</div> : null}
-            </div>
-          ) : null}
-
-          <div className="rounded-[12px] bg-panel px-4 py-3">
-            <div className="text-xs text-textMuted">当前方案</div>
-            <div className="mt-1 text-xs leading-5 text-textMuted">这版改成优先走 MTProto 的 Premium 状态文本；如果 Telegram 当前会在 `statusText` 里返回类似 `It expires on ...` 的内容，就能直接解析，不再碰本地客户端，也不再打开隐藏 Web。</div>
-          </div>
         </div>
       </div>
     </div>
