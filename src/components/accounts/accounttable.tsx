@@ -33,8 +33,8 @@ import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTi
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '56px 84px 176px 120px 124px 96px 220px 156px 184px'
-const ACCOUNT_GRID_WIDTH = 1236
+const ACCOUNT_GRID_TEMPLATE = '56px 84px 176px 120px 124px 96px 220px 144px 228px'
+const ACCOUNT_GRID_WIDTH = 1248
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -134,7 +134,7 @@ function cellShellClass(columnId: string, isHeader = false) {
   }
 
   if (columnId === 'actions') {
-    return 'flex h-full w-full items-center justify-start pl-1 pr-2'
+    return 'flex h-full w-full items-center justify-start pl-1 pr-1'
   }
 
   return 'flex h-full w-full min-w-0 items-center justify-start px-2'
@@ -221,6 +221,9 @@ function readLastLogin(account: AccountRecord) {
 
 function readPremiumExpiry(account: AccountRecord) {
   const value = account.profile?.premium_expiry
+    ?? account.profile?.premium_until
+    ?? account.profile?.premium_until_date
+    ?? account.profile?.premiumUntil
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value > 1e12 ? new Date(value).toISOString() : new Date(value * 1000).toISOString()
   }
@@ -235,6 +238,15 @@ function readPremiumExpiry(account: AccountRecord) {
   }
 
   return null
+}
+
+function readPremiumTooltip(account: AccountRecord) {
+  const premiumExpiry = formatDateTimeFull(readPremiumExpiry(account))
+  if (premiumExpiry !== '—') {
+    return `高级会员\n到期时间：${premiumExpiry}`
+  }
+
+  return '高级会员\n到期时间：暂未同步'
 }
 
 function isPremiumAccount(account: AccountRecord) {
@@ -329,7 +341,7 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
   const twoFactor = readTwoFactor(account)
   const lastLogin = readLastLogin(account)
   const premium = isPremiumAccount(account)
-  const premiumExpiry = formatDateTimeFull(readPremiumExpiry(account))
+  const premiumTooltip = readPremiumTooltip(account)
   const [openingWeb, setOpeningWeb] = useState(false)
 
   const handleOpenTelegramWeb = useCallback(async () => {
@@ -343,17 +355,24 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
   }, [account.id, openingWeb])
 
   return (
-    <div className="flex w-full items-center justify-start gap-1.5 overflow-hidden">
+    <div className="flex w-full items-center justify-start gap-1.5 whitespace-nowrap">
       <span title={`用户名：${username}`} className={actionButtonClass(username !== '-')}>@</span>
       <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>🔓</span>
       <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>
       {premium ? (
-        <span
-          title={`高级会员${premiumExpiry !== '—' ? `，到期时间：${premiumExpiry}` : ''}`}
-          className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-[8px] border border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300"
-        >
-          <Star size={12} className="fill-current" />
-        </span>
+        <div className="group relative flex shrink-0">
+          <span
+            title={premiumTooltip.replace(/\n/g, ' ｜ ')}
+            className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-[8px] border border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300"
+          >
+            <Star size={12} className="fill-current" />
+          </span>
+          <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 hidden min-w-[168px] -translate-x-1/2 rounded-[10px] border border-fuchsia-400/20 bg-slate-950/95 px-3 py-2 text-[11px] leading-4 text-fuchsia-100 shadow-[0_10px_24px_rgba(0,0,0,0.35)] group-hover:block">
+            {premiumTooltip.split('\n').map((line) => (
+              <div key={line}>{line}</div>
+            ))}
+          </div>
+        </div>
       ) : null}
       <button
         type="button"
@@ -552,7 +571,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'proxy',
         header: '代理',
-        size: 156,
+        size: 144,
         cell: ({ row }) => {
           const value = readProxy(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -561,7 +580,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'actions',
         header: '操作',
-        size: 184,
+        size: 228,
         enableSorting: false,
         cell: ({ row }) => <TableRowActions account={row.original} />
       }
