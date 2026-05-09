@@ -323,10 +323,13 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
   const [desktopScreenshotPath, setDesktopScreenshotPath] = useState<string | null>(null)
   const premiumExpiryRaw = desktopExpiry ?? readPremiumExpiry(account)
   const premiumExpiry = formatDateTimeFull(premiumExpiryRaw)
-  const premiumExpiryDisplay = premiumExpiry !== '—' ? premiumExpiry : '暂未读取到会员到期时间'
+  const premiumExpiryDisplay = desktopReading
+    ? '正在从官方 Telegram Desktop 读取…'
+    : premiumExpiry !== '—'
+      ? premiumExpiry
+      : '暂未读取到会员到期时间'
 
   const handleReadFromDesktop = useCallback(async () => {
-    if (desktopReading) return
     setDesktopReading(true)
     setDesktopMessage('')
     try {
@@ -344,7 +347,11 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
     } finally {
       setDesktopReading(false)
     }
-  }, [account.id, desktopReading])
+  }, [account.id])
+
+  useEffect(() => {
+    void handleReadFromDesktop()
+  }, [handleReadFromDesktop])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={onClose}>
@@ -382,18 +389,10 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
 
           <div className="rounded-[12px] bg-panel px-4 py-3">
             <div className="text-xs text-textMuted">官方客户端读取</div>
-            <div className="mt-1 text-xs text-textMuted">会打开当前系统默认的 Telegram Desktop Premium 页面，并尝试识别当前活动账号的到期时间。</div>
-            <button
-              type="button"
-              onClick={() => void handleReadFromDesktop()}
-              disabled={desktopReading}
-              className={`mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-[10px] border text-sm font-medium transition ${desktopReading
-                ? 'cursor-wait border-fuchsia-400/15 bg-fuchsia-500/10 text-fuchsia-200'
-                : 'border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300 hover:brightness-110'}`}
-            >
-              {desktopReading ? <Loader2 size={14} className="animate-spin" /> : null}
-              <span>{desktopReading ? '读取中…' : '从官方 Telegram Desktop 读取'}</span>
-            </button>
+            <div className="mt-1 flex items-center gap-2 text-xs text-textMuted">
+              {desktopReading ? <Loader2 size={13} className="animate-spin text-fuchsia-300" /> : null}
+              <span>{desktopReading ? '正在自动打开官方 Telegram Desktop 并读取会员时间…' : '点开弹窗后已自动尝试读取官方 Telegram Desktop 里的会员时间。'}</span>
+            </div>
             {desktopMessage ? <div className="mt-3 text-xs text-textMuted">{desktopMessage}</div> : null}
             {desktopScreenshotPath ? <div className="mt-2 break-all text-[11px] text-textMuted">识别截图：{desktopScreenshotPath}</div> : null}
           </div>
