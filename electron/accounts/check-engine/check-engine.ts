@@ -31,6 +31,16 @@ function withStepTimeout<T>(promise: Promise<T>, timeoutMs: number, label: strin
   })
 }
 
+function buildProbeSummary(probes: string[]) {
+  return probes.length > 0 ? `探针:${probes.join(' > ')}` : ''
+}
+
+function buildReplySnippet(replyText: string) {
+  const normalized = replyText.replace(/\s+/g, ' ').trim()
+  if (!normalized) return ''
+  return normalized.length > 120 ? `${normalized.slice(0, 120)}…` : normalized
+}
+
 export class AccountCheckEngine {
   private readonly timeoutMs: number
 
@@ -230,6 +240,16 @@ export class AccountCheckEngine {
 
       this.resultWriter.write(payload)
 
+      const probeSummary = buildProbeSummary(probes)
+      const replySnippet = buildReplySnippet(spamResult.replyText)
+      const unknownReason = spamResult.status === 'unknown'
+        ? [
+            spamResult.summary || 'SpamBot 回复未命中规则',
+            replySnippet ? `回复:${replySnippet}` : '',
+            probeSummary
+          ].filter(Boolean).join(' | ')
+        : undefined
+
       return {
         accountId: account.id,
         status: spamResult.status,
@@ -241,13 +261,14 @@ export class AccountCheckEngine {
         lastCheckTime: updated.lastCheckTime,
         lastOnlineTime: updated.lastOnlineTime,
         durationMs: Date.now() - startedAt,
-        retryable: false
+        retryable: false,
+        errorMessage: unknownReason
       }
     } catch (error) {
       const durationMs = Date.now() - startedAt
       const status = this.statusResolver.resolveFromError(error)
       const baseErrorMessage = error instanceof Error ? error.message : String(error)
-      const probeSuffix = probes.length > 0 ? ` | 探针:${probes.join(' > ')}` : ''
+      const probeSuffix = probes.length > 0 ? ` | ${buildProbeSummary(probes)}` : ''
       const errorMessage = `${baseErrorMessage}${probeSuffix}`
       return this.persistFailure(account, status, errorMessage, durationMs, this.statusResolver.isRetryable(status, error))
     } finally {

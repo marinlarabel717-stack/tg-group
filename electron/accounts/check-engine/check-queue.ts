@@ -230,6 +230,11 @@ export class CheckQueue extends EventEmitter {
     if (normalized.includes('phone number banned') || normalized.includes('user_deactivated_ban') || normalized.includes('banned')) return '账号已封禁'
     if (normalized.includes('network') || normalized.includes('socket') || normalized.includes('disconnect')) return appendProbeHint('网络连接失败')
     if (normalized.includes('timeout') || normalized.includes('timed out')) return appendProbeHint('请求超时')
+    if (normalized.includes('spambot 回复未命中规则')) {
+      const replyText = raw.includes('回复:') ? raw.split('回复:')[1]?.split('|')[0]?.trim() ?? '' : ''
+      const base = replyText ? `SpamBot 返回未命中规则：${replyText}` : 'SpamBot 返回未命中规则'
+      return appendProbeHint(base)
+    }
 
     return raw
   }
