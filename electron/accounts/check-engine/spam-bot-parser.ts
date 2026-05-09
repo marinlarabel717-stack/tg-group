@@ -10,7 +10,17 @@ const RULES: Array<{ status: AccountStatus; summary: string; patterns: RegExp[] 
   {
     status: 'frozen',
     summary: '账号处于冻结状态',
-    patterns: [/frozen/i, /freeze state/i, /account frozen/i, /已冻结/i, /冻结/i]
+    patterns: [
+      /frozen/i,
+      /freeze state/i,
+      /account frozen/i,
+      /your account was blocked for violations of the telegram terms of service/i,
+      /violations of the telegram terms of service/i,
+      /based on user reports confirmed by our moderators/i,
+      /your account was blocked/i,
+      /已冻结/i,
+      /冻结/i
+    ]
   },
   {
     status: 'multi_ip',
