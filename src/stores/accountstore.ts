@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { formatCountryDisplay } from '../lib/ui-text'
 import type { AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload } from '../types'
 
+export type AccountStatusFilter = 'all' | AccountStatus | 'premium'
+
 interface ImportResultDialogState {
   open: boolean
   scannedCount: number
@@ -86,7 +88,7 @@ interface AccountStoreState {
   loading: boolean
   busy: boolean
   search: string
-  statusFilter: 'all' | AccountStatus
+  statusFilter: AccountStatusFilter
   countryFilter: string
   selectedIds: number[]
   selectedProfileAccountId: number | null
@@ -100,7 +102,7 @@ interface AccountStoreState {
   init: () => Promise<void>
   refresh: () => Promise<void>
   setSearch: (value: string) => void
-  setStatusFilter: (value: 'all' | AccountStatus) => void
+  setStatusFilter: (value: AccountStatusFilter) => void
   setCountryFilter: (value: string) => void
   setSelectedIds: (ids: number[]) => void
   setSelectedProfileAccountId: (id: number | null) => void
@@ -399,14 +401,18 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
 
 export function filterAccounts(accounts: AccountRecord[], filters: {
   search: string
-  statusFilter: 'all' | AccountStatus
+  statusFilter: AccountStatusFilter
   countryFilter: string
 }) {
   const keyword = filters.search.trim().toLowerCase()
 
   return accounts.filter((account) => {
-    if (filters.statusFilter !== 'all' && account.status !== filters.statusFilter) {
-      return false
+    if (filters.statusFilter !== 'all') {
+      if (filters.statusFilter === 'premium') {
+        if (!account.profile?.is_premium) return false
+      } else if (account.status !== filters.statusFilter) {
+        return false
+      }
     }
 
     if (filters.countryFilter && formatCountryDisplay(account.country, account.phone) !== filters.countryFilter) {

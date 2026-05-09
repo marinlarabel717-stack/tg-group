@@ -28,7 +28,7 @@ import { StatusBadge } from './statusbadge'
 import { TableFilters } from './tablefilters'
 import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
-import { filterAccounts, useAccountStore } from '../../stores/accountstore'
+import { filterAccounts, useAccountStore, type AccountStatusFilter } from '../../stores/accountstore'
 import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTimeFull, formatProfileSource } from '../../lib/ui-text'
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
@@ -656,23 +656,31 @@ export const AccountTable = memo(function AccountTable() {
     [accounts]
   )
   const statuses = useMemo(
-    () => Array.from(new Set(accounts.map((item) => item.status))).map((value) => {
-      const sampleAccount = accounts.find((item) => item.status === value)
-      const checkMode = sampleAccount?.profile?.check_mode === 'account-survival'
-        ? 'account-survival'
-        : sampleAccount?.profile?.check_mode === 'account-status'
-          ? 'account-status'
-          : null
+    () => {
+      const options: Array<{ label: string; value: AccountStatusFilter }> = Array.from(new Set(accounts.map((item) => item.status))).map((value) => {
+        const sampleAccount = accounts.find((item) => item.status === value)
+        const checkMode = sampleAccount?.profile?.check_mode === 'account-survival'
+          ? 'account-survival'
+          : sampleAccount?.profile?.check_mode === 'account-status'
+            ? 'account-status'
+            : null
 
-      return {
-        label: formatAccountStatus(
-          value,
-          typeof sampleAccount?.profile?.check_error === 'string' ? sampleAccount.profile.check_error : null,
-          checkMode
-        ),
-        value
+        return {
+          label: formatAccountStatus(
+            value,
+            typeof sampleAccount?.profile?.check_error === 'string' ? sampleAccount.profile.check_error : null,
+            checkMode
+          ),
+          value
+        }
+      })
+
+      if (accounts.some((item) => item.profile?.is_premium)) {
+        options.unshift({ label: '会员', value: 'premium' as AccountStatusFilter })
       }
-    }),
+
+      return options
+    },
     [accounts]
   )
   const sources = useMemo(
@@ -793,7 +801,7 @@ export const AccountTable = memo(function AccountTable() {
         sources={sources}
         proxies={proxies}
         onCountryChange={setCountryFilter}
-        onStatusChange={(value) => setStatusFilter((value || 'all') as typeof statusFilter)}
+        onStatusChange={(value) => setStatusFilter((value || 'all') as AccountStatusFilter)}
         onSourceChange={setSourceFilter}
         onProxyChange={setProxyFilter}
       />
