@@ -58,7 +58,8 @@ export default memo(function LogsView() {
                 const lineClass = getLogLineClass(log)
                 return (
                   <div key={log.id} className={`text-sm leading-7 ${lineClass}`}>
-                    <span className={`mr-2 ${lineClass}`}>{formatLogTimestamp(log.createdAt)}</span>
+                    <span className={lineClass}>{formatLogTimestamp(log.createdAt)}</span>
+                    <span className={`mx-2 ${lineClass}`}>—</span>
                     <span>{log.message}</span>
                   </div>
                 )
