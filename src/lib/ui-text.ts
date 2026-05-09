@@ -14,6 +14,7 @@ export const moduleLabelMap = {
 export const accountStatusLabelMap: Record<AccountStatus, string> = {
   alive: '无限制',
   banned: '封禁',
+  duo: 'duo',
   limited: '双向',
   temporary_limited: '临时双向',
   frozen: '冻结',

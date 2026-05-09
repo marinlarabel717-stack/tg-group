@@ -10,6 +10,7 @@ interface QueueTask {
 const STATUS_LABELS: Record<AccountCheckResult['status'], string> = {
   alive: '无限制',
   banned: '封禁',
+  duo: 'duo',
   limited: '双向',
   temporary_limited: '临时双向',
   frozen: '冻结',
@@ -54,6 +55,7 @@ function createInitialState(options: Required<CheckQueueOptions>): CheckQueueSta
     resultSummary: {
       total: 0,
       alive: 0,
+      duo: 0,
       limited: 0,
       temporary_limited: 0,
       frozen: 0,
@@ -117,6 +119,7 @@ export class CheckQueue extends EventEmitter {
     this.state.resultSummary = {
       total: 0,
       alive: 0,
+      duo: 0,
       limited: 0,
       temporary_limited: 0,
       frozen: 0,
@@ -139,6 +142,7 @@ export class CheckQueue extends EventEmitter {
       this.state.resultSummary = {
         total: 0,
         alive: 0,
+        duo: 0,
         limited: 0,
         temporary_limited: 0,
         frozen: 0,
@@ -218,7 +222,7 @@ export class CheckQueue extends EventEmitter {
   }
 
   private normalizeDisplayStatus(status: AccountCheckResult['status']) {
-    if (status === 'alive' || status === 'limited' || status === 'temporary_limited' || status === 'frozen' || status === 'banned' || status === 'timeout' || status === 'unknown') {
+    if (status === 'alive' || status === 'duo' || status === 'limited' || status === 'temporary_limited' || status === 'frozen' || status === 'banned' || status === 'timeout' || status === 'unknown') {
       return status
     }
 
@@ -244,6 +248,7 @@ export class CheckQueue extends EventEmitter {
     if (!baseError) {
       if (result.status === 'not_logged_in') return 'Session 未登录'
       if (result.status === 'session_expired') return 'Session 已失效'
+      if (result.status === 'duo') return 'AUTH KEY 重复'
       if (result.status === 'multi_ip') return '检测到多 IP 登录'
       if (result.status === 'unknown') return '未拿到有效结果'
       return STATUS_LABELS[result.status]
@@ -259,6 +264,7 @@ export class CheckQueue extends EventEmitter {
     if (normalized.includes('spambot 检测')) return appendProbeHint('SpamBot 检测超时')
     if (normalized.includes('session 未登录')) return 'Session 未登录'
     if (normalized.includes('session revoked') || normalized.includes('session expired') || normalized.includes('auth_key_unregistered')) return 'Session 已失效'
+    if (normalized.includes('auth_key_duplicated')) return 'AUTH KEY 重复'
     if (normalized.includes('phone number banned') || normalized.includes('user_deactivated_ban') || normalized.includes('banned')) return '账号已封禁'
     if (normalized.includes('network') || normalized.includes('socket') || normalized.includes('disconnect')) return appendProbeHint('网络连接失败')
     if (normalized.includes('timeout') || normalized.includes('timed out')) return appendProbeHint('请求超时')
@@ -328,6 +334,7 @@ export class CheckQueue extends EventEmitter {
       this.appendLog('success', null, '本次检测已完成')
       const summaryItems: Array<{ status: AccountCheckResult['status']; count: number }> = [
         { status: 'alive', count: this.state.resultSummary.alive },
+        { status: 'duo', count: this.state.resultSummary.duo },
         { status: 'limited', count: this.state.resultSummary.limited },
         { status: 'temporary_limited', count: this.state.resultSummary.temporary_limited },
         { status: 'frozen', count: this.state.resultSummary.frozen },

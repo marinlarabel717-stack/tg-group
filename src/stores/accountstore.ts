@@ -44,6 +44,7 @@ function createEmptyCheckState(): CheckQueueState {
     resultSummary: {
       total: 0,
       alive: 0,
+      duo: 0,
       limited: 0,
       temporary_limited: 0,
       frozen: 0,

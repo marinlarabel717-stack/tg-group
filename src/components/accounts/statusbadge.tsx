@@ -6,6 +6,7 @@ import { formatAccountStatus } from '../../lib/ui-text'
 const styles: Record<AccountStatus, string> = {
   alive: 'bg-emerald-500/15 text-emerald-300',
   banned: 'bg-rose-500/15 text-rose-300',
+  duo: 'bg-indigo-500/15 text-indigo-300',
   limited: 'bg-yellow-500/15 text-yellow-300',
   temporary_limited: 'bg-yellow-500/15 text-yellow-300',
   frozen: 'bg-sky-500/15 text-sky-300',
