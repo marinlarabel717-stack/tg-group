@@ -46,21 +46,21 @@ export default memo(function LogsView() {
           <div className="text-sm font-medium text-white">运行日志</div>
         </div>
 
-        <div ref={scrollContainerRef} className="max-h-[760px] overflow-y-auto px-5 py-4">
+        <div ref={scrollContainerRef} className="max-h-[760px] overflow-y-auto px-5 py-4 select-text">
           {checkState.logs.length === 0 ? (
             <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center text-textMuted">
               <FileClock size={24} className="text-neonSoft" />
               <div className="text-base font-medium text-white">暂无运行日志</div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 select-text">
               {checkState.logs.map((log) => {
                 const lineClass = getLogLineClass(log)
                 return (
-                  <div key={log.id} className={`text-sm leading-7 ${lineClass}`}>
+                  <div key={log.id} className={`cursor-text select-text text-sm leading-7 ${lineClass}`}>
                     <span className={lineClass}>{formatLogTimestamp(log.createdAt)}</span>
                     <span className={`mx-2 ${lineClass}`}>—</span>
-                    <span>{log.message}</span>
+                    <span className="select-text">{log.message}</span>
                   </div>
                 )
               })}
