@@ -4,59 +4,6 @@ export interface SpamBotParseResult {
   status: AccountStatus
   normalizedText: string
   summary: string
-  freezeSince?: string | null
-  freezeUntil?: string | null
-  freezeAppealUrl?: string | null
-}
-
-function normalizeTimestamp(value: string) {
-  const trimmed = value.trim().replace(/\s+/g, ' ')
-  if (!trimmed) return null
-
-  const normalized = trimmed
-    .replace(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})(?!\s*[+-]\d{2}:?\d{2}|\s*Z)/i, '$1T$2Z')
-    .replace(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})(?!\s*[+-]\d{2}:?\d{2}|\s*Z)/i, '$1T$2:00Z')
-    .replace(/\bUTC\b/i, 'Z')
-    .replace(/([+-]\d{2})(\d{2})$/, '$1:$2')
-
-  const date = new Date(normalized)
-  return Number.isNaN(date.getTime()) ? null : date.toISOString()
-}
-
-function extractLabeledDate(text: string, patterns: RegExp[]) {
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
-    const value = match?.[1]
-    if (!value) continue
-    const parsed = normalizeTimestamp(value)
-    if (parsed) return parsed
-  }
-
-  return null
-}
-
-function extractFreezeMetadata(replyText: string) {
-  const normalizedText = replyText.replace(/\s+/g, ' ').trim()
-
-  const freezeSince = extractLabeledDate(normalizedText, [
-    /(?:freeze|frozen)\s*(?:since|from)\s*[:：]?\s*([^。.!\n]+?)(?=(?:\s+(?:freeze|frozen|until|to|appeal|https?:\/\/))|$)/i,
-    /冻结(?:开始|起始|时间)?\s*[:：]?\s*([^。.!\n]+?)(?=(?:\s+(?:冻结|解封|申诉|https?:\/\/))|$)/i
-  ])
-
-  const freezeUntil = extractLabeledDate(normalizedText, [
-    /(?:freeze|frozen)\s*(?:until|till|to)\s*[:：]?\s*([^。.!\n]+?)(?=(?:\s+(?:appeal|https?:\/\/|please|if))|$)/i,
-    /(?:unfreeze|release)\s*(?:at|on|time)?\s*[:：]?\s*([^。.!\n]+?)(?=(?:\s+(?:appeal|https?:\/\/|please|if))|$)/i,
-    /(?:restricted|limited)\s*until\s*[:：]?\s*([^。.!\n]+?)(?=(?:\s+(?:appeal|https?:\/\/|please|if))|$)/i,
-    /(?:解封|冻结结束|冻结至|到期时间)\s*[:：]?\s*([^。.!\n]+?)(?=(?:\s+(?:申诉|https?:\/\/))|$)/i
-  ])
-
-  const freezeAppealUrl = normalizedText.match(/https?:\/\/\S+/i)?.[0] ?? null
-
-  return {
-    freezeSince,
-    freezeUntil,
-    freezeAppealUrl
-  }
 }
 
 const RULES: Array<{ status: AccountStatus; summary: string; patterns: RegExp[] }> = [
@@ -100,17 +47,13 @@ const RULES: Array<{ status: AccountStatus; summary: string; patterns: RegExp[] 
 
 export function parseSpamBotReply(replyText: string): SpamBotParseResult {
   const normalizedText = replyText.replace(/\s+/g, ' ').trim()
-  const metadata = extractFreezeMetadata(replyText)
 
   for (const rule of RULES) {
     if (rule.patterns.some((pattern) => pattern.test(normalizedText))) {
       return {
         status: rule.status,
         normalizedText,
-        summary: rule.summary,
-        freezeSince: rule.status === 'frozen' ? metadata.freezeSince : null,
-        freezeUntil: rule.status === 'frozen' ? metadata.freezeUntil : null,
-        freezeAppealUrl: rule.status === 'frozen' ? metadata.freezeAppealUrl : null
+        summary: rule.summary
       }
     }
   }
@@ -118,9 +61,6 @@ export function parseSpamBotReply(replyText: string): SpamBotParseResult {
   return {
     status: 'unknown',
     normalizedText,
-    summary: 'SpamBot 回复未命中已知规则',
-    freezeSince: null,
-    freezeUntil: null,
-    freezeAppealUrl: metadata.freezeAppealUrl
+    summary: 'SpamBot 回复未命中已知规则'
   }
 }

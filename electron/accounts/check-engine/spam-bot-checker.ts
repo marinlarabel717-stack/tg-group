@@ -330,15 +330,21 @@ export class SpamBotChecker {
         const replyText = extractMessageText(reply)
         const frozenState = await this.detectFrozenState(client)
         const parsed = parseSpamBotReply(replyText)
+        const finalStatus = frozenState.frozen ? 'frozen' : parsed.status === 'frozen' ? 'unknown' : parsed.status
+        const finalSummary = frozenState.frozen
+          ? '账号处于冻结状态'
+          : parsed.status === 'frozen'
+            ? 'SpamBot 提示冻结，但实时冻结探针未命中'
+            : parsed.summary
         return {
           ...parsed,
-          status: frozenState.frozen ? 'frozen' : parsed.status,
-          summary: frozenState.frozen ? '账号处于冻结状态' : parsed.summary,
+          status: finalStatus,
+          summary: finalSummary,
           replyText,
           frozenByAppConfig: frozenState.frozen,
-          freezeSince: frozenState.freezeSince ?? parsed.freezeSince ?? null,
-          freezeUntil: frozenState.freezeUntil ?? parsed.freezeUntil ?? null,
-          freezeAppealUrl: frozenState.freezeAppealUrl ?? parsed.freezeAppealUrl ?? null
+          freezeSince: frozenState.freezeSince ?? null,
+          freezeUntil: frozenState.freezeUntil ?? null,
+          freezeAppealUrl: frozenState.freezeAppealUrl ?? null
         }
       }
     }
@@ -349,15 +355,21 @@ export class SpamBotChecker {
       const replyText = extractMessageText(fallbackReply)
       const frozenState = await this.detectFrozenState(client)
       const parsed = parseSpamBotReply(replyText)
+      const finalStatus = frozenState.frozen ? 'frozen' : parsed.status === 'frozen' ? 'unknown' : parsed.status
+      const finalSummary = frozenState.frozen
+        ? '账号处于冻结状态'
+        : parsed.status === 'frozen'
+          ? 'SpamBot 提示冻结，但实时冻结探针未命中'
+          : parsed.summary
       return {
         ...parsed,
-        status: frozenState.frozen ? 'frozen' : parsed.status,
-        summary: frozenState.frozen ? '账号处于冻结状态' : parsed.summary,
+        status: finalStatus,
+        summary: finalSummary,
         replyText,
         frozenByAppConfig: frozenState.frozen,
-        freezeSince: frozenState.freezeSince ?? parsed.freezeSince ?? null,
-        freezeUntil: frozenState.freezeUntil ?? parsed.freezeUntil ?? null,
-        freezeAppealUrl: frozenState.freezeAppealUrl ?? parsed.freezeAppealUrl ?? null
+        freezeSince: frozenState.freezeSince ?? null,
+        freezeUntil: frozenState.freezeUntil ?? null,
+        freezeAppealUrl: frozenState.freezeAppealUrl ?? null
       }
     }
 
