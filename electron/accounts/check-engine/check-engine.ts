@@ -7,6 +7,7 @@ import { SessionLoader } from './session-loader'
 import { SpamBotChecker } from './spam-bot-checker'
 import { StatusResolver } from './status-resolver'
 import { TelegramClientManager } from './telegram-client-manager'
+import { TelethonFreezeChecker } from './telethon-freeze-checker'
 
 interface CheckLogger {
   (payload: { type: 'login_success'; phone: string } | { type: 'login_failed'; phone: string; reason: string }): void
@@ -41,12 +42,28 @@ function buildReplySnippet(replyText: string) {
   return normalized.length > 120 ? `${normalized.slice(0, 120)}…` : normalized
 }
 
+function normalizeTelethonFreezeDate(value?: number | string | null) {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return new Date(value * 1000).toISOString()
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return new Date(parsed * 1000).toISOString()
+    }
+  }
+
+  return null
+}
+
 export class AccountCheckEngine {
   private readonly timeoutMs: number
 
   constructor(
     private readonly repository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
+    private readonly telethonFreezeChecker: TelethonFreezeChecker,
     private readonly clientManager: TelegramClientManager,
     private readonly spamBotChecker: SpamBotChecker,
     private readonly statusResolver: StatusResolver,
@@ -84,6 +101,61 @@ export class AccountCheckEngine {
     try {
       const session = await withStepTimeout(this.sessionLoader.load(account.sessionPath), this.timeoutMs, 'Session 加载')
       probes.push('Session 加载成功')
+
+      const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结检测')
+      if (telethonFrozen?.status === 'frozen') {
+        probes.push(`Telethon 冻结命中:${telethonFrozen.reason ?? 'FREEZE_STATE_IN_APP_CONFIG'}`)
+        const liveUser = {
+          id: telethonFrozen.user_id ?? account.userId,
+          phone: telethonFrozen.phone ?? account.phone,
+          username: telethonFrozen.username ?? account.profile.username,
+          firstName: telethonFrozen.first_name ?? account.profile.first_name,
+          lastName: telethonFrozen.last_name ?? account.profile.last_name
+        }
+
+        const updated = this.updateService.buildSuccessProfile({
+          account,
+          liveUser,
+          fullUser: null,
+          spambotReply: '',
+          status: 'frozen',
+          freezeSince: normalizeTelethonFreezeDate(telethonFrozen.freeze_since_date),
+          freezeUntil: normalizeTelethonFreezeDate(telethonFrozen.freeze_until_date),
+          freezeAppealUrl: telethonFrozen.freeze_appeal_url ?? null,
+          durationMs: Date.now() - startedAt
+        })
+
+        const payload: CheckResultInput = {
+          id: account.id,
+          profile: updated.profile,
+          status: 'frozen',
+          phone: updated.phone,
+          username: updated.username,
+          userId: updated.userId,
+          country: updated.country,
+          lastCheckTime: updated.lastCheckTime,
+          lastOnlineTime: updated.lastOnlineTime
+        }
+
+        this.resultWriter.write(payload)
+
+        return {
+          accountId: account.id,
+          status: 'frozen',
+          profile: updated.profile,
+          phone: updated.phone,
+          username: updated.username,
+          userId: updated.userId,
+          country: updated.country,
+          lastCheckTime: updated.lastCheckTime,
+          lastOnlineTime: updated.lastOnlineTime,
+          durationMs: Date.now() - startedAt,
+          retryable: false
+        }
+      }
+      if (telethonFrozen?.status) {
+        probes.push(`Telethon 冻结未命中:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
+      }
 
       client = this.clientManager.createClient(session)
 
