@@ -360,7 +360,6 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, onClose
         <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
             <div className="text-sm font-semibold text-fuchsia-300">会员详情</div>
-            <div className="mt-1 text-xs text-textMuted">弹窗打开后会自动通过 MTProto 调 Telegram Premium 状态接口读取时间</div>
           </div>
           <button type="button" className="rounded-[8px] px-2 py-1 text-sm text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}>关闭</button>
         </div>
