@@ -6,6 +6,9 @@ import type { AccountRepository } from './account-repository'
 import { FileScanner } from './file-scanner'
 import { JsonTemplateService } from './json-template-service'
 
+const IMPORT_CONCURRENCY = 8
+const IMPORT_PROGRESS_CHUNK = 25
+
 function readStringField(profile: AccountJsonProfile, ...keys: string[]) {
   for (const key of keys) {
     const value = profile[key]
@@ -218,19 +221,25 @@ export class AccountImportService {
     const warnings = [...ignoredPaths.map((item) => `已忽略非账号文件：${item}`)]
     const inputs: UpsertAccountInput[] = []
     let generatedJsonCount = 0
-    let skippedCount = Math.max(candidates.length - inputs.length, 0)
+    let completedCount = 0
+    let importedCount = 0
+    let skippedCount = candidates.length
 
-    options.onProgress?.({
-      phase: 'start',
-      total: candidates.length,
-      current: 0,
-      importedCount: 0,
-      generatedJsonCount: 0,
-      skippedCount: ignoredPaths.length,
-      message: candidates.length > 0 ? `正在导入账号，准备处理 0 / ${candidates.length}` : '正在导入账号'
-    })
+    const emitProgress = (phase: ImportProgressPayload['phase'], current: number, message: string) => {
+      options.onProgress?.({
+        phase,
+        total: candidates.length,
+        current,
+        importedCount,
+        generatedJsonCount,
+        skippedCount,
+        message
+      })
+    }
 
-    for (const [index, sourceCandidate] of candidates.entries()) {
+    emitProgress('start', 0, candidates.length > 0 ? `正在导入账号，准备处理 0 / ${candidates.length}` : '正在导入账号')
+
+    const processCandidate = async (sourceCandidate: ScanCandidate) => {
       try {
         const candidate = options.mirrorToManagedDirectory
           ? await this.mirrorCandidateToManagedDirectory(sourceCandidate)
@@ -242,7 +251,7 @@ export class AccountImportService {
         const profile = await this.jsonTemplateService.readProfile(ensured.jsonPath)
         const username = inferUsername(profile)
 
-        inputs.push({
+        return {
           phone: inferPhone(profile, candidate.sessionPath),
           username,
           userId: inferUserId(profile),
@@ -254,36 +263,40 @@ export class AccountImportService {
           profileSource: 'json_import',
           lastCheckTime: parseDateValue(profile.last_check_time),
           lastOnlineTime: parseDateValue(profile.last_connect_date)
-        })
+        } satisfies UpsertAccountInput
       } catch (error) {
         const reason = error instanceof Error ? error.message : '未知错误'
         warnings.push(`导入失败：${sourceCandidate.sessionPath} -> ${reason}`)
+        return null
       }
+    }
 
-      skippedCount = Math.max(candidates.length - inputs.length, 0)
-      options.onProgress?.({
-        phase: 'progress',
-        total: candidates.length,
-        current: index + 1,
-        importedCount: inputs.length,
-        generatedJsonCount,
-        skippedCount,
-        message: `正在导入账号 ${index + 1} / ${candidates.length}`
-      })
+    for (let startIndex = 0; startIndex < candidates.length; startIndex += IMPORT_CONCURRENCY) {
+      const batch = candidates.slice(startIndex, startIndex + IMPORT_CONCURRENCY)
+      const batchResults = await Promise.all(batch.map((candidate) => processCandidate(candidate)))
+
+      for (const result of batchResults) {
+        completedCount += 1
+        if (result) {
+          inputs.push(result)
+          importedCount += 1
+        }
+        skippedCount = Math.max(candidates.length - importedCount, 0)
+
+        if (
+          completedCount === candidates.length ||
+          completedCount === 1 ||
+          completedCount % IMPORT_PROGRESS_CHUNK === 0
+        ) {
+          emitProgress('progress', completedCount, `正在导入账号 ${completedCount} / ${candidates.length}`)
+        }
+      }
     }
 
     const accounts = inputs.length > 0 ? this.repository.upsertMany(inputs) : this.repository.list()
 
-    skippedCount = Math.max(candidates.length - inputs.length, 0)
-    options.onProgress?.({
-      phase: 'completed',
-      total: candidates.length,
-      current: candidates.length,
-      importedCount: inputs.length,
-      generatedJsonCount,
-      skippedCount,
-      message: `本次成功导入 ${inputs.length} 个账号`
-    })
+    skippedCount = Math.max(candidates.length - importedCount, 0)
+    emitProgress('completed', candidates.length, `本次成功导入 ${inputs.length} 个账号`)
 
     return {
       scannedCount: candidates.length,
