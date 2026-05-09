@@ -23,6 +23,9 @@ export type AccountStatus =
 export type ProfileSource = 'json_import' | 'login_check'
 export type CheckLogLevel = 'info' | 'success' | 'warning' | 'error'
 export type CheckAction = 'account-status' | 'account-survival' | 'profile-refresh' | 'proxy-health'
+export type ProxyType = 'http' | 'https' | 'socks5'
+export type ProxyIpVersion = 'ipv4' | 'ipv6'
+export type ProxyStatus = 'idle' | 'checking' | 'alive' | 'dead'
 
 export interface AccountJsonProfile extends Record<string, unknown> {
   app_id?: number
@@ -145,6 +148,54 @@ export interface ExportAccountsResult {
   targetDirectory: string
 }
 
+export interface ProxyRecord {
+  id: string
+  value: string
+  type: ProxyType
+  ipVersion: ProxyIpVersion
+  host: string
+  port: number
+  username: string | null
+  password: string | null
+  status: ProxyStatus
+  latencyMs: number | null
+  lastCheckedAt: string | null
+  errorMessage: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProxyPoolSettings {
+  defaultType: ProxyType
+  ipVersion: ProxyIpVersion
+  randomize: boolean
+}
+
+export interface ProxyCheckLogEntry {
+  id: string
+  level: CheckLogLevel
+  message: string
+  createdAt: string
+  proxyId: string | null
+}
+
+export interface ProxyCheckState {
+  running: boolean
+  totalCount: number
+  checkedCount: number
+  aliveCount: number
+  deadCount: number
+  removedCount: number
+  logs: ProxyCheckLogEntry[]
+  lastUpdatedAt: string | null
+}
+
+export interface ProxyPoolState {
+  proxies: ProxyRecord[]
+  settings: ProxyPoolSettings
+  checkState: ProxyCheckState
+}
+
 export interface PremiumExpiryReadResult {
   ok: boolean
   premiumExpiry: string | null
@@ -223,6 +274,15 @@ export interface DesktopSettingsApi {
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
 }
 
+export interface DesktopProxyPoolApi {
+  getState: () => Promise<ProxyPoolState>
+  replaceProxyList: (text: string) => Promise<ProxyPoolState>
+  updateSettings: (patch: Partial<ProxyPoolSettings>) => Promise<ProxyPoolState>
+  clearLogs: () => Promise<ProxyPoolState>
+  startCheck: () => Promise<ProxyPoolState>
+  onState: (callback: (state: ProxyPoolState) => void) => () => void
+}
+
 export interface DesktopWindowApi {
   minimize: () => Promise<void>
   toggleMaximize: () => Promise<boolean>
@@ -234,6 +294,7 @@ declare global {
   interface Window {
     desktopAccounts?: DesktopAccountsApi
     desktopSettings?: DesktopSettingsApi
+    desktopProxyPool?: DesktopProxyPoolApi
     desktopWindow?: DesktopWindowApi
     desktopInfo?: {
       appName: string

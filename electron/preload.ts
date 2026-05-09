@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, CheckAction, CheckQueueState, CheckResultInput, ImportProgressPayload } from '../src/types'
+import type { AccountRecord, CheckAction, CheckQueueState, CheckResultInput, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'Telegram Multi Account Manager',
@@ -51,4 +51,17 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
 contextBridge.exposeInMainWorld('desktopSettings', {
   get: () => ipcRenderer.invoke('app-settings:get'),
   update: (patch: { checkConcurrency?: number }) => ipcRenderer.invoke('app-settings:update', patch)
+})
+
+contextBridge.exposeInMainWorld('desktopProxyPool', {
+  getState: () => ipcRenderer.invoke('proxy-pool:get-state'),
+  replaceProxyList: (text: string) => ipcRenderer.invoke('proxy-pool:replace-list', text),
+  updateSettings: (patch: Partial<ProxyPoolSettings>) => ipcRenderer.invoke('proxy-pool:update-settings', patch),
+  clearLogs: () => ipcRenderer.invoke('proxy-pool:clear-logs'),
+  startCheck: () => ipcRenderer.invoke('proxy-pool:start-check'),
+  onState: (callback: (state: ProxyPoolState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: ProxyPoolState) => callback(state)
+    ipcRenderer.on('proxy-pool:state', listener)
+    return () => ipcRenderer.removeListener('proxy-pool:state', listener)
+  }
 })

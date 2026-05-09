@@ -22,6 +22,7 @@ import { JsonTemplateService } from './accounts/services/json-template-service'
 import { TelegramWebService } from './accounts/telegram-web-service'
 import { TelegramDesktopPremiumService } from './accounts/telegram-desktop-premium-service'
 import { AppSettingsStore } from './app-settings-store'
+import { ProxyPoolService } from './proxy-pool/service'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -131,8 +132,10 @@ async function bootstrap() {
   const settingsPath = path.join(app.getPath('userData'), 'settings.json')
   const database = await createAccountsDatabase(databasePath)
   const appSettingsStore = new AppSettingsStore(settingsPath)
+  const proxyPoolStoragePath = path.join(app.getPath('userData'), 'proxy-pool.json')
   const appSettings = appSettingsStore.get()
   const repository = new AccountRepository(database)
+  const proxyPoolService = new ProxyPoolService(proxyPoolStoragePath)
   const scanner = new FileScanner()
   const jsonTemplateService = new JsonTemplateService()
   const importService = new AccountImportService(repository, scanner, jsonTemplateService, managedSessionsDirectory)
@@ -169,6 +172,21 @@ async function bootstrap() {
     timeoutMs: 25000,
     retryLimit: 2
   })
+
+  await proxyPoolService.init()
+
+  const emitProxyPoolState = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('proxy-pool:state', proxyPoolService.getState())
+  }
+
+  proxyPoolService.on('state', emitProxyPoolState)
+
+  ipcMain.handle('proxy-pool:get-state', () => proxyPoolService.getState())
+  ipcMain.handle('proxy-pool:replace-list', (_event, text: string) => proxyPoolService.replaceProxyList(text))
+  ipcMain.handle('proxy-pool:update-settings', (_event, patch) => proxyPoolService.updateSettings(patch))
+  ipcMain.handle('proxy-pool:clear-logs', () => proxyPoolService.clearLogs())
+  ipcMain.handle('proxy-pool:start-check', () => proxyPoolService.startCheck())
 
   await importService.syncManagedSessions()
 
