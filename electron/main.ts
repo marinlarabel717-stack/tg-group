@@ -145,7 +145,7 @@ async function bootstrap() {
   const telethonFreezeChecker = new TelethonFreezeChecker()
   const clientManager = new TelegramClientManager()
   const telegramWebPreloadPath = path.resolve(__dirname, '../electron/accounts/telegram-web-preload.cjs')
-  const telegramWebService = new TelegramWebService(sessionLoader, clientManager, telegramWebPreloadPath)
+  const telegramWebService = new TelegramWebService(sessionLoader, clientManager, telegramWebPreloadPath, proxyPoolService)
   const telegramDesktopPremiumService = new TelegramDesktopPremiumService(
     accountsRootPath,
     sessionLoader,

@@ -1,8 +1,8 @@
 import { BrowserWindow, dialog } from 'electron'
 import type { AccountRecord } from './types'
 import { SessionLoader } from './check-engine/session-loader'
-import { TelegramClientManager } from './check-engine/telegram-client-manager'
-import { getTelegramModule } from './check-engine/gramjs-runtime'
+import { type AccountClientProxyOptions, TelegramClientManager } from './check-engine/telegram-client-manager'
+import { type AccountCheckProxy, ProxyPoolService } from '../proxy-pool/service'
 
 interface TelegramWebAccountState {
   userId: string
@@ -70,7 +70,8 @@ export class TelegramWebService {
   constructor(
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
-    private readonly preloadPath: string
+    private readonly preloadPath: string,
+    private readonly proxyPoolService: ProxyPoolService
   ) {}
 
   async openAccountWeb(account: AccountRecord) {
@@ -81,73 +82,122 @@ export class TelegramWebService {
       return true
     }
 
-    try {
-      const webState = await this.buildWebAccountState(account)
-      const partition = `telegram-web-${account.id}-${Date.now()}`
-      const window = new BrowserWindow({
-        width: 1280,
-        height: 920,
-        minWidth: 980,
-        minHeight: 720,
-        show: false,
-        autoHideMenuBar: true,
-        backgroundColor: '#08101d',
-        title: `${account.phone || '账号'} - Telegram Web`,
-        webPreferences: {
-          partition,
-          preload: this.preloadPath,
-          additionalArguments: [`--tg-web-auth=${encodeWebAuthPayload(this.buildWindowPayload(webState))}`],
-          contextIsolation: true,
-          sandbox: true,
-          nodeIntegration: false,
-          spellcheck: false,
-          backgroundThrottling: false
+    const attempts = this.pickProxyAttempts()
+    let lastError: unknown = null
+
+    for (const proxy of attempts) {
+      let window: BrowserWindow | null = null
+
+      try {
+        const webState = await this.buildWebAccountState(account, proxy)
+        const partition = `telegram-web-${account.id}-${Date.now()}`
+        window = new BrowserWindow({
+          width: 1280,
+          height: 920,
+          minWidth: 980,
+          minHeight: 720,
+          show: false,
+          autoHideMenuBar: true,
+          backgroundColor: '#08101d',
+          title: `${account.phone || '账号'} - Telegram Web`,
+          webPreferences: {
+            partition,
+            preload: this.preloadPath,
+            additionalArguments: [`--tg-web-auth=${encodeWebAuthPayload(this.buildWindowPayload(webState))}`],
+            contextIsolation: true,
+            sandbox: true,
+            nodeIntegration: false,
+            spellcheck: false,
+            backgroundThrottling: false
+          }
+        })
+
+        await this.configureWindowProxy(window, proxy)
+        this.windows.set(account.id, window)
+
+        const cleanup = async () => {
+          this.windows.delete(account.id)
+          try {
+            await window?.webContents.session.clearStorageData()
+          } catch {
+            // ignore session cleanup failures on close
+          }
         }
-      })
 
-      this.windows.set(account.id, window)
+        window.on('closed', () => {
+          void cleanup()
+        })
 
-      const cleanup = async () => {
-        this.windows.delete(account.id)
-        try {
-          await window.webContents.session.clearStorageData()
-        } catch {
-          // ignore session cleanup failures on close
-        }
-      }
-
-      window.on('closed', () => {
-        void cleanup()
-      })
-
-      await window.loadURL(TELEGRAM_WEB_URL)
-      await sleep(TELEGRAM_WEB_BOOT_DELAY_MS)
-      await this.patchWindowAuthState(window, webState)
-      await window.webContents.executeJavaScript('location.reload()')
-      await sleep(4000)
-
-      let probe = await this.probeWindow(window)
-      if (probe.hasAuthForm && !probe.hasMainContent) {
+        await window.loadURL(TELEGRAM_WEB_URL)
+        await sleep(TELEGRAM_WEB_BOOT_DELAY_MS)
         await this.patchWindowAuthState(window, webState)
         await window.webContents.executeJavaScript('location.reload()')
-      }
+        await sleep(4000)
 
-      await this.waitForMainContent(window)
+        const probe = await this.probeWindow(window)
+        if (probe.hasAuthForm && !probe.hasMainContent) {
+          await this.patchWindowAuthState(window, webState)
+          await window.webContents.executeJavaScript('location.reload()')
+        }
 
-      if (!window.isDestroyed()) {
-        window.show()
-        window.focus()
+        await this.waitForMainContent(window)
+
+        if (!window.isDestroyed()) {
+          window.show()
+          window.focus()
+        }
+        return true
+      } catch (error) {
+        lastError = error
+        if (window && !window.isDestroyed()) {
+          window.destroy()
+        }
       }
-      return true
-    } catch (error) {
-      dialog.showErrorBox('Telegram Web 打开失败', formatWebLoginError(error))
-      return false
+    }
+
+    dialog.showErrorBox('Telegram Web 打开失败', formatWebLoginError(lastError))
+    return false
+  }
+
+  private pickProxyAttempts() {
+    const first = this.proxyPoolService.getAccountCheckProxy()
+    if (!first) return [null]
+    const second = this.proxyPoolService.getAccountCheckProxy([first.id])
+    return second ? [first, second] : [first]
+  }
+
+  private toClientProxy(proxy: AccountCheckProxy | null): AccountClientProxyOptions | null {
+    if (!proxy) return null
+    return {
+      type: proxy.type,
+      ip: proxy.host,
+      port: proxy.port,
+      username: proxy.username,
+      password: proxy.password,
+      ipVersion: proxy.ipVersion
     }
   }
 
-  private async buildWebAccountState(account: AccountRecord): Promise<TelegramWebAccountState> {
+  private async configureWindowProxy(window: BrowserWindow, proxy: AccountCheckProxy | null) {
+    const session = window.webContents.session
+    await session.setProxy(proxy ? {
+      proxyRules: `${proxy.type}://${proxy.host.includes(':') && !proxy.host.startsWith('[') ? `[${proxy.host}]` : proxy.host}:${proxy.port}`
+    } : { mode: 'direct' })
+
+    if (proxy?.username) {
+      window.webContents.on('login', (event, _request, authInfo, callback) => {
+        if (!authInfo.isProxy) return
+        event.preventDefault()
+        callback(proxy.username ?? '', proxy.password ?? '')
+      })
+    }
+  }
+
+  private async buildWebAccountState(account: AccountRecord, proxy: AccountCheckProxy | null): Promise<TelegramWebAccountState> {
     const sourceSession = await this.sessionLoader.load(account.sessionPath)
-    const sourceClient = this.clientManager.createClient(sourceSession)
+    const sourceClient = this.clientManager.createClient(sourceSession, {
+      proxy: this.toClientProxy(proxy)
+    })
 
     try {
       await sourceClient.connect()

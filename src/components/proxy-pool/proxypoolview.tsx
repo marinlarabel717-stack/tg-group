@@ -48,6 +48,7 @@ export default memo(function ProxyPoolView() {
   const errorMessage = useProxyPoolStore((store) => store.errorMessage)
   const lastActionMessage = useProxyPoolStore((store) => store.lastActionMessage)
   const setActiveModule = useUIStore((store) => store.setActiveModule)
+  const setLogsContext = useUIStore((store) => store.setLogsContext)
 
   const [draft, setDraft] = useState('')
   const [dirty, setDirty] = useState(false)
@@ -87,6 +88,7 @@ export default memo(function ProxyPoolView() {
   const handleStartCheck = async () => {
     await replaceProxyList(draft)
     setDirty(false)
+    setLogsContext('proxy-pool')
     setActiveModule('logs')
     await startCheck()
   }

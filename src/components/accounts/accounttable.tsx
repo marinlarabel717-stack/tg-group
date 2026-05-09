@@ -451,6 +451,7 @@ export const AccountTable = memo(function AccountTable() {
   const deleteAll = useAccountStore((state) => state.deleteAll)
   const startSelectedCheck = useAccountStore((state) => state.startSelectedCheck)
   const setActiveModule = useUIStore((state) => state.setActiveModule)
+  const setLogsContext = useUIStore((state) => state.setLogsContext)
 
   const [sourceFilter, setSourceFilter] = useState('')
   const [proxyFilter, setProxyFilter] = useState('')
@@ -734,9 +735,10 @@ export const AccountTable = memo(function AccountTable() {
   }, [orderedIds, setSelectedIds])
 
   const handleStartCheck = useCallback((actions: CheckAction[]) => {
+    setLogsContext('accounts')
     setActiveModule('logs')
     void startSelectedCheck(actions)
-  }, [setActiveModule, startSelectedCheck])
+  }, [setActiveModule, setLogsContext, startSelectedCheck])
 
   const handleOpenPremiumDialog = useCallback(async (account: AccountRecord) => {
     let premiumExpiryOverride: string | null | undefined = readPremiumExpiry(account)

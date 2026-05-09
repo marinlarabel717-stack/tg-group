@@ -3,6 +3,7 @@ import { FileClock, ShieldCheck, ShieldX } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useAccountStore } from '../../stores/accountstore'
 import { useProxyPoolStore } from '../../stores/proxypoolstore'
+import { useUIStore } from '../../stores/uistore'
 import type { CheckLogEntry, ProxyCheckLogEntry } from '../../types'
 import { isGeoRestrictedError } from '../../lib/ui-text'
 
@@ -65,7 +66,12 @@ const LogLines = memo(function LogLines({
 
 const ProxySummary = memo(function ProxySummary() {
   const proxyState = useProxyPoolStore((state) => state.state)
+  const logsContext = useUIStore((state) => state.logsContext)
   const running = proxyState.checkState.running
+
+  if (logsContext !== 'proxy-pool') {
+    return null
+  }
 
   if (!running && proxyState.checkState.logs.length === 0) {
     return null
