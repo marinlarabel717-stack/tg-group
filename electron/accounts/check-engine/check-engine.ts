@@ -102,61 +102,6 @@ export class AccountCheckEngine {
       const session = await withStepTimeout(this.sessionLoader.load(account.sessionPath), this.timeoutMs, 'Session 加载')
       probes.push('Session 加载成功')
 
-      const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结检测')
-      if (telethonFrozen?.status === 'frozen') {
-        probes.push(`Telethon 冻结命中:${telethonFrozen.reason ?? 'FREEZE_STATE_IN_APP_CONFIG'}`)
-        const liveUser = {
-          id: telethonFrozen.user_id ?? account.userId,
-          phone: telethonFrozen.phone ?? account.phone,
-          username: telethonFrozen.username ?? account.profile.username,
-          firstName: telethonFrozen.first_name ?? account.profile.first_name,
-          lastName: telethonFrozen.last_name ?? account.profile.last_name
-        }
-
-        const updated = this.updateService.buildSuccessProfile({
-          account,
-          liveUser,
-          fullUser: null,
-          spambotReply: '',
-          status: 'frozen',
-          freezeSince: normalizeTelethonFreezeDate(telethonFrozen.freeze_since_date),
-          freezeUntil: normalizeTelethonFreezeDate(telethonFrozen.freeze_until_date),
-          freezeAppealUrl: telethonFrozen.freeze_appeal_url ?? null,
-          durationMs: Date.now() - startedAt
-        })
-
-        const payload: CheckResultInput = {
-          id: account.id,
-          profile: updated.profile,
-          status: 'frozen',
-          phone: updated.phone,
-          username: updated.username,
-          userId: updated.userId,
-          country: updated.country,
-          lastCheckTime: updated.lastCheckTime,
-          lastOnlineTime: updated.lastOnlineTime
-        }
-
-        this.resultWriter.write(payload)
-
-        return {
-          accountId: account.id,
-          status: 'frozen',
-          profile: updated.profile,
-          phone: updated.phone,
-          username: updated.username,
-          userId: updated.userId,
-          country: updated.country,
-          lastCheckTime: updated.lastCheckTime,
-          lastOnlineTime: updated.lastOnlineTime,
-          durationMs: Date.now() - startedAt,
-          retryable: false
-        }
-      }
-      if (telethonFrozen?.status) {
-        probes.push(`Telethon 冻结未命中:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
-      }
-
       client = this.clientManager.createClient(session)
 
       await withStepTimeout(client.connect(), this.timeoutMs, 'Telegram 连接')
@@ -192,15 +137,19 @@ export class AccountCheckEngine {
       logger({ type: 'login_success', phone: loginPhone })
 
       if (frozenState.frozen) {
+        const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结检测')
+        if (telethonFrozen?.status) {
+          probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
+        }
         const updated = this.updateService.buildSuccessProfile({
           account,
           liveUser,
           fullUser: null,
           spambotReply: '',
           status: 'frozen',
-          freezeSince: frozenState.freezeSince,
-          freezeUntil: frozenState.freezeUntil,
-          freezeAppealUrl: frozenState.freezeAppealUrl,
+          freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? frozenState.freezeSince,
+          freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? frozenState.freezeUntil,
+          freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? frozenState.freezeAppealUrl,
           durationMs: Date.now() - startedAt
         })
 
@@ -246,15 +195,19 @@ export class AccountCheckEngine {
       }
 
       if (selfProbe.frozen) {
+        const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结检测')
+        if (telethonFrozen?.status) {
+          probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
+        }
         const updated = this.updateService.buildSuccessProfile({
           account,
           liveUser,
           fullUser: null,
           spambotReply: '',
           status: 'frozen',
-          freezeSince: selfProbe.freezeSince,
-          freezeUntil: selfProbe.freezeUntil,
-          freezeAppealUrl: selfProbe.freezeAppealUrl,
+          freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? selfProbe.freezeSince,
+          freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? selfProbe.freezeUntil,
+          freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? selfProbe.freezeAppealUrl,
           durationMs: Date.now() - startedAt
         })
 
@@ -292,15 +245,21 @@ export class AccountCheckEngine {
 
       const spamResult = await withStepTimeout(this.spamBotChecker.check(client), this.timeoutMs, 'SpamBot 检测')
       probes.push(`SpamBot 检测完成:${spamResult.status}`)
+      const telethonFrozen = spamResult.status === 'frozen'
+        ? await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结检测')
+        : null
+      if (telethonFrozen?.status) {
+        probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
+      }
       const updated = this.updateService.buildSuccessProfile({
         account,
         liveUser,
         fullUser,
         spambotReply: spamResult.replyText,
         status: spamResult.status,
-        freezeSince: spamResult.freezeSince,
-        freezeUntil: spamResult.freezeUntil,
-        freezeAppealUrl: spamResult.freezeAppealUrl,
+        freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? spamResult.freezeSince,
+        freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? spamResult.freezeUntil,
+        freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? spamResult.freezeAppealUrl,
         durationMs: Date.now() - startedAt
       })
 
