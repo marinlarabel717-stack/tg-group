@@ -337,10 +337,6 @@ function extractFrozenStateInfo(value: unknown, visited = new Set<object>()) {
       for (const [rawKey, item] of Object.entries(input as Record<string, unknown>)) {
         const key = rawKey.toLowerCase()
 
-        if (key.includes('freeze')) {
-          info.frozen = true
-        }
-
         if (!info.freezeSince && (key === 'freeze_since_date' || key === 'freeze_since' || key === 'frozen_since_date' || key === 'frozen_since')) {
           info.freezeSince = normalizeTimestamp(item)
         }
@@ -365,6 +361,86 @@ function extractFrozenStateInfo(value: unknown, visited = new Set<object>()) {
 }
 
 export class SpamBotChecker {
+  private async probeFrozenBySavedMessageWrite(client: TelegramClient): Promise<FrozenStateInfo> {
+    const probeText = `health-check-${Date.now().toString(36)}`
+    const { generateRandomLong } = getHelpersModule()
+    const randomId = generateRandomLong(true)
+
+    try {
+      const message = await client.invoke(new Api.messages.SendMessage({
+        peer: new Api.InputPeerSelf(),
+        message: probeText,
+        randomId,
+        noWebpage: true,
+        silent: true,
+        clearDraft: true
+      }))
+
+      try {
+        const messageId = readMessageId(message)
+        if (messageId) {
+          await client.deleteMessages('me', [messageId], { revoke: true })
+        }
+      } catch {
+        // ignore cleanup failure
+      }
+
+      return {
+        frozen: false,
+        freezeSince: null,
+        freezeUntil: null,
+        freezeAppealUrl: null,
+        errorMessage: null,
+        reason: 'SAVED_MESSAGE_WRITE_OK',
+        appConfigSummary: null
+      }
+    } catch (error) {
+      if (isFrozenRpcError(error)) {
+        const metadata = await this.detectFrozenState(client)
+        return {
+          ...metadata,
+          frozen: true,
+          errorMessage: null,
+          reason: extractRpcErrorName(error)
+        }
+      }
+
+      return {
+        frozen: false,
+        freezeSince: null,
+        freezeUntil: null,
+        freezeAppealUrl: null,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        reason: extractRpcErrorName(error) || 'SAVED_MESSAGE_PROBE_FAILED',
+        appConfigSummary: null
+      }
+    }
+  }
+
+  private async refreshFreezeMetadataAfterFrozenReply(client: TelegramClient) {
+    let metadata = await this.detectFrozenState(client)
+    if (metadata.freezeSince || metadata.freezeUntil || metadata.freezeAppealUrl) return metadata
+
+    const probes = [
+      () => this.probeFrozenBySelfMessage(client),
+      () => this.probeFrozenBySavedMessageWrite(client)
+    ]
+
+    for (const runProbe of probes) {
+      const probe = await runProbe()
+      if (probe.freezeSince || probe.freezeUntil || probe.freezeAppealUrl) {
+        return probe
+      }
+
+      metadata = await this.detectFrozenState(client)
+      if (metadata.freezeSince || metadata.freezeUntil || metadata.freezeAppealUrl) {
+        return metadata
+      }
+    }
+
+    return metadata
+  }
+
   private buildSpamBotResult(replyText: string, frozenState: FrozenStateInfo): SpamBotCheckResult {
     const parsed = parseSpamBotReply(replyText)
     const replyFrozen = parsed.status === 'frozen'
@@ -393,14 +469,13 @@ export class SpamBotChecker {
       const metadata = fetchFreezeMetadataFromConfig(appConfig)
       const plainConfig = metadata.plainConfig
       const extracted = extractFrozenStateInfo(plainConfig)
-      const haystack = extractPrimitiveTokens(plainConfig).join(' ').toLowerCase()
       const highConfidenceFrozen = hasHighConfidenceFreezeSignal(plainConfig)
       return {
         ...extracted,
         freezeSince: metadata.freezeSince ?? extracted.freezeSince,
         freezeUntil: metadata.freezeUntil ?? extracted.freezeUntil,
         freezeAppealUrl: metadata.freezeAppealUrl ?? extracted.freezeAppealUrl,
-        frozen: metadata.hasFreezeDate || highConfidenceFrozen || extracted.frozen || /frozen|freeze_state|freeze/.test(haystack),
+        frozen: metadata.hasFreezeDate || highConfidenceFrozen || extracted.frozen,
         errorMessage: null,
         reason: metadata.hasFreezeDate ? 'FREEZE_STATE_IN_APP_CONFIG' : highConfidenceFrozen ? 'FREEZE_STATE_IN_APP_CONFIG' : null,
         appConfigSummary: buildAppConfigSummary(plainConfig)
@@ -494,7 +569,10 @@ export class SpamBotChecker {
 
       if (reply) {
         const replyText = extractMessageText(reply)
-        const frozenState = await this.detectFrozenState(client)
+        const parsed = parseSpamBotReply(replyText)
+        const frozenState = parsed.status === 'frozen'
+          ? await this.refreshFreezeMetadataAfterFrozenReply(client)
+          : await this.detectFrozenState(client)
         return this.buildSpamBotResult(replyText, frozenState)
       }
     }
@@ -503,7 +581,10 @@ export class SpamBotChecker {
     const fallbackReply = fallbackMessages.find((message) => isIncomingMessage(message) && extractMessageText(message))
     if (fallbackReply) {
       const replyText = extractMessageText(fallbackReply)
-      const frozenState = await this.detectFrozenState(client)
+      const parsed = parseSpamBotReply(replyText)
+      const frozenState = parsed.status === 'frozen'
+        ? await this.refreshFreezeMetadataAfterFrozenReply(client)
+        : await this.detectFrozenState(client)
       return this.buildSpamBotResult(replyText, frozenState)
     }
 
