@@ -35,6 +35,18 @@ export class AccountUpdateService {
     this.avatarDirectory = path.join(accountsRootPath, 'avatars')
   }
 
+  private toAvatarDataUrl(value: Buffer | string) {
+    if (Buffer.isBuffer(value)) {
+      return `data:image/jpeg;base64,${value.toString('base64')}`
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      return fs.readFile(value).then((buffer) => `data:image/jpeg;base64,${buffer.toString('base64')}`)
+    }
+
+    return null
+  }
+
   async buildSuccessProfile(args: {
     account: AccountRecord
     client?: any
@@ -116,31 +128,35 @@ export class AccountUpdateService {
       return typeof account.profile.avatar === 'string' ? account.profile.avatar : null
     }
 
+    const existingAvatar = typeof account.profile.avatar === 'string' ? account.profile.avatar : null
+
     try {
-      await fs.mkdir(this.avatarDirectory, { recursive: true })
-      const filePath = path.join(this.avatarDirectory, `${account.id}-${userId || 'unknown'}.jpg`)
       const downloaded = await client.downloadProfilePhoto('me', {
-        isBig: false,
-        outputFile: filePath
+        isBig: false
       })
 
-      if (typeof downloaded === 'string' && downloaded.trim()) {
-        return downloaded
+      if (downloaded) {
+        const dataUrl = await this.toAvatarDataUrl(downloaded)
+        if (dataUrl) return dataUrl
       }
-
-      const fallbackDownloaded = await client.downloadProfilePhoto(liveUser, {
-        isBig: false,
-        outputFile: filePath
-      })
-
-      if (typeof fallbackDownloaded === 'string' && fallbackDownloaded.trim()) {
-        return fallbackDownloaded
-      }
-
-      return filePath
     } catch {
-      return typeof account.profile.avatar === 'string' ? account.profile.avatar : null
+      // ignore and fallback below
     }
+
+    try {
+      const fallbackDownloaded = await client.downloadProfilePhoto(liveUser, {
+        isBig: false
+      })
+
+      if (fallbackDownloaded) {
+        const dataUrl = await this.toAvatarDataUrl(fallbackDownloaded)
+        if (dataUrl) return dataUrl
+      }
+    } catch {
+      // ignore and fallback below
+    }
+
+    return existingAvatar
   }
 
   buildFailureProfile(args: {
