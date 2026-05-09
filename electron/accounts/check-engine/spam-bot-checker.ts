@@ -294,27 +294,20 @@ export class SpamBotChecker {
   }
 
   async probeFrozenBySelfMessage(client: TelegramClient): Promise<FrozenStateInfo> {
-    const probeText = `health-check-${Date.now().toString(36)}`
+    const probeText = '/start'
     const { generateRandomLong } = getHelpersModule()
     const randomId = generateRandomLong(true)
 
     try {
+      const peer = await client.getEntity('SpamBot')
       const message = await client.invoke(new Api.messages.SendMessage({
-        peer: new Api.InputPeerSelf(),
+        peer,
         message: probeText,
         randomId,
         noWebpage: true,
         silent: true,
         clearDraft: true
       }))
-      try {
-        const messageId = readMessageId(message)
-        if (messageId) {
-          await client.deleteMessages('me', [messageId], { revoke: true })
-        }
-      } catch {
-        // ignore cleanup failure
-      }
 
       return {
         frozen: false,
@@ -322,7 +315,7 @@ export class SpamBotChecker {
         freezeUntil: null,
         freezeAppealUrl: null,
         errorMessage: null,
-        reason: 'SELF_PROBE_OK',
+        reason: 'SPAMBOT_WRITE_OK',
         appConfigSummary: null
       }
     } catch (error) {
