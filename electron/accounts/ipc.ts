@@ -7,6 +7,7 @@ import type { AccountRepository } from './services/account-repository'
 import type { AccountStatusService } from './services/account-status-service'
 import type { CheckQueue } from './check-engine/check-queue'
 import type { AppSettingsStore } from '../app-settings-store'
+import type { TelegramWebService } from './telegram-web-service'
 
 interface RegisterAccountIpcOptions {
   getMainWindow: () => BrowserWindow | null
@@ -15,10 +16,11 @@ interface RegisterAccountIpcOptions {
   accountStatusService: AccountStatusService
   checkQueue: CheckQueue
   appSettingsStore: AppSettingsStore
+  telegramWebService: TelegramWebService
 }
 
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
-  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore } = options
+  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, telegramWebService } = options
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
     const mainWindow = getMainWindow()
@@ -145,8 +147,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     return true
   })
 
-  ipcMain.handle('accounts:open-telegram-web', async () => {
-    await shell.openExternal('https://web.telegram.org/a/')
-    return true
+  ipcMain.handle('accounts:open-telegram-web', async (_event, accountId: number) => {
+    const account = accountRepository.getByIds([accountId])[0]
+    if (!account) return false
+    return telegramWebService.openAccountWeb(account)
   })
 }

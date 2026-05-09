@@ -44,7 +44,7 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
   },
   exportByIds: (ids: number[]) => ipcRenderer.invoke('accounts:export', ids),
   revealPath: (targetPath: string) => ipcRenderer.invoke('accounts:reveal-path', targetPath),
-  openTelegramWeb: () => ipcRenderer.invoke('accounts:open-telegram-web')
+  openTelegramWeb: (accountId: number) => ipcRenderer.invoke('accounts:open-telegram-web', accountId)
 })
 
 contextBridge.exposeInMainWorld('desktopSettings', {

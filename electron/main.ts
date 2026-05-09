@@ -19,6 +19,7 @@ import { AccountStatusService } from './accounts/services/account-status-service
 import { createAccountsDatabase } from './accounts/services/database'
 import { FileScanner } from './accounts/services/file-scanner'
 import { JsonTemplateService } from './accounts/services/json-template-service'
+import { TelegramWebService } from './accounts/telegram-web-service'
 import { AppSettingsStore } from './app-settings-store'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -139,6 +140,7 @@ async function bootstrap() {
   const sessionLoader = new SessionLoader()
   const telethonFreezeChecker = new TelethonFreezeChecker()
   const clientManager = new TelegramClientManager()
+  const telegramWebService = new TelegramWebService(sessionLoader, clientManager)
   const spamBotChecker = new SpamBotChecker()
   const statusResolver = new StatusResolver()
   const updateService = new AccountUpdateService()
@@ -171,7 +173,8 @@ async function bootstrap() {
     accountImportService: importService,
     accountStatusService: statusService,
     checkQueue,
-    appSettingsStore
+    appSettingsStore,
+    telegramWebService
   })
   createWindow()
 

@@ -256,8 +256,8 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
   const twoFactor = readTwoFactor(account)
   const lastLogin = readLastLogin(account)
   const handleOpenTelegramWeb = useCallback(() => {
-    void window.desktopAccounts?.openTelegramWeb()
-  }, [])
+    void window.desktopAccounts?.openTelegramWeb(account.id)
+  }, [account.id])
 
   return (
     <div className="flex w-full items-center justify-start gap-1.5 overflow-hidden">
