@@ -101,6 +101,9 @@ export class AccountCheckEngine {
         fullUser,
         spambotReply: spamResult.replyText,
         status: spamResult.status,
+        freezeSince: spamResult.freezeSince,
+        freezeUntil: spamResult.freezeUntil,
+        freezeAppealUrl: spamResult.freezeAppealUrl,
         durationMs: Date.now() - startedAt
       })
 

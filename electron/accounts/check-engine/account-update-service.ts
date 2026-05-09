@@ -38,6 +38,9 @@ export class AccountUpdateService {
     fullUser: unknown
     spambotReply: string
     status: AccountStatus
+    freezeSince?: string | null
+    freezeUntil?: string | null
+    freezeAppealUrl?: string | null
     durationMs: number
   }) {
     const now = new Date()
@@ -62,6 +65,9 @@ export class AccountUpdateService {
       has_profile_pic: Boolean(liveUserRecord.photo ?? args.account.profile.has_profile_pic),
       is_premium: Boolean(liveUserRecord.premium ?? args.account.profile.is_premium),
       spamblock: args.status === 'alive' ? 'free' : args.status,
+      freeze_since_date: args.status === 'frozen' ? args.freezeSince ?? null : null,
+      freeze_until_date: args.status === 'frozen' ? args.freezeUntil ?? null : null,
+      freeze_appeal_url: args.status === 'frozen' ? args.freezeAppealUrl ?? null : null,
       spambot_reply: args.spambotReply || null,
       session_file: readString(args.account.profile.session_file) || path.basename(args.account.sessionPath, path.extname(args.account.sessionPath)),
       last_connect_date: formatOffsetDate(now),

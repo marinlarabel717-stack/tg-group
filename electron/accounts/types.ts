@@ -39,6 +39,9 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   has_profile_pic?: boolean
   spamblock?: string | null
   spamblock_end_date?: string | number | null
+  freeze_since_date?: string | number | null
+  freeze_until_date?: string | number | null
+  freeze_appeal_url?: string | null
   spambot_reply?: string | null
   session_file?: string
   stats_spam_count?: number

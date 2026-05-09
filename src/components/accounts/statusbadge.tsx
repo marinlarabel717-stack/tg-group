@@ -17,18 +17,22 @@ const styles: Record<AccountStatus, string> = {
   unknown: 'bg-white/10 text-slate-200'
 }
 
-export const StatusBadge = memo(function StatusBadge({ status }: { status: AccountStatus }) {
+export const StatusBadge = memo(function StatusBadge({ status, onClick }: { status: AccountStatus; onClick?: () => void }) {
   const label = formatAccountStatus(status)
 
   return (
-    <span
+    <button
+      type="button"
       title={label}
+      onClick={onClick}
+      disabled={!onClick}
       className={clsx(
         'inline-flex h-6 w-[102px] items-center justify-center overflow-hidden rounded-full px-2 text-center text-[10px] font-semibold tracking-[0.06em] whitespace-nowrap',
+        onClick ? 'cursor-pointer transition hover:brightness-110' : 'cursor-default',
         styles[status]
       )}
     >
       <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
-    </span>
+    </button>
   )
 })

@@ -29,7 +29,7 @@ import { TableFilters } from './tablefilters'
 import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
 import { filterAccounts, useAccountStore } from '../../stores/accountstore'
-import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatProfileSource } from '../../lib/ui-text'
+import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTimeFull, formatProfileSource } from '../../lib/ui-text'
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
@@ -132,6 +132,77 @@ function readLastLogin(account: AccountRecord) {
   return formatDateTime(account.lastOnlineTime || account.lastCheckTime)
 }
 
+function readFreezeSince(account: AccountRecord) {
+  const value = account.profile?.freeze_since_date
+  return typeof value === 'string' ? value : typeof value === 'number' ? String(value) : null
+}
+
+function readFreezeUntil(account: AccountRecord) {
+  const value = account.profile?.freeze_until_date
+  return typeof value === 'string' ? value : typeof value === 'number' ? String(value) : null
+}
+
+function readFreezeAppealUrl(account: AccountRecord) {
+  const value = account.profile?.freeze_appeal_url
+  return typeof value === 'string' && value.trim() ? value.trim() : ''
+}
+
+const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }: { account: AccountRecord; onClose: () => void }) {
+  const freezeSince = formatDateTimeFull(readFreezeSince(account))
+  const freezeUntil = formatDateTimeFull(readFreezeUntil(account))
+  const appealUrl = readFreezeAppealUrl(account)
+  const nickname = readNickname(account)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={onClose}>
+      <div className="w-full max-w-[420px] rounded-[18px] border border-sky-400/20 bg-card shadow-[0_16px_48px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+          <div>
+            <div className="text-sm font-semibold text-sky-300">冻结详情</div>
+            <div className="mt-1 text-xs text-textMuted">点击状态栏“冻结”可查看该账号的具体冻结时间</div>
+          </div>
+          <button type="button" className="rounded-[8px] px-2 py-1 text-sm text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}>关闭</button>
+        </div>
+
+        <div className="space-y-3 px-5 py-5 text-sm text-textMain">
+          <div className="rounded-[12px] bg-panel px-4 py-3">
+            <div className="text-xs text-textMuted">账号</div>
+            <div className="mt-1 font-medium text-white">{account.phone || '—'}</div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-[12px] bg-panel px-4 py-3">
+              <div className="text-xs text-textMuted">昵称</div>
+              <div className="mt-1 font-medium text-white">{nickname}</div>
+            </div>
+            <div className="rounded-[12px] bg-panel px-4 py-3">
+              <div className="text-xs text-textMuted">状态</div>
+              <div className="mt-1 font-medium text-sky-300">冻结</div>
+            </div>
+          </div>
+
+          <div className="rounded-[12px] bg-panel px-4 py-3">
+            <div className="text-xs text-textMuted">冻结开始时间</div>
+            <div className="mt-1 font-medium text-white">{freezeSince}</div>
+          </div>
+
+          <div className="rounded-[12px] bg-panel px-4 py-3">
+            <div className="text-xs text-textMuted">冻结结束时间</div>
+            <div className="mt-1 font-medium text-white">{freezeUntil}</div>
+          </div>
+
+          {appealUrl ? (
+            <div className="rounded-[12px] bg-panel px-4 py-3">
+              <div className="text-xs text-textMuted">申诉地址</div>
+              <div className="mt-1 break-all font-medium text-sky-300">{appealUrl}</div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+})
+
 const SkeletonRow = memo(function SkeletonRow({ columns }: { columns: number }) {
   return (
     <div className="grid min-h-[52px] shrink-0 items-center gap-0 rounded-[10px] bg-panel" style={ACCOUNT_GRID_STYLE}>
@@ -187,6 +258,7 @@ export const AccountTable = memo(function AccountTable() {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [tableLoading, setTableLoading] = useState(true)
   const [scrollLeft, setScrollLeft] = useState(0)
+  const [frozenDialogAccount, setFrozenDialogAccount] = useState<AccountRecord | null>(null)
   const deferredSearch = useDeferredValue(search)
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const scrollbarRef = useRef<HTMLDivElement | null>(null)
@@ -275,7 +347,12 @@ export const AccountTable = memo(function AccountTable() {
         accessorKey: 'status',
         header: '状态',
         size: 124,
-        cell: ({ row }) => <StatusBadge status={row.original.status} />
+        cell: ({ row }) => (
+          <StatusBadge
+            status={row.original.status}
+            onClick={row.original.status === 'frozen' ? () => setFrozenDialogAccount(row.original) : undefined}
+          />
+        )
       },
       {
         id: 'nickname',
@@ -553,6 +630,8 @@ export const AccountTable = memo(function AccountTable() {
         onNextPage={() => table.nextPage()}
         onPageSizeChange={(size) => table.setPageSize(size)}
       />
+
+      {frozenDialogAccount ? <FrozenStatusDialog account={frozenDialogAccount} onClose={() => setFrozenDialogAccount(null)} /> : null}
     </div>
   )
 })

@@ -42,6 +42,9 @@ export interface AccountJsonProfile extends Record<string, unknown> {
   is_premium?: boolean
   spamblock?: string | null
   spamblock_end_date?: string | number | null
+  freeze_since_date?: string | number | null
+  freeze_until_date?: string | number | null
+  freeze_appeal_url?: string | null
   spambot_reply?: string | null
   session_file?: string
   last_connect_date?: string | null
