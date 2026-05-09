@@ -17,7 +17,7 @@ interface WindowProbeResult {
   hasMainContent: boolean
 }
 
-const TELEGRAM_WEB_URL = 'https://web.telegram.org/k/'
+const TELEGRAM_WEB_URL = 'https://web.telegram.org/a/'
 const TELEGRAM_WEB_API_ID = 1025907
 const TELEGRAM_WEB_API_HASH = '452b0359b988148995f22ff0f4229750'
 const TELEGRAM_WEB_BASE_DC_ID = 2
@@ -30,6 +30,15 @@ function sleep(ms: number) {
 
 function encodeWebAuthPayload(payload: Record<string, unknown>) {
   return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
+}
+
+function randomHex(length: number) {
+  const alphabet = '0123456789abcdef'
+  let output = ''
+  for (let index = 0; index < length; index += 1) {
+    output += alphabet[Math.floor(Math.random() * alphabet.length)]
+  }
+  return output
 }
 
 function formatWebLoginError(error: unknown) {
@@ -117,8 +126,16 @@ export class TelegramWebService {
 
       await window.loadURL(TELEGRAM_WEB_URL)
       await sleep(TELEGRAM_WEB_BOOT_DELAY_MS)
-      await this.patchWindowAuthState(window, payload)
+      await this.patchWindowAuthState(window, webState)
       await window.webContents.executeJavaScript('location.reload()')
+      await sleep(4000)
+
+      let probe = await this.probeWindow(window)
+      if (probe.hasAuthForm && !probe.hasMainContent) {
+        await this.patchWindowAuthState(window, webState)
+        await window.webContents.executeJavaScript('location.reload()')
+      }
+
       await this.waitForMainContent(window)
 
       if (!window.isDestroyed()) {
@@ -215,64 +232,55 @@ export class TelegramWebService {
   }
 
   private buildWindowPayload(state: TelegramWebAccountState) {
-    const accountData = {
-      userId: state.userId,
-      dcId: state.dcId,
-      date: state.date,
-      auth_key_fingerprint: state.authKeyFingerprint,
-      [`dc${state.dcId}_auth_key`]: state.authKeyHex,
-      [`dc${state.dcId}_server_salt`]: ZERO_SERVER_SALT,
-    }
-
     return {
-      account1: accountData,
-      current_account: 1,
-      number_of_accounts: 1,
-      dc: state.dcId,
-      user_auth: {
-        date: state.date,
-        id: state.userId,
-        dcID: state.dcId
-      },
-      auth_key_fingerprint: state.authKeyFingerprint,
-      server_time_offset: 0,
-      [`dc${state.dcId}_auth_key`]: state.authKeyHex,
-      [`dc${state.dcId}_server_salt`]: ZERO_SERVER_SALT,
+      dcId: state.dcId,
+      userId: state.userId,
+      authKeyHex: state.authKeyHex,
+      authKeyFingerprint: state.authKeyFingerprint,
+      serverSalt: ZERO_SERVER_SALT,
     }
   }
 
-  private async patchWindowAuthState(window: BrowserWindow, payload: Record<string, unknown>) {
-    const encodedPayload = JSON.stringify(payload)
-
-    await window.webContents.executeJavaScript(`(() => {
-      const payload = ${encodedPayload}
-      const marker = '__tg_group_web_auth_injected__'
-      const signature = JSON.stringify(payload.user_auth ?? payload.account1 ?? {})
-      const keysToClear = [
-        'account1', 'account2', 'account3', 'account4',
-        'auth_key_fingerprint', 'current_account', 'dc', 'number_of_accounts',
-        'previous_account', 'server_time_offset', 'user_auth', 'xt_instance'
-      ]
-      for (let dcId = 1; dcId <= 5; dcId += 1) {
-        keysToClear.push('dc' + dcId + '_auth_key', 'dc' + dcId + '_server_salt', 'dc' + dcId + '_hash')
+  private async patchWindowAuthState(window: BrowserWindow, state: TelegramWebAccountState) {
+    const serverSalt = ZERO_SERVER_SALT === '0000000000000000' ? randomHex(16) : ZERO_SERVER_SALT
+    const script = `(() => {
+      const dcId = ${JSON.stringify(state.dcId)}
+      const authKeyHex = ${JSON.stringify(state.authKeyHex)}
+      const fingerprint = ${JSON.stringify(state.authKeyFingerprint)}
+      const userId = ${JSON.stringify(state.userId)}
+      const serverSalt = ${JSON.stringify(serverSalt)}
+      const keysToClear = ['dc', 'server_time_offset', 'xt_instance', 'user_auth', 'auth_key_fingerprint', 'number_of_accounts', 'current_account', 'previous_account', 'tt-multitab_1', 'loglevel', 'k_build', 'kz_version', 'tgme_sync', 'state_id']
+      for (let i = 1; i <= 5; i += 1) {
+        keysToClear.push('dc' + i + '_auth_key', 'dc' + i + '_server_salt', 'dc' + i + '_hash', 'account' + i)
       }
-
       for (const key of keysToClear) {
         localStorage.removeItem(key)
       }
 
-      for (const [key, value] of Object.entries(payload)) {
-        localStorage.setItem(key, JSON.stringify(value))
-      }
+      localStorage.setItem('dc', String(dcId))
+      localStorage.setItem('dc' + dcId + '_auth_key', '\"' + authKeyHex + '\"')
+      localStorage.setItem('dc' + dcId + '_server_salt', '\"' + serverSalt + '\"')
+      localStorage.setItem('auth_key_fingerprint', '\"' + fingerprint + '\"')
+      localStorage.setItem('user_auth', JSON.stringify({ dcID: dcId, id: String(userId) }))
+      localStorage.setItem('k_build', '589')
+      localStorage.setItem('kz_version', '\"K\"')
+      localStorage.setItem('number_of_accounts', '1')
+      localStorage.setItem('server_time_offset', '0')
+      localStorage.setItem('tt-multitab_1', '1')
+      localStorage.setItem('loglevel', 'SILENT')
+      localStorage.setItem('state_id', String(Math.floor(Math.random() * 0xFFFFFFFF) >>> 0))
+      localStorage.setItem('xt_instance', JSON.stringify({ id: Math.floor(Math.random() * 1e8), idle: false, time: Date.now() }))
+      localStorage.setItem('tgme_sync', JSON.stringify({ canRedirect: true, ts: Math.floor(Date.now() / 1000) }))
 
-      localStorage.setItem(marker, signature)
       return {
-        marker: localStorage.getItem(marker),
         dc: localStorage.getItem('dc'),
         user_auth: localStorage.getItem('user_auth'),
-        account1: localStorage.getItem('account1')
+        auth_key_fingerprint: localStorage.getItem('auth_key_fingerprint'),
+        auth_key: localStorage.getItem('dc' + dcId + '_auth_key')
       }
-    })()`)
+    })()`
+
+    await window.webContents.executeJavaScript(script)
   }
 
   private async waitForMainContent(window: BrowserWindow) {
@@ -296,8 +304,8 @@ export class TelegramWebService {
 
   private async probeWindow(window: BrowserWindow): Promise<WindowProbeResult> {
     return window.webContents.executeJavaScript(`(() => ({
-      hasAuthForm: Boolean(document.querySelector('#auth-qr-form, .auth-form')),
-      hasMainContent: Boolean(document.querySelector('#Main, #LeftColumn, .LeftColumn, .chatlist-container'))
+      hasAuthForm: Boolean(document.querySelector('#auth-qr-form, .auth-form, .qr-code, .page-signQR, .page-sign')),
+      hasMainContent: Boolean(document.querySelector('#Main, #LeftColumn, .LeftColumn, .chatlist-container, .im_page_wrap, .chat-background, .sidebar-left-section-content'))
     }))()`)
   }
 }
