@@ -117,6 +117,8 @@ export class TelegramWebService {
 
       await window.loadURL(TELEGRAM_WEB_URL)
       await sleep(TELEGRAM_WEB_BOOT_DELAY_MS)
+      await this.patchWindowAuthState(window, payload)
+      await window.webContents.executeJavaScript('location.reload()')
       await this.waitForMainContent(window)
 
       if (!window.isDestroyed()) {
@@ -237,6 +239,40 @@ export class TelegramWebService {
       [`dc${state.dcId}_auth_key`]: state.authKeyHex,
       [`dc${state.dcId}_server_salt`]: ZERO_SERVER_SALT,
     }
+  }
+
+  private async patchWindowAuthState(window: BrowserWindow, payload: Record<string, unknown>) {
+    const encodedPayload = JSON.stringify(payload)
+
+    await window.webContents.executeJavaScript(`(() => {
+      const payload = ${encodedPayload}
+      const marker = '__tg_group_web_auth_injected__'
+      const signature = JSON.stringify(payload.user_auth ?? payload.account1 ?? {})
+      const keysToClear = [
+        'account1', 'account2', 'account3', 'account4',
+        'auth_key_fingerprint', 'current_account', 'dc', 'number_of_accounts',
+        'previous_account', 'server_time_offset', 'user_auth', 'xt_instance'
+      ]
+      for (let dcId = 1; dcId <= 5; dcId += 1) {
+        keysToClear.push('dc' + dcId + '_auth_key', 'dc' + dcId + '_server_salt', 'dc' + dcId + '_hash')
+      }
+
+      for (const key of keysToClear) {
+        localStorage.removeItem(key)
+      }
+
+      for (const [key, value] of Object.entries(payload)) {
+        localStorage.setItem(key, JSON.stringify(value))
+      }
+
+      localStorage.setItem(marker, signature)
+      return {
+        marker: localStorage.getItem(marker),
+        dc: localStorage.getItem('dc'),
+        user_auth: localStorage.getItem('user_auth'),
+        account1: localStorage.getItem('account1')
+      }
+    })()`)
   }
 
   private async waitForMainContent(window: BrowserWindow) {
