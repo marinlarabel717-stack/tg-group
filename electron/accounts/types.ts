@@ -176,6 +176,7 @@ export interface CheckQueueState {
     frozen: number
     banned: number
     timeout: number
+    unknown: number
   }
   lastUpdatedAt: string | null
 }

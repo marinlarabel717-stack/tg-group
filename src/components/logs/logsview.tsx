@@ -22,11 +22,9 @@ function getLogLineClass(log: CheckLogEntry) {
   if (log.status === 'frozen') return 'text-sky-300'
   if (log.status === 'banned') return 'text-rose-300'
   if (log.status === 'timeout') return 'text-orange-300'
+  if (log.status === 'unknown') return 'text-slate-200'
 
   if (log.message.includes('本次检测已完成')) return 'text-emerald-300'
-  if (log.message.startsWith('总数量') || log.message.startsWith('无限制') || log.message.startsWith('双向') || log.message.startsWith('临时双向') || log.message.startsWith('冻结') || log.message.startsWith('封禁') || log.message.startsWith('超时')) {
-    return 'text-slate-200'
-  }
 
   return 'text-white'
 }

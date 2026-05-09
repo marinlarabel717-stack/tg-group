@@ -48,7 +48,8 @@ function createInitialState(options: Required<CheckQueueOptions>): CheckQueueSta
       temporary_limited: 0,
       frozen: 0,
       banned: 0,
-      timeout: 0
+      timeout: 0,
+      unknown: 0
     },
     lastUpdatedAt: null
   }
@@ -89,7 +90,8 @@ export class CheckQueue extends EventEmitter {
       temporary_limited: 0,
       frozen: 0,
       banned: 0,
-      timeout: 0
+      timeout: 0,
+      unknown: 0
     }
     this.bump()
   }
@@ -110,7 +112,8 @@ export class CheckQueue extends EventEmitter {
         temporary_limited: 0,
         frozen: 0,
         banned: 0,
-        timeout: 0
+        timeout: 0,
+        unknown: 0
       }
       if (uniqueIds.length > 0) {
         this.appendLog('info', null, `已选择 ${uniqueIds.length} 个账号，检查任务进行中，请稍等`)
@@ -234,9 +237,7 @@ export class CheckQueue extends EventEmitter {
       this.state.failedCount += 1
     }
     this.state.resultSummary.total += 1
-    if (displayStatus !== 'unknown') {
-      this.state.resultSummary[displayStatus] += 1
-    }
+    this.state.resultSummary[displayStatus] += 1
 
     const level: CheckLogLevel = displayStatus === 'alive' ? 'success' : displayStatus === 'timeout' ? 'error' : 'warning'
     const reasonSuffix = displayStatus === 'timeout' || displayStatus === 'unknown' ? `（${this.formatFailureReason(result)}）` : ''
@@ -272,13 +273,21 @@ export class CheckQueue extends EventEmitter {
 
     if (wasRunning && !this.state.running && this.state.totalCount === this.state.completedCount) {
       this.appendLog('success', null, '本次检测已完成')
-      this.appendLog('info', null, `总数量 ${this.state.resultSummary.total}`)
-      this.appendLog('info', null, `无限制 ${this.state.resultSummary.alive}`)
-      this.appendLog('info', null, `双向 ${this.state.resultSummary.limited}`)
-      this.appendLog('info', null, `临时双向 ${this.state.resultSummary.temporary_limited}`)
-      this.appendLog('info', null, `冻结 ${this.state.resultSummary.frozen}`)
-      this.appendLog('info', null, `封禁 ${this.state.resultSummary.banned}`)
-      this.appendLog('info', null, `超时 ${this.state.resultSummary.timeout}`)
+      const summaryItems: Array<{ status: AccountCheckResult['status']; count: number }> = [
+        { status: 'alive', count: this.state.resultSummary.alive },
+        { status: 'limited', count: this.state.resultSummary.limited },
+        { status: 'temporary_limited', count: this.state.resultSummary.temporary_limited },
+        { status: 'frozen', count: this.state.resultSummary.frozen },
+        { status: 'banned', count: this.state.resultSummary.banned },
+        { status: 'timeout', count: this.state.resultSummary.timeout },
+        { status: 'unknown', count: this.state.resultSummary.unknown }
+      ]
+
+      for (const item of summaryItems) {
+        if (item.count <= 0) continue
+        const level: CheckLogLevel = item.status === 'alive' ? 'success' : item.status === 'timeout' ? 'error' : 'warning'
+        this.appendLog(level, null, `${STATUS_LABELS[item.status]} ${item.count}`, undefined, { status: item.status })
+      }
     }
   }
 

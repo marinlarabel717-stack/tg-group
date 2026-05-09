@@ -27,7 +27,8 @@ function createEmptyCheckState(): CheckQueueState {
       temporary_limited: 0,
       frozen: 0,
       banned: 0,
-      timeout: 0
+      timeout: 0,
+      unknown: 0
     },
     lastUpdatedAt: null
   }
