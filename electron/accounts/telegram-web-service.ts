@@ -2,7 +2,7 @@ import { BrowserWindow, dialog } from 'electron'
 import type { AccountRecord } from './types'
 import { SessionLoader } from './check-engine/session-loader'
 import { TelegramClientManager } from './check-engine/telegram-client-manager'
-import { getSessionsModule, getTelegramModule } from './check-engine/gramjs-runtime'
+import { getTelegramModule } from './check-engine/gramjs-runtime'
 
 interface TelegramWebAccountState {
   userId: string
@@ -18,9 +18,6 @@ interface WindowProbeResult {
 }
 
 const TELEGRAM_WEB_URL = 'https://web.telegram.org/a/'
-const TELEGRAM_WEB_API_ID = 1025907
-const TELEGRAM_WEB_API_HASH = '452b0359b988148995f22ff0f4229750'
-const TELEGRAM_WEB_BASE_DC_ID = 2
 const TELEGRAM_WEB_BOOT_DELAY_MS = 3000
 const ZERO_SERVER_SALT = '0000000000000000'
 
@@ -86,7 +83,6 @@ export class TelegramWebService {
 
     try {
       const webState = await this.buildWebAccountState(account)
-      const payload = this.buildWindowPayload(webState)
       const partition = `telegram-web-${account.id}-${Date.now()}`
       const window = new BrowserWindow({
         width: 1280,
@@ -100,7 +96,7 @@ export class TelegramWebService {
         webPreferences: {
           partition,
           preload: this.preloadPath,
-          additionalArguments: [`--tg-web-auth=${encodeWebAuthPayload(payload)}`],
+          additionalArguments: [`--tg-web-auth=${encodeWebAuthPayload(this.buildWindowPayload(webState))}`],
           contextIsolation: true,
           sandbox: true,
           nodeIntegration: false,
@@ -166,69 +162,28 @@ export class TelegramWebService {
         throw new Error('missing user id')
       }
 
-      const { Api, TelegramClient } = getTelegramModule()
-      const { StringSession } = getSessionsModule()
+      const sessionState = sourceSession as any
+      const dcId = Number(sessionState?.dcId ?? sessionState?._dcId ?? 0)
+      if (!dcId) {
+        throw new Error('missing session dc id')
+      }
 
-      const dcOption = await this.resolveDcOption(sourceClient, TELEGRAM_WEB_BASE_DC_ID)
-      const exported = await sourceClient.invoke(new Api.auth.ExportAuthorization({
-        dcId: TELEGRAM_WEB_BASE_DC_ID
-      }))
+      const authKey = sessionState?.getAuthKey?.(dcId) ?? sessionState?.authKey
+      const authKeyHex = authKey?.getKey?.()?.toString('hex')
+      if (!authKeyHex) {
+        throw new Error('missing session auth key')
+      }
 
-      const webSession = new StringSession('')
-      webSession.setDC(TELEGRAM_WEB_BASE_DC_ID, dcOption.ipAddress, dcOption.port)
-      const webClient = new TelegramClient(webSession, TELEGRAM_WEB_API_ID, TELEGRAM_WEB_API_HASH, {
-        connectionRetries: 1,
-        reconnectRetries: 0,
-        requestRetries: 1,
-        retryDelay: 500,
-        autoReconnect: false,
-        timeout: 10,
-        floodSleepThreshold: 0,
-        useIPV6: false
-      })
-
-      try {
-        await webClient.connect()
-        await webClient.invoke(new Api.auth.ImportAuthorization({
-          id: exported.id,
-          bytes: exported.bytes
-        }))
-
-        const authKeyHex = webSession.getAuthKey(TELEGRAM_WEB_BASE_DC_ID)?.getKey()?.toString('hex')
-        if (!authKeyHex) {
-          throw new Error('missing imported web auth key')
-        }
-
-        return {
-          userId,
-          authKeyHex,
-          authKeyFingerprint: authKeyHex.slice(0, 8),
-          dcId: TELEGRAM_WEB_BASE_DC_ID,
-          date: Math.floor(Date.now() / 1000)
-        }
-      } finally {
-        await webClient.disconnect().catch(() => undefined)
+      return {
+        userId,
+        authKeyHex,
+        authKeyFingerprint: authKeyHex.slice(0, 8),
+        dcId,
+        date: Math.floor(Date.now() / 1000)
       }
     } finally {
       await this.clientManager.destroyClient(sourceClient)
     }
-  }
-
-  private async resolveDcOption(client: any, dcId: number) {
-    const { Api } = getTelegramModule()
-    const config = await client.invoke(new Api.help.GetConfig())
-    const dcOption = config.dcOptions.find((option: any) => (
-      option.id === dcId &&
-      !option.ipv6 &&
-      !option.mediaOnly &&
-      !option.tcpoOnly
-    ))
-
-    if (!dcOption) {
-      throw new Error(`missing dc option for ${dcId}`)
-    }
-
-    return dcOption
   }
 
   private buildWindowPayload(state: TelegramWebAccountState) {
