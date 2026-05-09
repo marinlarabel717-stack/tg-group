@@ -144,4 +144,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     shell.showItemInFolder(resolvedPath)
     return true
   })
+
+  ipcMain.handle('accounts:open-telegram-web', async () => {
+    await shell.openExternal('https://web.telegram.org/a/')
+    return true
+  })
 }

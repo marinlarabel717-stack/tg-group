@@ -255,14 +255,23 @@ const TableRowActions = memo(function TableRowActions({ account }: { account: Ac
   const username = readUsername(account)
   const twoFactor = readTwoFactor(account)
   const lastLogin = readLastLogin(account)
+  const handleOpenTelegramWeb = useCallback(() => {
+    void window.desktopAccounts?.openTelegramWeb()
+  }, [])
 
   return (
     <div className="flex w-full items-center justify-start gap-1.5 overflow-hidden">
       <span title={`用户名：${username}`} className={actionButtonClass(username !== '-')}>@</span>
       <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>🔓</span>
       <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>
-      <span title="跳转（后续接功能）" className={actionButtonClass(false)}>↗</span>
-      <span title="打开网页版 Web（后续接功能）" className="flex h-7 min-w-[38px] shrink-0 items-center justify-center rounded-[8px] border border-white/5 bg-slate-950/35 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">web</span>
+      <button
+        type="button"
+        title="打开 Telegram 网页版"
+        onClick={handleOpenTelegramWeb}
+        className="flex h-7 min-w-[38px] shrink-0 items-center justify-center rounded-[8px] border border-white/10 bg-panel px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-200 transition hover:bg-hover hover:text-neonSoft"
+      >
+        web
+      </button>
     </div>
   )
 })

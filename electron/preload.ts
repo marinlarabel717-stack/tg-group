@@ -43,7 +43,8 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
     return () => ipcRenderer.removeListener('accounts:import-progress', listener)
   },
   exportByIds: (ids: number[]) => ipcRenderer.invoke('accounts:export', ids),
-  revealPath: (targetPath: string) => ipcRenderer.invoke('accounts:reveal-path', targetPath)
+  revealPath: (targetPath: string) => ipcRenderer.invoke('accounts:reveal-path', targetPath),
+  openTelegramWeb: () => ipcRenderer.invoke('accounts:open-telegram-web')
 })
 
 contextBridge.exposeInMainWorld('desktopSettings', {

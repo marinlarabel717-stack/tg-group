@@ -197,6 +197,7 @@ export interface DesktopAccountsApi {
   onImportProgress: (callback: (payload: ImportProgressPayload) => void) => () => void
   exportByIds: (ids: number[]) => Promise<ExportAccountsResult>
   revealPath: (targetPath: string) => Promise<boolean>
+  openTelegramWeb: () => Promise<boolean>
 }
 
 export interface DesktopAppSettings {
