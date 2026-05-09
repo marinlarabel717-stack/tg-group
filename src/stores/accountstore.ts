@@ -2,6 +2,15 @@ import { create } from 'zustand'
 import { formatCountryDisplay } from '../lib/ui-text'
 import type { AccountRecord, AccountStatus, CheckQueueState, ImportProgressPayload } from '../types'
 
+interface ImportResultDialogState {
+  open: boolean
+  scannedCount: number
+  importedCount: number
+  generatedJsonCount: number
+  skippedCount: number
+  warning: string
+}
+
 function getDesktopAccountsApi() {
   return window.desktopAccounts
 }
@@ -70,6 +79,7 @@ interface AccountStoreState {
   selectedProfileAccountId: number | null
   checkState: CheckQueueState
   importProgress: ImportProgressPayload | null
+  importResultDialog: ImportResultDialogState
   lastActionMessage: string
   errorMessage: string
   init: () => Promise<void>
@@ -82,6 +92,7 @@ interface AccountStoreState {
   importFiles: () => Promise<void>
   importFolder: () => Promise<void>
   importDroppedPaths: (paths: string[]) => Promise<void>
+  closeImportResultDialog: () => void
   exportSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
   deleteAll: () => Promise<void>
@@ -127,6 +138,14 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   selectedProfileAccountId: null,
   checkState: createEmptyCheckState(),
   importProgress: null,
+  importResultDialog: {
+    open: false,
+    scannedCount: 0,
+    importedCount: 0,
+    generatedJsonCount: 0,
+    skippedCount: 0,
+    warning: ''
+  },
   lastActionMessage: '',
   errorMessage: '',
   init: async () => {
@@ -179,6 +198,14 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       await syncAccounts(set, get)
       set({
         importProgress: null,
+        importResultDialog: {
+          open: true,
+          scannedCount: result.scannedCount,
+          importedCount: result.importedCount,
+          generatedJsonCount: result.generatedJsonCount,
+          skippedCount: result.skippedCount,
+          warning: result.warnings[0] ?? ''
+        },
         lastActionMessage: `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}，自动补 JSON ${result.generatedJsonCount}）`,
         errorMessage: result.warnings[0] ?? ''
       })
@@ -191,6 +218,14 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       await syncAccounts(set, get)
       set({
         importProgress: null,
+        importResultDialog: {
+          open: true,
+          scannedCount: result.scannedCount,
+          importedCount: result.importedCount,
+          generatedJsonCount: result.generatedJsonCount,
+          skippedCount: result.skippedCount,
+          warning: result.warnings[0] ?? ''
+        },
         lastActionMessage: `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}，自动补 JSON ${result.generatedJsonCount}）`,
         errorMessage: result.warnings[0] ?? ''
       })
@@ -204,10 +239,26 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       await syncAccounts(set, get)
       set({
         importProgress: null,
+        importResultDialog: {
+          open: true,
+          scannedCount: result.scannedCount,
+          importedCount: result.importedCount,
+          generatedJsonCount: result.generatedJsonCount,
+          skippedCount: result.skippedCount,
+          warning: result.warnings[0] ?? ''
+        },
         lastActionMessage: `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}）`,
         errorMessage: result.warnings[0] ?? ''
       })
     })
+  },
+  closeImportResultDialog: () => {
+    set((state) => ({
+      importResultDialog: {
+        ...state.importResultDialog,
+        open: false
+      }
+    }))
   },
   exportSelected: async () => {
     await runBusyAction(set, async () => {

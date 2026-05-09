@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react'
-import { MonitorCog, ShieldCheck, Sparkles } from 'lucide-react'
+import { CheckCircle2, Loader2, MonitorCog, ShieldCheck, Sparkles, Upload, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { AccountTable } from './accounttable'
 import { useAccountStore } from '../../stores/accountstore'
@@ -60,29 +60,19 @@ const AccountsSummary = memo(function AccountsSummary() {
 
 export function AccountsView() {
   const importProgress = useAccountStore((state) => state.importProgress)
+  const importResultDialog = useAccountStore((state) => state.importResultDialog)
+  const closeImportResultDialog = useAccountStore((state) => state.closeImportResultDialog)
   const lastActionMessage = useAccountStore((state) => state.lastActionMessage)
   const errorMessage = useAccountStore((state) => state.errorMessage)
+
+  const showImportProgressDialog = Boolean(importProgress && importProgress.phase !== 'completed')
+  const showImportResultDialog = importResultDialog.open
 
   return (
     <div className="space-y-5 contain-layout">
       <AccountsSummary />
 
-      {importProgress ? (
-        <GlassPanel className="bg-card py-0">
-          <div className="flex items-center justify-between gap-4 text-sm">
-            <div>
-              <div className="font-medium text-white">{importProgress.phase === 'completed' ? '导入完成' : '正在导入账号'}</div>
-              <div className="mt-1 text-textMuted">{importProgress.message}</div>
-            </div>
-            <div className="text-right text-textMuted">
-              <div>{importProgress.current} / {importProgress.total}</div>
-              <div className="mt-1">已导入 {importProgress.importedCount} 个</div>
-            </div>
-          </div>
-        </GlassPanel>
-      ) : null}
-
-      {!importProgress && lastActionMessage ? (
+      {!showImportResultDialog && lastActionMessage ? (
         <GlassPanel className="bg-card py-0">
           <div className="text-sm font-medium text-white">{lastActionMessage}</div>
           {errorMessage ? <div className="mt-1 text-sm text-amber-300">{errorMessage}</div> : null}
@@ -90,6 +80,114 @@ export function AccountsView() {
       ) : null}
 
       <AccountTable />
+
+      {showImportProgressDialog && importProgress ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4">
+          <div className="w-full max-w-[420px] rounded-[20px] border border-neon/20 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]">
+            <div className="border-b border-white/8 px-5 py-4">
+              <div className="flex items-center gap-3 text-white">
+                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-neon/10 text-neonSoft">
+                  <Upload size={18} />
+                </div>
+                <div>
+                  <div className="text-base font-semibold">正在导入账号</div>
+                  <div className="mt-1 text-xs text-textMuted">请稍等，正在处理你刚导入的账号文件</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+              <div className="flex items-center justify-between rounded-[14px] bg-panel px-4 py-3 text-sm">
+                <div className="flex items-center gap-2 text-white">
+                  <Loader2 size={16} className="animate-spin text-neonSoft" />
+                  <span>{importProgress.message}</span>
+                </div>
+                <div className="font-medium text-neonSoft">{importProgress.current} / {importProgress.total}</div>
+              </div>
+
+              <div className="h-2 overflow-hidden rounded-full bg-panel">
+                <div
+                  className="h-full rounded-full bg-neonSoft transition-all duration-300"
+                  style={{ width: `${importProgress.total > 0 ? Math.min((importProgress.current / importProgress.total) * 100, 100) : 0}%` }}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                <div className="rounded-[12px] bg-panel px-3 py-3">
+                  <div className="text-xs text-textMuted">已导入</div>
+                  <div className="mt-1 font-semibold text-white">{importProgress.importedCount}</div>
+                </div>
+                <div className="rounded-[12px] bg-panel px-3 py-3">
+                  <div className="text-xs text-textMuted">补 JSON</div>
+                  <div className="mt-1 font-semibold text-white">{importProgress.generatedJsonCount}</div>
+                </div>
+                <div className="rounded-[12px] bg-panel px-3 py-3">
+                  <div className="text-xs text-textMuted">跳过</div>
+                  <div className="mt-1 font-semibold text-white">{importProgress.skippedCount}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showImportResultDialog ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4" onClick={closeImportResultDialog}>
+          <div className="w-full max-w-[420px] rounded-[20px] border border-emerald-400/20 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+              <div className="flex items-center gap-3 text-white">
+                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-emerald-400/10 text-emerald-300">
+                  <CheckCircle2 size={18} />
+                </div>
+                <div>
+                  <div className="text-base font-semibold">导入完成</div>
+                  <div className="mt-1 text-xs text-textMuted">本次导入结果如下</div>
+                </div>
+              </div>
+
+              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={closeImportResultDialog}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+              <div className="rounded-[16px] bg-emerald-400/10 px-4 py-4 text-center">
+                <div className="text-xs tracking-[0.18em] text-emerald-200/80">导入结果</div>
+                <div className="mt-2 text-2xl font-semibold text-emerald-300">本次成功导入 {importResultDialog.importedCount} 个</div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                <div className="rounded-[12px] bg-panel px-3 py-3">
+                  <div className="text-xs text-textMuted">扫描到</div>
+                  <div className="mt-1 font-semibold text-white">{importResultDialog.scannedCount}</div>
+                </div>
+                <div className="rounded-[12px] bg-panel px-3 py-3">
+                  <div className="text-xs text-textMuted">补 JSON</div>
+                  <div className="mt-1 font-semibold text-white">{importResultDialog.generatedJsonCount}</div>
+                </div>
+                <div className="rounded-[12px] bg-panel px-3 py-3">
+                  <div className="text-xs text-textMuted">跳过</div>
+                  <div className="mt-1 font-semibold text-white">{importResultDialog.skippedCount}</div>
+                </div>
+              </div>
+
+              {importResultDialog.warning ? (
+                <div className="rounded-[12px] border border-amber-300/15 bg-amber-300/8 px-4 py-3 text-sm text-amber-200">
+                  {importResultDialog.warning}
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={closeImportResultDialog}
+                className="h-11 w-full rounded-[12px] bg-emerald-400/12 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/16"
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
