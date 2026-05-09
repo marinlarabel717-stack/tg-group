@@ -1,6 +1,6 @@
 import { Api, TelegramClient } from 'telegram'
-import bigInt from 'big-integer'
 import { parseSpamBotReply, type SpamBotParseResult } from './spam-bot-parser'
+import { getHelpersModule } from './gramjs-runtime'
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -295,7 +295,8 @@ export class SpamBotChecker {
 
   async probeFrozenBySelfMessage(client: TelegramClient): Promise<FrozenStateInfo> {
     const probeText = `health-check-${Date.now().toString(36)}`
-    const randomId = bigInt(Date.now()).multiply(1000).add(Math.floor(Math.random() * 1000))
+    const { generateRandomLong } = getHelpersModule()
+    const randomId = generateRandomLong(true)
 
     try {
       const message = await client.invoke(new Api.messages.SendMessage({
