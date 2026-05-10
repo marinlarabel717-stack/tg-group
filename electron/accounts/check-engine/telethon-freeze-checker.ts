@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { resolveRuntimeAssetPath } from '../../runtime-paths'
 
 const execFileAsync = promisify(execFile)
 
@@ -31,7 +32,7 @@ function resolvePythonExecutable() {
 }
 
 function resolveScriptPath() {
-  return path.resolve(process.cwd(), 'electron', 'accounts', 'check-engine', 'telethon_freeze_check.py')
+  return resolveRuntimeAssetPath('accounts', 'check-engine', 'telethon_freeze_check.py')
 }
 
 export class TelethonFreezeChecker {

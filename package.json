@@ -2,13 +2,69 @@
   "name": "telegram-multi-account-manager",
   "version": "0.0.1",
   "private": true,
+  "description": "TG Group desktop manager",
+  "author": "TG Group",
+  "license": "UNLICENSED",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "rebuild:native": "electron-rebuild -f -w better-sqlite3"
+    "rebuild:native": "electron-rebuild -f -w better-sqlite3",
+    "pack:dir": "npm run build && electron-builder --dir --publish never",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never",
+    "dist:portable": "npm run build && electron-builder --win portable --publish never"
+  },
+  "build": {
+    "appId": "ai.tggroup.desktop",
+    "productName": "TG Group",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "electron/accounts/telegram-web-preload.cjs",
+        "to": "runtime/accounts/telegram-web-preload.cjs"
+      },
+      {
+        "from": "electron/accounts/check-engine/telethon_freeze_check.py",
+        "to": "runtime/accounts/check-engine/telethon_freeze_check.py"
+      }
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-${version}-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-Portable.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": false
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://example.com/tg-group/releases"
+      }
+    ]
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",
@@ -33,6 +89,7 @@
     "@vitejs/plugin-react": "^4.4.1",
     "autoprefixer": "^10.4.21",
     "electron": "^35.2.0",
+    "electron-builder": "^26.0.12",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",

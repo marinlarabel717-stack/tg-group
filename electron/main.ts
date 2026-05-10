@@ -23,6 +23,7 @@ import { TelegramWebService } from './accounts/telegram-web-service'
 import { TelegramDesktopPremiumService } from './accounts/telegram-desktop-premium-service'
 import { AppSettingsStore } from './app-settings-store'
 import { ProxyPoolService } from './proxy-pool/service'
+import { resolveRuntimeAssetPath } from './runtime-paths'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -32,6 +33,8 @@ let managedSessionsWatcher: fs.FSWatcher | null = null
 let managedSessionsSyncTimer: NodeJS.Timeout | null = null
 
 function createWindow() {
+  const appTitle = app.getName()
+
   mainWindow = new BrowserWindow({
     width: 1600,
     height: 1000,
@@ -49,7 +52,7 @@ function createWindow() {
     roundedCorners: true,
     backgroundColor: '#08101d',
     autoHideMenuBar: true,
-    title: 'Telegram Multi Account Manager',
+    title: appTitle,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
@@ -144,7 +147,7 @@ async function bootstrap() {
   const sessionLoader = new SessionLoader()
   const telethonFreezeChecker = new TelethonFreezeChecker()
   const clientManager = new TelegramClientManager()
-  const telegramWebPreloadPath = path.resolve(__dirname, '../electron/accounts/telegram-web-preload.cjs')
+  const telegramWebPreloadPath = resolveRuntimeAssetPath('accounts', 'telegram-web-preload.cjs')
   const telegramWebService = new TelegramWebService(sessionLoader, clientManager, telegramWebPreloadPath, proxyPoolService)
   const telegramDesktopPremiumService = new TelegramDesktopPremiumService(
     accountsRootPath,
