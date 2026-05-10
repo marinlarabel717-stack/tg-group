@@ -125,6 +125,7 @@ export default memo(function LogsView() {
   const initAccounts = useAccountStore((state) => state.init)
   const initProxyPool = useProxyPoolStore((state) => state.init)
   const checkState = useAccountStore((state) => state.checkState)
+  const logsContext = useUIStore((state) => state.logsContext)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -140,24 +141,26 @@ export default memo(function LogsView() {
 
   return (
     <div className="space-y-5 contain-layout">
-      <ProxySummary />
+      {logsContext === 'proxy-pool' ? (
+        <ProxySummary />
+      ) : (
+        <GlassPanel className="min-h-[520px] bg-card p-0">
+          <div className="border-b border-white/5 px-5 py-4">
+            <div className="text-sm font-medium text-white">账号运行日志</div>
+          </div>
 
-      <GlassPanel className="min-h-[520px] bg-card p-0">
-        <div className="border-b border-white/5 px-5 py-4">
-          <div className="text-sm font-medium text-white">账号运行日志</div>
-        </div>
-
-        <div ref={scrollContainerRef} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">
-          {checkState.logs.length === 0 ? (
-            <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center text-textMuted">
-              <FileClock size={24} className="text-neonSoft" />
-              <div className="text-base font-medium text-white">暂无账号运行日志</div>
-            </div>
-          ) : (
-            <LogLines logs={checkState.logs} lineClassResolver={getAccountLogLineClass} />
-          )}
-        </div>
-      </GlassPanel>
+          <div ref={scrollContainerRef} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">
+            {checkState.logs.length === 0 ? (
+              <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center text-textMuted">
+                <FileClock size={24} className="text-neonSoft" />
+                <div className="text-base font-medium text-white">暂无账号运行日志</div>
+              </div>
+            ) : (
+              <LogLines logs={checkState.logs} lineClassResolver={getAccountLogLineClass} />
+            )}
+          </div>
+        </GlassPanel>
+      )}
     </div>
   )
 })
