@@ -1,12 +1,47 @@
+import fs from 'node:fs'
 import http from 'node:http'
+import path from 'node:path'
 import { URL } from 'node:url'
 import { LicenseServerService } from './service.mjs'
 import { json, readJsonBody } from './utils.mjs'
 
 const PORT = Number(process.env.LICENSE_SERVER_PORT || 8787)
 const HOST = process.env.LICENSE_SERVER_HOST || '127.0.0.1'
+const ADMIN_TOKEN = (process.env.LICENSE_ADMIN_TOKEN || 'dev-admin-token').trim()
+const USING_DEFAULT_ADMIN_TOKEN = !process.env.LICENSE_ADMIN_TOKEN?.trim()
+const ADMIN_PAGE_PATH = path.resolve(process.cwd(), 'license-server', 'admin.html')
 
 const service = new LicenseServerService()
+
+function getAdminTokenFromRequest(req) {
+  const authHeader = req.headers.authorization || ''
+  if (authHeader.toLowerCase().startsWith('bearer ')) {
+    return authHeader.slice(7).trim()
+  }
+  const headerToken = req.headers['x-admin-token']
+  return typeof headerToken === 'string' ? headerToken.trim() : ''
+}
+
+function ensureAdminAuthorized(req, res) {
+  if (!ADMIN_TOKEN) {
+    json(res, 503, { ok: false, message: '管理员令牌未配置。' })
+    return false
+  }
+
+  const token = getAdminTokenFromRequest(req)
+  if (token !== ADMIN_TOKEN) {
+    json(res, 401, { ok: false, message: '管理员令牌无效。' })
+    return false
+  }
+
+  return true
+}
+
+function sendHtml(res, filePath) {
+  const content = fs.readFileSync(filePath, 'utf8')
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+  res.end(content)
+}
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -14,7 +49,16 @@ const server = http.createServer(async (req, res) => {
     const pathname = url.pathname
 
     if (req.method === 'GET' && pathname === '/health') {
-      return json(res, 200, { ok: true, message: 'license server ok' })
+      return json(res, 200, {
+        ok: true,
+        message: 'license server ok',
+        adminTokenConfigured: Boolean(ADMIN_TOKEN),
+        usingDefaultAdminToken: USING_DEFAULT_ADMIN_TOKEN
+      })
+    }
+
+    if (req.method === 'GET' && (pathname === '/' || pathname === '/admin')) {
+      return sendHtml(res, ADMIN_PAGE_PATH)
     }
 
     if (req.method === 'POST' && pathname === '/api/license/activate') {
@@ -27,6 +71,18 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req)
       const result = service.validate(body)
       return json(res, result.statusCode, result.body)
+    }
+
+    if (pathname.startsWith('/api/admin/')) {
+      if (!ensureAdminAuthorized(req, res)) return
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/session') {
+      return json(res, 200, {
+        ok: true,
+        message: '管理员认证通过。',
+        usingDefaultAdminToken: USING_DEFAULT_ADMIN_TOKEN
+      })
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/cards') {
@@ -90,4 +146,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`[license-server] listening on http://${HOST}:${PORT}`)
+  if (USING_DEFAULT_ADMIN_TOKEN) {
+    console.log('[license-server] warning: using default admin token "dev-admin-token". Set LICENSE_ADMIN_TOKEN in production.')
+  }
 })

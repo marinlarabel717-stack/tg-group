@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TG Group License Admin</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #08101d;
+        --panel: rgba(15, 23, 42, 0.72);
+        --panel-2: rgba(15, 23, 42, 0.88);
+        --line: rgba(255, 255, 255, 0.08);
+        --text: #e5eefb;
+        --muted: #8ea0bf;
+        --primary: #38bdf8;
+        --danger: #fb7185;
+        --warn: #f59e0b;
+        --ok: #34d399;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: radial-gradient(circle at top, rgba(56,189,248,.12), transparent 28%), var(--bg);
+        color: var(--text);
+        font: 14px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      .page { max-width: 1480px; margin: 0 auto; padding: 24px; }
+      .hero, .panel {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 18px;
+        backdrop-filter: blur(14px);
+        box-shadow: 0 20px 60px rgba(0,0,0,.24);
+      }
+      .hero { padding: 22px; display:flex; gap:16px; justify-content:space-between; align-items:flex-start; }
+      .grid { margin-top: 18px; display:grid; gap:18px; grid-template-columns: 360px minmax(0, 1fr); }
+      .panel { padding: 18px; }
+      .title { font-size: 24px; font-weight: 700; }
+      .muted { color: var(--muted); }
+      .badge { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; background: rgba(56,189,248,.12); color:#bce8ff; }
+      .stack { display:flex; flex-direction:column; gap:12px; }
+      .row { display:flex; gap:10px; flex-wrap:wrap; }
+      .field { display:flex; flex-direction:column; gap:8px; width:100%; }
+      .field.inline { width:auto; min-width:120px; }
+      label { color: var(--muted); font-size: 12px; }
+      input, textarea, select {
+        width:100%; border:1px solid var(--line); background: rgba(2,6,23,.55); color: var(--text);
+        border-radius: 12px; padding: 11px 12px; outline: none;
+      }
+      textarea { min-height: 84px; resize: vertical; }
+      button {
+        border:0; border-radius: 12px; padding: 11px 14px; cursor:pointer; color:white;
+        background: var(--primary); font-weight: 600;
+      }
+      button.secondary { background: rgba(255,255,255,.06); border:1px solid var(--line); }
+      button.warn { background: var(--warn); color:#1f1400; }
+      button.danger { background: var(--danger); }
+      button.ok { background: var(--ok); color:#05291f; }
+      button:disabled { opacity:.55; cursor:not-allowed; }
+      .table-wrap { overflow:auto; border:1px solid var(--line); border-radius: 14px; }
+      table { width:100%; border-collapse: collapse; min-width: 980px; }
+      th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align:left; }
+      th { color: var(--muted); font-size:12px; position: sticky; top:0; background: var(--panel-2); }
+      tr:hover td { background: rgba(255,255,255,.025); }
+      .actions { display:flex; gap:8px; flex-wrap:wrap; }
+      .status { font-weight:700; }
+      .status.active { color:#c4fce8; }
+      .status.disabled { color:#ffd4dc; }
+      .status.expired { color:#ffe3a5; }
+      .kv { display:grid; grid-template-columns: 120px 1fr; gap:8px 12px; }
+      .log-list { max-height: 360px; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+      .log-item { border:1px solid var(--line); border-radius: 12px; padding: 12px; background: rgba(2,6,23,.42); }
+      .token-box { display:grid; grid-template-columns: 1fr auto auto; gap:10px; align-items:end; }
+      .notice, .error { padding:12px 14px; border-radius:12px; margin-top:12px; }
+      .notice { background: rgba(52,211,153,.12); color:#bff7e0; border:1px solid rgba(52,211,153,.18); }
+      .error { background: rgba(251,113,133,.12); color:#ffd3db; border:1px solid rgba(251,113,133,.18); }
+      .split { display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
+      .empty { padding: 20px; color: var(--muted); }
+      @media (max-width: 1100px) {
+        .grid, .split { grid-template-columns: 1fr; }
+        .token-box { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="hero">
+        <div>
+          <div class="muted">TG GROUP · LICENSE ADMIN</div>
+          <div class="title">授权后台</div>
+          <div class="muted" style="margin-top:8px">现在已经能直接创建卡密、禁用、延期、重置设备、查日志。先用这个简洁后台顶着，后面再升级正式管理台。</div>
+        </div>
+        <div class="badge" id="healthBadge">等待连接服务</div>
+      </div>
+
+      <div class="grid">
+        <div class="stack">
+          <div class="panel">
+            <div style="font-size:16px;font-weight:700">管理员认证</div>
+            <div class="muted" style="margin-top:6px">本地默认 token 是 <code>dev-admin-token</code>。正式部署请设置环境变量 <code>LICENSE_ADMIN_TOKEN</code>。</div>
+            <div class="token-box" style="margin-top:14px">
+              <div class="field">
+                <label>管理员 Token</label>
+                <input id="adminToken" placeholder="请输入管理员 token" />
+              </div>
+              <button id="saveTokenBtn" class="secondary">保存</button>
+              <button id="checkTokenBtn">验证</button>
+            </div>
+            <div id="authMessage"></div>
+          </div>
+
+          <div class="panel">
+            <div style="font-size:16px;font-weight:700">创建卡密</div>
+            <div class="stack" style="margin-top:14px">
+              <div class="field">
+                <label>卡密</label>
+                <input id="createKey" placeholder="例如 TEST-2026-0002" />
+              </div>
+              <div class="row">
+                <div class="field inline" style="flex:1">
+                  <label>有效期（天）</label>
+                  <input id="createDays" type="number" min="1" value="30" />
+                </div>
+                <div class="field inline" style="flex:1">
+                  <label>设备上限</label>
+                  <input id="createDevices" type="number" min="1" value="1" />
+                </div>
+              </div>
+              <div class="field">
+                <label>备注</label>
+                <textarea id="createNote" placeholder="例如：代理版客户 / 月卡"></textarea>
+              </div>
+              <button id="createBtn">创建卡密</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div style="font-size:16px;font-weight:700">卡密操作</div>
+            <div class="muted" style="margin-top:6px">先从右侧列表点一张卡，再执行操作。</div>
+            <div class="stack" style="margin-top:14px">
+              <div class="field">
+                <label>当前选中卡密</label>
+                <input id="selectedCardKey" readonly placeholder="未选择" />
+              </div>
+              <div class="row">
+                <button id="disableBtn" class="danger">禁用</button>
+                <button id="enableBtn" class="ok">启用</button>
+                <button id="refreshBtn" class="secondary">刷新详情</button>
+              </div>
+              <div class="row">
+                <div class="field inline" style="flex:1">
+                  <label>延期天数</label>
+                  <input id="extendDays" type="number" min="1" value="30" />
+                </div>
+                <div class="field inline" style="flex:1; align-self:end">
+                  <button id="extendBtn" class="warn">延期</button>
+                </div>
+              </div>
+              <button id="resetDevicesBtn" class="secondary">重置设备绑定</button>
+              <div class="field">
+                <label>备注</label>
+                <textarea id="actionNote" placeholder="操作备注，会写进卡密 note 和日志"></textarea>
+              </div>
+            </div>
+            <div id="actionMessage"></div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="panel">
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-size:16px;font-weight:700">卡密列表</div>
+                <div class="muted" style="margin-top:6px">点击某行可查看设备与日志。</div>
+              </div>
+              <button id="loadCardsBtn" class="secondary">刷新列表</button>
+            </div>
+            <div class="table-wrap" style="margin-top:14px">
+              <table>
+                <thead>
+                  <tr>
+                    <th>卡密</th>
+                    <th>状态</th>
+                    <th>到期</th>
+                    <th>设备</th>
+                    <th>最近校验</th>
+                    <th>备注</th>
+                  </tr>
+                </thead>
+                <tbody id="cardsTableBody">
+                  <tr><td colspan="6" class="empty">还没有数据</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="split">
+            <div class="panel">
+              <div style="font-size:16px;font-weight:700">卡密详情</div>
+              <div id="detailBox" class="kv" style="margin-top:14px"></div>
+            </div>
+            <div class="panel">
+              <div style="font-size:16px;font-weight:700">绑定设备</div>
+              <div id="deviceList" class="log-list" style="margin-top:14px"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-size:16px;font-weight:700">操作日志</div>
+                <div class="muted" style="margin-top:6px">默认显示选中卡密最近日志。</div>
+              </div>
+              <button id="loadLogsBtn" class="secondary">刷新日志</button>
+            </div>
+            <div id="logList" class="log-list" style="margin-top:14px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const state = {
+        token: localStorage.getItem('license_admin_token') || 'dev-admin-token',
+        selectedCardKey: '',
+        cards: []
+      }
+
+      const els = {
+        healthBadge: document.getElementById('healthBadge'),
+        adminToken: document.getElementById('adminToken'),
+        saveTokenBtn: document.getElementById('saveTokenBtn'),
+        checkTokenBtn: document.getElementById('checkTokenBtn'),
+        authMessage: document.getElementById('authMessage'),
+        createKey: document.getElementById('createKey'),
+        createDays: document.getElementById('createDays'),
+        createDevices: document.getElementById('createDevices'),
+        createNote: document.getElementById('createNote'),
+        createBtn: document.getElementById('createBtn'),
+        selectedCardKey: document.getElementById('selectedCardKey'),
+        disableBtn: document.getElementById('disableBtn'),
+        enableBtn: document.getElementById('enableBtn'),
+        refreshBtn: document.getElementById('refreshBtn'),
+        extendDays: document.getElementById('extendDays'),
+        extendBtn: document.getElementById('extendBtn'),
+        resetDevicesBtn: document.getElementById('resetDevicesBtn'),
+        actionNote: document.getElementById('actionNote'),
+        actionMessage: document.getElementById('actionMessage'),
+        loadCardsBtn: document.getElementById('loadCardsBtn'),
+        cardsTableBody: document.getElementById('cardsTableBody'),
+        detailBox: document.getElementById('detailBox'),
+        deviceList: document.getElementById('deviceList'),
+        loadLogsBtn: document.getElementById('loadLogsBtn'),
+        logList: document.getElementById('logList')
+      }
+
+      function setMessage(target, text, type = 'notice') {
+        target.innerHTML = text ? `<div class="${type}">${text}</div>` : ''
+      }
+
+      function formatDate(value) {
+        if (!value) return '—'
+        const date = new Date(value)
+        if (Number.isNaN(date.getTime())) return value
+        return date.toLocaleString('zh-CN', { hour12: false })
+      }
+
+      function getHeaders() {
+        return {
+          'content-type': 'application/json',
+          authorization: `Bearer ${state.token}`
+        }
+      }
+
+      async function api(path, options = {}) {
+        const response = await fetch(path, {
+          ...options,
+          headers: {
+            ...(options.body ? { 'content-type': 'application/json' } : {}),
+            authorization: `Bearer ${state.token}`,
+            ...(options.headers || {})
+          }
+        })
+        const data = await response.json()
+        if (!response.ok || data.ok === false) {
+          throw new Error(data.message || '请求失败')
+        }
+        return data
+      }
+
+      function renderCards() {
+        if (!state.cards.length) {
+          els.cardsTableBody.innerHTML = '<tr><td colspan="6" class="empty">还没有卡密</td></tr>'
+          return
+        }
+        els.cardsTableBody.innerHTML = state.cards.map((card) => `
+          <tr data-card-key="${card.cardKey}" style="cursor:pointer">
+            <td>${card.cardKeyMasked}</td>
+            <td><span class="status ${card.status}">${card.status}</span></td>
+            <td>${formatDate(card.expireAt)}</td>
+            <td>${card.activeDeviceCount} / ${card.maxDevices}</td>
+            <td>${formatDate(card.lastValidatedAt)}</td>
+            <td>${card.note || '—'}</td>
+          </tr>
+        `).join('')
+
+        for (const row of els.cardsTableBody.querySelectorAll('tr[data-card-key]')) {
+          row.addEventListener('click', () => selectCard(row.dataset.cardKey || ''))
+        }
+      }
+
+      function renderCardDetail(item) {
+        els.selectedCardKey.value = item?.cardKey || ''
+        els.detailBox.innerHTML = item ? `
+          <div class="muted">卡密</div><div>${item.cardKeyMasked}</div>
+          <div class="muted">状态</div><div>${item.status}</div>
+          <div class="muted">到期时间</div><div>${formatDate(item.expireAt)}</div>
+          <div class="muted">设备数量</div><div>${item.activeDeviceCount} / ${item.maxDevices}</div>
+          <div class="muted">创建时间</div><div>${formatDate(item.createdAt)}</div>
+          <div class="muted">激活时间</div><div>${formatDate(item.activatedAt)}</div>
+          <div class="muted">最近校验</div><div>${formatDate(item.lastValidatedAt)}</div>
+          <div class="muted">备注</div><div>${item.note || '—'}</div>
+        ` : '<div class="empty">未选择卡密</div>'
+
+        els.deviceList.innerHTML = item?.devices?.length ? item.devices.map((device) => `
+          <div class="log-item">
+            <div><strong>${device.machine_id}</strong></div>
+            <div class="muted" style="margin-top:6px">状态：${device.status}</div>
+            <div class="muted">设备名：${device.device_name || '—'}</div>
+            <div class="muted">版本：${device.app_version || '—'}</div>
+            <div class="muted">首次激活：${formatDate(device.first_activated_at)}</div>
+            <div class="muted">最近校验：${formatDate(device.last_validated_at)}</div>
+          </div>
+        `).join('') : '<div class="empty">暂无设备记录</div>'
+
+        renderLogs(item?.logs || [])
+      }
+
+      function renderLogs(items) {
+        els.logList.innerHTML = items.length ? items.map((log) => `
+          <div class="log-item">
+            <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <strong>${log.action}</strong>
+              <span class="muted">${formatDate(log.created_at)}</span>
+            </div>
+            <div class="muted" style="margin-top:6px">结果：${log.result}</div>
+            <div class="muted">机器：${log.machine_id || '—'}</div>
+            <div style="margin-top:6px">${log.message || '—'}</div>
+          </div>
+        `).join('') : '<div class="empty">暂无日志</div>'
+      }
+
+      async function loadHealth() {
+        try {
+          const data = await fetch('/health').then((res) => res.json())
+          els.healthBadge.textContent = data.usingDefaultAdminToken ? '服务在线 · 默认开发 token' : '服务在线 · 已配置管理 token'
+        } catch {
+          els.healthBadge.textContent = '服务不可用'
+        }
+      }
+
+      async function loadCards(selectFirst = false) {
+        try {
+          const data = await api('/api/admin/cards')
+          state.cards = data.items || []
+          renderCards()
+          if (selectFirst && state.cards[0]) {
+            await selectCard(state.cards[0].cardKey)
+          }
+        } catch (error) {
+          setMessage(els.actionMessage, error.message, 'error')
+        }
+      }
+
+      async function selectCard(cardKey) {
+        if (!cardKey) return
+        state.selectedCardKey = cardKey
+        try {
+          const data = await api(`/api/admin/card?cardKey=${encodeURIComponent(cardKey)}`)
+          renderCardDetail(data.item)
+        } catch (error) {
+          setMessage(els.actionMessage, error.message, 'error')
+        }
+      }
+
+      async function loadLogs() {
+        if (!state.selectedCardKey) return
+        try {
+          const data = await api(`/api/admin/logs?cardKey=${encodeURIComponent(state.selectedCardKey)}&limit=20`)
+          renderLogs(data.items || [])
+        } catch (error) {
+          setMessage(els.actionMessage, error.message, 'error')
+        }
+      }
+
+      async function verifyToken() {
+        state.token = els.adminToken.value.trim()
+        localStorage.setItem('license_admin_token', state.token)
+        try {
+          await api('/api/admin/session')
+          setMessage(els.authMessage, '管理员认证成功。')
+          await loadCards(true)
+        } catch (error) {
+          setMessage(els.authMessage, error.message, 'error')
+        }
+      }
+
+      async function runAction(path, body, successText) {
+        if (!state.selectedCardKey) {
+          setMessage(els.actionMessage, '请先选择一张卡密。', 'error')
+          return
+        }
+        try {
+          const data = await api(path, { method: 'POST', body: JSON.stringify(body) })
+          setMessage(els.actionMessage, data.message || successText)
+          await loadCards()
+          await selectCard(state.selectedCardKey)
+        } catch (error) {
+          setMessage(els.actionMessage, error.message, 'error')
+        }
+      }
+
+      els.adminToken.value = state.token
+      els.saveTokenBtn.addEventListener('click', () => {
+        state.token = els.adminToken.value.trim()
+        localStorage.setItem('license_admin_token', state.token)
+        setMessage(els.authMessage, '管理员 token 已保存。')
+      })
+      els.checkTokenBtn.addEventListener('click', verifyToken)
+      els.loadCardsBtn.addEventListener('click', () => loadCards())
+      els.loadLogsBtn.addEventListener('click', loadLogs)
+      els.refreshBtn.addEventListener('click', () => selectCard(state.selectedCardKey))
+      els.createBtn.addEventListener('click', async () => {
+        try {
+          const data = await api('/api/admin/cards/create', {
+            method: 'POST',
+            body: JSON.stringify({
+              cardKey: els.createKey.value.trim(),
+              days: Number(els.createDays.value || 30),
+              maxDevices: Number(els.createDevices.value || 1),
+              note: els.createNote.value.trim()
+            })
+          })
+          setMessage(els.actionMessage, data.message || '卡密创建成功。')
+          els.createKey.value = ''
+          els.createNote.value = ''
+          await loadCards(true)
+        } catch (error) {
+          setMessage(els.actionMessage, error.message, 'error')
+        }
+      })
+      els.disableBtn.addEventListener('click', () => runAction('/api/admin/cards/disable', {
+        cardKey: state.selectedCardKey,
+        disabled: true,
+        note: els.actionNote.value.trim()
+      }, '卡密已禁用。'))
+      els.enableBtn.addEventListener('click', () => runAction('/api/admin/cards/disable', {
+        cardKey: state.selectedCardKey,
+        disabled: false,
+        note: els.actionNote.value.trim()
+      }, '卡密已启用。'))
+      els.extendBtn.addEventListener('click', () => runAction('/api/admin/cards/extend', {
+        cardKey: state.selectedCardKey,
+        days: Number(els.extendDays.value || 30),
+        note: els.actionNote.value.trim()
+      }, '卡密已延期。'))
+      els.resetDevicesBtn.addEventListener('click', () => runAction('/api/admin/cards/reset-devices', {
+        cardKey: state.selectedCardKey,
+        note: els.actionNote.value.trim()
+      }, '设备绑定已重置。'))
+
+      loadHealth()
+      verifyToken()
+    </script>
+  </body>
+</html>

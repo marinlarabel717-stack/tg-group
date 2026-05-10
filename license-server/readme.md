@@ -14,6 +14,12 @@ npm run license:server
 http://127.0.0.1:8787
 ```
 
+后台页面：
+
+```bash
+http://127.0.0.1:8787/admin
+```
+
 健康检查：
 
 ```bash
@@ -80,6 +86,21 @@ http://127.0.0.1:8787
 
 然后在授权页输入刚创建的卡密即可激活。
 
+## 管理员鉴权
+
+- 后台管理接口统一要求管理员 token
+- 正式部署建议设置环境变量：
+
+```bash
+LICENSE_ADMIN_TOKEN=your-secret-token
+```
+
+- 如果未设置，当前本地开发默认 token 为：
+
+```bash
+dev-admin-token
+```
+
 ## 当前已实现接口
 
 ### 客户端接口
@@ -109,8 +130,8 @@ license-server/data/license-db.json
 
 这是本地 MVP，后面可以继续补：
 
-- 后台管理页面
-- 管理接口鉴权
+- 更完整的后台管理页面
+- 管理员账号体系
 - 版本更新接口
 - 多渠道 release 管理
 - 正式数据库迁移
