@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { DesktopLicenseActivateResult, DesktopLicenseState } from '../types'
+import type { DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult } from '../types'
 
 const DEFAULT_STATE: DesktopLicenseState = {
   status: 'missing',
@@ -9,6 +9,7 @@ const DEFAULT_STATE: DesktopLicenseState = {
   isPackaged: false,
   devBypassAvailable: true,
   apiConfigured: false,
+  apiBaseUrl: '',
   cardKeyMasked: null,
   expireAt: null,
   activatedAt: null,
@@ -22,10 +23,12 @@ interface LicenseStoreState {
   initialized: boolean
   loading: boolean
   activating: boolean
+  validating: boolean
   errorMessage: string
   lastActionMessage: string
   devBypass: boolean
   init: () => Promise<void>
+  validate: () => Promise<DesktopLicenseValidateResult | null>
   activate: (cardKey: string) => Promise<DesktopLicenseActivateResult | null>
   clear: () => Promise<void>
   enterDevMode: () => void
@@ -36,6 +39,7 @@ export const useLicenseStore = create<LicenseStoreState>((set, get) => ({
   initialized: false,
   loading: false,
   activating: false,
+  validating: false,
   errorMessage: '',
   lastActionMessage: '',
   devBypass: false,
@@ -44,17 +48,51 @@ export const useLicenseStore = create<LicenseStoreState>((set, get) => ({
     set({ loading: true, errorMessage: '' })
     try {
       const state = await window.desktopLicense?.getState()
-      set({
-        state: state ?? DEFAULT_STATE,
-        initialized: true,
-        loading: false
-      })
+      const shouldValidate = Boolean(state?.cardKeyMasked && state?.apiConfigured)
+      if (state) {
+        set({
+          state,
+          initialized: true,
+          loading: false
+        })
+      } else {
+        set({
+          state: DEFAULT_STATE,
+          initialized: true,
+          loading: false
+        })
+      }
+
+      if (shouldValidate) {
+        await get().validate()
+      }
     } catch (error) {
       set({
         initialized: true,
         loading: false,
         errorMessage: error instanceof Error ? error.message : '读取授权状态失败。'
       })
+    }
+  },
+  validate: async () => {
+    set({ validating: true, errorMessage: '', lastActionMessage: '' })
+    try {
+      const result = await window.desktopLicense?.validate()
+      if (!result) {
+        set({ validating: false, errorMessage: '当前运行环境未注入授权 API。' })
+        return null
+      }
+
+      set({
+        validating: false,
+        state: result.snapshot,
+        lastActionMessage: result.ok ? result.message : '',
+        errorMessage: result.ok ? '' : result.message
+      })
+      return result
+    } catch (error) {
+      set({ validating: false, errorMessage: error instanceof Error ? error.message : '授权校验失败。' })
+      return null
     }
   },
   activate: async (cardKey) => {
@@ -89,4 +127,3 @@ export const useLicenseStore = create<LicenseStoreState>((set, get) => ({
   },
   enterDevMode: () => set({ devBypass: true, errorMessage: '', lastActionMessage: '当前为开发模式临时放行，仅用于本地调试。' })
 }))
-

@@ -1,10 +1,9 @@
 import { app } from 'electron'
 import { createHash } from 'node:crypto'
 import os from 'node:os'
-import type { LicenseActivateResult, LicenseSnapshot, StoredLicenseRecord } from './types'
+import type { AppSettingsStore } from '../app-settings-store'
+import type { LicenseActivateResult, LicenseSnapshot, LicenseValidateResult, StoredLicenseRecord } from './types'
 import { LicenseStore } from './license-store'
-
-const LICENSE_API_BASE_URL = (process.env.LICENSE_API_BASE_URL || '').trim()
 
 function maskCardKey(value: string) {
   const trimmed = value.trim()
@@ -52,13 +51,24 @@ async function postJson<T>(url: string, body: unknown) {
 export class LicenseService {
   private readonly machineId = buildMachineId()
 
-  constructor(private readonly store: LicenseStore) {}
+  constructor(
+    private readonly store: LicenseStore,
+    private readonly appSettingsStore: AppSettingsStore
+  ) {}
 
-  getSnapshot(): LicenseSnapshot {
-    const record = this.store.get()
+  private getLicenseApiBaseUrl() {
+    return this.appSettingsStore.get().licenseApiBaseUrl.trim()
+  }
+
+  private getOfflineGraceDays() {
+    return this.appSettingsStore.get().licenseOfflineGraceDays
+  }
+
+  private buildSnapshot(record: StoredLicenseRecord | null, override?: Partial<LicenseSnapshot>): LicenseSnapshot {
     const now = Date.now()
     const expireAt = toTimestamp(record?.expireAt)
     const graceUntil = toTimestamp(record?.offlineGraceUntil)
+    const apiBaseUrl = this.getLicenseApiBaseUrl()
 
     if (!record) {
       return {
@@ -68,15 +78,17 @@ export class LicenseService {
         appVersion: app.getVersion(),
         isPackaged: app.isPackaged,
         devBypassAvailable: !app.isPackaged,
-        apiConfigured: Boolean(LICENSE_API_BASE_URL),
+        apiConfigured: Boolean(apiBaseUrl),
+        apiBaseUrl,
         cardKeyMasked: null,
         expireAt: null,
         activatedAt: null,
         lastValidatedAt: null,
         offlineGraceUntil: null,
-        message: LICENSE_API_BASE_URL
+        message: apiBaseUrl
           ? '请输入卡密完成激活。'
-          : '授权服务地址尚未配置，当前仅完成本地授权骨架。'
+          : '授权服务地址尚未配置，请先在设置里填写。',
+        ...override
       }
     }
 
@@ -88,13 +100,15 @@ export class LicenseService {
         appVersion: app.getVersion(),
         isPackaged: app.isPackaged,
         devBypassAvailable: !app.isPackaged,
-        apiConfigured: Boolean(LICENSE_API_BASE_URL),
+        apiConfigured: Boolean(apiBaseUrl),
+        apiBaseUrl,
         cardKeyMasked: maskCardKey(record.cardKey),
         expireAt: record.expireAt,
         activatedAt: record.activatedAt,
         lastValidatedAt: record.lastValidatedAt,
         offlineGraceUntil: record.offlineGraceUntil,
-        message: '当前授权状态无效，请重新激活。'
+        message: '当前授权状态无效，请重新激活。',
+        ...override
       }
     }
 
@@ -107,13 +121,15 @@ export class LicenseService {
           appVersion: app.getVersion(),
           isPackaged: app.isPackaged,
           devBypassAvailable: !app.isPackaged,
-          apiConfigured: Boolean(LICENSE_API_BASE_URL),
+          apiConfigured: Boolean(apiBaseUrl),
+          apiBaseUrl,
           cardKeyMasked: maskCardKey(record.cardKey),
           expireAt: record.expireAt,
           activatedAt: record.activatedAt,
           lastValidatedAt: record.lastValidatedAt,
           offlineGraceUntil: record.offlineGraceUntil,
-          message: '授权已进入离线宽限期，请尽快联网校验。'
+          message: '授权已进入离线宽限期，请尽快联网校验。',
+          ...override
         }
       }
 
@@ -124,13 +140,15 @@ export class LicenseService {
         appVersion: app.getVersion(),
         isPackaged: app.isPackaged,
         devBypassAvailable: !app.isPackaged,
-        apiConfigured: Boolean(LICENSE_API_BASE_URL),
+        apiConfigured: Boolean(apiBaseUrl),
+        apiBaseUrl,
         cardKeyMasked: maskCardKey(record.cardKey),
         expireAt: record.expireAt,
         activatedAt: record.activatedAt,
         lastValidatedAt: record.lastValidatedAt,
         offlineGraceUntil: record.offlineGraceUntil,
-        message: '授权已过期，请重新激活。'
+        message: '授权已过期，请重新激活。',
+        ...override
       }
     }
 
@@ -141,13 +159,122 @@ export class LicenseService {
       appVersion: app.getVersion(),
       isPackaged: app.isPackaged,
       devBypassAvailable: !app.isPackaged,
-      apiConfigured: Boolean(LICENSE_API_BASE_URL),
+      apiConfigured: Boolean(apiBaseUrl),
+      apiBaseUrl,
       cardKeyMasked: maskCardKey(record.cardKey),
       expireAt: record.expireAt,
       activatedAt: record.activatedAt,
       lastValidatedAt: record.lastValidatedAt,
       offlineGraceUntil: record.offlineGraceUntil,
-      message: '授权有效。'
+      message: '授权有效。',
+      ...override
+    }
+  }
+
+  getSnapshot() {
+    return this.buildSnapshot(this.store.get())
+  }
+
+  private buildOfflineGraceUntil(now = Date.now()) {
+    const days = this.getOfflineGraceDays()
+    if (days <= 0) return null
+    return new Date(now + days * 24 * 60 * 60 * 1000).toISOString()
+  }
+
+  private saveRecord(record: StoredLicenseRecord) {
+    this.store.set(record)
+    return record
+  }
+
+  async validate(): Promise<LicenseValidateResult> {
+    const record = this.store.get()
+    if (!record) {
+      return {
+        ok: false,
+        message: '当前还没有授权记录。',
+        snapshot: this.buildSnapshot(null)
+      }
+    }
+
+    const apiBaseUrl = this.getLicenseApiBaseUrl()
+    if (!apiBaseUrl) {
+      return {
+        ok: false,
+        message: '授权服务地址尚未配置，请先在设置里填写。',
+        snapshot: this.buildSnapshot(record, { message: '授权服务地址尚未配置，请先在设置里填写。' })
+      }
+    }
+
+    try {
+      const response = await postJson<{
+        ok?: boolean
+        message?: string
+        expireAt?: string | null
+        offlineGraceUntil?: string | null
+        licenseStatus?: 'active' | 'expired' | 'disabled' | 'invalid'
+      }>(`${apiBaseUrl.replace(/\/$/, '')}/api/license/validate`, {
+        cardKey: record.cardKey,
+        licenseToken: record.licenseToken,
+        machineId: this.machineId,
+        deviceName: os.hostname(),
+        appVersion: app.getVersion()
+      })
+
+      if (!response?.ok) {
+        const nextRecord: StoredLicenseRecord = {
+          ...record,
+          expireAt: response?.expireAt ?? record.expireAt,
+          offlineGraceUntil: response?.offlineGraceUntil ?? null,
+          licenseStatus: response?.licenseStatus ?? 'invalid',
+          lastValidatedAt: new Date().toISOString()
+        }
+        this.saveRecord(nextRecord)
+        return {
+          ok: false,
+          message: response?.message || '授权校验未通过。',
+          snapshot: this.buildSnapshot(nextRecord, { message: response?.message || '授权校验未通过。' })
+        }
+      }
+
+      const nowIso = new Date().toISOString()
+      const nextRecord: StoredLicenseRecord = {
+        ...record,
+        expireAt: response.expireAt ?? record.expireAt,
+        offlineGraceUntil: response.offlineGraceUntil ?? this.buildOfflineGraceUntil(),
+        lastValidatedAt: nowIso,
+        licenseStatus: response.licenseStatus ?? 'active'
+      }
+      this.saveRecord(nextRecord)
+      return {
+        ok: true,
+        message: response.message || '授权校验成功。',
+        snapshot: this.buildSnapshot(nextRecord, { message: response.message || '授权校验成功。' })
+      }
+    } catch (error) {
+      const now = Date.now()
+      const graceUntil = toTimestamp(record.offlineGraceUntil)
+      if (graceUntil && graceUntil > now) {
+        const snapshot = this.buildSnapshot(record, {
+          status: 'grace',
+          canEnter: true,
+          message: '当前无法连接授权服务，已使用离线宽限继续进入。'
+        })
+        return {
+          ok: true,
+          message: '当前无法连接授权服务，已使用离线宽限继续进入。',
+          snapshot
+        }
+      }
+
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : '授权校验失败。',
+        snapshot: this.buildSnapshot(record, {
+          status: 'invalid',
+          canEnter: false,
+          message: error instanceof Error ? error.message : '授权校验失败。'
+        })
+      }
     }
   }
 
@@ -161,10 +288,11 @@ export class LicenseService {
       }
     }
 
-    if (!LICENSE_API_BASE_URL) {
+    const apiBaseUrl = this.getLicenseApiBaseUrl()
+    if (!apiBaseUrl) {
       return {
         ok: false,
-        message: '授权服务地址尚未配置，下一步接入卡密服务端后即可激活。',
+        message: '授权服务地址尚未配置，请先在设置里填写。',
         snapshot: this.getSnapshot()
       }
     }
@@ -177,7 +305,7 @@ export class LicenseService {
         expireAt?: string | null
         offlineGraceUntil?: string | null
         licenseStatus?: 'active' | 'expired' | 'disabled' | 'invalid'
-      }>(`${LICENSE_API_BASE_URL.replace(/\/$/, '')}/api/license/activate`, {
+      }>(`${apiBaseUrl.replace(/\/$/, '')}/api/license/activate`, {
         cardKey: normalized,
         machineId: this.machineId,
         deviceName: os.hostname(),
@@ -198,16 +326,17 @@ export class LicenseService {
         expireAt: response.expireAt ?? null,
         activatedAt: new Date().toISOString(),
         lastValidatedAt: new Date().toISOString(),
-        offlineGraceUntil: response.offlineGraceUntil ?? null,
+        offlineGraceUntil: response.offlineGraceUntil ?? this.buildOfflineGraceUntil(),
         machineId: this.machineId,
         licenseStatus: response.licenseStatus ?? 'active'
       }
-      this.store.set(record)
+      this.saveRecord(record)
 
+      const validated = await this.validate()
       return {
-        ok: true,
-        message: response.message || '卡密激活成功。',
-        snapshot: this.getSnapshot()
+        ok: validated.ok,
+        message: response.message || validated.message || '卡密激活成功。',
+        snapshot: validated.snapshot
       }
     } catch (error) {
       return {
@@ -223,4 +352,3 @@ export class LicenseService {
     return this.getSnapshot()
   }
 }
-

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
+import type { AccountRecord, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'Telegram Multi Account Manager',
@@ -51,7 +51,7 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
 
 contextBridge.exposeInMainWorld('desktopSettings', {
   get: () => ipcRenderer.invoke('app-settings:get'),
-  update: (patch: { checkConcurrency?: number }) => ipcRenderer.invoke('app-settings:update', patch)
+  update: (patch: { checkConcurrency?: number; licenseApiBaseUrl?: string; licenseOfflineGraceDays?: number }) => ipcRenderer.invoke('app-settings:update', patch)
 })
 
 contextBridge.exposeInMainWorld('desktopProxyPool', {
@@ -70,5 +70,6 @@ contextBridge.exposeInMainWorld('desktopProxyPool', {
 contextBridge.exposeInMainWorld('desktopLicense', {
   getState: () => ipcRenderer.invoke('license:get-state') as Promise<DesktopLicenseState>,
   activate: (cardKey: string) => ipcRenderer.invoke('license:activate', cardKey) as Promise<DesktopLicenseActivateResult>,
+  validate: () => ipcRenderer.invoke('license:validate') as Promise<DesktopLicenseValidateResult>,
   clear: () => ipcRenderer.invoke('license:clear') as Promise<DesktopLicenseState>
 })

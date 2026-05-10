@@ -269,6 +269,8 @@ export interface DesktopAccountsApi {
 
 export interface DesktopAppSettings {
   checkConcurrency: number
+  licenseApiBaseUrl: string
+  licenseOfflineGraceDays: number
 }
 
 export interface DesktopLicenseState {
@@ -279,6 +281,7 @@ export interface DesktopLicenseState {
   isPackaged: boolean
   devBypassAvailable: boolean
   apiConfigured: boolean
+  apiBaseUrl: string
   cardKeyMasked: string | null
   expireAt: string | null
   activatedAt: string | null
@@ -288,6 +291,12 @@ export interface DesktopLicenseState {
 }
 
 export interface DesktopLicenseActivateResult {
+  ok: boolean
+  message: string
+  snapshot: DesktopLicenseState
+}
+
+export interface DesktopLicenseValidateResult {
   ok: boolean
   message: string
   snapshot: DesktopLicenseState
@@ -310,6 +319,7 @@ export interface DesktopProxyPoolApi {
 export interface DesktopLicenseApi {
   getState: () => Promise<DesktopLicenseState>
   activate: (cardKey: string) => Promise<DesktopLicenseActivateResult>
+  validate: () => Promise<DesktopLicenseValidateResult>
   clear: () => Promise<DesktopLicenseState>
 }
 

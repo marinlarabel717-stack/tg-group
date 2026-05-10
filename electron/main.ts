@@ -139,7 +139,7 @@ async function bootstrap() {
   const database = await createAccountsDatabase(databasePath)
   const appSettingsStore = new AppSettingsStore(settingsPath)
   const licenseStore = new LicenseStore(licensePath)
-  const licenseService = new LicenseService(licenseStore)
+  const licenseService = new LicenseService(licenseStore, appSettingsStore)
   const proxyPoolStoragePath = path.join(app.getPath('userData'), 'proxy-pool.json')
   const appSettings = appSettingsStore.get()
   const repository = new AccountRepository(database)
@@ -198,6 +198,7 @@ async function bootstrap() {
   ipcMain.handle('proxy-pool:start-check', () => proxyPoolService.startCheck())
   ipcMain.handle('license:get-state', () => licenseService.getSnapshot())
   ipcMain.handle('license:activate', (_event, cardKey: string) => licenseService.activate(cardKey))
+  ipcMain.handle('license:validate', () => licenseService.validate())
   ipcMain.handle('license:clear', () => licenseService.clear())
 
   await importService.syncManagedSessions()

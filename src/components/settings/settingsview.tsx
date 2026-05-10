@@ -4,11 +4,19 @@ import { GlassPanel } from '../common/glasspanel'
 import { useSettingsStore } from '../../stores/settingsstore'
 import { useAccountStore } from '../../stores/accountstore'
 import { useProxyPoolStore } from '../../stores/proxypoolstore'
+import { useLicenseStore } from '../../stores/licensestore'
+import { formatDateTimeFull } from '../../lib/ui-text'
 
 function normalizeConcurrency(value: string) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 3
   return Math.min(20, Math.max(1, Math.trunc(parsed)))
+}
+
+function normalizeGraceDays(value: string) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 3
+  return Math.min(30, Math.max(0, Math.trunc(parsed)))
 }
 
 export default memo(function SettingsView() {
@@ -19,6 +27,7 @@ export default memo(function SettingsView() {
   const errorMessage = useSettingsStore((state) => state.errorMessage)
   const lastActionMessage = useSettingsStore((state) => state.lastActionMessage)
   const saveCheckConcurrency = useSettingsStore((state) => state.saveCheckConcurrency)
+  const saveLicenseConfig = useSettingsStore((state) => state.saveLicenseConfig)
   const runtimeConcurrency = useAccountStore((state) => state.checkState.concurrency)
   const initProxyPool = useProxyPoolStore((state) => state.init)
   const proxyPoolLoading = useProxyPoolStore((state) => state.loading)
@@ -27,19 +36,32 @@ export default memo(function SettingsView() {
   const proxyPoolErrorMessage = useProxyPoolStore((state) => state.errorMessage)
   const proxyPoolActionMessage = useProxyPoolStore((state) => state.lastActionMessage)
   const updateProxySettings = useProxyPoolStore((state) => state.updateSettings)
+  const initLicense = useLicenseStore((state) => state.init)
+  const validateLicense = useLicenseStore((state) => state.validate)
+  const licenseState = useLicenseStore((state) => state.state)
+  const licenseValidating = useLicenseStore((state) => state.validating)
 
   const [concurrencyInput, setConcurrencyInput] = useState(String(settings.checkConcurrency))
+  const [licenseApiBaseUrlInput, setLicenseApiBaseUrlInput] = useState(settings.licenseApiBaseUrl)
+  const [licenseOfflineGraceDaysInput, setLicenseOfflineGraceDaysInput] = useState(String(settings.licenseOfflineGraceDays))
 
   useEffect(() => {
     void init()
     void initProxyPool()
-  }, [init, initProxyPool])
+    void initLicense()
+  }, [init, initProxyPool, initLicense])
 
   useEffect(() => {
     setConcurrencyInput(String(settings.checkConcurrency))
   }, [settings.checkConcurrency])
 
+  useEffect(() => {
+    setLicenseApiBaseUrlInput(settings.licenseApiBaseUrl)
+    setLicenseOfflineGraceDaysInput(String(settings.licenseOfflineGraceDays))
+  }, [settings.licenseApiBaseUrl, settings.licenseOfflineGraceDays])
+
   const normalizedValue = normalizeConcurrency(concurrencyInput)
+  const normalizedGraceDays = normalizeGraceDays(licenseOfflineGraceDaysInput)
 
   return (
     <div className="contain-layout">
@@ -86,6 +108,77 @@ export default memo(function SettingsView() {
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 保存设置
               </button>
+            </div>
+          </div>
+
+          <div className="rounded-[16px] bg-panel p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold text-white">授权服务</div>
+                <div className="mt-2 text-sm leading-6 text-textMuted">
+                  这里配置卡密服务端地址与离线宽限天数。打包正式版后，建议写入真实服务地址，客户端启动时会先做授权校验。
+                </div>
+              </div>
+              {loading ? <Loader2 className="mt-1 animate-spin text-textMuted" size={18} /> : null}
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-[1fr_180px_auto] md:items-end">
+              <label className="flex flex-col gap-2 text-sm text-textMuted">
+                <span>授权服务地址</span>
+                <input
+                  value={licenseApiBaseUrlInput}
+                  onChange={(event) => setLicenseApiBaseUrlInput(event.target.value)}
+                  placeholder="https://license.example.com"
+                  className="h-11 rounded-[12px] border border-white/10 bg-slate-950/45 px-3 text-white outline-none transition focus:border-sky-400/50"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2 text-sm text-textMuted">
+                <span>离线宽限天数</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={30}
+                  step={1}
+                  value={licenseOfflineGraceDaysInput}
+                  onChange={(event) => setLicenseOfflineGraceDaysInput(event.target.value)}
+                  className="h-11 rounded-[12px] border border-white/10 bg-slate-950/45 px-3 text-white outline-none transition focus:border-sky-400/50"
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void saveLicenseConfig({ licenseApiBaseUrl: licenseApiBaseUrlInput.trim(), licenseOfflineGraceDays: normalizedGraceDays })}
+                  className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-sky-500 px-4 text-sm font-medium text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  保存授权配置
+                </button>
+                <button
+                  type="button"
+                  disabled={licenseValidating}
+                  onClick={() => void validateLicense()}
+                  className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {licenseValidating ? <Loader2 size={16} className="animate-spin" /> : null}
+                  立即校验授权
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <div className="rounded-[14px] border border-white/6 bg-slate-950/35 px-4 py-4 text-sm text-textMuted">
+                <div>当前状态：<span className="font-semibold text-white">{licenseState.status === 'valid' ? '授权有效' : licenseState.status === 'grace' ? '离线宽限' : licenseState.status === 'expired' ? '授权过期' : licenseState.status === 'invalid' ? '授权无效' : '未激活'}</span></div>
+                <div className="mt-2">已绑卡密：{licenseState.cardKeyMasked || '—'}</div>
+                <div className="mt-2">到期时间：{formatDateTimeFull(licenseState.expireAt)}</div>
+              </div>
+              <div className="rounded-[14px] border border-white/6 bg-slate-950/35 px-4 py-4 text-sm text-textMuted">
+                <div>最近校验：{formatDateTimeFull(licenseState.lastValidatedAt)}</div>
+                <div className="mt-2">离线宽限：{formatDateTimeFull(licenseState.offlineGraceUntil)}</div>
+                <div className="mt-2">设备指纹：<span className="font-mono text-[12px] text-slate-300">{licenseState.machineId || '—'}</span></div>
+              </div>
             </div>
           </div>
 

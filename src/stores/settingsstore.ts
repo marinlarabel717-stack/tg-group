@@ -10,6 +10,7 @@ interface SettingsStoreState {
   lastActionMessage: string
   init: () => Promise<void>
   saveCheckConcurrency: (value: number) => Promise<void>
+  saveLicenseConfig: (patch: { licenseApiBaseUrl?: string; licenseOfflineGraceDays?: number }) => Promise<void>
 }
 
 function getDesktopSettingsApi() {
@@ -17,7 +18,9 @@ function getDesktopSettingsApi() {
 }
 
 const DEFAULT_SETTINGS: DesktopAppSettings = {
-  checkConcurrency: 3
+  checkConcurrency: 3,
+  licenseApiBaseUrl: '',
+  licenseOfflineGraceDays: 3
 }
 
 export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
@@ -60,6 +63,25 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       })
     } catch (error) {
       set({ saving: false, errorMessage: error instanceof Error ? error.message : '保存设置失败。' })
+    }
+  },
+  saveLicenseConfig: async (patch) => {
+    const api = getDesktopSettingsApi()
+    if (!api) {
+      set({ errorMessage: '当前运行环境未注入设置 API。' })
+      return
+    }
+
+    set({ saving: true, errorMessage: '', lastActionMessage: '' })
+    try {
+      const settings = await api.update(patch)
+      set({
+        settings,
+        saving: false,
+        lastActionMessage: '授权服务配置已保存。'
+      })
+    } catch (error) {
+      set({ saving: false, errorMessage: error instanceof Error ? error.message : '保存授权配置失败。' })
     }
   }
 }))

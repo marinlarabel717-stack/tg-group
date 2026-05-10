@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
 import type { CheckAction, CheckResultInput, ImportProgressPayload } from './types'
+import type { AppSettings } from '../app-settings-store'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
 import type { AccountStatusService } from './services/account-status-service'
@@ -50,7 +51,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   })
   ipcMain.handle('accounts:get-check-state', () => checkQueue.getState())
   ipcMain.handle('app-settings:get', () => appSettingsStore.get())
-  ipcMain.handle('app-settings:update', (_event, patch: { checkConcurrency?: number }) => {
+  ipcMain.handle('app-settings:update', (_event, patch: Partial<AppSettings>) => {
     const next = appSettingsStore.update(patch)
     checkQueue.updateOptions({ concurrency: next.checkConcurrency })
     emitCheckState()

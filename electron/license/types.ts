@@ -17,6 +17,7 @@ export interface LicenseSnapshot {
   isPackaged: boolean
   devBypassAvailable: boolean
   apiConfigured: boolean
+  apiBaseUrl: string
   cardKeyMasked: string | null
   expireAt: string | null
   activatedAt: string | null
@@ -31,3 +32,8 @@ export interface LicenseActivateResult {
   snapshot: LicenseSnapshot
 }
 
+export interface LicenseValidateResult {
+  ok: boolean
+  message: string
+  snapshot: LicenseSnapshot
+}

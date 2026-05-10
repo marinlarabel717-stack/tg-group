@@ -15,11 +15,13 @@ function statusLabel(status: DesktopLicenseState['status']) {
 export const LicenseGate = memo(function LicenseGate({ children }: { children: React.ReactNode }) {
   const init = useLicenseStore((state) => state.init)
   const activate = useLicenseStore((state) => state.activate)
+  const validate = useLicenseStore((state) => state.validate)
   const clear = useLicenseStore((state) => state.clear)
   const enterDevMode = useLicenseStore((state) => state.enterDevMode)
   const state = useLicenseStore((store) => store.state)
   const loading = useLicenseStore((store) => store.loading)
   const activating = useLicenseStore((store) => store.activating)
+  const validating = useLicenseStore((store) => store.validating)
   const initialized = useLicenseStore((store) => store.initialized)
   const errorMessage = useLicenseStore((store) => store.errorMessage)
   const lastActionMessage = useLicenseStore((store) => store.lastActionMessage)
@@ -107,6 +109,16 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
               清空本地授权
             </button>
 
+            <button
+              type="button"
+              disabled={validating || !state.cardKeyMasked || !state.apiConfigured}
+              onClick={() => void validate()}
+              className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-white/10 bg-white/[0.04] px-5 text-sm font-medium text-white transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {validating ? <Loader2 size={16} className="animate-spin" /> : null}
+              重新校验授权
+            </button>
+
             {state.devBypassAvailable ? (
               <button
                 type="button"
@@ -127,6 +139,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
           </div>
           <div className="rounded-[16px] border border-white/8 bg-slate-950/25 px-4 py-4 text-sm text-textMuted">
             <div>授权服务：{state.apiConfigured ? '已配置' : '未配置'}</div>
+            <div className="mt-2 break-all">服务地址：{state.apiBaseUrl || '—'}</div>
             <div className="mt-2">激活时间：{formatDateTimeFull(state.activatedAt)}</div>
             <div className="mt-2">离线宽限：{formatDateTimeFull(state.offlineGraceUntil)}</div>
           </div>
