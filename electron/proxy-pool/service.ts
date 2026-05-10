@@ -46,6 +46,7 @@ interface PersistedProxyPoolData {
 
 function createDefaultSettings(): ProxyPoolSettings {
   return {
+    enabled: true,
     defaultType: 'http',
     ipVersion: 'ipv4',
     randomize: true
@@ -71,6 +72,7 @@ function cloneState<T>(value: T): T {
 
 function normalizeSettings(value?: Partial<ProxyPoolSettings>): ProxyPoolSettings {
   return {
+    enabled: value?.enabled ?? true,
     defaultType: value?.defaultType === 'https' || value?.defaultType === 'socks5' ? value.defaultType : 'http',
     ipVersion: value?.ipVersion === 'ipv6' ? 'ipv6' : 'ipv4',
     randomize: value?.randomize ?? true
@@ -407,7 +409,13 @@ export class ProxyPoolService extends EventEmitter {
     return cloneState(this.state)
   }
 
+  isEnabled() {
+    return this.state.settings.enabled
+  }
+
   getAccountCheckProxy(excludedIds: string[] = []): AccountCheckProxy | null {
+    if (!this.state.settings.enabled) return null
+
     const excluded = new Set(excludedIds)
     const preferred = this.state.proxies.filter((proxy) => proxy.status === 'alive' && !excluded.has(proxy.id))
     const fallback = this.state.proxies.filter((proxy) => proxy.status !== 'dead' && proxy.status !== 'checking' && !excluded.has(proxy.id))

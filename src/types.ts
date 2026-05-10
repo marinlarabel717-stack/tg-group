@@ -167,6 +167,7 @@ export interface ProxyRecord {
 }
 
 export interface ProxyPoolSettings {
+  enabled: boolean
   defaultType: ProxyType
   ipVersion: ProxyIpVersion
   randomize: boolean

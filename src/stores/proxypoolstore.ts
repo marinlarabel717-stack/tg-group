@@ -5,6 +5,7 @@ function createEmptyState(): ProxyPoolState {
   return {
     proxies: [],
     settings: {
+      enabled: true,
       defaultType: 'http',
       ipVersion: 'ipv4',
       randomize: true

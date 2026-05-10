@@ -3,6 +3,7 @@ import { Loader2, Save } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useSettingsStore } from '../../stores/settingsstore'
 import { useAccountStore } from '../../stores/accountstore'
+import { useProxyPoolStore } from '../../stores/proxypoolstore'
 
 function normalizeConcurrency(value: string) {
   const parsed = Number(value)
@@ -19,12 +20,20 @@ export default memo(function SettingsView() {
   const lastActionMessage = useSettingsStore((state) => state.lastActionMessage)
   const saveCheckConcurrency = useSettingsStore((state) => state.saveCheckConcurrency)
   const runtimeConcurrency = useAccountStore((state) => state.checkState.concurrency)
+  const initProxyPool = useProxyPoolStore((state) => state.init)
+  const proxyPoolLoading = useProxyPoolStore((state) => state.loading)
+  const proxyPoolSaving = useProxyPoolStore((state) => state.saving)
+  const proxyPoolState = useProxyPoolStore((state) => state.state)
+  const proxyPoolErrorMessage = useProxyPoolStore((state) => state.errorMessage)
+  const proxyPoolActionMessage = useProxyPoolStore((state) => state.lastActionMessage)
+  const updateProxySettings = useProxyPoolStore((state) => state.updateSettings)
 
   const [concurrencyInput, setConcurrencyInput] = useState(String(settings.checkConcurrency))
 
   useEffect(() => {
     void init()
-  }, [init])
+    void initProxyPool()
+  }, [init, initProxyPool])
 
   useEffect(() => {
     setConcurrencyInput(String(settings.checkConcurrency))
@@ -80,8 +89,39 @@ export default memo(function SettingsView() {
             </div>
           </div>
 
+          <div className="rounded-[16px] bg-panel p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold text-white">全局代理开关</div>
+                <div className="mt-2 text-sm leading-6 text-textMuted">
+                  关闭后，整个软件都走 <span className="font-semibold text-white">直连本地</span>。
+                  <br />
+                  打开后，账号检测和 WEB 都会按代理池规则全局走代理。
+                </div>
+              </div>
+              {proxyPoolLoading ? <Loader2 className="mt-1 animate-spin text-textMuted" size={18} /> : null}
+            </div>
+
+            <div className="mt-5 flex items-center justify-between rounded-[14px] border border-white/6 bg-slate-950/35 px-4 py-4">
+              <div>
+                <div className="text-sm font-medium text-white">当前状态</div>
+                <div className="mt-1 text-xs text-textMuted">{proxyPoolState.settings.enabled ? '已开启全局代理池' : '当前全局直连'}</div>
+              </div>
+              <button
+                type="button"
+                disabled={proxyPoolSaving}
+                onClick={() => void updateProxySettings({ enabled: !proxyPoolState.settings.enabled })}
+                className={`inline-flex h-9 w-16 items-center rounded-full px-1 transition disabled:cursor-not-allowed disabled:opacity-60 ${proxyPoolState.settings.enabled ? 'bg-sky-500/80' : 'bg-white/10'}`}
+              >
+                <span className={`h-7 w-7 rounded-full bg-white shadow transition ${proxyPoolState.settings.enabled ? 'translate-x-7' : 'translate-x-0'}`} />
+              </button>
+            </div>
+          </div>
+
           {lastActionMessage ? <div className="rounded-[12px] border border-emerald-400/15 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{lastActionMessage}</div> : null}
+          {proxyPoolActionMessage ? <div className="rounded-[12px] border border-sky-400/15 bg-sky-400/10 px-4 py-3 text-sm text-sky-200">{proxyPoolActionMessage}</div> : null}
           {errorMessage ? <div className="rounded-[12px] border border-rose-400/15 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
+          {proxyPoolErrorMessage ? <div className="rounded-[12px] border border-rose-400/15 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{proxyPoolErrorMessage}</div> : null}
         </div>
       </GlassPanel>
     </div>

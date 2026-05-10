@@ -9,7 +9,7 @@ import { StatusResolver } from './status-resolver'
 import { type AccountClientProxyOptions, TelegramClientManager } from './telegram-client-manager'
 import { TelethonFreezeChecker } from './telethon-freeze-checker'
 import { readPremiumExpiryViaClient } from '../telegram-desktop-premium-service'
-import { type AccountCheckProxy, formatMaskedProxyLabel, ProxyPoolService } from '../../proxy-pool/service'
+import { type AccountCheckProxy, ProxyPoolService } from '../../proxy-pool/service'
 
 interface CheckLogger {
   (payload: { type: 'login_success'; phone: string } | { type: 'login_failed'; phone: string; reason: string }): void
@@ -104,7 +104,7 @@ export class AccountCheckEngine {
 
     return {
       proxyUsed: true,
-      proxyDisplay: formatMaskedProxyLabel(proxy)
+      proxyDisplay: '已连接代理'
     }
   }
 
