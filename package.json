@@ -16,7 +16,12 @@
     "dist:portable": "npm run build && electron-builder --win portable --publish never",
     "license:server": "node license-server/server.mjs",
     "license:create-card": "node license-server/create-card.mjs",
-    "license:list-cards": "node license-server/list-cards.mjs"
+    "license:list-cards": "node license-server/list-cards.mjs",
+    "license:get-card": "node license-server/get-card.mjs",
+    "license:disable-card": "node license-server/disable-card.mjs",
+    "license:extend-card": "node license-server/extend-card.mjs",
+    "license:reset-devices": "node license-server/reset-devices.mjs",
+    "license:list-logs": "node license-server/list-logs.mjs"
   },
   "build": {
     "appId": "ai.tggroup.desktop",

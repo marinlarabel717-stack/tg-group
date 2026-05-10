@@ -1,6 +1,18 @@
 import { openLicenseDatabase } from './db.mjs'
 import { addDaysIso, maskCardKey, normalizeCardKey, nowIso, randomToken, sha256 } from './utils.mjs'
 
+function toTimestamp(value) {
+  if (!value) return null
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : null
+}
+
+function nextExpiryIso(currentExpireAt, days) {
+  const current = toTimestamp(currentExpireAt)
+  const base = current && current > Date.now() ? current : Date.now()
+  return addDaysIso(days, base)
+}
+
 export class LicenseServerService {
   constructor(db = openLicenseDatabase()) {
     this.db = db
@@ -12,6 +24,28 @@ export class LicenseServerService {
 
   getDevices(licenseId, data = this.db.read()) {
     return data.licenseDevices.filter((item) => item.license_id === licenseId && item.status === 'active')
+  }
+
+  getLogsByLicenseId(licenseId, data = this.db.read()) {
+    return data.licenseLogs.filter((item) => item.license_id === licenseId).slice().reverse()
+  }
+
+  toCardSummary(card, data = this.db.read()) {
+    const activeDevices = this.getDevices(card.id, data)
+    return {
+      id: card.id,
+      cardKey: card.card_key,
+      cardKeyMasked: maskCardKey(card.card_key),
+      status: card.status,
+      durationDays: card.duration_days,
+      expireAt: card.expire_at,
+      maxDevices: card.max_devices,
+      activeDeviceCount: activeDevices.length,
+      createdAt: card.created_at,
+      activatedAt: card.activated_at,
+      lastValidatedAt: card.last_validated_at,
+      note: card.note || null
+    }
   }
 
   log(data, licenseId, machineId, action, result, message) {
@@ -65,6 +99,7 @@ export class LicenseServerService {
       }
       license.activated_at = license.activated_at || now
       license.last_validated_at = now
+      license.status = 'active'
 
       const licenseToken = randomToken(24)
       const tokenHash = sha256(licenseToken)
@@ -132,6 +167,7 @@ export class LicenseServerService {
 
       const now = nowIso()
       license.last_validated_at = now
+      license.status = 'active'
       device.device_name = deviceName || device.device_name
       device.app_version = appVersion || device.app_version
       device.last_validated_at = now
@@ -171,12 +207,100 @@ export class LicenseServerService {
         note: note || null
       }
       data.licenseKeys.push(card)
-      return card
+      this.log(data, card.id, null, 'create-card', 'success', `创建卡密：${maskCardKey(normalizedCardKey)}`)
+      return this.toCardSummary(card, data)
     })
   }
 
   listCards() {
     const data = this.db.read()
-    return data.licenseKeys.slice().reverse()
+    return data.licenseKeys.slice().reverse().map((card) => this.toCardSummary(card, data))
+  }
+
+  disableCard({ cardKey, disabled = true, note = '' }) {
+    return this.db.transaction((data) => {
+      const normalizedCardKey = normalizeCardKey(cardKey)
+      const license = this.getLicenseByCardKey(normalizedCardKey, data)
+      if (!license) {
+        throw new Error('卡密不存在。')
+      }
+      license.status = disabled ? 'disabled' : 'active'
+      if (note) {
+        license.note = note
+      }
+      this.log(data, license.id, null, disabled ? 'disable-card' : 'enable-card', 'success', `${disabled ? '禁用' : '启用'}卡密：${maskCardKey(normalizedCardKey)}`)
+      return this.toCardSummary(license, data)
+    })
+  }
+
+  extendCard({ cardKey, days = 30, note = '' }) {
+    return this.db.transaction((data) => {
+      const normalizedCardKey = normalizeCardKey(cardKey)
+      const license = this.getLicenseByCardKey(normalizedCardKey, data)
+      if (!license) {
+        throw new Error('卡密不存在。')
+      }
+      license.expire_at = nextExpiryIso(license.expire_at, Number(days))
+      if (license.status === 'expired' || license.status === 'disabled') {
+        license.status = 'active'
+      }
+      if (note) {
+        license.note = note
+      }
+      this.log(data, license.id, null, 'extend-card', 'success', `延期 ${days} 天：${maskCardKey(normalizedCardKey)}`)
+      return this.toCardSummary(license, data)
+    })
+  }
+
+  resetDevices({ cardKey, note = '' }) {
+    return this.db.transaction((data) => {
+      const normalizedCardKey = normalizeCardKey(cardKey)
+      const license = this.getLicenseByCardKey(normalizedCardKey, data)
+      if (!license) {
+        throw new Error('卡密不存在。')
+      }
+      let cleared = 0
+      const now = nowIso()
+      for (const device of data.licenseDevices) {
+        if (device.license_id !== license.id || device.status !== 'active') continue
+        device.status = 'revoked'
+        device.last_validated_at = now
+        cleared += 1
+      }
+      if (note) {
+        license.note = note
+      }
+      this.log(data, license.id, null, 'reset-devices', 'success', `重置绑定设备 ${cleared} 台：${maskCardKey(normalizedCardKey)}`)
+      return {
+        ...this.toCardSummary(license, data),
+        clearedDevices: cleared
+      }
+    })
+  }
+
+  getCard(cardKey) {
+    const data = this.db.read()
+    const license = this.getLicenseByCardKey(cardKey, data)
+    if (!license) {
+      throw new Error('卡密不存在。')
+    }
+    return {
+      ...this.toCardSummary(license, data),
+      devices: data.licenseDevices.filter((item) => item.license_id === license.id).slice().reverse(),
+      logs: this.getLogsByLicenseId(license.id, data)
+    }
+  }
+
+  listLogs({ cardKey = '', limit = 50 } = {}) {
+    const data = this.db.read()
+    let logs = data.licenseLogs.slice().reverse()
+    if (cardKey) {
+      const license = this.getLicenseByCardKey(cardKey, data)
+      if (!license) {
+        throw new Error('卡密不存在。')
+      }
+      logs = logs.filter((item) => item.license_id === license.id)
+    }
+    return logs.slice(0, Math.max(1, Math.min(500, Number(limit) || 50)))
   }
 }

@@ -20,16 +20,54 @@ http://127.0.0.1:8787
 GET /health
 ```
 
-## 创建卡密
+## 基础命令
+
+### 创建卡密
 
 ```bash
 npm run license:create-card -- --key TEST-2026-0001 --days 30 --devices 1 --note 本地测试卡
 ```
 
-## 查看卡密
+### 查看全部卡密
 
 ```bash
 npm run license:list-cards
+```
+
+### 查看单张卡密详情
+
+```bash
+npm run license:get-card -- --key TEST-2026-0001
+```
+
+### 禁用卡密
+
+```bash
+npm run license:disable-card -- --key TEST-2026-0001 --note 手动禁用
+```
+
+### 重新启用卡密
+
+```bash
+npm run license:disable-card -- --key TEST-2026-0001 --enable true --note 重新启用
+```
+
+### 延长有效期
+
+```bash
+npm run license:extend-card -- --key TEST-2026-0001 --days 30 --note 补 30 天
+```
+
+### 重置设备绑定
+
+```bash
+npm run license:reset-devices -- --key TEST-2026-0001 --note 重置绑定
+```
+
+### 查看日志
+
+```bash
+npm run license:list-logs -- --key TEST-2026-0001 --limit 20
 ```
 
 ## 客户端设置
@@ -44,8 +82,20 @@ http://127.0.0.1:8787
 
 ## 当前已实现接口
 
+### 客户端接口
+
 - `POST /api/license/activate`
 - `POST /api/license/validate`
+
+### 后台管理接口
+
+- `GET /api/admin/cards`
+- `GET /api/admin/card?cardKey=...`
+- `GET /api/admin/logs?cardKey=...&limit=20`
+- `POST /api/admin/cards/create`
+- `POST /api/admin/cards/disable`
+- `POST /api/admin/cards/extend`
+- `POST /api/admin/cards/reset-devices`
 
 ## 当前数据存储
 
@@ -60,8 +110,7 @@ license-server/data/license-db.json
 这是本地 MVP，后面可以继续补：
 
 - 后台管理页面
-- 重置设备绑定
-- 禁用卡密
+- 管理接口鉴权
 - 版本更新接口
 - 多渠道 release 管理
-
+- 正式数据库迁移
