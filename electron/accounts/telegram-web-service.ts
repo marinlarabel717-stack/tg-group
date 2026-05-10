@@ -2,7 +2,7 @@ import { BrowserWindow, dialog } from 'electron'
 import type { AccountRecord } from './types'
 import { SessionLoader } from './check-engine/session-loader'
 import { type AccountClientProxyOptions, TelegramClientManager } from './check-engine/telegram-client-manager'
-import { type AccountCheckProxy, formatMaskedProxyLabel, ProxyPoolService } from '../proxy-pool/service'
+import { type AccountCheckProxy, ProxyPoolService } from '../proxy-pool/service'
 
 interface TelegramWebAccountState {
   userId: string
@@ -18,8 +18,8 @@ interface WindowProbeResult {
 }
 
 const TELEGRAM_WEB_URL = 'https://web.telegram.org/a/'
-const TELEGRAM_WEB_BOOT_DELAY_MS = 3000
 const ZERO_SERVER_SALT = '0000000000000000'
+const WEB_LOAD_TIMEOUT_MS = 15000
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -66,8 +66,8 @@ function normalizeUserId(value: unknown) {
 
 function buildWebWindowTitle(account: AccountRecord, proxy: AccountCheckProxy | null) {
   const phone = account.phone || '账号'
-  if (!proxy) return `${phone} - Telegram Web`
-  return `${phone} - Telegram Web · 代理 ${formatMaskedProxyLabel(proxy)}`
+  if (!proxy) return `${phone} - Telegram Web · 直连`
+  return `${phone} - Telegram Web · 已连接代理`
 }
 
 export class TelegramWebService {
@@ -144,15 +144,13 @@ export class TelegramWebService {
         })
 
         await window.loadURL(TELEGRAM_WEB_URL)
-        await sleep(TELEGRAM_WEB_BOOT_DELAY_MS)
         await this.patchWindowAuthState(window, webState)
-        await window.webContents.executeJavaScript('location.reload()')
-        await sleep(4000)
+        await this.reloadWindow(window)
 
         const probe = await this.probeWindow(window)
         if (probe.hasAuthForm && !probe.hasMainContent) {
           await this.patchWindowAuthState(window, webState)
-          await window.webContents.executeJavaScript('location.reload()')
+          await this.reloadWindow(window)
         }
 
         await this.waitForMainContent(window)
@@ -301,6 +299,45 @@ export class TelegramWebService {
     })()`
 
     await window.webContents.executeJavaScript(script)
+  }
+
+  private async reloadWindow(window: BrowserWindow) {
+    if (window.isDestroyed()) return
+
+    await new Promise<void>((resolve, reject) => {
+      const contents = window.webContents
+      let settled = false
+
+      const cleanup = () => {
+        contents.removeListener('did-finish-load', handleLoad)
+        contents.removeListener('did-fail-load', handleFail)
+      }
+
+      const finish = (callback: () => void) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        callback()
+      }
+
+      const timer = setTimeout(() => {
+        finish(() => reject(new Error('Telegram Web reload timeout')))
+      }, WEB_LOAD_TIMEOUT_MS)
+
+      const handleLoad = () => {
+        clearTimeout(timer)
+        finish(resolve)
+      }
+
+      const handleFail = (_event: unknown, _code: number, description: string) => {
+        clearTimeout(timer)
+        finish(() => reject(new Error(description || 'Telegram Web reload failed')))
+      }
+
+      contents.once('did-finish-load', handleLoad)
+      contents.once('did-fail-load', handleFail)
+      void contents.executeJavaScript('location.reload()')
+    })
   }
 
   private async waitForMainContent(window: BrowserWindow) {
