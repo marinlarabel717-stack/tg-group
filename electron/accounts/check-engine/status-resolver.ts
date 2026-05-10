@@ -8,6 +8,31 @@ function normalizeError(error: unknown) {
   return String(error ?? '')
 }
 
+function isTimeoutLike(text: string) {
+  return text.includes('timeout')
+    || text.includes('timed out')
+    || text.includes('etimedout')
+    || text.includes('超时')
+}
+
+function isNetworkLike(text: string) {
+  return text.includes('network')
+    || text.includes('socket')
+    || text.includes('disconnect')
+    || text.includes('disconnected')
+    || text.includes('not connected')
+    || text.includes('connection')
+    || text.includes('connect')
+    || text.includes('econnreset')
+    || text.includes('econnrefused')
+    || text.includes('enotfound')
+    || text.includes('ehostunreach')
+    || text.includes('enetunreach')
+    || text.includes('proxy')
+    || text.includes('网络')
+    || text.includes('连接')
+}
+
 export class StatusResolver {
   resolveAuthorization(authorized: boolean): AccountStatus {
     return authorized ? 'checking' : 'not_logged_in'
@@ -23,7 +48,8 @@ export class StatusResolver {
     if (text.includes('phone number banned') || text.includes('user_deactivated_ban') || text.includes('banned')) return 'banned'
     if (text.includes('auth_key_unregistered') || text.includes('session_revoked') || text.includes('session expired')) return 'session_expired'
     if (text.includes('not authorized') || text.includes('unauthorized') || text.includes('auth key') && text.includes('missing')) return 'not_logged_in'
-    if (text.includes('timeout') || text.includes('timed out') || text.includes('etimedout')) return 'timeout'
+    if (isTimeoutLike(text)) return 'timeout'
+    if (isNetworkLike(text)) return 'timeout'
     if (text.includes('multiple ip') || text.includes('different ip') || text.includes('many locations')) return 'multi_ip'
 
     return 'unknown'
@@ -32,19 +58,22 @@ export class StatusResolver {
   resolveHealthCheckError(error: unknown): AccountStatus {
     const text = normalizeError(error).toLowerCase()
 
-    if (!text) return 'banned'
+    if (!text) return 'timeout'
     if (text.includes('auth_key_duplicated')) return 'multi_ip'
     if (text.includes('multiple ip') || text.includes('different ip') || text.includes('many locations')) return 'multi_ip'
-    if (text.includes('timeout') || text.includes('timed out') || text.includes('etimedout')) return 'timeout'
-    if (text.includes('network') || text.includes('socket') || text.includes('disconnect')) return 'timeout'
+    if (isTimeoutLike(text)) return 'timeout'
+    if (isNetworkLike(text)) return 'timeout'
+    if (text.includes('auth_key_unregistered') || text.includes('session_revoked') || text.includes('session expired')) return 'banned'
+    if (text.includes('not authorized') || text.includes('unauthorized') || text.includes('session 未登录')) return 'banned'
+    if (text.includes('phone number banned') || text.includes('user_deactivated_ban') || text.includes('banned')) return 'banned'
 
-    return 'banned'
+    return 'timeout'
   }
 
   isRetryable(status: AccountStatus, error?: unknown) {
     if (status === 'timeout') return true
 
     const text = normalizeError(error).toLowerCase()
-    return text.includes('timeout') || text.includes('socket') || text.includes('network') || text.includes('disconnect')
+    return isTimeoutLike(text) || isNetworkLike(text)
   }
 }
