@@ -2,7 +2,7 @@ import { BrowserWindow, dialog } from 'electron'
 import type { AccountRecord } from './types'
 import { SessionLoader } from './check-engine/session-loader'
 import { type AccountClientProxyOptions, TelegramClientManager } from './check-engine/telegram-client-manager'
-import { type AccountCheckProxy, ProxyPoolService } from '../proxy-pool/service'
+import { type AccountCheckProxy, formatMaskedProxyLabel, ProxyPoolService } from '../proxy-pool/service'
 
 interface TelegramWebAccountState {
   userId: string
@@ -64,6 +64,12 @@ function normalizeUserId(value: unknown) {
   return ''
 }
 
+function buildWebWindowTitle(account: AccountRecord, proxy: AccountCheckProxy | null) {
+  const phone = account.phone || '账号'
+  if (!proxy) return `${phone} - Telegram Web`
+  return `${phone} - Telegram Web · 代理 ${formatMaskedProxyLabel(proxy)}`
+}
+
 export class TelegramWebService {
   private readonly windows = new Map<number, BrowserWindow>()
 
@@ -90,6 +96,7 @@ export class TelegramWebService {
 
       try {
         const webState = await this.buildWebAccountState(account, proxy)
+        const safeTitle = buildWebWindowTitle(account, proxy)
         const partition = `telegram-web-${account.id}-${Date.now()}`
         window = new BrowserWindow({
           width: 1280,
@@ -99,7 +106,7 @@ export class TelegramWebService {
           show: false,
           autoHideMenuBar: true,
           backgroundColor: '#08101d',
-          title: `${account.phone || '账号'} - Telegram Web`,
+          title: safeTitle,
           webPreferences: {
             partition,
             preload: this.preloadPath,
@@ -109,6 +116,14 @@ export class TelegramWebService {
             nodeIntegration: false,
             spellcheck: false,
             backgroundThrottling: false
+          }
+        })
+
+        window.on('page-title-updated', (event) => {
+          event.preventDefault()
+          const targetWindow = window
+          if (targetWindow && !targetWindow.isDestroyed()) {
+            targetWindow.setTitle(safeTitle)
           }
         })
 
