@@ -1,9 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, CheckAction, CheckQueueState, CheckResultInput, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
+import type { AccountRecord, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'Telegram Multi Account Manager',
-  platform: process.platform
+  platform: process.platform,
+  version: process.env.npm_package_version || '0.0.1'
 })
 
 contextBridge.exposeInMainWorld('desktopWindow', {
@@ -64,4 +65,10 @@ contextBridge.exposeInMainWorld('desktopProxyPool', {
     ipcRenderer.on('proxy-pool:state', listener)
     return () => ipcRenderer.removeListener('proxy-pool:state', listener)
   }
+})
+
+contextBridge.exposeInMainWorld('desktopLicense', {
+  getState: () => ipcRenderer.invoke('license:get-state') as Promise<DesktopLicenseState>,
+  activate: (cardKey: string) => ipcRenderer.invoke('license:activate', cardKey) as Promise<DesktopLicenseActivateResult>,
+  clear: () => ipcRenderer.invoke('license:clear') as Promise<DesktopLicenseState>
 })

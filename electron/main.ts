@@ -24,6 +24,8 @@ import { TelegramDesktopPremiumService } from './accounts/telegram-desktop-premi
 import { AppSettingsStore } from './app-settings-store'
 import { ProxyPoolService } from './proxy-pool/service'
 import { resolveRuntimeAssetPath } from './runtime-paths'
+import { LicenseStore } from './license/license-store'
+import { LicenseService } from './license/license-service'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -133,8 +135,11 @@ async function bootstrap() {
   const databasePath = path.join(accountsRootPath, 'accounts.db')
   const managedSessionsDirectory = path.join(accountsRootPath, 'sessions')
   const settingsPath = path.join(app.getPath('userData'), 'settings.json')
+  const licensePath = path.join(app.getPath('userData'), 'license.json')
   const database = await createAccountsDatabase(databasePath)
   const appSettingsStore = new AppSettingsStore(settingsPath)
+  const licenseStore = new LicenseStore(licensePath)
+  const licenseService = new LicenseService(licenseStore)
   const proxyPoolStoragePath = path.join(app.getPath('userData'), 'proxy-pool.json')
   const appSettings = appSettingsStore.get()
   const repository = new AccountRepository(database)
@@ -191,6 +196,9 @@ async function bootstrap() {
   ipcMain.handle('proxy-pool:update-settings', (_event, patch) => proxyPoolService.updateSettings(patch))
   ipcMain.handle('proxy-pool:clear-logs', () => proxyPoolService.clearLogs())
   ipcMain.handle('proxy-pool:start-check', () => proxyPoolService.startCheck())
+  ipcMain.handle('license:get-state', () => licenseService.getSnapshot())
+  ipcMain.handle('license:activate', (_event, cardKey: string) => licenseService.activate(cardKey))
+  ipcMain.handle('license:clear', () => licenseService.clear())
 
   await importService.syncManagedSessions()
 

@@ -271,6 +271,28 @@ export interface DesktopAppSettings {
   checkConcurrency: number
 }
 
+export interface DesktopLicenseState {
+  status: 'missing' | 'valid' | 'expired' | 'invalid' | 'grace'
+  canEnter: boolean
+  machineId: string
+  appVersion: string
+  isPackaged: boolean
+  devBypassAvailable: boolean
+  apiConfigured: boolean
+  cardKeyMasked: string | null
+  expireAt: string | null
+  activatedAt: string | null
+  lastValidatedAt: string | null
+  offlineGraceUntil: string | null
+  message: string
+}
+
+export interface DesktopLicenseActivateResult {
+  ok: boolean
+  message: string
+  snapshot: DesktopLicenseState
+}
+
 export interface DesktopSettingsApi {
   get: () => Promise<DesktopAppSettings>
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
@@ -285,6 +307,12 @@ export interface DesktopProxyPoolApi {
   onState: (callback: (state: ProxyPoolState) => void) => () => void
 }
 
+export interface DesktopLicenseApi {
+  getState: () => Promise<DesktopLicenseState>
+  activate: (cardKey: string) => Promise<DesktopLicenseActivateResult>
+  clear: () => Promise<DesktopLicenseState>
+}
+
 export interface DesktopWindowApi {
   minimize: () => Promise<void>
   toggleMaximize: () => Promise<boolean>
@@ -297,10 +325,12 @@ declare global {
     desktopAccounts?: DesktopAccountsApi
     desktopSettings?: DesktopSettingsApi
     desktopProxyPool?: DesktopProxyPoolApi
+    desktopLicense?: DesktopLicenseApi
     desktopWindow?: DesktopWindowApi
     desktopInfo?: {
       appName: string
       platform: string
+      version: string
     }
   }
 }
