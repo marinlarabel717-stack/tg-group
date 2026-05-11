@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react'
-import { CalendarClock, CopyPlus, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, Radio, RefreshCw, Send, Users } from 'lucide-react'
+import { ArrowRight, CalendarClock, CheckCircle2, CopyPlus, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, Radio, RefreshCw, Send, Users } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useAccountStore } from '../../stores/accountstore'
@@ -409,117 +409,191 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
   const [groupMembers, setGroupMembers] = useState('0')
 
   const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedTargetAccountId) ?? null, [accounts, selectedTargetAccountId])
+  const selectedAccountGroups = useMemo(() => {
+    if (!selectedAccount) return groups
+    return groups.filter((group) => group.accountIds.includes(selectedAccount.id))
+  }, [groups, selectedAccount])
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
+    <div className="space-y-5">
       <GlassPanel className="bg-card">
-        <div>
-          <div className="text-lg font-semibold text-white">第 1 步：选账号</div>
-          <div className="mt-1 text-sm text-textMuted">先选一个账号，再读这个账号已经加入的群。</div>
-        </div>
-        <div className="mt-4 space-y-3">
-          {accounts.length === 0 ? (
-            <div className="rounded-[16px] bg-panel px-4 py-10 text-center text-sm text-textMuted">还没有可用账号，先去账号管理导入或登录。</div>
-          ) : accounts.map((account) => (
-            <button key={account.id} type="button" onClick={() => setSelectedTargetAccountId(account.id)} className={`flex w-full items-center justify-between rounded-[16px] px-4 py-4 text-left transition ${selectedTargetAccountId === account.id ? 'bg-violet-400/10 ring-1 ring-violet-400/30' : 'bg-panel hover:bg-white/[0.04]'}`}>
-              <div>
-                <div className="text-sm font-semibold text-white">{account.username || account.phone || `账号#${account.id}`}</div>
-                <div className="mt-1 text-xs text-textMuted">{account.phone || account.userId || '未识别账号'} · {formatAccountStatus(account.status)}</div>
+        <div className="rounded-[24px] border border-violet-400/20 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/8 to-sky-500/10 p-5">
+          <div className="text-xs tracking-[0.2em] text-violet-300">简单模式</div>
+          <div className="mt-2 text-2xl font-semibold text-white">账号 / 群配置</div>
+          <div className="mt-2 text-sm text-slate-300">别再手工维护“哪个账号勾哪个群”了。现在就按 3 步走：先选账号，再读取它已加入的群，最后点一下加入目标群。</div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            {[
+              ['1', '先选一个账号', '点左边账号卡片'],
+              ['2', '读取已加入的群', '系统自动拉这个账号的群列表'],
+              ['3', '点一下加入目标群', '后面任务页直接勾选使用']
+            ].map(([index, title, desc]) => (
+              <div key={index} className="rounded-[18px] bg-black/20 px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-400/16 text-sm font-semibold text-violet-200">{index}</div>
+                  <div className="text-sm font-semibold text-white">{title}</div>
+                </div>
+                <div className="mt-2 text-xs leading-6 text-textMuted">{desc}</div>
               </div>
-              <div className={`rounded-full px-2.5 py-1 text-[11px] ${account.status === 'alive' ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/[0.05] text-textMuted'}`}>{account.status === 'alive' ? '可发' : formatAccountStatus(account.status)}</div>
-            </button>
-          ))}
+            ))}
+          </div>
         </div>
-        <button
-          type="button"
-          disabled={!selectedTargetAccountId || loadingJoinedGroups}
-          onClick={() => selectedTargetAccountId ? void loadJoinedGroupsForAccount(selectedTargetAccountId) : undefined}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <RefreshCw size={16} className={loadingJoinedGroups ? 'animate-spin' : ''} />
-          {loadingJoinedGroups ? '正在读取已加入群…' : '读取这个账号已加入的群'}
-        </button>
       </GlassPanel>
 
-      <GlassPanel className="bg-card">
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-          <div className="space-y-4">
+      <div className="grid gap-5 xl:grid-cols-[320px_1fr]">
+        <GlassPanel className="bg-card">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-white">第 2 步：从已加入群里直接选</div>
-              <div className="mt-1 text-sm text-textMuted">读出来后，点“加入目标群”就行，不用你再手动对账号。</div>
+              <div className="text-lg font-semibold text-white">1）选择账号</div>
+              <div className="mt-1 text-sm text-textMuted">先点一个你要发群的账号。</div>
+            </div>
+            <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{accounts.length} 个账号</div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {accounts.length === 0 ? (
+              <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted">还没有可用账号，先去账号管理导入或登录。</div>
+            ) : accounts.map((account) => {
+              const active = selectedTargetAccountId === account.id
+              return (
+                <button
+                  key={account.id}
+                  type="button"
+                  onClick={() => setSelectedTargetAccountId(account.id)}
+                  className={`w-full rounded-[20px] border px-4 py-4 text-left transition ${active ? 'border-violet-400/40 bg-violet-400/10 shadow-[0_0_0_1px_rgba(167,139,250,0.15)]' : 'border-white/6 bg-panel hover:border-white/12 hover:bg-white/[0.04]'}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-base font-semibold text-white">{account.username || account.phone || `账号#${account.id}`}</div>
+                      <div className="mt-1 text-xs text-textMuted">{account.phone || account.userId || '未识别账号'}</div>
+                    </div>
+                    {active ? <CheckCircle2 size={18} className="shrink-0 text-violet-300" /> : null}
+                  </div>
+                  <div className="mt-3 inline-flex rounded-full px-2.5 py-1 text-[11px] text-white/90 bg-white/[0.05]">{account.status === 'alive' ? '状态：可发' : `状态：${formatAccountStatus(account.status)}`}</div>
+                </button>
+              )
+            })}
+          </div>
+        </GlassPanel>
+
+        <div className="space-y-5">
+          <GlassPanel className="bg-card">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="text-lg font-semibold text-white">2）读取这个账号已加入的群</div>
+                <div className="mt-1 text-sm text-textMuted">选完账号后，直接点下面这个按钮。</div>
+              </div>
+              <button
+                type="button"
+                disabled={!selectedTargetAccountId || loadingJoinedGroups}
+                onClick={() => selectedTargetAccountId ? void loadJoinedGroupsForAccount(selectedTargetAccountId) : undefined}
+                className="flex h-12 items-center justify-center gap-2 rounded-[14px] bg-violet-400 px-5 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:bg-violet-400/40 disabled:text-white/70"
+              >
+                <RefreshCw size={16} className={loadingJoinedGroups ? 'animate-spin' : ''} />
+                {loadingJoinedGroups ? '正在读取群...' : '读取已加入的群'}
+                <ArrowRight size={16} />
+              </button>
             </div>
 
-            {!selectedAccount ? (
-              <div className="flex min-h-[240px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">先在左边选一个账号。</div>
-            ) : loadingJoinedGroups ? (
-              <div className="flex min-h-[240px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">正在读取 {selectedAccount.username || selectedAccount.phone || `账号#${selectedAccount.id}`} 已加入的群…</div>
-            ) : joinedGroups.length === 0 ? (
-              <div className="rounded-[18px] bg-panel px-4 py-10 text-center text-sm text-textMuted">{errorMessage || '还没读到群，点左边按钮试一下。'}</div>
-            ) : (
-              <div className="space-y-3">
-                {joinedGroups.map((group) => {
-                  const exists = groups.some((item) => (item.username && group.username && item.username.toLowerCase() === group.username.toLowerCase()) || item.title === group.title)
-                  return (
-                    <div key={`${group.peerId}:${group.username || group.title}`} className="flex items-center justify-between gap-3 rounded-[18px] bg-panel px-4 py-4">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-white">{group.title}</div>
-                        <div className="mt-1 text-xs text-textMuted">{group.username || '无 @username'} · 成员数 {group.memberCount || 0}</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => attachJoinedGroupToAccount(selectedAccount.id, group)}
-                        className={`shrink-0 rounded-[12px] px-3 py-2 text-sm transition ${exists ? 'bg-emerald-400/12 text-emerald-300' : 'bg-violet-400/12 text-violet-300 hover:bg-violet-400/18'}`}
-                      >
-                        {exists ? '已加入目标群' : '加入目标群'}
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+            <div className="mt-4 rounded-[18px] bg-panel p-4">
+              {!selectedAccount ? (
+                <div className="text-sm text-textMuted">先在左边选一个账号。</div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="rounded-full bg-violet-400/12 px-3 py-1.5 text-sm text-violet-200">当前账号：{selectedAccount.username || selectedAccount.phone || `账号#${selectedAccount.id}`}</div>
+                  <div className="rounded-full bg-white/[0.05] px-3 py-1.5 text-sm text-textMuted">已读到群：{joinedGroups.length} 个</div>
+                  <div className="rounded-full bg-white/[0.05] px-3 py-1.5 text-sm text-textMuted">已加入目标群：{selectedAccountGroups.length} 个</div>
+                </div>
+              )}
+            </div>
+          </GlassPanel>
 
-            <div>
-              <div className="text-lg font-semibold text-white">第 3 步：当前目标群</div>
-              <div className="mt-1 text-sm text-textMuted">这里的群，后面去任务页直接勾选就行。</div>
-              <div className="mt-4 space-y-4">
-                {groups.length === 0 ? (
-                  <div className="rounded-[18px] bg-panel px-4 py-10 text-center text-sm text-textMuted">还没有目标群。</div>
-                ) : groups.map((group) => (
-                  <div key={group.id} className="rounded-[18px] bg-panel p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <input value={group.title} onChange={(event) => updateGroup(group.id, { title: event.target.value })} className="w-full bg-transparent text-sm font-semibold text-white outline-none" />
-                        <input value={group.username} onChange={(event) => updateGroup(group.id, { username: event.target.value })} className="mt-1 w-full bg-transparent text-xs text-textMuted outline-none" />
+          <GlassPanel className="bg-card">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">3）选择要发的群</div>
+                <div className="mt-1 text-sm text-textMuted">看到哪个群要发，就点它右边按钮。不要的就别点。</div>
+              </div>
+              {selectedAccount ? <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">账号：{selectedAccount.username || selectedAccount.phone || `账号#${selectedAccount.id}`}</div> : null}
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {!selectedAccount ? (
+                <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted">先选账号，再读群。</div>
+              ) : loadingJoinedGroups ? (
+                <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted">正在读取 {selectedAccount.username || selectedAccount.phone || `账号#${selectedAccount.id}`} 的群...</div>
+              ) : joinedGroups.length === 0 ? (
+                <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted">{errorMessage || '还没读到群，点上面的“读取已加入的群”。'}</div>
+              ) : (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {joinedGroups.map((group) => {
+                    const exists = groups.some((item) => (item.username && group.username && item.username.toLowerCase() === group.username.toLowerCase()) || item.title === group.title)
+                    return (
+                      <div key={`${group.peerId}:${group.username || group.title}`} className={`rounded-[20px] border p-4 transition ${exists ? 'border-emerald-400/25 bg-emerald-400/8' : 'border-white/8 bg-panel'}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-base font-semibold text-white">{group.title}</div>
+                            <div className="mt-1 text-xs text-textMuted">{group.username || '没有 @username'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
+                          </div>
+                          {exists ? <CheckCircle2 size={18} className="shrink-0 text-emerald-300" /> : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => attachJoinedGroupToAccount(selectedAccount.id, group)}
+                          className={`mt-4 flex w-full items-center justify-center gap-2 rounded-[14px] px-4 py-3 text-sm font-semibold transition ${exists ? 'bg-emerald-400/12 text-emerald-300' : 'bg-violet-400/12 text-violet-300 hover:bg-violet-400/18'}`}
+                        >
+                          {exists ? '已加入目标群' : '加入这个群'}
+                        </button>
                       </div>
-                      <label className="flex items-center gap-2 text-xs text-textMuted">
-                        启用
-                        <input type="checkbox" checked={group.enabled} onChange={(event) => updateGroup(group.id, { enabled: event.target.checked })} />
-                      </label>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </GlassPanel>
+
+          <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
+            <GlassPanel className="bg-card">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-lg font-semibold text-white">已选中的目标群</div>
+                  <div className="mt-1 text-sm text-textMuted">这些群后面会直接出现在任务页。</div>
+                </div>
+                <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{selectedAccountGroups.length} 个</div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {selectedAccountGroups.length === 0 ? (
+                  <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted">这个账号还没有选中任何目标群。</div>
+                ) : selectedAccountGroups.map((group) => (
+                  <div key={group.id} className="flex items-center justify-between gap-3 rounded-[18px] bg-panel px-4 py-4">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-white">{group.title}</div>
+                      <div className="mt-1 text-xs text-textMuted">{group.username || '没有 @username'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
                     </div>
-                    <div className="mt-3 flex items-center justify-between text-xs text-textMuted">
-                      <span>成员数 {group.memberCount}</span>
-                      <span>可发账号 {group.accountIds.length}</span>
-                    </div>
+                    <label className="flex shrink-0 items-center gap-2 text-xs text-textMuted">
+                      启用
+                      <input type="checkbox" checked={group.enabled} onChange={(event) => updateGroup(group.id, { enabled: event.target.checked })} />
+                    </label>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
+            </GlassPanel>
 
-          <div className="rounded-[18px] bg-panel p-4">
-            <div className="text-sm font-semibold text-white">手动补一个群（备用）</div>
-            <div className="mt-1 text-xs text-textMuted">如果某个群暂时没读出来，再手动补。</div>
-            <div className="mt-4 space-y-3">
-              <label className="block space-y-2 text-sm"><span className="text-textMuted">群名称</span><input value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-              <label className="block space-y-2 text-sm"><span className="text-textMuted">群 @username</span><input value={groupUsername} onChange={(event) => setGroupUsername(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-              <label className="block space-y-2 text-sm"><span className="text-textMuted">成员数</span><input type="number" value={groupMembers} onChange={(event) => setGroupMembers(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-              <button type="button" onClick={() => { createGroup({ title: groupTitle, username: groupUsername, memberCount: Number(groupMembers) || 0 }); setGroupTitle(''); setGroupUsername(''); setGroupMembers('0') }} className="flex w-full items-center justify-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
-                <Plus size={16} /> 添加群组
-              </button>
-            </div>
+            <GlassPanel className="bg-card">
+              <div className="text-lg font-semibold text-white">手动补一个群</div>
+              <div className="mt-1 text-sm text-textMuted">如果某个群没读出来，再手动补。</div>
+              <div className="mt-4 space-y-3">
+                <label className="block space-y-2 text-sm"><span className="text-textMuted">群名称</span><input value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <label className="block space-y-2 text-sm"><span className="text-textMuted">群 @username</span><input value={groupUsername} onChange={(event) => setGroupUsername(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <label className="block space-y-2 text-sm"><span className="text-textMuted">成员数</span><input type="number" value={groupMembers} onChange={(event) => setGroupMembers(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <button type="button" onClick={() => { createGroup({ title: groupTitle, username: groupUsername, memberCount: Number(groupMembers) || 0 }); setGroupTitle(''); setGroupUsername(''); setGroupMembers('0') }} className="flex w-full items-center justify-center gap-2 rounded-[12px] bg-white/[0.06] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.1]">
+                  <Plus size={16} /> 手动添加
+                </button>
+              </div>
+            </GlassPanel>
           </div>
         </div>
-      </GlassPanel>
+      </div>
     </div>
   )
 })
