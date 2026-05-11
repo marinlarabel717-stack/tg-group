@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, CalendarClock, CheckCircle2, CopyPlus, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, Radio, RefreshCw, Send, Users, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, CheckCircle2, CopyPlus, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Send, Users, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useAccountStore } from '../../stores/accountstore'
@@ -77,51 +77,6 @@ function isSameGroupRef(left: { title?: string; username?: string; targetRef?: s
 
   return String(left.title || '').trim() !== '' && String(left.title || '').trim() === String(right.title || '').trim()
 }
-
-const BroadcastSummary = memo(function BroadcastSummary() {
-  const tasks = useBroadcastStore((state) => state.tasks)
-  const previewItems = useBroadcastStore((state) => state.previewItems)
-  const groups = useBroadcastStore((state) => state.groups)
-  const accounts = useAccountStore((state) => state.accounts)
-
-  const summary = useMemo(() => {
-    const running = tasks.filter((item) => item.status === 'active' && item.enabled).length
-    const scheduled = previewItems.filter((item) => item.status === 'scheduled').length
-    const errors = previewItems.filter((item) => item.status === 'failed').length
-    return {
-      running,
-      scheduled,
-      groups: groups.filter((item) => item.enabled).length,
-      accounts: accounts.length,
-      errors
-    }
-  }, [accounts.length, groups, previewItems, tasks])
-
-  return (
-    <div className="grid gap-4 md:grid-cols-5">
-      <GlassPanel className="bg-card">
-        <div className="text-xs tracking-[0.18em] text-textMuted">运行任务</div>
-        <div className="mt-2 text-3xl font-semibold text-white">{summary.running}</div>
-      </GlassPanel>
-      <GlassPanel className="bg-card">
-        <div className="text-xs tracking-[0.18em] text-textMuted">今日已排程</div>
-        <div className="mt-2 text-3xl font-semibold text-white">{summary.scheduled}</div>
-      </GlassPanel>
-      <GlassPanel className="bg-card">
-        <div className="text-xs tracking-[0.18em] text-textMuted">目标群</div>
-        <div className="mt-2 text-3xl font-semibold text-white">{summary.groups}</div>
-      </GlassPanel>
-      <GlassPanel className="bg-card">
-        <div className="text-xs tracking-[0.18em] text-textMuted">登录账号</div>
-        <div className="mt-2 text-3xl font-semibold text-white">{summary.accounts}</div>
-      </GlassPanel>
-      <GlassPanel className="bg-card">
-        <div className="text-xs tracking-[0.18em] text-textMuted">异常项</div>
-        <div className="mt-2 text-3xl font-semibold text-white">{summary.errors}</div>
-      </GlassPanel>
-    </div>
-  )
-})
 
 const TabBar = memo(function TabBar() {
   const activeTab = useBroadcastStore((state) => state.activeTab)
@@ -1165,18 +1120,7 @@ export default memo(function BroadcastView() {
   }, [initAccounts])
 
   return (
-    <div className="space-y-5 contain-layout">
-      <GlassPanel className="bg-card overflow-hidden">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs tracking-[0.22em] text-violet-300"><Radio size={14} /> 官方定时消息工作台</div>
-            <h1 className="mt-3 text-3xl font-semibold text-white">定时群发</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-textMuted">现在改成更直接的操作台：左边选账号，中间看群和发送配置，右边看运行日志。</p>
-          </div>
-        </div>
-      </GlassPanel>
-
-      <BroadcastSummary />
+    <div className="contain-layout">
       <BroadcastConsole />
     </div>
   )
