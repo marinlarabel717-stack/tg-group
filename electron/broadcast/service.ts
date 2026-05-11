@@ -78,6 +78,42 @@ function slugifyFileName(input: string) {
   return value || 'broadcast_image'
 }
 
+function normalizeJoinedGroupTitle(value: string) {
+  return value.trim().toLowerCase()
+}
+
+function dedupeJoinedGroups(groups: BroadcastJoinedGroup[]) {
+  const result = new Map<string, BroadcastJoinedGroup>()
+
+  for (const group of groups) {
+    const titleKey = normalizeJoinedGroupTitle(group.title)
+    const primaryKey = group.username ? `username:${group.username.toLowerCase()}` : group.peerId ? `peer:${group.peerId}` : `title:${titleKey}`
+    const titleFallbackKey = titleKey ? `title:${titleKey}` : primaryKey
+    const existing = result.get(primaryKey) || result.get(titleFallbackKey)
+
+    if (!existing) {
+      result.set(primaryKey, group)
+      if (titleKey) result.set(titleFallbackKey, group)
+      continue
+    }
+
+    const merged: BroadcastJoinedGroup = {
+      ...existing,
+      title: existing.title || group.title,
+      username: group.username || existing.username,
+      targetRef: group.username || existing.username || existing.targetRef || group.targetRef || group.peerId || existing.peerId,
+      peerId: existing.peerId || group.peerId,
+      memberCount: Math.max(existing.memberCount || 0, group.memberCount || 0),
+      type: existing.type === 'supergroup' || group.type === 'supergroup' ? 'supergroup' : existing.type
+    }
+
+    result.set(primaryKey, merged)
+    if (titleKey) result.set(titleFallbackKey, merged)
+  }
+
+  return Array.from(new Map(Array.from(result.values()).map((group) => [`${group.username || ''}::${group.peerId || ''}::${normalizeJoinedGroupTitle(group.title)}`, group])).values())
+}
+
 function resolveMediaFile(imageUrl: string, title: string) {
   const value = imageUrl.trim()
   if (!value) return undefined
@@ -275,9 +311,10 @@ export class BroadcastService {
           } satisfies BroadcastJoinedGroup
         })
         .filter((item) => item.title)
+      const dedupedGroups = dedupeJoinedGroups(groups)
         .sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'))
 
-      return groups
+      return dedupedGroups
     } catch (error) {
       throw new Error(formatBroadcastError(error))
     } finally {

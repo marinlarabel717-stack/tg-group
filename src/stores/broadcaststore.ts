@@ -226,6 +226,40 @@ function dedupeGroups(groups: BroadcastGroupTarget[]) {
   }
 }
 
+function dedupeJoinedGroups(items: BroadcastJoinedGroup[]) {
+  const result = new Map<string, BroadcastJoinedGroup>()
+
+  for (const item of items) {
+    const targetRef = normalizeGroupRefValue(item.targetRef || '')
+    const username = normalizeUsername(item.username || '')
+    const title = String(item.title || '').trim().toLowerCase()
+    const key = targetRef ? `ref:${targetRef}` : username ? `username:${username}` : `title:${title}`
+    const titleKey = title ? `title:${title}` : key
+    const existing = result.get(key) || result.get(titleKey)
+
+    if (!existing) {
+      result.set(key, item)
+      if (title) result.set(titleKey, item)
+      continue
+    }
+
+    const merged: BroadcastJoinedGroup = {
+      ...existing,
+      title: existing.title || item.title,
+      username: item.username || existing.username,
+      targetRef: item.username || existing.username || item.targetRef || existing.targetRef || item.peerId || existing.peerId,
+      peerId: existing.peerId || item.peerId,
+      memberCount: Math.max(existing.memberCount || 0, item.memberCount || 0),
+      type: existing.type === 'supergroup' || item.type === 'supergroup' ? 'supergroup' : existing.type
+    }
+
+    result.set(key, merged)
+    if (title) result.set(titleKey, merged)
+  }
+
+  return Array.from(new Map(Array.from(result.values()).map((item) => [`${item.username || ''}::${item.peerId || ''}::${String(item.title || '').trim().toLowerCase()}`, item])).values())
+}
+
 function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget, accounts: Array<{ id: number; status?: string }>) {
   const joined = task.accountIds.filter((accountId) => group.accountIds.includes(accountId))
   return joined.filter((accountId) => {
@@ -465,7 +499,7 @@ export const useBroadcastStore = create<BroadcastState>()(
 
         set({ selectedTargetAccountId: accountId, loadingJoinedGroups: true, errorMessage: '', joinedGroups: [] })
         try {
-          const joinedGroups = await window.desktopBroadcast.listJoinedGroups(accountId)
+          const joinedGroups = dedupeJoinedGroups(await window.desktopBroadcast.listJoinedGroups(accountId))
           set({
             joinedGroups,
             loadingJoinedGroups: false,
