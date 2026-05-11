@@ -347,8 +347,6 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
   const endDate = rawEndDate.getTime() >= startDate.getTime() ? rawEndDate : startDate
   const totalDays = Math.max(1, Math.floor((startOfLocalDay(endDate).getTime() - startOfLocalDay(startDate).getTime()) / (24 * 60 * 60 * 1000)) + 1)
   const startMinutes = toMinutes(task.startTime)
-  const rawEndMinutes = toMinutes(task.endTime)
-  const endMinutes = rawEndMinutes < startMinutes ? rawEndMinutes + 24 * 60 : rawEndMinutes
   const interval = Math.max(5, Number(task.intervalMinutes) || 10)
   const jitter = 0
   const limitPerGroup = Math.max(1, Number(task.dailyLimitPerGroup) || 1)
@@ -364,11 +362,11 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
     for (let dayIndex = 0; dayIndex < totalDays; dayIndex += 1) {
       const dayBase = new Date(startDate)
       dayBase.setDate(startDate.getDate() + dayIndex)
-      let slotIndex = 0
 
-      for (let minute = startMinutes; minute <= endMinutes && slotIndex < limitPerGroup; minute += interval) {
+      for (let slotIndex = 0; slotIndex < limitPerGroup; slotIndex += 1) {
+        const minute = startMinutes + slotIndex * interval
         const jitterOffset = jitter === 0 ? 0 : (globalIndex % (jitter * 2 + 1)) - jitter
-        const scheduledMinute = Math.max(startMinutes, Math.min(endMinutes, minute + jitterOffset))
+        const scheduledMinute = minute + jitterOffset
         const scheduledAt = setMinutes(dayBase, scheduledMinute)
         const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
         const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[slotIndex % compatibleAccounts.length] : null
@@ -395,7 +393,6 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
           remoteMessageId: null,
           syncedAt: null
         })
-        slotIndex += 1
         globalIndex += 1
       }
     }
