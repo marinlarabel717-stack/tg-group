@@ -950,9 +950,9 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       </div>
 
       {accountPickerOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 px-4" onClick={() => setAccountPickerOpen(false)}>
-          <div className="w-full max-w-[980px] rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+        <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/60 px-4 py-6" onClick={() => setAccountPickerOpen(false)}>
+          <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-card px-5 py-4">
               <div>
                 <div className="text-lg font-semibold text-white">选择账号</div>
                 <div className="mt-1 text-sm text-textMuted">按账号管理的表格方式来选：能搜索、全选、手动勾选。</div>
@@ -962,7 +962,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               </button>
             </div>
 
-            <div className="space-y-4 px-5 py-5">
+            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <input
                   value={accountSearch}
@@ -1022,7 +1022,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-white/8 px-5 py-4">
+            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/8 bg-card px-5 py-4">
               <button type="button" onClick={() => setAccountPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
               <button type="button" onClick={() => void applyAccountSelection()} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">确定使用这些账号</button>
             </div>
