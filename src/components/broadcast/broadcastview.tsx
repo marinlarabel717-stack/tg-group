@@ -660,6 +660,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const selectedAccounts = useMemo(() => accounts.filter((item) => selectedAccountIds.includes(item.id)), [accounts, selectedAccountIds])
   const selectedAccountId = selectedTargetAccountId ?? selectedTask?.accountIds[0] ?? null
   const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedAccountId) ?? null, [accounts, selectedAccountId])
+  const currentAccountIsPremium = Boolean(selectedAccount?.profile?.is_premium)
   const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTask?.id), [previewItems, selectedTask])
   const previewSummary = useMemo(() => {
     const successCount = selectedPreview.filter((item) => item.status === 'scheduled').length
@@ -908,11 +909,28 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
               <GlassPanel className="bg-card">
                 <div className="text-lg font-semibold text-white">发送时间</div>
-                <div className="mt-1 text-sm text-textMuted">这里只配时间和频率，别的先不折腾。</div>
+                <div className="mt-1 text-sm text-textMuted">可以直接选几号到几号，系统会按每天的条数和间隔自动铺满。</div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">开始日期</span><input type="date" value={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { startDate: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">结束日期</span><input type="date" value={selectedTask.endDate} onChange={(event) => updateTask(selectedTask.id, { endDate: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                </div>
+                <div className="mt-4 rounded-[16px] bg-panel p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-white">会员快捷模式</div>
+                      <div className="mt-1 text-xs text-textMuted">会员号可以直接切成“每天重复”，底层仍会按日期范围批量写入官方定时消息。</div>
+                    </div>
+                    <label className={`inline-flex items-center gap-2 text-sm ${currentAccountIsPremium ? 'text-white' : 'text-textMuted'}`}>
+                      <input type="checkbox" checked={selectedTask.scheduleMode === 'daily_repeat'} disabled={!currentAccountIsPremium} onChange={(event) => updateTask(selectedTask.id, { scheduleMode: event.target.checked ? 'daily_repeat' : 'date_range' })} />
+                      每天重复
+                    </label>
+                  </div>
+                  {!currentAccountIsPremium ? <div className="mt-3 text-xs text-amber-200">当前账号不是会员号，这里先走普通日期范围模式。</div> : null}
+                </div>
                 <div className="mt-4 grid gap-4 md:grid-cols-4">
                   <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                   <label className="space-y-2 text-sm"><span className="text-textMuted">结束时间</span><input type="time" value={selectedTask.endTime} onChange={(event) => updateTask(selectedTask.id, { endTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                   <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                 </div>
               </GlassPanel>

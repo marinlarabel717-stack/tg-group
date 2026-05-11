@@ -39,6 +39,9 @@ export interface BroadcastTask {
   accountIds: number[]
   groupIds: string[]
   creativeIds: string[]
+  startDate: string
+  endDate: string
+  scheduleMode: 'date_range' | 'daily_repeat'
   startTime: string
   endTime: string
   intervalMinutes: number
@@ -124,6 +127,27 @@ function setMinutes(base: Date, totalMinutes: number) {
   next.setDate(next.getDate() + dayOffset)
   next.setHours(Math.floor(minuteOfDay / 60), minuteOfDay % 60, 0, 0)
   return next
+}
+
+function formatDateInputValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function parseDateInputValue(value: string) {
+  const matched = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!matched) return null
+  const year = Number(matched[1])
+  const month = Number(matched[2]) - 1
+  const day = Number(matched[3])
+  const date = new Date(year, month, day)
+  return Number.isFinite(date.getTime()) ? date : null
+}
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
 function rotateCreatives(task: BroadcastTask, creatives: BroadcastCreative[]) {
@@ -316,7 +340,12 @@ function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget,
 }
 
 function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[], groups: BroadcastGroupTarget[], accounts: Array<{ id: number; status?: string }>) {
-  const today = new Date()
+  const now = new Date()
+  const today = startOfLocalDay(now)
+  const startDate = parseDateInputValue(task.startDate) ?? today
+  const rawEndDate = parseDateInputValue(task.endDate) ?? startDate
+  const endDate = rawEndDate.getTime() >= startDate.getTime() ? rawEndDate : startDate
+  const totalDays = Math.max(1, Math.floor((startOfLocalDay(endDate).getTime() - startOfLocalDay(startDate).getTime()) / (24 * 60 * 60 * 1000)) + 1)
   const startMinutes = toMinutes(task.startTime)
   const rawEndMinutes = toMinutes(task.endTime)
   const endMinutes = rawEndMinutes < startMinutes ? rawEndMinutes + 24 * 60 : rawEndMinutes
@@ -331,40 +360,44 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
 
   for (const group of selectedGroups) {
     const compatibleAccounts = getCompatibleAccounts(task, group, accounts)
-    let slotIndex = 0
-    for (let minute = startMinutes; minute <= endMinutes && slotIndex < limitPerGroup; minute += interval) {
-      const jitterOffset = jitter === 0 ? 0 : (globalIndex % (jitter * 2 + 1)) - jitter
-      const scheduledMinute = Math.max(startMinutes, Math.min(endMinutes, minute + jitterOffset))
-      const scheduledAt = setMinutes(today, scheduledMinute)
-      const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
-      const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[slotIndex % compatibleAccounts.length] : null
-      let status: BroadcastPreviewStatus = 'queued'
-      let errorMessage = ''
 
-      if (!creativeId) {
-        status = 'failed'
-        errorMessage = '当前任务还没有启用中的图文文案'
-      } else if (!accountId) {
-        status = 'failed'
-        errorMessage = '目标群内没有已加入且可发送的账号'
-      } else if (slotIndex < 2) {
-        status = 'scheduled'
+    for (let dayIndex = 0; dayIndex < totalDays; dayIndex += 1) {
+      const dayBase = new Date(startDate)
+      dayBase.setDate(startDate.getDate() + dayIndex)
+      let slotIndex = 0
+
+      for (let minute = startMinutes; minute <= endMinutes && slotIndex < limitPerGroup; minute += interval) {
+        const jitterOffset = jitter === 0 ? 0 : (globalIndex % (jitter * 2 + 1)) - jitter
+        const scheduledMinute = Math.max(startMinutes, Math.min(endMinutes, minute + jitterOffset))
+        const scheduledAt = setMinutes(dayBase, scheduledMinute)
+        const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
+        const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[slotIndex % compatibleAccounts.length] : null
+        let status: BroadcastPreviewStatus = 'queued'
+        let errorMessage = ''
+
+        if (!creativeId) {
+          status = 'failed'
+          errorMessage = '当前任务还没有启用中的图文文案'
+        } else if (!accountId) {
+          status = 'failed'
+          errorMessage = '目标群内没有已加入且可发送的账号'
+        }
+
+        items.push({
+          id: createId('preview'),
+          taskId: task.id,
+          scheduledAt: scheduledAt.toISOString(),
+          accountId,
+          groupId: group.id,
+          creativeId,
+          status,
+          errorMessage,
+          remoteMessageId: null,
+          syncedAt: null
+        })
+        slotIndex += 1
+        globalIndex += 1
       }
-
-      items.push({
-        id: createId('preview'),
-        taskId: task.id,
-        scheduledAt: scheduledAt.toISOString(),
-        accountId,
-        groupId: group.id,
-        creativeId,
-        status,
-        errorMessage,
-        remoteMessageId: null,
-        syncedAt: null
-      })
-      slotIndex += 1
-      globalIndex += 1
     }
   }
 
@@ -375,16 +408,21 @@ const initialCreatives: BroadcastCreative[] = []
 
 const initialGroups: BroadcastGroupTarget[] = []
 
+const defaultStartDate = formatDateInputValue(new Date())
+
 const initialTasks: BroadcastTask[] = [
   {
     id: createId('task'),
     name: '默认定时群发任务',
     enabled: true,
     status: 'draft',
-    note: '先把今天的排程预览跑出来，再一键写入 Telegram 官方定时消息。',
+    note: '先把日期范围和每日条数配好，再一键写入 Telegram 官方定时消息。',
     accountIds: [],
     groupIds: initialGroups.map((item) => item.id),
     creativeIds: initialCreatives.map((item) => item.id),
+    startDate: defaultStartDate,
+    endDate: defaultStartDate,
+    scheduleMode: 'date_range',
     startTime: '09:00',
     endTime: '23:00',
     intervalMinutes: 10,
@@ -423,6 +461,9 @@ export const useBroadcastStore = create<BroadcastState>()(
           accountIds: [],
           groupIds: [],
           creativeIds: [],
+          startDate: formatDateInputValue(new Date()),
+          endDate: formatDateInputValue(new Date()),
+          scheduleMode: 'date_range',
           startTime: '09:00',
           endTime: '23:00',
           intervalMinutes: 10,
@@ -607,11 +648,16 @@ export const useBroadcastStore = create<BroadcastState>()(
           return
         }
         const previewItems = normalizePreviewItems(generatePreviewItems(task, state.creatives, state.groups, accounts))
+        const startDate = parseDateInputValue(task.startDate)
+        const endDate = parseDateInputValue(task.endDate)
+        const totalDays = startDate && endDate
+          ? Math.max(1, Math.floor((startOfLocalDay(endDate).getTime() - startOfLocalDay(startDate).getTime()) / (24 * 60 * 60 * 1000)) + 1)
+          : 1
         set({
           previewItems,
           activeTab: 'tasks',
           errorMessage: '',
-          lastActionMessage: previewItems.length > 0 ? `已生成 ${previewItems.length} 条今日排程预览。` : '当前配置还生成不出任何排程，请检查账号、群或文案。'
+          lastActionMessage: previewItems.length > 0 ? `已生成 ${previewItems.length} 条排程预览，共 ${totalDays} 天。` : '当前配置还生成不出任何排程，请检查账号、群或文案。'
         })
       },
       clearPreview: () => set({ previewItems: [], errorMessage: '', lastActionMessage: '当前任务预览已清空。' }),
@@ -686,7 +732,7 @@ export const useBroadcastStore = create<BroadcastState>()(
     }),
     {
       name: 'tg-group-broadcast-workbench',
-      version: 8,
+      version: 9,
       storage: createJSONStorage(() => localStorage),
       migrate: (persistedState: any) => {
         const defaultCreativeTitles = new Set(['早间图文 A', '转化图文 B'])
@@ -741,6 +787,9 @@ export const useBroadcastStore = create<BroadcastState>()(
           tasks: Array.isArray(persistedState?.tasks)
             ? persistedState.tasks.map((task: any) => ({
               ...task,
+              startDate: typeof task?.startDate === 'string' && task.startDate.trim() ? task.startDate : defaultStartDate,
+              endDate: typeof task?.endDate === 'string' && task.endDate.trim() ? task.endDate : (typeof task?.startDate === 'string' && task.startDate.trim() ? task.startDate : defaultStartDate),
+              scheduleMode: task?.scheduleMode === 'daily_repeat' ? 'daily_repeat' : 'date_range',
               groupIds: Array.isArray(task?.groupIds)
                 ? dedupeTaskGroupIds((Array.from(new Set((task.groupIds as string[]).map((groupId: string) => deduped.idMap.get(groupId) || groupId))) as string[]).filter((groupId) => deduped.groups.some((group) => group.id === groupId)), deduped.groups)
                 : [],
