@@ -12,4 +12,8 @@ export function registerBroadcastIpc(options: RegisterBroadcastIpcOptions) {
   ipcMain.handle('broadcast:push-schedule', async (_event, payload: BroadcastPushSchedulePayload) => {
     return broadcastService.pushSchedule(payload)
   })
+
+  ipcMain.handle('broadcast:list-joined-groups', async (_event, accountId: number) => {
+    return broadcastService.listJoinedGroups(accountId)
+  })
 }

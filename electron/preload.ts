@@ -75,5 +75,6 @@ contextBridge.exposeInMainWorld('desktopLicense', {
 })
 
 contextBridge.exposeInMainWorld('desktopBroadcast', {
-  pushSchedule: (payload: BroadcastPushSchedulePayload) => ipcRenderer.invoke('broadcast:push-schedule', payload)
+  pushSchedule: (payload: BroadcastPushSchedulePayload) => ipcRenderer.invoke('broadcast:push-schedule', payload),
+  listJoinedGroups: (accountId: number) => ipcRenderer.invoke('broadcast:list-joined-groups', accountId)
 })

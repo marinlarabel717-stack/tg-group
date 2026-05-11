@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { BroadcastPushSchedulePayload } from '../types'
+import type { BroadcastJoinedGroup, BroadcastPushSchedulePayload } from '../types'
 
 export type BroadcastTabKey = 'tasks' | 'creatives' | 'targets' | 'calendar'
 export type BroadcastTaskStatus = 'draft' | 'active' | 'paused'
@@ -64,8 +64,11 @@ interface BroadcastState {
   selectedTaskId: string | null
   selectedCreativeId: string | null
   previewItems: BroadcastPreviewItem[]
+  selectedTargetAccountId: number | null
+  joinedGroups: BroadcastJoinedGroup[]
   lastActionMessage: string
   syncing: boolean
+  loadingJoinedGroups: boolean
   errorMessage: string
   setActiveTab: (tab: BroadcastTabKey) => void
   selectTask: (taskId: string) => void
@@ -81,6 +84,9 @@ interface BroadcastState {
   createGroup: (payload: { title: string; username: string; memberCount: number }) => void
   updateGroup: (groupId: string, patch: Partial<BroadcastGroupTarget>) => void
   toggleGroupAccount: (groupId: string, accountId: number) => void
+  setSelectedTargetAccountId: (accountId: number | null) => void
+  loadJoinedGroupsForAccount: (accountId: number) => Promise<void>
+  attachJoinedGroupToAccount: (accountId: number, group: BroadcastJoinedGroup) => void
   generatePreview: (accounts: Array<{ id: number; status?: string }>) => void
   clearPreview: () => void
   pushScheduleToTelegram: () => Promise<void>
@@ -149,6 +155,12 @@ function normalizePreviewItems(items: BroadcastPreviewItem[]) {
       syncedAt: item.syncedAt ?? null
     }
   })
+}
+
+function normalizeUsername(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  return `@${trimmed.replace(/^@+/, '').toLowerCase()}`
 }
 
 function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget, accounts: Array<{ id: number; status?: string }>) {
@@ -239,24 +251,7 @@ const initialCreatives: BroadcastCreative[] = [
   }
 ]
 
-const initialGroups: BroadcastGroupTarget[] = [
-  {
-    id: createId('group'),
-    title: '高活跃交流群',
-    username: '@high_active_group',
-    memberCount: 1850,
-    enabled: true,
-    accountIds: []
-  },
-  {
-    id: createId('group'),
-    title: '转化群 02',
-    username: '@convert_group_02',
-    memberCount: 963,
-    enabled: true,
-    accountIds: []
-  }
-]
+const initialGroups: BroadcastGroupTarget[] = []
 
 const initialTasks: BroadcastTask[] = [
   {
@@ -287,8 +282,11 @@ export const useBroadcastStore = create<BroadcastState>()(
       selectedTaskId: initialTasks[0]?.id ?? null,
       selectedCreativeId: initialCreatives[0]?.id ?? null,
       previewItems: [],
+      selectedTargetAccountId: null,
+      joinedGroups: [],
       lastActionMessage: '先完成任务配置，再写入 Telegram 官方定时消息。',
       syncing: false,
+      loadingJoinedGroups: false,
       errorMessage: '',
       setActiveTab: (tab) => set({ activeTab: tab }),
       selectTask: (taskId) => set({ selectedTaskId: taskId }),
@@ -410,6 +408,70 @@ export const useBroadcastStore = create<BroadcastState>()(
           }
         })
       })),
+      setSelectedTargetAccountId: (accountId) => set({ selectedTargetAccountId: accountId }),
+      loadJoinedGroupsForAccount: async (accountId) => {
+        if (!window.desktopBroadcast?.listJoinedGroups) {
+          set({ errorMessage: '当前环境还没注入读取已加入群的桌面能力。' })
+          return
+        }
+
+        set({ selectedTargetAccountId: accountId, loadingJoinedGroups: true, errorMessage: '', joinedGroups: [] })
+        try {
+          const joinedGroups = await window.desktopBroadcast.listJoinedGroups(accountId)
+          set({
+            joinedGroups,
+            loadingJoinedGroups: false,
+            lastActionMessage: joinedGroups.length > 0 ? `已读取 ${joinedGroups.length} 个已加入群。` : '这个账号暂时没读到可用群组。'
+          })
+        } catch (error) {
+          set({
+            joinedGroups: [],
+            loadingJoinedGroups: false,
+            errorMessage: error instanceof Error ? error.message : '读取已加入群失败。',
+            lastActionMessage: '读取账号已加入群失败。'
+          })
+        }
+      },
+      attachJoinedGroupToAccount: (accountId, group) => set((state) => {
+        const normalizedIncomingUsername = normalizeUsername(group.username)
+        const matched = state.groups.find((item) => {
+          const normalizedExistingUsername = normalizeUsername(item.username)
+          if (normalizedIncomingUsername && normalizedExistingUsername) {
+            return normalizedExistingUsername === normalizedIncomingUsername
+          }
+          return item.title.trim() === group.title.trim()
+        })
+
+        if (matched) {
+          return {
+            groups: state.groups.map((item) => item.id !== matched.id
+              ? item
+              : {
+                ...item,
+                title: group.title || item.title,
+                username: group.username || item.username,
+                memberCount: group.memberCount || item.memberCount,
+                enabled: true,
+                accountIds: item.accountIds.includes(accountId) ? item.accountIds : [...item.accountIds, accountId]
+              }),
+            lastActionMessage: `已把 ${group.title} 绑定到当前账号。`
+          }
+        }
+
+        const nextGroup: BroadcastGroupTarget = {
+          id: createId('group'),
+          title: group.title,
+          username: group.username,
+          memberCount: group.memberCount,
+          enabled: true,
+          accountIds: [accountId]
+        }
+
+        return {
+          groups: [nextGroup, ...state.groups],
+          lastActionMessage: `已添加目标群：${group.title}`
+        }
+      }),
       generatePreview: (accounts) => {
         const state = get()
         const task = state.tasks.find((item) => item.id === state.selectedTaskId)
@@ -497,12 +559,15 @@ export const useBroadcastStore = create<BroadcastState>()(
     }),
     {
       name: 'tg-group-broadcast-workbench',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       migrate: (persistedState: any) => ({
         ...persistedState,
         previewItems: normalizePreviewItems(Array.isArray(persistedState?.previewItems) ? persistedState.previewItems : []),
+        selectedTargetAccountId: null,
+        joinedGroups: [],
         syncing: false,
+        loadingJoinedGroups: false,
         errorMessage: ''
       }),
       partialize: (state) => ({

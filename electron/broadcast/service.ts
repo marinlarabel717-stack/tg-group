@@ -4,7 +4,7 @@ import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager } from '../accounts/check-engine/telegram-client-manager'
-import type { BroadcastPushSchedulePayload, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem } from '../../src/types'
+import type { BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem } from '../../src/types'
 
 const MIN_SCHEDULE_AHEAD_MS = 60_000
 
@@ -214,6 +214,47 @@ export class BroadcastService {
       failedCount,
       items: results,
       message
+    }
+  }
+
+  async listJoinedGroups(accountId: number): Promise<BroadcastJoinedGroup[]> {
+    const account = this.accountRepository.getByIds([accountId])[0]
+    if (!account) {
+      throw new Error('账号不存在')
+    }
+
+    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+
+    try {
+      const dialogs = await client.getDialogs({ limit: 200 })
+      const groups = dialogs
+        .filter((dialog) => dialog.isGroup || (dialog.isChannel && !(dialog.entity as any)?.broadcast))
+        .map((dialog) => {
+          const entity = dialog.entity as any
+          const peerId = typeof dialog.id?.toString === 'function' ? dialog.id.toString() : String(entity?.id ?? '')
+          const title = String(dialog.title || dialog.name || entity?.title || '未命名群组').trim()
+          const username = typeof entity?.username === 'string' && entity.username.trim() ? `@${String(entity.username).replace(/^@+/, '')}` : ''
+          const participants = typeof entity?.participantsCount === 'number'
+            ? entity.participantsCount
+            : typeof entity?.participants_count === 'number'
+              ? entity.participants_count
+              : 0
+          return {
+            peerId,
+            title,
+            username,
+            memberCount: participants,
+            type: dialog.isChannel ? 'supergroup' : 'group'
+          } satisfies BroadcastJoinedGroup
+        })
+        .filter((item) => item.title)
+        .sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'))
+
+      return groups
+    } catch (error) {
+      throw new Error(formatBroadcastError(error))
+    } finally {
+      await this.clientManager.destroyClient(client)
     }
   }
 

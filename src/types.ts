@@ -361,6 +361,14 @@ export interface BroadcastPushScheduleResult {
   message: string
 }
 
+export interface BroadcastJoinedGroup {
+  peerId: string
+  title: string
+  username: string
+  memberCount: number
+  type: 'group' | 'supergroup'
+}
+
 export interface DesktopSettingsApi {
   get: () => Promise<DesktopAppSettings>
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
@@ -384,6 +392,7 @@ export interface DesktopLicenseApi {
 
 export interface DesktopBroadcastApi {
   pushSchedule: (payload: BroadcastPushSchedulePayload) => Promise<BroadcastPushScheduleResult>
+  listJoinedGroups: (accountId: number) => Promise<BroadcastJoinedGroup[]>
 }
 
 export interface DesktopWindowApi {
