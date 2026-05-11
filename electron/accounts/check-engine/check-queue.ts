@@ -42,6 +42,7 @@ function formatFrozenSince(value: unknown) {
 function createInitialState(options: Required<CheckQueueOptions>): CheckQueueState {
   return {
     running: false,
+    runMode: 'account-status',
     concurrency: options.concurrency,
     timeoutMs: options.timeoutMs,
     retryLimit: options.retryLimit,
@@ -129,6 +130,7 @@ export class CheckQueue extends EventEmitter {
       timeout: 0,
       unknown: 0
     }
+    this.state.runMode = this.currentRunMode
     this.bump()
   }
 
@@ -138,6 +140,7 @@ export class CheckQueue extends EventEmitter {
 
     if (!this.state.running && this.pending.length === 0 && this.active.size === 0) {
       this.currentRunMode = mode
+      this.state.runMode = mode
       this.state.completedCount = 0
       this.state.failedCount = 0
       this.state.totalCount = 0
@@ -195,6 +198,10 @@ export class CheckQueue extends EventEmitter {
           return
         }
 
+        if ((payload.reason || '').includes('Session 未登录')) {
+          return
+        }
+
         this.appendLog('warning', task.accountId, `${payload.phone} ---- 登录失败（${payload.reason}）`, task.attempt + 1, {
           phone: payload.phone,
           status: null
@@ -228,6 +235,10 @@ export class CheckQueue extends EventEmitter {
   private normalizeDisplayStatus(status: AccountCheckResult['status']) {
     if (status === 'alive' || status === 'limited' || status === 'temporary_limited' || status === 'frozen' || status === 'banned' || status === 'multi_ip' || status === 'timeout' || status === 'unknown') {
       return status
+    }
+
+    if (status === 'session_expired' || status === 'not_logged_in') {
+      return 'banned' as const
     }
 
     return 'timeout' as const
@@ -304,7 +315,10 @@ export class CheckQueue extends EventEmitter {
       result.errorMessage,
       task.mode === 'account-survival' ? 'account-survival' : result.profile?.check_mode === 'account-survival' ? 'account-survival' : 'account-status'
     )
-    const reasonSuffix = displayStatus === 'timeout' || displayStatus === 'unknown' ? `（${this.formatFailureReason(result)}）` : ''
+    const shouldHideReasonSuffix = displayLabel === '地理位置限制'
+    const reasonSuffix = (displayStatus === 'timeout' || displayStatus === 'unknown') && !shouldHideReasonSuffix
+      ? `（${this.formatFailureReason(result)}）`
+      : ''
     const frozenSince = displayStatus === 'frozen' ? formatFrozenSince(result.profile?.freeze_since_date) : ''
     const frozenSinceSuffix = frozenSince ? `（${frozenSince}）` : ''
     const progressPrefix = `${this.state.completedCount}/${this.state.totalCount}`

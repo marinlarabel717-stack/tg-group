@@ -219,6 +219,7 @@ export interface CheckLogEntry {
 
 export interface CheckQueueState {
   running: boolean
+  runMode: 'account-status' | 'account-survival'
   concurrency: number
   timeoutMs: number
   retryLimit: number

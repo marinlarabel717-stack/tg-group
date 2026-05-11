@@ -283,7 +283,7 @@ export class AccountCheckEngine {
       const failedPhone = account.phone || account.profile.phone || `账号#${account.id}`
       logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session 未登录' })
       const durationMs = Date.now() - startedAt
-      return this.persistFailure(account, authorizationStatus, 'Session 未登录', durationMs, false, 'account-status', proxyMeta)
+      return this.persistFailure(account, 'banned', 'Session 未登录', durationMs, false, 'account-status', proxyMeta)
     }
 
     const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')

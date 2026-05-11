@@ -25,6 +25,17 @@ interface DeleteResultDialogState {
   mode: 'selected' | 'all'
 }
 
+interface CheckResultDialogState {
+  open: boolean
+  runMode: 'account-status' | 'account-survival'
+  total: number
+  alive: number
+  limited: number
+  temporaryLimited: number
+  frozen: number
+  banned: number
+}
+
 function getDesktopAccountsApi() {
   return window.desktopAccounts
 }
@@ -32,6 +43,7 @@ function getDesktopAccountsApi() {
 function createEmptyCheckState(): CheckQueueState {
   return {
     running: false,
+    runMode: 'account-status',
     concurrency: 3,
     timeoutMs: 25000,
     retryLimit: 2,
@@ -97,6 +109,7 @@ interface AccountStoreState {
   importResultDialog: ImportResultDialogState
   exportResultDialog: ExportResultDialogState
   deleteResultDialog: DeleteResultDialogState
+  checkResultDialog: CheckResultDialogState
   lastActionMessage: string
   errorMessage: string
   init: () => Promise<void>
@@ -112,6 +125,7 @@ interface AccountStoreState {
   closeImportResultDialog: () => void
   closeExportResultDialog: () => void
   closeDeleteResultDialog: () => void
+  closeCheckResultDialog: () => void
   exportSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
   deleteAll: () => Promise<void>
@@ -175,6 +189,16 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     deletedCount: 0,
     mode: 'selected'
   },
+  checkResultDialog: {
+    open: false,
+    runMode: 'account-status',
+    total: 0,
+    alive: 0,
+    limited: 0,
+    temporaryLimited: 0,
+    frozen: 0,
+    banned: 0
+  },
   lastActionMessage: '',
   errorMessage: '',
   init: async () => {
@@ -184,7 +208,19 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         set({ checkState })
         if (previousState.running && !checkState.running) {
           await syncAccounts(set, get)
-          set({ lastActionMessage: '批量检测已完成，账号资料已刷新。' })
+          set({
+            checkResultDialog: {
+              open: true,
+              runMode: checkState.runMode,
+              total: checkState.resultSummary.total,
+              alive: checkState.resultSummary.alive,
+              limited: checkState.resultSummary.limited,
+              temporaryLimited: checkState.resultSummary.temporary_limited,
+              frozen: checkState.resultSummary.frozen,
+              banned: checkState.resultSummary.banned
+            },
+            lastActionMessage: '批量检测已完成，账号资料已刷新。'
+          })
         }
       })
       window.desktopAccounts?.onAccountsUpdated((accounts) => {
@@ -301,6 +337,14 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     set((state) => ({
       deleteResultDialog: {
         ...state.deleteResultDialog,
+        open: false
+      }
+    }))
+  },
+  closeCheckResultDialog: () => {
+    set((state) => ({
+      checkResultDialog: {
+        ...state.checkResultDialog,
         open: false
       }
     }))
