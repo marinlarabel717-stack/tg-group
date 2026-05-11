@@ -263,6 +263,48 @@ function dedupeJoinedGroups(items: BroadcastJoinedGroup[]) {
   return Array.from(new Map(Array.from(result.values()).map((item) => [`${item.username || ''}::${item.peerId || ''}::${String(item.title || '').trim().toLowerCase()}`, item])).values())
 }
 
+function scoreGroupRef(group: { username?: string; targetRef?: string }) {
+  const username = normalizeUsername(group.username || '')
+  if (username) return 4
+  const targetRef = String(group.targetRef || '').trim().toLowerCase()
+  if (!targetRef) return 0
+  if (targetRef.includes('t.me/+') || targetRef.includes('joinchat/')) return 3
+  if (/^-?\d+$/.test(targetRef)) return 2
+  return 1
+}
+
+function buildTaskGroupSelectionKey(group: BroadcastGroupTarget) {
+  const title = String(group.title || '').trim().toLowerCase()
+  const accountKey = [...group.accountIds].sort((left, right) => left - right).join(',')
+  if (title) return `${accountKey}::title:${title}`
+  const identityKey = buildGroupIdentityKey(group)
+  return `${accountKey}::${identityKey || group.id}`
+}
+
+function dedupeTaskGroupIds(groupIds: string[], groups: BroadcastGroupTarget[]) {
+  const selectedGroups = groupIds
+    .map((groupId) => groups.find((group) => group.id === groupId))
+    .filter((group): group is BroadcastGroupTarget => Boolean(group))
+
+  const bestGroupByKey = new Map<string, BroadcastGroupTarget>()
+  for (const group of selectedGroups) {
+    const key = buildTaskGroupSelectionKey(group)
+    const existing = bestGroupByKey.get(key)
+    if (!existing) {
+      bestGroupByKey.set(key, group)
+      continue
+    }
+
+    const existingScore = scoreGroupRef(existing)
+    const nextScore = scoreGroupRef(group)
+    if (nextScore > existingScore || (nextScore === existingScore && (group.memberCount || 0) > (existing.memberCount || 0))) {
+      bestGroupByKey.set(key, group)
+    }
+  }
+
+  return Array.from(bestGroupByKey.values()).map((group) => group.id)
+}
+
 function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget, accounts: Array<{ id: number; status?: string }>) {
   const joined = task.accountIds.filter((accountId) => group.accountIds.includes(accountId))
   return joined.filter((accountId) => {
@@ -282,7 +324,8 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
   const jitter = 0
   const limitPerGroup = Math.max(1, Number(task.dailyLimitPerGroup) || 1)
   const creativeRotation = rotateCreatives(task, creatives)
-  const selectedGroups = groups.filter((group) => task.groupIds.includes(group.id) && group.enabled)
+  const selectedGroupIds = dedupeTaskGroupIds(task.groupIds, groups)
+  const selectedGroups = groups.filter((group) => selectedGroupIds.includes(group.id) && group.enabled)
   const items: BroadcastPreviewItem[] = []
   let globalIndex = 0
 
@@ -643,7 +686,7 @@ export const useBroadcastStore = create<BroadcastState>()(
     }),
     {
       name: 'tg-group-broadcast-workbench',
-      version: 7,
+      version: 8,
       storage: createJSONStorage(() => localStorage),
       migrate: (persistedState: any) => {
         const defaultCreativeTitles = new Set(['早间图文 A', '转化图文 B'])
@@ -699,7 +742,7 @@ export const useBroadcastStore = create<BroadcastState>()(
             ? persistedState.tasks.map((task: any) => ({
               ...task,
               groupIds: Array.isArray(task?.groupIds)
-                ? (Array.from(new Set((task.groupIds as string[]).map((groupId: string) => deduped.idMap.get(groupId) || groupId))) as string[]).filter((groupId) => deduped.groups.some((group) => group.id === groupId))
+                ? dedupeTaskGroupIds((Array.from(new Set((task.groupIds as string[]).map((groupId: string) => deduped.idMap.get(groupId) || groupId))) as string[]).filter((groupId) => deduped.groups.some((group) => group.id === groupId)), deduped.groups)
                 : [],
               creativeIds: Array.isArray(task?.creativeIds)
                 ? task.creativeIds.filter((creativeId: string) => creativeIds.has(creativeId))
