@@ -334,6 +334,7 @@ export interface BroadcastPreviewSyncItem {
   accountId: number | null
   groupId: string
   creativeId: string | null
+  repeatPeriodSeconds?: number | null
   status: 'queued' | 'scheduled' | 'failed'
   errorMessage: string
   remoteMessageId?: number | null

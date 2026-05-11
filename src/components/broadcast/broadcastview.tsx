@@ -929,7 +929,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <div className="text-sm font-semibold text-white">会员快捷模式</div>
-                      <div className="mt-1 text-xs text-textMuted">会员号可以直接切成“每天重复”，底层会从今天开始自动跨天顺延写入。</div>
+                      <div className="mt-1 text-xs text-textMuted">会员号勾了“每天重复”后，会直接写 Telegram 官方的每天重复；普通号还是自动跨天，单群最多 100 条。</div>
                     </div>
                     <label className={`inline-flex items-center gap-2 text-sm ${currentAccountIsPremium ? 'text-white' : 'text-textMuted'}`}>
                       <input type="checkbox" checked={selectedTask.scheduleMode === 'daily_repeat'} disabled={!currentAccountIsPremium} onChange={(event) => updateTask(selectedTask.id, { scheduleMode: event.target.checked ? 'daily_repeat' : 'date_range' })} />
@@ -949,6 +949,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
                     <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
                     <div className="mt-1">• 共 {previewSummary.total} 条</div>
+                    {currentAccountIsPremium && selectedTask.scheduleMode === 'daily_repeat' ? <div className="mt-1 text-emerald-200">• 当前会按 Telegram 官方“每天重复”写入</div> : null}
                     {!currentAccountIsPremium ? <div className="mt-1 text-amber-200">• 普通号单群最多 100 条，超过会自动压到 100 条</div> : null}
                   </div>
                 ) : null}

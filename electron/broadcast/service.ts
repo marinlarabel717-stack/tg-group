@@ -246,6 +246,12 @@ export class BroadcastService {
           this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
+        if ((item.repeatPeriodSeconds ?? 0) > 0 && !account.profile?.is_premium) {
+          const resultItem = this.createFailedItem(item, '当前账号不是会员号，不能写入 Telegram 重复定时发送')
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          continue
+        }
 
         const groupRef = normalizeGroupRef(group.targetRef || group.username)
         if (!groupRef) {
@@ -270,10 +276,11 @@ export class BroadcastService {
           }
 
           const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
-          const message = await client.sendMessage(entity as never, {
+          const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
             message: buildCreativeMessage(creative),
             file: media,
-            schedule: Math.floor(scheduledAt.getTime() / 1000)
+            schedule: Math.floor(scheduledAt.getTime() / 1000),
+            scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
           })
 
           const resultItem: BroadcastPushScheduleResultItem = {

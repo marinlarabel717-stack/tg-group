@@ -9,7 +9,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "patch:telegram-repeat": "node scripts/patch-telegram-repeat.cjs",
+    "build": "npm run patch:telegram-repeat && tsc && vite build",
+    "postinstall": "node scripts/patch-telegram-repeat.cjs",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
     "pack:dir": "npm run build && electron-builder --dir --publish never",
     "dist:win": "npm run build && electron-builder --win nsis --publish never",

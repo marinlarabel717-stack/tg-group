@@ -57,6 +57,7 @@ export interface BroadcastPreviewItem {
   accountId: number | null
   groupId: string
   creativeId: string | null
+  repeatPeriodSeconds?: number | null
   status: BroadcastPreviewStatus
   errorMessage: string
   remoteMessageId?: number | null
@@ -345,8 +346,9 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
   const interval = Math.max(5, Number(task.intervalMinutes) || 10)
   const jitter = 0
   const hasPremiumAccount = task.accountIds.some((accountId) => accounts.some((account) => account.id === accountId && account.profile?.is_premium))
+  const useDailyRepeat = hasPremiumAccount && task.scheduleMode === 'daily_repeat'
   const requestedLimitPerGroup = Math.max(1, Number(task.dailyLimitPerGroup) || 1)
-  const limitPerGroup = hasPremiumAccount ? requestedLimitPerGroup : Math.min(requestedLimitPerGroup, 100)
+  const limitPerGroup = Math.min(hasPremiumAccount ? requestedLimitPerGroup : Math.min(requestedLimitPerGroup, 100), 100)
   const creativeRotation = rotateCreatives(task, creatives)
   const selectedGroupIds = dedupeTaskGroupIds(task.groupIds, groups)
   const selectedGroups = groups.filter((group) => selectedGroupIds.includes(group.id) && group.enabled)
@@ -381,6 +383,7 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
         accountId,
         groupId: group.id,
         creativeId,
+        repeatPeriodSeconds: useDailyRepeat ? 24 * 60 * 60 : null,
         status,
         errorMessage,
         remoteMessageId: null,
@@ -638,7 +641,7 @@ export const useBroadcastStore = create<BroadcastState>()(
         }
         const hasPremiumAccount = task.accountIds.some((accountId) => accounts.some((account) => account.id === accountId && account.profile?.is_premium))
         const requestedLimitPerGroup = Math.max(1, Number(task.dailyLimitPerGroup) || 1)
-        const effectiveLimitPerGroup = hasPremiumAccount ? requestedLimitPerGroup : Math.min(requestedLimitPerGroup, 100)
+        const effectiveLimitPerGroup = Math.min(hasPremiumAccount ? requestedLimitPerGroup : Math.min(requestedLimitPerGroup, 100), 100)
         const previewItems = normalizePreviewItems(generatePreviewItems({ ...task, dailyLimitPerGroup: effectiveLimitPerGroup }, state.creatives, state.groups, accounts))
         set({
           previewItems,
@@ -646,9 +649,11 @@ export const useBroadcastStore = create<BroadcastState>()(
           errorMessage: '',
           tasks: state.tasks.map((item) => item.id === task.id ? { ...item, dailyLimitPerGroup: effectiveLimitPerGroup } : item),
           lastActionMessage: previewItems.length > 0
-            ? (!hasPremiumAccount && requestedLimitPerGroup > 100
-              ? `普通号单群最多先按 100 条处理，已自动从 ${requestedLimitPerGroup} 条压到 100 条。`
-              : `已生成 ${previewItems.length} 条排程预览，会从今天开始自动跨天往后排。`)
+            ? (hasPremiumAccount && task.scheduleMode === 'daily_repeat'
+              ? `已生成 ${previewItems.length} 个首发时间点，写入时会按“每天重复”发送。`
+              : !hasPremiumAccount && requestedLimitPerGroup > 100
+                ? `普通号单群最多先按 100 条处理，已自动从 ${requestedLimitPerGroup} 条压到 100 条。`
+                : `已生成 ${previewItems.length} 条排程预览，会从今天开始自动跨天往后排。`)
             : '当前配置还生成不出任何排程，请检查账号、群或文案。'
         })
       },
