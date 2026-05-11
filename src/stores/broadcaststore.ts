@@ -276,7 +276,7 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
   const rawEndMinutes = toMinutes(task.endTime)
   const endMinutes = rawEndMinutes < startMinutes ? rawEndMinutes + 24 * 60 : rawEndMinutes
   const interval = Math.max(5, Number(task.intervalMinutes) || 10)
-  const jitter = Math.max(0, Math.min(30, Number(task.jitterMinutes) || 0))
+  const jitter = 0
   const limitPerGroup = Math.max(1, Number(task.dailyLimitPerGroup) || 1)
   const creativeRotation = rotateCreatives(task, creatives)
   const selectedGroups = groups.filter((group) => task.groupIds.includes(group.id) && group.enabled)
@@ -342,7 +342,7 @@ const initialTasks: BroadcastTask[] = [
     startTime: '09:00',
     endTime: '23:00',
     intervalMinutes: 10,
-    jitterMinutes: 1,
+    jitterMinutes: 0,
     dailyLimitPerGroup: 12,
     lastSyncedAt: null
   }
@@ -380,7 +380,7 @@ export const useBroadcastStore = create<BroadcastState>()(
           startTime: '09:00',
           endTime: '23:00',
           intervalMinutes: 10,
-          jitterMinutes: 1,
+          jitterMinutes: 0,
           dailyLimitPerGroup: 12,
           lastSyncedAt: null
         }

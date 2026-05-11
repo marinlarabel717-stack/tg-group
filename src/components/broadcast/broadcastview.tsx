@@ -917,23 +917,6 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                   <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                 </div>
-                <div className="mt-4 grid gap-4 md:grid-cols-[220px_1fr]">
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">随机抖动（分钟）</span><input type="number" min={0} max={30} value={selectedTask.jitterMinutes} onChange={(event) => updateTask(selectedTask.id, { jitterMinutes: Number(event.target.value) || 0 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                  <div>
-                    <div className="mb-2 text-sm text-textMuted">发送文案</div>
-                    <div className="flex flex-wrap gap-2 rounded-[16px] bg-panel p-3">
-                      {creatives.length === 0 ? <div className="px-1 py-2 text-sm text-textMuted">先去下面新建文案，这里默认不再塞示例文案。</div> : null}
-                      {creatives.map((creative) => {
-                        const checked = selectedTask.creativeIds.includes(creative.id)
-                        return (
-                          <button key={creative.id} type="button" onClick={() => toggleCreative(creative.id)} className={`rounded-full px-3 py-2 text-sm transition ${checked ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.05] text-textMuted hover:bg-white/[0.1] hover:text-white'}`}>
-                            {readCreativeTitle(creative)}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
               </GlassPanel>
 
               <GlassPanel className="bg-card">
@@ -947,7 +930,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   </button>
                 </div>
                 <div className="mt-4 space-y-4">
-                  {creatives.length === 0 ? <div className="rounded-[18px] border border-dashed border-white/10 bg-panel px-4 py-12 text-center text-sm text-textMuted">这里先保持空白。点右上角“新建文案”，再填你自己的标题、图片和正文。</div> : null}
+                  {creatives.length === 0 ? <div className="rounded-[18px] border border-dashed border-white/10 bg-panel px-4 py-12 text-center text-sm text-textMuted">这里先保持空白。点右上角“新建文案”，再填你自己的内容。</div> : null}
                   {creatives.map((creative) => {
                     const checked = selectedTask.creativeIds.includes(creative.id)
                     return (
