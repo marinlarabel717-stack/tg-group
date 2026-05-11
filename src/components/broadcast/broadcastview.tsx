@@ -34,6 +34,11 @@ function readAccountNickname(account: { username?: string; phone?: string; profi
   return '未命名账号'
 }
 
+function readCreativeTitle(creative: { title?: string } | null | undefined) {
+  const title = typeof creative?.title === 'string' ? creative.title.trim() : ''
+  return title || '未命名文案'
+}
+
 const BroadcastSummary = memo(function BroadcastSummary() {
   const tasks = useBroadcastStore((state) => state.tasks)
   const previewItems = useBroadcastStore((state) => state.previewItems)
@@ -325,7 +330,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 <div className="mt-3 space-y-1 text-sm text-slate-200">
                   <div>群组：{group?.title || '未匹配群组'}</div>
                   <div>账号：{account?.username || account?.phone || '未分配账号'}</div>
-                  <div>文案：{creative?.title || '未匹配文案'}</div>
+                  <div>文案：{creative ? readCreativeTitle(creative) : '未匹配文案'}</div>
                   {item.remoteMessageId ? <div>官方消息 ID：{item.remoteMessageId}</div> : null}
                   {item.syncedAt ? <div>写入时间：{formatDateTimeFull(item.syncedAt)}</div> : null}
                 </div>
@@ -352,10 +357,10 @@ const CreativesWorkbench = memo(function CreativesWorkbench() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {creatives.map((creative) => (
           <button key={creative.id} type="button" onClick={() => selectCreative(creative.id)} className={`overflow-hidden rounded-[18px] border text-left transition ${selectedCreativeId === creative.id ? 'border-violet-400/30 bg-violet-400/10' : 'border-white/5 bg-card hover:border-white/10'}`}>
-            <img src={creative.imageUrl} alt={creative.title} className="h-40 w-full object-cover" />
+            {creative.imageUrl ? <img src={creative.imageUrl} alt={readCreativeTitle(creative)} className="h-40 w-full object-cover" /> : <div className="flex h-40 w-full items-center justify-center bg-panel text-sm text-textMuted">还没设置图片</div>}
             <div className="px-4 py-4">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-white">{creative.title}</div>
+                <div className="text-sm font-semibold text-white">{readCreativeTitle(creative)}</div>
                 <div className={`rounded-full px-2 py-1 text-[11px] ${creative.enabled ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/[0.05] text-textMuted'}`}>{creative.enabled ? '启用中' : '已停用'}</div>
               </div>
               <div className="mt-2 line-clamp-2 text-sm text-textMuted">{creative.text || '这条文案还没填正文。'}</div>
@@ -392,7 +397,7 @@ const CreativesWorkbench = memo(function CreativesWorkbench() {
             <label className="block space-y-2 text-sm"><span className="text-textMuted">备注</span><textarea value={selectedCreative.note} rows={3} onChange={(event) => updateCreative(selectedCreative.id, { note: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
             <div className="rounded-[16px] bg-panel p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><LayoutTemplate size={16} /> Telegram 预览</div>
-              <img src={selectedCreative.imageUrl} alt={selectedCreative.title} className="h-40 w-full rounded-[12px] object-cover" />
+              {selectedCreative.imageUrl ? <img src={selectedCreative.imageUrl} alt={readCreativeTitle(selectedCreative)} className="h-40 w-full rounded-[12px] object-cover" /> : <div className="flex h-40 w-full items-center justify-center rounded-[12px] bg-card text-sm text-textMuted">还没设置图片</div>}
               <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-200">{selectedCreative.text || '文案正文为空，后面这里会直接按 Telegram 图文样式预览。'}</div>
             </div>
           </div>
@@ -863,11 +868,12 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div>
                     <div className="mb-2 text-sm text-textMuted">发送文案</div>
                     <div className="flex flex-wrap gap-2 rounded-[16px] bg-panel p-3">
+                      {creatives.length === 0 ? <div className="px-1 py-2 text-sm text-textMuted">先去下面新建文案，这里默认不再塞示例文案。</div> : null}
                       {creatives.map((creative) => {
                         const checked = selectedTask.creativeIds.includes(creative.id)
                         return (
                           <button key={creative.id} type="button" onClick={() => toggleCreative(creative.id)} className={`rounded-full px-3 py-2 text-sm transition ${checked ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.05] text-textMuted hover:bg-white/[0.1] hover:text-white'}`}>
-                            {creative.title}
+                            {readCreativeTitle(creative)}
                           </button>
                         )
                       })}
@@ -887,6 +893,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   </button>
                 </div>
                 <div className="mt-4 space-y-4">
+                  {creatives.length === 0 ? <div className="rounded-[18px] border border-dashed border-white/10 bg-panel px-4 py-12 text-center text-sm text-textMuted">这里先保持空白。点右上角“新建文案”，再填你自己的标题、图片和正文。</div> : null}
                   {creatives.map((creative) => {
                     const checked = selectedTask.creativeIds.includes(creative.id)
                     return (
@@ -945,7 +952,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div className="mt-3 space-y-1 text-sm text-slate-200">
                     <div>群组：{group?.title || '未匹配群组'}</div>
                     <div>账号：{account?.username || account?.phone || '未分配账号'}</div>
-                    <div>文案：{creative?.title || '未匹配文案'}</div>
+                  <div>文案：{creative ? readCreativeTitle(creative) : '未匹配文案'}</div>
                     {item.remoteMessageId ? <div>消息 ID：{item.remoteMessageId}</div> : null}
                     {item.syncedAt ? <div>写入时间：{formatDateTimeFull(item.syncedAt)}</div> : null}
                   </div>
@@ -1079,7 +1086,7 @@ const CalendarWorkbench = memo(function CalendarWorkbench() {
                   <div key={item.id} className="grid gap-3 rounded-[14px] bg-card px-4 py-3 lg:grid-cols-[180px_1fr_180px_120px] lg:items-center">
                     <div className="text-sm text-white">{formatDateTimeFull(item.scheduledAt)}</div>
                     <div>
-                      <div className="text-sm font-medium text-white">{creative?.title || '未匹配文案'}</div>
+                      <div className="text-sm font-medium text-white">{creative ? readCreativeTitle(creative) : '未匹配文案'}</div>
                       <div className="mt-1 text-xs text-textMuted">{group?.title || '未匹配群组'} · {account?.username || account?.phone || '未分配账号'}</div>
                     </div>
                     <div className="text-xs text-textMuted">{item.errorMessage || '已进入本地排程队列'}</div>

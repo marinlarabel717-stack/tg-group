@@ -97,11 +97,6 @@ function createId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
 }
 
-function createPlaceholderImage(text: string, from = '#1d4ed8', to = '#7c3aed') {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360" fill="none"><defs><linearGradient id="g" x1="0" y1="0" x2="640" y2="360" gradientUnits="userSpaceOnUse"><stop stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="640" height="360" rx="28" fill="url(#g)"/><text x="48" y="164" fill="white" font-family="Segoe UI, Arial" font-size="40" font-weight="700">${text}</text><text x="48" y="214" fill="rgba(255,255,255,0.78)" font-family="Segoe UI, Arial" font-size="22">TG Group Scheduled Broadcast</text></svg>`
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
-}
-
 function cloneTask(task: BroadcastTask): BroadcastTask {
   return {
     ...task,
@@ -229,28 +224,7 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
   return items.sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
 }
 
-const initialCreatives: BroadcastCreative[] = [
-  {
-    id: createId('creative'),
-    title: '早间图文 A',
-    text: '早安，今日热门内容已经整理好了，点击群内置顶查看详情。',
-    imageUrl: createPlaceholderImage('早间图文 A', '#1d4ed8', '#2563eb'),
-    dailyQuota: 12,
-    weight: 3,
-    enabled: true,
-    note: '适合早间第一轮预热'
-  },
-  {
-    id: createId('creative'),
-    title: '转化图文 B',
-    text: '今日限时活动继续开放，需要名额的直接联系管理员领取。',
-    imageUrl: createPlaceholderImage('转化图文 B', '#7c3aed', '#9333ea'),
-    dailyQuota: 8,
-    weight: 2,
-    enabled: true,
-    note: '中午和晚间转化使用'
-  }
-]
+const initialCreatives: BroadcastCreative[] = []
 
 const initialGroups: BroadcastGroupTarget[] = []
 
@@ -363,10 +337,10 @@ export const useBroadcastStore = create<BroadcastState>()(
       createCreative: () => {
         const nextCreative: BroadcastCreative = {
           id: createId('creative'),
-          title: '新图文文案',
+          title: '',
           text: '',
-          imageUrl: createPlaceholderImage('新图文文案', '#0f172a', '#334155'),
-          dailyQuota: 6,
+          imageUrl: '',
+          dailyQuota: 1,
           weight: 1,
           enabled: true,
           note: ''
@@ -375,7 +349,7 @@ export const useBroadcastStore = create<BroadcastState>()(
           creatives: [nextCreative, ...state.creatives],
           selectedCreativeId: nextCreative.id,
           activeTab: 'creatives',
-          lastActionMessage: '已新增文案卡片，直接把图文补进去就行。'
+          lastActionMessage: '已新增空白文案，直接填你自己的内容就行。'
         }))
       },
       updateCreative: (creativeId, patch) => set((state) => ({
@@ -570,27 +544,45 @@ export const useBroadcastStore = create<BroadcastState>()(
     }),
     {
       name: 'tg-group-broadcast-workbench',
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => localStorage),
-      migrate: (persistedState: any) => ({
-        ...persistedState,
-        groups: Array.isArray(persistedState?.groups)
-          ? persistedState.groups.map((group: any) => ({
-            ...group,
-            targetRef: typeof group?.targetRef === 'string' && group.targetRef.trim()
-              ? group.targetRef
-              : typeof group?.username === 'string'
-                ? group.username
-                : ''
-          }))
-          : [],
-        previewItems: normalizePreviewItems(Array.isArray(persistedState?.previewItems) ? persistedState.previewItems : []),
-        selectedTargetAccountId: null,
-        joinedGroups: [],
-        syncing: false,
-        loadingJoinedGroups: false,
-        errorMessage: ''
-      }),
+      migrate: (persistedState: any) => {
+        const defaultCreativeTitles = new Set(['早间图文 A', '转化图文 B'])
+        const creatives = Array.isArray(persistedState?.creatives)
+          ? persistedState.creatives.filter((creative: any) => !defaultCreativeTitles.has(String(creative?.title || '').trim()))
+          : []
+        const creativeIds = new Set(creatives.map((creative: any) => creative.id))
+
+        return {
+          ...persistedState,
+          creatives,
+          tasks: Array.isArray(persistedState?.tasks)
+            ? persistedState.tasks.map((task: any) => ({
+              ...task,
+              creativeIds: Array.isArray(task?.creativeIds)
+                ? task.creativeIds.filter((creativeId: string) => creativeIds.has(creativeId))
+                : []
+            }))
+            : [],
+          selectedCreativeId: creativeIds.has(persistedState?.selectedCreativeId) ? persistedState.selectedCreativeId : null,
+          groups: Array.isArray(persistedState?.groups)
+            ? persistedState.groups.map((group: any) => ({
+              ...group,
+              targetRef: typeof group?.targetRef === 'string' && group.targetRef.trim()
+                ? group.targetRef
+                : typeof group?.username === 'string'
+                  ? group.username
+                  : ''
+            }))
+            : [],
+          previewItems: normalizePreviewItems(Array.isArray(persistedState?.previewItems) ? persistedState.previewItems : []),
+          selectedTargetAccountId: null,
+          joinedGroups: [],
+          syncing: false,
+          loadingJoinedGroups: false,
+          errorMessage: ''
+        }
+      },
       partialize: (state) => ({
         activeTab: state.activeTab,
         tasks: state.tasks,
