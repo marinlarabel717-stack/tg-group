@@ -936,12 +936,12 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                       每天重复
                     </label>
                   </div>
-                  {!currentAccountIsPremium ? <div className="mt-3 text-xs text-amber-200">当前账号不是会员号，这里先走普通自动跨天模式。</div> : null}
+                  {!currentAccountIsPremium ? <div className="mt-3 text-xs text-amber-200">当前账号不是会员号：继续走普通自动跨天模式，单群最多 100 条。</div> : null}
                 </div>
                 <div className="mt-4 grid gap-4 md:grid-cols-3">
                   <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                   <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} max={currentAccountIsPremium ? undefined : 100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: currentAccountIsPremium ? (Number(event.target.value) || 1) : Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                 </div>
                 {previewSummary.total > 0 ? (
                   <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
@@ -949,6 +949,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
                     <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
                     <div className="mt-1">• 共 {previewSummary.total} 条</div>
+                    {!currentAccountIsPremium ? <div className="mt-1 text-amber-200">• 普通号单群最多 100 条，超过会自动压到 100 条</div> : null}
                   </div>
                 ) : null}
               </GlassPanel>
