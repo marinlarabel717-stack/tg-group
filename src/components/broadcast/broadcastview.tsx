@@ -69,17 +69,59 @@ function readRepeatLabel(repeatPeriodSeconds?: number | null) {
 }
 
 function explainPreviewError(errorMessage: string) {
-  if (!errorMessage.trim()) return '这条目前没有报错。'
-  if (errorMessage.includes('排程时间太近') || errorMessage.includes('已过期')) {
-    return '这条时间已经过了。先重新点一次“预览发送”，再马上点“开始发送”。'
+  const normalized = errorMessage.trim()
+  if (!normalized) return '这条目前没有报错。'
+  if (normalized.includes('排程时间太近') || normalized.includes('已过期') || /SCHEDULE_DATE_INVALID|MSG_ID_INVALID/i.test(normalized)) {
+    return '这条时间已经过了，或者时间不合法。先重新点一次“预览发送”，再马上点“开始发送”。'
   }
-  if (errorMessage.includes('目标群内没有已加入且可发送的账号')) {
+  if (normalized.includes('目标群内没有已加入且可发送的账号')) {
     return '这个群还没绑到可发送账号。先把群重新绑定到左边当前账号。'
   }
-  if (errorMessage.includes('缺少可用的 @username') || errorMessage.includes('缺少可用的 @username、私密链接或群链接') || errorMessage.includes('无法识别这个群')) {
-    return '这个群引用不对。请检查 @username、群链接或私密链接。'
+  if (normalized.includes('缺少可用的 @username') || normalized.includes('缺少可用的 @username、私密链接或群链接') || normalized.includes('无法识别这个群') || /CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID|USERNAME_INVALID|USERNAME_NOT_OCCUPIED/i.test(normalized)) {
+    return '这个群引用不对。请检查 @username、公开链接或私密链接。'
   }
-  return errorMessage
+  if (normalized.includes('这个群不允许发纯文字') || /CHAT_SEND_PLAIN_FORBIDDEN/i.test(normalized)) {
+    return '这个群不允许发纯文字。请改成图文或图片发送。'
+  }
+  if (normalized.includes('这个群不允许发图片或媒体') || /CHAT_SEND_MEDIA_FORBIDDEN/i.test(normalized)) {
+    return '这个群不让发图片或媒体。先改成纯文字，或者去 Telegram 里确认群权限。'
+  }
+  if (normalized.includes('当前账号在这个群不能发消息') || normalized.includes('当前账号在这个群被限制发言') || /CHAT_WRITE_FORBIDDEN|USER_BANNED_IN_CHANNEL|CHAT_RESTRICTED/i.test(normalized)) {
+    return '这个账号在群里发不了消息，可能被禁言了，先去 Telegram 里确认权限。'
+  }
+  if (normalized.includes('当前账号在这个群没有发送或定时发送权限') || /CHAT_ADMIN_REQUIRED/i.test(normalized)) {
+    return '这个账号在群里没有发送或定时发送权限。'
+  }
+  if (normalized.includes('当前账号还没加入这个群') || /USER_NOT_PARTICIPANT/i.test(normalized)) {
+    return '这个账号还没进群，或者当前私密链接没有权限。'
+  }
+  if (normalized.includes('图片有问题') || /PHOTO_INVALID|MEDIA_INVALID|IMAGE_PROCESS_FAILED/i.test(normalized)) {
+    return '图片有问题，可能格式不对、图片坏了，或者 Telegram 不认这张图。'
+  }
+  if (normalized.includes('按钮链接格式不对') || /BUTTON_URL_INVALID/i.test(normalized)) {
+    return '按钮链接格式不对，请填完整的 https:// 链接。'
+  }
+  if (normalized.includes('文案太长了') || /MESSAGE_TOO_LONG|MEDIA_CAPTION_TOO_LONG/i.test(normalized)) {
+    return '文案太长了，缩短一点再试。'
+  }
+  if (normalized.includes('这个群的官方定时消息已经堆满了') || /SCHEDULE_TOO_MUCH/i.test(normalized)) {
+    return '这个群的定时消息已经满了，先去 Telegram 里删掉一些再发。'
+  }
+  if (normalized.includes('触发 Telegram 限流') || /FLOOD_WAIT_(\d+)/i.test(normalized)) {
+    const matched = normalized.match(/(\d+)/)
+    return matched ? `当前账号被 Telegram 限流了，请 ${matched[1]} 秒后再试。` : '当前账号被 Telegram 限流了，请稍后再试。'
+  }
+  if (normalized.includes('这个群开了慢速模式') || /SLOWMODE_WAIT_(\d+)/i.test(normalized)) {
+    const matched = normalized.match(/(\d+)/)
+    return matched ? `这个群开了慢速模式，请 ${matched[1]} 秒后再发。` : '这个群开了慢速模式，请稍后再发。'
+  }
+  if (normalized.includes('登录状态失效') || /AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) {
+    return '这个账号掉线了，需要重新登录。'
+  }
+  if (normalized.includes('私密链接失效') || /INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) {
+    return '私密链接失效了、过期了，或者这个账号用不了这个链接。'
+  }
+  return normalized.startsWith('发送失败：') ? normalized : `发送失败：${normalized}`
 }
 
 function normalizeGroupRefValue(value: string) {

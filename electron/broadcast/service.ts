@@ -13,21 +13,33 @@ function formatBroadcastError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '写入 Telegram 定时消息失败'
-  if (/USERNAME_INVALID/i.test(normalized)) return '群组 @username 不合法'
-  if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '群组 @username 不存在'
-  if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '当前账号无法识别这个群，请确认 @username、私密链接或群链接正确'
-  if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '当前账号没有该群的发言/排程权限'
-  if (/USER_NOT_PARTICIPANT/i.test(normalized)) return '当前账号尚未加入这个群或这个私密链接无权访问'
-  if (/SCHEDULE_TOO_MUCH/i.test(normalized)) return '该聊天的官方定时消息已达到上限，请先去 Telegram 清理一部分'
-  if (/SCHEDULE_DATE_TOO_LATE/i.test(normalized)) return '排程时间超出 Telegram 允许范围'
-  if (/SCHEDULE_DATE_INVALID|MSG_ID_INVALID/i.test(normalized)) return '排程时间无效，请改成未来时间再试'
-  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '当前账号 Session 已失效，请重新登录该账号'
-  if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '私密链接无效、已过期，或当前账号无法使用这个链接'
+  if (/USERNAME_INVALID/i.test(normalized)) return '这个群的 @username 不对，请检查群用户名。'
+  if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '这个群的 @username 不存在，请确认群链接填对了。'
+  if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '当前账号认不出这个群，请检查 @username、群链接或私密链接。'
+  if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '当前账号在这个群没有发送或定时发送权限。'
+  if (/CHAT_WRITE_FORBIDDEN/i.test(normalized)) return '当前账号在这个群不能发消息，可能被禁言了。'
+  if (/USER_BANNED_IN_CHANNEL|CHAT_RESTRICTED/i.test(normalized)) return '当前账号在这个群被限制发言，先去 Telegram 里确认群权限。'
+  if (/USER_NOT_PARTICIPANT/i.test(normalized)) return '当前账号还没加入这个群，或者这个私密链接当前账号没权限进。'
+  if (/CHAT_SEND_PLAIN_FORBIDDEN/i.test(normalized)) return '这个群不允许发纯文字，请改成图文或图片发送。'
+  if (/CHAT_SEND_MEDIA_FORBIDDEN/i.test(normalized)) return '这个群不允许发图片或媒体，请改成纯文字，或去群里确认发送权限。'
+  if (/MEDIA_EMPTY|MESSAGE_EMPTY/i.test(normalized)) return '这条消息内容是空的，至少要有文字或图片。'
+  if (/PHOTO_INVALID|MEDIA_INVALID|IMAGE_PROCESS_FAILED/i.test(normalized)) return '图片有问题，可能格式不对、文件坏了，或者 Telegram 不认这张图。'
+  if (/BUTTON_URL_INVALID/i.test(normalized)) return '按钮链接格式不对，请填完整的 https:// 链接。'
+  if (/MESSAGE_TOO_LONG|MEDIA_CAPTION_TOO_LONG/i.test(normalized)) return '文案太长了，缩短一点再试。'
+  if (/SCHEDULE_TOO_MUCH/i.test(normalized)) return '这个群的官方定时消息已经堆满了，先去 Telegram 里删掉一部分再发。'
+  if (/SCHEDULE_DATE_TOO_LATE/i.test(normalized)) return '定时时间设得太远了，Telegram 不接受这么远的时间。'
+  if (/SCHEDULE_DATE_INVALID|MSG_ID_INVALID/i.test(normalized)) return '定时时间不对，请改成未来时间再试。'
+  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号的登录状态失效了，需要重新登录。'
+  if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '私密链接失效了、过期了，或者当前账号用不了这个链接。'
+  if (/SLOWMODE_WAIT_(\d+)/i.test(normalized)) {
+    const matched = normalized.match(/SLOWMODE_WAIT_(\d+)/i)
+    return matched ? `这个群开了慢速模式，请 ${matched[1]} 秒后再发。` : '这个群开了慢速模式，请稍后再发。'
+  }
   if (/FLOOD_WAIT_(\d+)/i.test(normalized)) {
     const matched = normalized.match(/FLOOD_WAIT_(\d+)/i)
-    return matched ? `触发 Telegram 限流，请 ${matched[1]} 秒后再试` : '触发 Telegram 限流，请稍后再试'
+    return matched ? `当前账号触发 Telegram 限流了，请 ${matched[1]} 秒后再试。` : '当前账号触发 Telegram 限流了，请稍后再试。'
   }
-  return normalized
+  return `发送失败：${normalized}`
 }
 
 function extractInviteHash(input: string) {
