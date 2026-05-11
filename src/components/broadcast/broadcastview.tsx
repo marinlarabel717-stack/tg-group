@@ -52,6 +52,17 @@ function readCreativeKindLabel(kind?: string) {
   return '文字'
 }
 
+function formatPreviewSummaryTime(value: string) {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return '-'
+  const year = date.getFullYear()
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}`
+}
+
 function explainPreviewError(errorMessage: string) {
   if (!errorMessage.trim()) return '这条目前没有报错。'
   if (errorMessage.includes('排程时间太近') || errorMessage.includes('已过期')) {
@@ -673,6 +684,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     const invalidRefGroupNames = Array.from(new Set(failedItems
       .filter((item) => item.errorMessage.includes('缺少可用的 @username') || item.errorMessage.includes('缺少可用的 @username、私密链接或群链接') || item.errorMessage.includes('无法识别这个群'))
       .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
+    const firstItem = selectedPreview[0] ?? null
+    const lastItem = selectedPreview[selectedPreview.length - 1] ?? null
     return {
       total: selectedPreview.length,
       successCount,
@@ -680,7 +693,9 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       pendingCount,
       expiredCount,
       unboundGroupNames,
-      invalidRefGroupNames
+      invalidRefGroupNames,
+      firstScheduledAt: firstItem?.scheduledAt ?? '',
+      lastScheduledAt: lastItem?.scheduledAt ?? ''
     }
   }, [groups, selectedPreview])
   const filteredAccounts = useMemo(() => {
@@ -928,6 +943,14 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                   <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                 </div>
+                {previewSummary.total > 0 ? (
+                  <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
+                    <div>• 从今天开始</div>
+                    <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
+                    <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
+                    <div className="mt-1">• 共 {previewSummary.total} 条</div>
+                  </div>
+                ) : null}
               </GlassPanel>
 
               <GlassPanel className="bg-card">
