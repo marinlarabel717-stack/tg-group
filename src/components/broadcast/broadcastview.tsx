@@ -696,8 +696,21 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     }
   }, [selectedTargetAccountId, selectedTask, setSelectedTargetAccountId])
 
+  const syncTaskGroupsForAccount = (accountId: number | null) => {
+    if (!selectedTask) return
+    const nextGroupIds = accountId == null
+      ? []
+      : selectedTask.groupIds.filter((groupId) => groups.some((group) => group.id === groupId && group.accountIds.includes(accountId)))
+
+    if (nextGroupIds.length !== selectedTask.groupIds.length) {
+      updateTask(selectedTask.id, { groupIds: nextGroupIds })
+    }
+  }
+
   const handleSwitchAccount = async (accountId: number) => {
     setSelectedTargetAccountId(accountId)
+    syncTaskGroupsForAccount(accountId)
+    clearPreview()
     await loadJoinedGroupsForAccount(accountId)
   }
 
@@ -713,10 +726,15 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       return
     }
 
-    updateTask(selectedTask.id, { accountIds: draftAccountIds })
     const nextActive = draftAccountIds.includes(selectedAccountId ?? -1) ? selectedAccountId : (draftAccountIds[0] ?? null)
+    const nextGroupIds = nextActive == null
+      ? []
+      : selectedTask.groupIds.filter((groupId) => groups.some((group) => group.id === groupId && group.accountIds.includes(nextActive)))
+
+    updateTask(selectedTask.id, { accountIds: draftAccountIds, groupIds: nextGroupIds })
     setSelectedTargetAccountId(nextActive ?? null)
     setAccountPickerOpen(false)
+    clearPreview()
 
     if (nextActive) {
       await loadJoinedGroupsForAccount(nextActive)
@@ -767,7 +785,12 @@ const BroadcastConsole = memo(function BroadcastConsole() {
             <button
               type="button"
               disabled={!selectedAccountId || loadingJoinedGroups}
-              onClick={() => selectedAccountId ? void loadJoinedGroupsForAccount(selectedAccountId) : undefined}
+              onClick={() => {
+                if (!selectedAccountId) return
+                syncTaskGroupsForAccount(selectedAccountId)
+                clearPreview()
+                void loadJoinedGroupsForAccount(selectedAccountId)
+              }}
               className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-white/[0.06] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCw size={16} className={loadingJoinedGroups ? 'animate-spin' : ''} />
