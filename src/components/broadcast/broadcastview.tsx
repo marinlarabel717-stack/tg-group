@@ -63,6 +63,11 @@ function formatPreviewSummaryTime(value: string) {
   return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
+function readRepeatLabel(repeatPeriodSeconds?: number | null) {
+  if ((repeatPeriodSeconds ?? 0) === 24 * 60 * 60) return '每天'
+  return '绝不'
+}
+
 function explainPreviewError(errorMessage: string) {
   if (!errorMessage.trim()) return '这条目前没有报错。'
   if (errorMessage.includes('排程时间太近') || errorMessage.includes('已过期')) {
@@ -1079,7 +1084,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div className="mt-3 space-y-1 text-sm text-slate-200">
                     <div>群组：{group?.title || '未匹配群组'}</div>
                     <div>账号：{account?.username || account?.phone || '未分配账号'}</div>
-                  <div>文案：{creative ? readCreativeTitle(creative) : '未匹配文案'}</div>
+                    <div>文案：{creative ? readCreativeTitle(creative) : '未匹配文案'}</div>
+                    <div>重复：{readRepeatLabel(item.repeatPeriodSeconds)}</div>
                     {item.remoteMessageId ? <div>消息 ID：{item.remoteMessageId}</div> : null}
                     {item.syncedAt ? <div>写入时间：{formatDateTimeFull(item.syncedAt)}</div> : null}
                   </div>
