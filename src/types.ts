@@ -306,11 +306,14 @@ export interface DesktopLicenseValidateResult {
 export interface BroadcastCreativePayload {
   id: string
   title: string
+  kind: 'text' | 'image' | 'image_text' | 'image_button'
   text: string
   imageUrl: string
   dailyQuota: number
   weight: number
   enabled: boolean
+  buttonText: string
+  buttonUrl: string
   note: string
 }
 

@@ -34,13 +34,22 @@ function readAccountNickname(account: { username?: string; phone?: string; profi
   return '未命名账号'
 }
 
-function readCreativeTitle(creative: { title?: string; text?: string; note?: string } | null | undefined) {
+function readCreativeTitle(creative: { title?: string; text?: string; buttonText?: string; note?: string } | null | undefined) {
   const text = typeof creative?.text === 'string' ? creative.text.trim() : ''
   if (text) return text.length > 12 ? `${text.slice(0, 12)}...` : text
-  const button = typeof creative?.note === 'string' ? creative.note.trim() : ''
+  const button = typeof creative?.buttonText === 'string' ? creative.buttonText.trim() : ''
   if (button) return button
+  const legacyButton = typeof creative?.note === 'string' ? creative.note.trim() : ''
+  if (legacyButton) return legacyButton
   const title = typeof creative?.title === 'string' ? creative.title.trim() : ''
   return title || '未填写文案'
+}
+
+function readCreativeKindLabel(kind?: string) {
+  if (kind === 'image') return '图片'
+  if (kind === 'image_text') return '图文'
+  if (kind === 'image_button') return '图文+按钮'
+  return '文字'
 }
 
 function explainPreviewError(errorMessage: string) {
@@ -673,11 +682,6 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       invalidRefGroupNames
     }
   }, [groups, selectedPreview])
-  const selectedAccountGroups = useMemo(() => {
-    if (!selectedAccountId) return []
-    return groups.filter((group) => group.accountIds.includes(selectedAccountId))
-  }, [groups, selectedAccountId])
-
   const filteredAccounts = useMemo(() => {
     const keyword = accountSearch.trim().toLowerCase()
     if (!keyword) return accounts
@@ -741,20 +745,33 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     }
   }
 
-  const toggleSendGroup = (groupId: string) => {
-    if (!selectedTask) return
-    const next = selectedTask.groupIds.includes(groupId)
-      ? selectedTask.groupIds.filter((item) => item !== groupId)
-      : [...selectedTask.groupIds, groupId]
-    updateTask(selectedTask.id, { groupIds: next })
-  }
-
   const toggleCreative = (creativeId: string) => {
     if (!selectedTask) return
     const next = selectedTask.creativeIds.includes(creativeId)
       ? selectedTask.creativeIds.filter((item) => item !== creativeId)
       : [...selectedTask.creativeIds, creativeId]
     updateTask(selectedTask.id, { creativeIds: next })
+  }
+
+  const toggleJoinedGroupSelection = (group: typeof joinedGroups[number]) => {
+    if (!selectedTask || !selectedAccount) return
+
+    const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
+    let matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+
+    if (!matchedGroup || !matchedGroup.accountIds.includes(selectedAccount.id)) {
+      attachJoinedGroupToAccount(selectedAccount.id, group)
+      matchedGroup = useBroadcastStore.getState().groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+    }
+
+    if (!matchedGroup) return
+
+    const nextGroupIds = selectedTask.groupIds.includes(matchedGroup.id)
+      ? selectedTask.groupIds.filter((item) => item !== matchedGroup.id)
+      : [...selectedTask.groupIds, matchedGroup.id]
+
+    updateTask(selectedTask.id, { groupIds: nextGroupIds })
+    clearPreview()
   }
 
   const handleCreativeImageUpload = (creativeId: string, event: ChangeEvent<HTMLInputElement>) => {
@@ -766,6 +783,22 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     }
     reader.readAsDataURL(file)
     event.target.value = ''
+  }
+
+  const handleCreativeKindChange = (creativeId: string, kind: 'text' | 'image' | 'image_text' | 'image_button') => {
+    if (kind === 'text') {
+      updateCreative(creativeId, { kind, imageUrl: '', buttonText: '', buttonUrl: '', note: '' })
+      return
+    }
+    if (kind === 'image') {
+      updateCreative(creativeId, { kind, buttonText: '', buttonUrl: '', note: '' })
+      return
+    }
+    if (kind === 'image_text') {
+      updateCreative(creativeId, { kind, buttonText: '', buttonUrl: '', note: '' })
+      return
+    }
+    updateCreative(creativeId, { kind })
   }
 
   return (
@@ -854,26 +887,20 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   ) : joinedGroups.map((group) => {
                     const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
                     const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
-                    const exists = Boolean(matchedGroup && selectedAccountGroups.some((item) => item.id === matchedGroup.id))
                     const checked = Boolean(matchedGroup && selectedTask.groupIds.includes(matchedGroup.id))
                     return (
-                      <div key={`${group.peerId}:${group.username || group.title}`} className={`rounded-[18px] border p-4 ${checked ? 'border-violet-400/30 bg-violet-400/8' : 'border-white/8 bg-panel'}`}>
+                      <button key={`${group.peerId}:${group.username || group.title}`} type="button" onClick={() => toggleJoinedGroupSelection(group)} className={`w-full rounded-[18px] border p-4 text-left transition ${checked ? 'border-violet-400/30 bg-violet-400/8' : 'border-white/8 bg-panel hover:bg-white/[0.03]'}`}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-semibold text-white">{group.title}</div>
                             <div className="mt-1 text-xs text-textMuted">{group.username || group.targetRef || '私密群 / 无公开用户名'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
                           </div>
-                          {exists ? <CheckCircle2 size={18} className="shrink-0 text-emerald-300" /> : null}
+                          {checked ? <CheckCircle2 size={18} className="shrink-0 text-emerald-300" /> : null}
                         </div>
-                        <div className="mt-4 flex gap-2">
-                          <button type="button" onClick={() => selectedAccount && attachJoinedGroupToAccount(selectedAccount.id, group)} className={`flex-1 rounded-[12px] px-3 py-2 text-sm transition ${exists ? 'bg-emerald-400/12 text-emerald-300' : 'bg-white/[0.06] text-white hover:bg-white/[0.1]'}`}>
-                            {exists ? '已加入目标群' : '加入目标群'}
-                          </button>
-                          <button type="button" disabled={!matchedGroup} onClick={() => matchedGroup ? toggleSendGroup(matchedGroup.id) : undefined} className="flex-1 rounded-[12px] bg-violet-400/12 px-3 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-50">
-                            {checked ? '取消发送' : '加入发送'}
-                          </button>
+                        <div className={`mt-4 inline-flex rounded-[12px] px-3 py-2 text-sm ${checked ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.06] text-white'}`}>
+                          {checked ? '已勾选发送' : '勾选这个群发送'}
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
@@ -916,17 +943,33 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                               <input type="checkbox" checked={creative.enabled} onChange={(event) => updateCreative(creative.id, { enabled: event.target.checked })} />
                             </label>
                           </div>
-                          <div className="text-xs text-textMuted">每日 {creative.dailyQuota} 条 · 权重 {creative.weight}</div>
+                          <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{readCreativeKindLabel(creative.kind)}</div>
                         </div>
-                        <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">文本</span><textarea rows={5} value={creative.text} onChange={(event) => updateCreative(creative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                        <div className="mt-4 grid gap-4 md:grid-cols-2">
-                          <label className="space-y-2 text-sm"><span className="text-textMuted">上传图片</span><input type="file" accept="image/*" onChange={(event) => handleCreativeImageUpload(creative.id, event)} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white file:mr-3 file:rounded-[8px] file:border-0 file:bg-violet-400/14 file:px-3 file:py-2 file:text-sm file:text-violet-300" /></label>
-                          <label className="space-y-2 text-sm"><span className="text-textMuted">图文+按钮</span><input value={creative.note} onChange={(event) => updateCreative(creative.id, { note: event.target.value })} placeholder="先填按钮文案" className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between rounded-[12px] bg-card px-4 py-3 text-sm text-textMuted">
-                          <span>{creative.imageUrl ? '已上传图片' : '还没上传图片'}</span>
-                          {creative.imageUrl ? <button type="button" onClick={() => updateCreative(creative.id, { imageUrl: '' })} className="text-white transition hover:text-rose-200">删除图片</button> : null}
-                        </div>
+                        <label className="mt-4 block space-y-2 text-sm">
+                          <span className="text-textMuted">消息类型</span>
+                          <select value={creative.kind || 'text'} onChange={(event) => handleCreativeKindChange(creative.id, event.target.value as 'text' | 'image' | 'image_text' | 'image_button')} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30">
+                            <option value="text">文字</option>
+                            <option value="image">图片</option>
+                            <option value="image_text">图文</option>
+                            <option value="image_button">图文+按钮</option>
+                          </select>
+                        </label>
+                        {creative.kind !== 'image' ? <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">文本</span><textarea rows={5} value={creative.text} onChange={(event) => updateCreative(creative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label> : null}
+                        {creative.kind !== 'text' ? (
+                          <>
+                            <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">上传图片</span><input type="file" accept="image/*" onChange={(event) => handleCreativeImageUpload(creative.id, event)} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white file:mr-3 file:rounded-[8px] file:border-0 file:bg-violet-400/14 file:px-3 file:py-2 file:text-sm file:text-violet-300" /></label>
+                            <div className="mt-3 flex items-center justify-between rounded-[12px] bg-card px-4 py-3 text-sm text-textMuted">
+                              <span>{creative.imageUrl ? '已上传图片' : '还没上传图片'}</span>
+                              {creative.imageUrl ? <button type="button" onClick={() => updateCreative(creative.id, { imageUrl: '' })} className="text-white transition hover:text-rose-200">删除图片</button> : null}
+                            </div>
+                          </>
+                        ) : null}
+                        {creative.kind === 'image_button' ? (
+                          <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            <label className="space-y-2 text-sm"><span className="text-textMuted">按钮文字</span><input value={creative.buttonText || ''} onChange={(event) => updateCreative(creative.id, { buttonText: event.target.value, note: event.target.value })} placeholder="比如：立即查看" className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                            <label className="space-y-2 text-sm"><span className="text-textMuted">按钮链接</span><input value={creative.buttonUrl || ''} onChange={(event) => updateCreative(creative.id, { buttonUrl: event.target.value })} placeholder="https://..." className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                          </div>
+                        ) : null}
                       </div>
                     )
                   })}

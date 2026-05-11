@@ -9,11 +9,14 @@ export type BroadcastPreviewStatus = 'queued' | 'scheduled' | 'failed'
 export interface BroadcastCreative {
   id: string
   title: string
+  kind: 'text' | 'image' | 'image_text' | 'image_button'
   text: string
   imageUrl: string
   dailyQuota: number
   weight: number
   enabled: boolean
+  buttonText: string
+  buttonUrl: string
   note: string
 }
 
@@ -439,11 +442,14 @@ export const useBroadcastStore = create<BroadcastState>()(
         const nextCreative: BroadcastCreative = {
           id: createId('creative'),
           title: '',
+          kind: 'text',
           text: '',
           imageUrl: '',
           dailyQuota: 1,
           weight: 1,
           enabled: true,
+          buttonText: '',
+          buttonUrl: '',
           note: ''
         }
         set((state) => ({
@@ -637,12 +643,39 @@ export const useBroadcastStore = create<BroadcastState>()(
     }),
     {
       name: 'tg-group-broadcast-workbench',
-      version: 6,
+      version: 7,
       storage: createJSONStorage(() => localStorage),
       migrate: (persistedState: any) => {
         const defaultCreativeTitles = new Set(['早间图文 A', '转化图文 B'])
         const creatives = Array.isArray(persistedState?.creatives)
-          ? persistedState.creatives.filter((creative: any) => !defaultCreativeTitles.has(String(creative?.title || '').trim()))
+          ? persistedState.creatives
+            .filter((creative: any) => !defaultCreativeTitles.has(String(creative?.title || '').trim()))
+            .map((creative: any) => {
+              const text = typeof creative?.text === 'string' ? creative.text : ''
+              const imageUrl = typeof creative?.imageUrl === 'string' ? creative.imageUrl : ''
+              const buttonText = typeof creative?.buttonText === 'string'
+                ? creative.buttonText
+                : typeof creative?.note === 'string'
+                  ? creative.note
+                  : ''
+              const buttonUrl = typeof creative?.buttonUrl === 'string' ? creative.buttonUrl : ''
+              const kind = typeof creative?.kind === 'string' && creative.kind
+                ? creative.kind
+                : buttonText.trim() || buttonUrl.trim()
+                  ? 'image_button'
+                  : imageUrl.trim() && text.trim()
+                    ? 'image_text'
+                    : imageUrl.trim()
+                      ? 'image'
+                      : 'text'
+
+              return {
+                ...creative,
+                kind,
+                buttonText,
+                buttonUrl
+              }
+            })
           : []
         const creativeIds = new Set(creatives.map((creative: any) => creative.id))
 

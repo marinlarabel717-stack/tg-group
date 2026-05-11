@@ -133,6 +133,18 @@ function resolveMediaFile(imageUrl: string, title: string) {
   return value
 }
 
+function buildCreativeMessage(creative: { text: string; kind?: string; buttonText?: string; buttonUrl?: string }) {
+  const text = creative.text.trim()
+  if (creative.kind !== 'image_button') return text || undefined
+
+  const buttonText = typeof creative.buttonText === 'string' ? creative.buttonText.trim() : ''
+  const buttonUrl = typeof creative.buttonUrl === 'string' ? creative.buttonUrl.trim() : ''
+  if (!buttonUrl) return text || undefined
+
+  const buttonLine = buttonText ? `${buttonText}：${buttonUrl}` : buttonUrl
+  return [text, buttonLine].filter(Boolean).join('\n\n') || undefined
+}
+
 async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: SessionLoader, clientManager: TelegramClientManager) {
   const session = await sessionLoader.load(account.sessionPath)
   const client = clientManager.createClient(session)
@@ -237,9 +249,9 @@ export class BroadcastService {
             entityCache.set(entityKey, entity)
           }
 
-          const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title) : undefined
+          const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
           const message = await client.sendMessage(entity as never, {
-            message: creative.text.trim() || undefined,
+            message: buildCreativeMessage(creative),
             file: media,
             schedule: Math.floor(scheduledAt.getTime() / 1000)
           })
