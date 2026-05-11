@@ -365,6 +365,15 @@ export interface BroadcastPushScheduleResult {
   message: string
 }
 
+export interface BroadcastPushScheduleProgress {
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  item: BroadcastPushScheduleResultItem
+  message: string
+}
+
 export interface BroadcastJoinedGroup {
   peerId: string
   title: string
@@ -398,6 +407,7 @@ export interface DesktopLicenseApi {
 export interface DesktopBroadcastApi {
   pushSchedule: (payload: BroadcastPushSchedulePayload) => Promise<BroadcastPushScheduleResult>
   listJoinedGroups: (accountId: number) => Promise<BroadcastJoinedGroup[]>
+  onPushProgress: (callback: (payload: BroadcastPushScheduleProgress) => void) => () => void
 }
 
 export interface DesktopWindowApi {

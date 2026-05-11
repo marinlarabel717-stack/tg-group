@@ -9,8 +9,10 @@ interface RegisterBroadcastIpcOptions {
 export function registerBroadcastIpc(options: RegisterBroadcastIpcOptions) {
   const { broadcastService } = options
 
-  ipcMain.handle('broadcast:push-schedule', async (_event, payload: BroadcastPushSchedulePayload) => {
-    return broadcastService.pushSchedule(payload)
+  ipcMain.handle('broadcast:push-schedule', async (event, payload: BroadcastPushSchedulePayload) => {
+    return broadcastService.pushSchedule(payload, (progress) => {
+      event.sender.send('broadcast:push-progress', progress)
+    })
   })
 
   ipcMain.handle('broadcast:list-joined-groups', async (_event, accountId: number) => {

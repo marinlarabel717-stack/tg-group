@@ -675,7 +675,23 @@ export const useBroadcastStore = create<BroadcastState>()(
           return
         }
 
-        set({ syncing: true, errorMessage: '' })
+        const disposeProgress = window.desktopBroadcast?.onPushProgress?.((progress) => {
+          set((current) => ({
+            previewItems: current.previewItems.map((item) => item.id === progress.item.previewItemId
+              ? {
+                ...item,
+                status: progress.item.status,
+                errorMessage: progress.item.errorMessage,
+                remoteMessageId: progress.item.remoteMessageId,
+                syncedAt: progress.item.syncedAt
+              }
+              : item),
+            lastActionMessage: progress.message,
+            errorMessage: progress.failedCount > 0 ? `已有 ${progress.failedCount} 条写入失败，可直接看右侧报错逐条修。` : ''
+          }))
+        })
+
+        set({ syncing: true, errorMessage: '', lastActionMessage: `正在写入 0/${candidateItems.length}，请稍候...` })
         try {
           const result = await window.desktopBroadcast.pushSchedule(payload)
           const resultMap = new Map(result.items.map((item) => [item.previewItemId, item]))
@@ -709,6 +725,8 @@ export const useBroadcastStore = create<BroadcastState>()(
             errorMessage: error instanceof Error ? error.message : '写入 Telegram 定时消息失败。',
             lastActionMessage: '写入 Telegram 官方定时消息失败。'
           })
+        } finally {
+          disposeProgress?.()
         }
       }
     }),

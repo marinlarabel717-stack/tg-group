@@ -5,7 +5,7 @@ import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager } from '../accounts/check-engine/telegram-client-manager'
-import type { BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem } from '../../src/types'
+import type { BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem } from '../../src/types'
 
 const MIN_SCHEDULE_AHEAD_MS = 60_000
 
@@ -164,7 +164,7 @@ export class BroadcastService {
     private readonly clientManager: TelegramClientManager
   ) {}
 
-  async pushSchedule(payload: BroadcastPushSchedulePayload): Promise<BroadcastPushScheduleResult> {
+  async pushSchedule(payload: BroadcastPushSchedulePayload, onProgress?: (payload: BroadcastPushScheduleProgress) => void): Promise<BroadcastPushScheduleResult> {
     const creativesById = new Map(payload.creatives.map((item) => [item.id, item]))
     const groupsById = new Map(payload.groups.map((item) => [item.id, item]))
     const accountIds = Array.from(new Set(payload.items.map((item) => item.accountId).filter((item): item is number => typeof item === 'number')))
@@ -178,7 +178,7 @@ export class BroadcastService {
       for (const item of payload.items) {
         const existingScheduled = item.status === 'scheduled' && item.remoteMessageId
         if (existingScheduled) {
-          results.push({
+          const resultItem: BroadcastPushScheduleResultItem = {
             previewItemId: item.id,
             status: 'scheduled',
             errorMessage: '',
@@ -187,7 +187,9 @@ export class BroadcastService {
             accountId: item.accountId,
             groupId: item.groupId,
             creativeId: item.creativeId
-          })
+          }
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
 
@@ -197,41 +199,59 @@ export class BroadcastService {
         const scheduledAt = new Date(item.scheduledAt)
 
         if (!group) {
-          results.push(this.createFailedItem(item, '目标群不存在，请重新生成预览'))
+          const resultItem = this.createFailedItem(item, '目标群不存在，请重新生成预览')
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
         if (!group.enabled) {
-          results.push(this.createFailedItem(item, `目标群 ${group.title} 当前已停用`))
+          const resultItem = this.createFailedItem(item, `目标群 ${group.title} 当前已停用`)
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
         if (!creative) {
-          results.push(this.createFailedItem(item, '文案不存在，请重新生成预览'))
+          const resultItem = this.createFailedItem(item, '文案不存在，请重新生成预览')
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
         if (!creative.enabled) {
-          results.push(this.createFailedItem(item, `文案 ${creative.title} 当前已停用`))
+          const resultItem = this.createFailedItem(item, `文案 ${creative.title} 当前已停用`)
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
         if (!account) {
-          results.push(this.createFailedItem(item, '发送账号不存在，请检查账号列表'))
+          const resultItem = this.createFailedItem(item, '发送账号不存在，请检查账号列表')
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
         if (!Number.isFinite(scheduledAt.getTime())) {
-          results.push(this.createFailedItem(item, '排程时间格式不正确'))
+          const resultItem = this.createFailedItem(item, '排程时间格式不正确')
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
         if (scheduledAt.getTime() <= Date.now() + MIN_SCHEDULE_AHEAD_MS) {
-          results.push(this.createFailedItem(item, '排程时间太近或已过期，请重新生成未来时间段的计划'))
+          const resultItem = this.createFailedItem(item, '排程时间太近或已过期，请重新生成未来时间段的计划')
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
         if (!creative.text.trim() && !creative.imageUrl.trim()) {
-          results.push(this.createFailedItem(item, '文案正文和图片不能同时为空'))
+          const resultItem = this.createFailedItem(item, '文案正文和图片不能同时为空')
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
 
         const groupRef = normalizeGroupRef(group.targetRef || group.username)
         if (!groupRef) {
-          results.push(this.createFailedItem(item, `目标群 ${group.title} 缺少可用的 @username、私密链接或群链接`))
+          const resultItem = this.createFailedItem(item, `目标群 ${group.title} 缺少可用的 @username、私密链接或群链接`)
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
 
@@ -256,7 +276,7 @@ export class BroadcastService {
             schedule: Math.floor(scheduledAt.getTime() / 1000)
           })
 
-          results.push({
+          const resultItem: BroadcastPushScheduleResultItem = {
             previewItemId: item.id,
             status: 'scheduled',
             errorMessage: '',
@@ -265,9 +285,13 @@ export class BroadcastService {
             accountId: item.accountId,
             groupId: item.groupId,
             creativeId: item.creativeId
-          })
+          }
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
         } catch (error) {
-          results.push(this.createFailedItem(item, formatBroadcastError(error)))
+          const resultItem = this.createFailedItem(item, formatBroadcastError(error))
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
         }
       }
     } finally {
@@ -332,6 +356,25 @@ export class BroadcastService {
     } finally {
       await this.clientManager.destroyClient(client)
     }
+  }
+
+  private emitProgress(
+    results: BroadcastPushScheduleResultItem[],
+    total: number,
+    item: BroadcastPushScheduleResultItem,
+    onProgress?: (payload: BroadcastPushScheduleProgress) => void
+  ) {
+    if (!onProgress) return
+    const successCount = results.filter((entry) => entry.status === 'scheduled').length
+    const failedCount = results.filter((entry) => entry.status === 'failed').length
+    onProgress({
+      total,
+      completed: results.length,
+      successCount,
+      failedCount,
+      item,
+      message: `正在写入 ${results.length}/${total}，已写入 ${successCount} 条，失败 ${failedCount} 条。`
+    })
   }
 
   private createFailedItem(item: BroadcastPushSchedulePayload['items'][number], errorMessage: string): BroadcastPushScheduleResultItem {
