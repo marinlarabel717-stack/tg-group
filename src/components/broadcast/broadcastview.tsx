@@ -909,23 +909,19 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
               <GlassPanel className="bg-card">
                 <div className="text-lg font-semibold text-white">发送时间</div>
-                <div className="mt-1 text-sm text-textMuted">只要开始时间、间隔和条数，系统就会自动往后排；跨天也会继续接着排。</div>
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">开始日期</span><input type="date" value={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { startDate: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">结束日期</span><input type="date" value={selectedTask.endDate} onChange={(event) => updateTask(selectedTask.id, { endDate: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                </div>
+                <div className="mt-1 text-sm text-textMuted">默认从今天开始排。只要开始时间、间隔和条数，系统就会自动跨天接着往后排。</div>
                 <div className="mt-4 rounded-[16px] bg-panel p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <div className="text-sm font-semibold text-white">会员快捷模式</div>
-                      <div className="mt-1 text-xs text-textMuted">会员号可以直接切成“每天重复”，底层仍会按日期范围批量写入官方定时消息。</div>
+                      <div className="mt-1 text-xs text-textMuted">会员号可以直接切成“每天重复”，底层会从今天开始自动跨天顺延写入。</div>
                     </div>
                     <label className={`inline-flex items-center gap-2 text-sm ${currentAccountIsPremium ? 'text-white' : 'text-textMuted'}`}>
                       <input type="checkbox" checked={selectedTask.scheduleMode === 'daily_repeat'} disabled={!currentAccountIsPremium} onChange={(event) => updateTask(selectedTask.id, { scheduleMode: event.target.checked ? 'daily_repeat' : 'date_range' })} />
                       每天重复
                     </label>
                   </div>
-                  {!currentAccountIsPremium ? <div className="mt-3 text-xs text-amber-200">当前账号不是会员号，这里先走普通日期范围模式。</div> : null}
+                  {!currentAccountIsPremium ? <div className="mt-3 text-xs text-amber-200">当前账号不是会员号，这里先走普通自动跨天模式。</div> : null}
                 </div>
                 <div className="mt-4 grid gap-4 md:grid-cols-3">
                   <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>

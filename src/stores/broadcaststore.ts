@@ -340,12 +340,7 @@ function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget,
 }
 
 function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[], groups: BroadcastGroupTarget[], accounts: Array<{ id: number; status?: string }>) {
-  const now = new Date()
-  const today = startOfLocalDay(now)
-  const startDate = parseDateInputValue(task.startDate) ?? today
-  const rawEndDate = parseDateInputValue(task.endDate) ?? startDate
-  const endDate = rawEndDate.getTime() >= startDate.getTime() ? rawEndDate : startDate
-  const totalDays = Math.max(1, Math.floor((startOfLocalDay(endDate).getTime() - startOfLocalDay(startDate).getTime()) / (24 * 60 * 60 * 1000)) + 1)
+  const today = startOfLocalDay(new Date())
   const startMinutes = toMinutes(task.startTime)
   const interval = Math.max(5, Number(task.intervalMinutes) || 10)
   const jitter = 0
@@ -359,42 +354,37 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
   for (const group of selectedGroups) {
     const compatibleAccounts = getCompatibleAccounts(task, group, accounts)
 
-    for (let dayIndex = 0; dayIndex < totalDays; dayIndex += 1) {
-      const dayBase = new Date(startDate)
-      dayBase.setDate(startDate.getDate() + dayIndex)
+    for (let slotIndex = 0; slotIndex < limitPerGroup; slotIndex += 1) {
+      const minute = startMinutes + slotIndex * interval
+      const jitterOffset = jitter === 0 ? 0 : (globalIndex % (jitter * 2 + 1)) - jitter
+      const scheduledMinute = minute + jitterOffset
+      const scheduledAt = setMinutes(today, scheduledMinute)
+      const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
+      const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[slotIndex % compatibleAccounts.length] : null
+      let status: BroadcastPreviewStatus = 'queued'
+      let errorMessage = ''
 
-      for (let slotIndex = 0; slotIndex < limitPerGroup; slotIndex += 1) {
-        const minute = startMinutes + slotIndex * interval
-        const jitterOffset = jitter === 0 ? 0 : (globalIndex % (jitter * 2 + 1)) - jitter
-        const scheduledMinute = minute + jitterOffset
-        const scheduledAt = setMinutes(dayBase, scheduledMinute)
-        const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
-        const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[slotIndex % compatibleAccounts.length] : null
-        let status: BroadcastPreviewStatus = 'queued'
-        let errorMessage = ''
-
-        if (!creativeId) {
-          status = 'failed'
-          errorMessage = '当前任务还没有启用中的图文文案'
-        } else if (!accountId) {
-          status = 'failed'
-          errorMessage = '目标群内没有已加入且可发送的账号'
-        }
-
-        items.push({
-          id: createId('preview'),
-          taskId: task.id,
-          scheduledAt: scheduledAt.toISOString(),
-          accountId,
-          groupId: group.id,
-          creativeId,
-          status,
-          errorMessage,
-          remoteMessageId: null,
-          syncedAt: null
-        })
-        globalIndex += 1
+      if (!creativeId) {
+        status = 'failed'
+        errorMessage = '当前任务还没有启用中的图文文案'
+      } else if (!accountId) {
+        status = 'failed'
+        errorMessage = '目标群内没有已加入且可发送的账号'
       }
+
+      items.push({
+        id: createId('preview'),
+        taskId: task.id,
+        scheduledAt: scheduledAt.toISOString(),
+        accountId,
+        groupId: group.id,
+        creativeId,
+        status,
+        errorMessage,
+        remoteMessageId: null,
+        syncedAt: null
+      })
+      globalIndex += 1
     }
   }
 
@@ -645,16 +635,11 @@ export const useBroadcastStore = create<BroadcastState>()(
           return
         }
         const previewItems = normalizePreviewItems(generatePreviewItems(task, state.creatives, state.groups, accounts))
-        const startDate = parseDateInputValue(task.startDate)
-        const endDate = parseDateInputValue(task.endDate)
-        const totalDays = startDate && endDate
-          ? Math.max(1, Math.floor((startOfLocalDay(endDate).getTime() - startOfLocalDay(startDate).getTime()) / (24 * 60 * 60 * 1000)) + 1)
-          : 1
         set({
           previewItems,
           activeTab: 'tasks',
           errorMessage: '',
-          lastActionMessage: previewItems.length > 0 ? `已生成 ${previewItems.length} 条排程预览，共 ${totalDays} 天。` : '当前配置还生成不出任何排程，请检查账号、群或文案。'
+          lastActionMessage: previewItems.length > 0 ? `已生成 ${previewItems.length} 条排程预览，会从今天开始自动跨天往后排。` : '当前配置还生成不出任何排程，请检查账号、群或文案。'
         })
       },
       clearPreview: () => set({ previewItems: [], errorMessage: '', lastActionMessage: '当前任务预览已清空。' }),
