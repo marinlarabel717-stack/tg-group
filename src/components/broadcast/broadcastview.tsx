@@ -39,6 +39,31 @@ function readCreativeTitle(creative: { title?: string } | null | undefined) {
   return title || '未命名文案'
 }
 
+function normalizeGroupRefValue(value: string) {
+  return value.trim().toLowerCase()
+}
+
+function normalizeGroupUsername(value: string) {
+  const trimmed = value.trim()
+  return trimmed ? `@${trimmed.replace(/^@+/, '').toLowerCase()}` : ''
+}
+
+function isSameGroupRef(left: { title?: string; username?: string; targetRef?: string }, right: { title?: string; username?: string; targetRef?: string }) {
+  const leftTargetRef = normalizeGroupRefValue(left.targetRef || '')
+  const rightTargetRef = normalizeGroupRefValue(right.targetRef || '')
+  if (leftTargetRef || rightTargetRef) {
+    return Boolean(leftTargetRef && rightTargetRef && leftTargetRef === rightTargetRef)
+  }
+
+  const leftUsername = normalizeGroupUsername(left.username || '')
+  const rightUsername = normalizeGroupUsername(right.username || '')
+  if (leftUsername || rightUsername) {
+    return Boolean(leftUsername && rightUsername && leftUsername === rightUsername)
+  }
+
+  return String(left.title || '').trim() !== '' && String(left.title || '').trim() === String(right.title || '').trim()
+}
+
 const BroadcastSummary = memo(function BroadcastSummary() {
   const tasks = useBroadcastStore((state) => state.tasks)
   const previewItems = useBroadcastStore((state) => state.previewItems)
@@ -542,10 +567,7 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
                 <div className="grid gap-3 lg:grid-cols-2">
                   {joinedGroups.map((group) => {
                     const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
-                    const exists = groups.some((item) => {
-                      const existingTargetRef = (item.targetRef || item.username || '').trim()
-                      return (incomingTargetRef && existingTargetRef && incomingTargetRef === existingTargetRef) || item.title === group.title
-                    })
+                    const exists = groups.some((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
                     return (
                       <div key={`${group.peerId}:${group.username || group.title}`} className={`rounded-[20px] border p-4 transition ${exists ? 'border-emerald-400/25 bg-emerald-400/8' : 'border-white/8 bg-panel'}`}>
                         <div className="flex items-start justify-between gap-3">
@@ -825,10 +847,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted lg:col-span-2">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
                   ) : joinedGroups.map((group) => {
                     const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
-                    const matchedGroup = groups.find((item) => {
-                      const existingTargetRef = (item.targetRef || item.username || '').trim()
-                      return (incomingTargetRef && existingTargetRef && incomingTargetRef === existingTargetRef) || item.title === group.title
-                    })
+                    const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
                     const exists = Boolean(matchedGroup && selectedAccountGroups.some((item) => item.id === matchedGroup.id))
                     const checked = Boolean(matchedGroup && selectedTask.groupIds.includes(matchedGroup.id))
                     return (

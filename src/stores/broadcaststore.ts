@@ -159,6 +159,73 @@ function normalizeUsername(value: string) {
   return `@${trimmed.replace(/^@+/, '').toLowerCase()}`
 }
 
+function normalizeGroupRefValue(value: string) {
+  return value.trim().toLowerCase()
+}
+
+function buildGroupIdentityKey(group: { title?: string; username?: string; targetRef?: string }) {
+  const targetRef = normalizeGroupRefValue(group.targetRef || '')
+  if (targetRef) return `ref:${targetRef}`
+  const username = normalizeUsername(group.username || '')
+  if (username) return `username:${username}`
+  const title = String(group.title || '').trim().toLowerCase()
+  return title ? `title:${title}` : ''
+}
+
+function isSameGroup(left: { title?: string; username?: string; targetRef?: string }, right: { title?: string; username?: string; targetRef?: string }) {
+  const leftTargetRef = normalizeGroupRefValue(left.targetRef || '')
+  const rightTargetRef = normalizeGroupRefValue(right.targetRef || '')
+  if (leftTargetRef || rightTargetRef) {
+    return Boolean(leftTargetRef && rightTargetRef && leftTargetRef === rightTargetRef)
+  }
+
+  const leftUsername = normalizeUsername(left.username || '')
+  const rightUsername = normalizeUsername(right.username || '')
+  if (leftUsername || rightUsername) {
+    return Boolean(leftUsername && rightUsername && leftUsername === rightUsername)
+  }
+
+  return String(left.title || '').trim() !== '' && String(left.title || '').trim() === String(right.title || '').trim()
+}
+
+function dedupeGroups(groups: BroadcastGroupTarget[]) {
+  const idMap = new Map<string, string>()
+  const mergedByKey = new Map<string, BroadcastGroupTarget>()
+
+  for (const group of groups) {
+    const key = buildGroupIdentityKey(group)
+    if (!key) {
+      mergedByKey.set(group.id, group)
+      idMap.set(group.id, group.id)
+      continue
+    }
+
+    const existing = mergedByKey.get(key)
+    if (!existing) {
+      mergedByKey.set(key, { ...group, accountIds: [...group.accountIds] })
+      idMap.set(group.id, group.id)
+      continue
+    }
+
+    const merged: BroadcastGroupTarget = {
+      ...existing,
+      title: existing.title || group.title,
+      username: existing.username || group.username,
+      targetRef: existing.targetRef || group.targetRef || group.username,
+      memberCount: Math.max(existing.memberCount || 0, group.memberCount || 0),
+      enabled: existing.enabled || group.enabled,
+      accountIds: Array.from(new Set([...existing.accountIds, ...group.accountIds]))
+    }
+    mergedByKey.set(key, merged)
+    idMap.set(group.id, existing.id)
+  }
+
+  return {
+    groups: Array.from(mergedByKey.values()),
+    idMap
+  }
+}
+
 function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget, accounts: Array<{ id: number; status?: string }>) {
   const joined = task.accountIds.filter((accountId) => group.accountIds.includes(accountId))
   return joined.filter((accountId) => {
@@ -356,6 +423,9 @@ export const useBroadcastStore = create<BroadcastState>()(
         creatives: state.creatives.map((item) => item.id === creativeId ? { ...item, ...patch } : item)
       })),
       createGroup: ({ title, username, targetRef, memberCount }) => {
+        const state = get()
+        const selectedTask = state.tasks.find((item) => item.id === state.selectedTaskId) ?? null
+        const preferredAccountId = state.selectedTargetAccountId ?? (selectedTask?.accountIds.length === 1 ? selectedTask.accountIds[0] : null)
         const normalizedUsername = username.trim()
         const normalizedTargetRef = (targetRef ?? username).trim()
         const nextGroup: BroadcastGroupTarget = {
@@ -365,12 +435,12 @@ export const useBroadcastStore = create<BroadcastState>()(
           targetRef: normalizedTargetRef,
           memberCount: Number(memberCount) || 0,
           enabled: true,
-          accountIds: []
+          accountIds: typeof preferredAccountId === 'number' ? [preferredAccountId] : []
         }
         set((state) => ({
           groups: [nextGroup, ...state.groups],
           activeTab: 'targets',
-          lastActionMessage: `已新增目标群：${nextGroup.title}`
+          lastActionMessage: typeof preferredAccountId === 'number' ? `已新增目标群：${nextGroup.title}，并自动绑定当前账号。` : `已新增目标群：${nextGroup.title}`
         }))
       },
       updateGroup: (groupId, patch) => set((state) => ({
@@ -411,19 +481,8 @@ export const useBroadcastStore = create<BroadcastState>()(
         }
       },
       attachJoinedGroupToAccount: (accountId, group) => set((state) => {
-        const normalizedIncomingUsername = normalizeUsername(group.username)
         const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
-        const matched = state.groups.find((item) => {
-          const normalizedExistingUsername = normalizeUsername(item.username)
-          const existingTargetRef = (item.targetRef || item.username || '').trim()
-          if (incomingTargetRef && existingTargetRef && incomingTargetRef === existingTargetRef) {
-            return true
-          }
-          if (normalizedIncomingUsername && normalizedExistingUsername) {
-            return normalizedExistingUsername === normalizedIncomingUsername
-          }
-          return item.title.trim() === group.title.trim()
-        })
+        const matched = state.groups.find((item) => isSameGroup(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
 
         if (matched) {
           return {
@@ -544,7 +603,7 @@ export const useBroadcastStore = create<BroadcastState>()(
     }),
     {
       name: 'tg-group-broadcast-workbench',
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => localStorage),
       migrate: (persistedState: any) => {
         const defaultCreativeTitles = new Set(['早间图文 A', '转化图文 B'])
@@ -553,29 +612,41 @@ export const useBroadcastStore = create<BroadcastState>()(
           : []
         const creativeIds = new Set(creatives.map((creative: any) => creative.id))
 
+        const normalizedGroups = Array.isArray(persistedState?.groups)
+          ? persistedState.groups.map((group: any) => ({
+            ...group,
+            targetRef: typeof group?.targetRef === 'string' && group.targetRef.trim()
+              ? group.targetRef
+              : typeof group?.username === 'string'
+                ? group.username
+                : ''
+          }))
+          : []
+
+        const deduped = dedupeGroups(normalizedGroups)
+
         return {
           ...persistedState,
           creatives,
           tasks: Array.isArray(persistedState?.tasks)
             ? persistedState.tasks.map((task: any) => ({
               ...task,
+              groupIds: Array.isArray(task?.groupIds)
+                ? (Array.from(new Set((task.groupIds as string[]).map((groupId: string) => deduped.idMap.get(groupId) || groupId))) as string[]).filter((groupId) => deduped.groups.some((group) => group.id === groupId))
+                : [],
               creativeIds: Array.isArray(task?.creativeIds)
                 ? task.creativeIds.filter((creativeId: string) => creativeIds.has(creativeId))
                 : []
             }))
             : [],
           selectedCreativeId: creativeIds.has(persistedState?.selectedCreativeId) ? persistedState.selectedCreativeId : null,
-          groups: Array.isArray(persistedState?.groups)
-            ? persistedState.groups.map((group: any) => ({
-              ...group,
-              targetRef: typeof group?.targetRef === 'string' && group.targetRef.trim()
-                ? group.targetRef
-                : typeof group?.username === 'string'
-                  ? group.username
-                  : ''
-            }))
-            : [],
-          previewItems: normalizePreviewItems(Array.isArray(persistedState?.previewItems) ? persistedState.previewItems : []),
+          groups: deduped.groups,
+          previewItems: normalizePreviewItems(Array.isArray(persistedState?.previewItems)
+            ? persistedState.previewItems.map((item: any) => ({
+              ...item,
+              groupId: deduped.idMap.get(item?.groupId) || item?.groupId
+            })).filter((item: any) => deduped.groups.some((group) => group.id === item.groupId))
+            : []),
           selectedTargetAccountId: null,
           joinedGroups: [],
           syncing: false,
