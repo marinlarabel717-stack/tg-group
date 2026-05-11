@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import type { BroadcastPushSchedulePayload } from '../types'
 
 export type BroadcastTabKey = 'tasks' | 'creatives' | 'targets' | 'calendar'
 export type BroadcastTaskStatus = 'draft' | 'active' | 'paused'
@@ -51,6 +52,8 @@ export interface BroadcastPreviewItem {
   creativeId: string | null
   status: BroadcastPreviewStatus
   errorMessage: string
+  remoteMessageId?: number | null
+  syncedAt?: string | null
 }
 
 interface BroadcastState {
@@ -62,6 +65,8 @@ interface BroadcastState {
   selectedCreativeId: string | null
   previewItems: BroadcastPreviewItem[]
   lastActionMessage: string
+  syncing: boolean
+  errorMessage: string
   setActiveTab: (tab: BroadcastTabKey) => void
   selectTask: (taskId: string) => void
   selectCreative: (creativeId: string) => void
@@ -78,7 +83,7 @@ interface BroadcastState {
   toggleGroupAccount: (groupId: string, accountId: number) => void
   generatePreview: (accounts: Array<{ id: number; status?: string }>) => void
   clearPreview: () => void
-  pushScheduleToTelegram: () => void
+  pushScheduleToTelegram: () => Promise<void>
 }
 
 function createId(prefix: string) {
@@ -109,7 +114,10 @@ function toMinutes(value: string) {
 
 function setMinutes(base: Date, totalMinutes: number) {
   const next = new Date(base)
-  next.setHours(Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0)
+  const dayOffset = Math.floor(totalMinutes / (24 * 60))
+  const minuteOfDay = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60)
+  next.setDate(next.getDate() + dayOffset)
+  next.setHours(Math.floor(minuteOfDay / 60), minuteOfDay % 60, 0, 0)
   return next
 }
 
@@ -118,11 +126,29 @@ function rotateCreatives(task: BroadcastTask, creatives: BroadcastCreative[]) {
   const bucket: string[] = []
   for (const item of selected) {
     const quota = Math.max(1, Number(item.dailyQuota) || 1)
-    for (let index = 0; index < quota; index += 1) {
+    const weight = Math.max(1, Number(item.weight) || 1)
+    for (let index = 0; index < quota * weight; index += 1) {
       bucket.push(item.id)
     }
   }
   return bucket.length > 0 ? bucket : selected.map((item) => item.id)
+}
+
+function normalizePreviewItems(items: BroadcastPreviewItem[]) {
+  return items.map((item) => {
+    if (item.status === 'scheduled' && !item.remoteMessageId) {
+      return {
+        ...item,
+        status: 'queued' as const,
+        errorMessage: ''
+      }
+    }
+    return {
+      ...item,
+      remoteMessageId: item.remoteMessageId ?? null,
+      syncedAt: item.syncedAt ?? null
+    }
+  })
 }
 
 function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget, accounts: Array<{ id: number; status?: string }>) {
@@ -138,8 +164,10 @@ function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget,
 function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[], groups: BroadcastGroupTarget[], accounts: Array<{ id: number; status?: string }>) {
   const today = new Date()
   const startMinutes = toMinutes(task.startTime)
-  const endMinutes = toMinutes(task.endTime)
+  const rawEndMinutes = toMinutes(task.endTime)
+  const endMinutes = rawEndMinutes < startMinutes ? rawEndMinutes + 24 * 60 : rawEndMinutes
   const interval = Math.max(5, Number(task.intervalMinutes) || 10)
+  const jitter = Math.max(0, Math.min(30, Number(task.jitterMinutes) || 0))
   const limitPerGroup = Math.max(1, Number(task.dailyLimitPerGroup) || 1)
   const creativeRotation = rotateCreatives(task, creatives)
   const selectedGroups = groups.filter((group) => task.groupIds.includes(group.id) && group.enabled)
@@ -150,7 +178,9 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
     const compatibleAccounts = getCompatibleAccounts(task, group, accounts)
     let slotIndex = 0
     for (let minute = startMinutes; minute <= endMinutes && slotIndex < limitPerGroup; minute += interval) {
-      const scheduledAt = setMinutes(today, minute)
+      const jitterOffset = jitter === 0 ? 0 : (globalIndex % (jitter * 2 + 1)) - jitter
+      const scheduledMinute = Math.max(startMinutes, Math.min(endMinutes, minute + jitterOffset))
+      const scheduledAt = setMinutes(today, scheduledMinute)
       const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
       const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[slotIndex % compatibleAccounts.length] : null
       let status: BroadcastPreviewStatus = 'queued'
@@ -174,7 +204,9 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
         groupId: group.id,
         creativeId,
         status,
-        errorMessage
+        errorMessage,
+        remoteMessageId: null,
+        syncedAt: null
       })
       slotIndex += 1
       globalIndex += 1
@@ -256,6 +288,8 @@ export const useBroadcastStore = create<BroadcastState>()(
       selectedCreativeId: initialCreatives[0]?.id ?? null,
       previewItems: [],
       lastActionMessage: '先完成任务配置，再写入 Telegram 官方定时消息。',
+      syncing: false,
+      errorMessage: '',
       setActiveTab: (tab) => set({ activeTab: tab }),
       selectTask: (taskId) => set({ selectedTaskId: taskId }),
       selectCreative: (creativeId) => set({ selectedCreativeId: creativeId }),
@@ -380,26 +414,97 @@ export const useBroadcastStore = create<BroadcastState>()(
         const state = get()
         const task = state.tasks.find((item) => item.id === state.selectedTaskId)
         if (!task) {
-          set({ previewItems: [], lastActionMessage: '先选一个任务再生成预览。' })
+          set({ previewItems: [], lastActionMessage: '先选一个任务再生成预览。', errorMessage: '' })
           return
         }
-        const previewItems = generatePreviewItems(task, state.creatives, state.groups, accounts)
+        const previewItems = normalizePreviewItems(generatePreviewItems(task, state.creatives, state.groups, accounts))
         set({
           previewItems,
           activeTab: 'tasks',
+          errorMessage: '',
           lastActionMessage: previewItems.length > 0 ? `已生成 ${previewItems.length} 条今日排程预览。` : '当前配置还生成不出任何排程，请检查账号、群或文案。'
         })
       },
-      clearPreview: () => set({ previewItems: [], lastActionMessage: '当前任务预览已清空。' }),
-      pushScheduleToTelegram: () => set((state) => ({
-        previewItems: state.previewItems.map((item) => item.status === 'failed' ? item : { ...item, status: 'scheduled' }),
-        tasks: state.tasks.map((item) => item.id === state.selectedTaskId ? { ...item, status: 'active', lastSyncedAt: new Date().toISOString() } : item),
-        lastActionMessage: state.previewItems.length > 0 ? '已模拟写入 Telegram 官方定时消息队列。下一步接真实 MTProto 排程接口。' : '当前没有可写入的排程。'
-      }))
+      clearPreview: () => set({ previewItems: [], errorMessage: '', lastActionMessage: '当前任务预览已清空。' }),
+      pushScheduleToTelegram: async () => {
+        const state = get()
+        const task = state.tasks.find((item) => item.id === state.selectedTaskId)
+        if (!task) {
+          set({ errorMessage: '请先选中要写入的任务。', lastActionMessage: '当前没有可写入的任务。' })
+          return
+        }
+
+        const candidateItems = state.previewItems.filter((item) => item.taskId === task.id && item.status !== 'failed' && !item.remoteMessageId)
+        if (candidateItems.length === 0) {
+          set({ errorMessage: '', lastActionMessage: '当前没有新的可写入排程，已经写过的不会重复补发。' })
+          return
+        }
+
+        const payload: BroadcastPushSchedulePayload = {
+          items: candidateItems,
+          creatives: state.creatives,
+          groups: state.groups
+        }
+
+        if (!window.desktopBroadcast?.pushSchedule) {
+          set((current) => ({
+            previewItems: current.previewItems.map((item) => candidateItems.some((entry) => entry.id === item.id)
+              ? { ...item, status: 'scheduled', syncedAt: new Date().toISOString(), errorMessage: '' }
+              : item),
+            tasks: current.tasks.map((item) => item.id === task.id ? { ...item, status: 'active', lastSyncedAt: new Date().toISOString() } : item),
+            errorMessage: '',
+            lastActionMessage: '当前环境未注入桌面排程 API，已按本地模拟模式标记为已写入。'
+          }))
+          return
+        }
+
+        set({ syncing: true, errorMessage: '' })
+        try {
+          const result = await window.desktopBroadcast.pushSchedule(payload)
+          const resultMap = new Map(result.items.map((item) => [item.previewItemId, item]))
+          const now = new Date().toISOString()
+          set((current) => ({
+            syncing: false,
+            previewItems: current.previewItems.map((item) => {
+              const matched = resultMap.get(item.id)
+              if (!matched) return item
+              return {
+                ...item,
+                status: matched.status,
+                errorMessage: matched.errorMessage,
+                remoteMessageId: matched.remoteMessageId,
+                syncedAt: matched.syncedAt
+              }
+            }),
+            tasks: current.tasks.map((item) => item.id === task.id
+              ? {
+                ...item,
+                status: result.successCount > 0 ? 'active' : item.status,
+                lastSyncedAt: result.successCount > 0 ? now : item.lastSyncedAt
+              }
+              : item),
+            errorMessage: result.failedCount > 0 ? `有 ${result.failedCount} 条写入失败，可直接看右侧报错逐条修。` : '',
+            lastActionMessage: result.message
+          }))
+        } catch (error) {
+          set({
+            syncing: false,
+            errorMessage: error instanceof Error ? error.message : '写入 Telegram 定时消息失败。',
+            lastActionMessage: '写入 Telegram 官方定时消息失败。'
+          })
+        }
+      }
     }),
     {
       name: 'tg-group-broadcast-workbench',
+      version: 2,
       storage: createJSONStorage(() => localStorage),
+      migrate: (persistedState: any) => ({
+        ...persistedState,
+        previewItems: normalizePreviewItems(Array.isArray(persistedState?.previewItems) ? persistedState.previewItems : []),
+        syncing: false,
+        errorMessage: ''
+      }),
       partialize: (state) => ({
         activeTab: state.activeTab,
         tasks: state.tasks,

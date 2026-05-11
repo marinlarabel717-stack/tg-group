@@ -26,6 +26,8 @@ import { ProxyPoolService } from './proxy-pool/service'
 import { resolveRuntimeAssetPath } from './runtime-paths'
 import { LicenseStore } from './license/license-store'
 import { LicenseService } from './license/license-service'
+import { BroadcastService } from './broadcast/service'
+import { registerBroadcastIpc } from './broadcast/ipc'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -162,6 +164,7 @@ async function bootstrap() {
   const spamBotChecker = new SpamBotChecker()
   const statusResolver = new StatusResolver()
   const updateService = new AccountUpdateService(accountsRootPath)
+  const broadcastService = new BroadcastService(repository, sessionLoader, clientManager)
   const resultWriter = new CheckResultWriter(repository, {
     onWrite: (accounts) => emitAccountsUpdated(accounts)
   })
@@ -215,6 +218,9 @@ async function bootstrap() {
     telegramWebService,
     telegramDesktopPremiumService,
     emitAccountsUpdated
+  })
+  registerBroadcastIpc({
+    broadcastService
   })
   createWindow()
 

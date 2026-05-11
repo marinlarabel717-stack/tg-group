@@ -303,6 +303,64 @@ export interface DesktopLicenseValidateResult {
   snapshot: DesktopLicenseState
 }
 
+export interface BroadcastCreativePayload {
+  id: string
+  title: string
+  text: string
+  imageUrl: string
+  dailyQuota: number
+  weight: number
+  enabled: boolean
+  note: string
+}
+
+export interface BroadcastGroupPayload {
+  id: string
+  title: string
+  username: string
+  memberCount: number
+  enabled: boolean
+  accountIds: number[]
+}
+
+export interface BroadcastPreviewSyncItem {
+  id: string
+  taskId: string
+  scheduledAt: string
+  accountId: number | null
+  groupId: string
+  creativeId: string | null
+  status: 'queued' | 'scheduled' | 'failed'
+  errorMessage: string
+  remoteMessageId?: number | null
+  syncedAt?: string | null
+}
+
+export interface BroadcastPushSchedulePayload {
+  items: BroadcastPreviewSyncItem[]
+  creatives: BroadcastCreativePayload[]
+  groups: BroadcastGroupPayload[]
+}
+
+export interface BroadcastPushScheduleResultItem {
+  previewItemId: string
+  status: 'queued' | 'scheduled' | 'failed'
+  errorMessage: string
+  remoteMessageId: number | null
+  syncedAt: string | null
+  accountId: number | null
+  groupId: string
+  creativeId: string | null
+}
+
+export interface BroadcastPushScheduleResult {
+  total: number
+  successCount: number
+  failedCount: number
+  items: BroadcastPushScheduleResultItem[]
+  message: string
+}
+
 export interface DesktopSettingsApi {
   get: () => Promise<DesktopAppSettings>
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
@@ -324,6 +382,10 @@ export interface DesktopLicenseApi {
   clear: () => Promise<DesktopLicenseState>
 }
 
+export interface DesktopBroadcastApi {
+  pushSchedule: (payload: BroadcastPushSchedulePayload) => Promise<BroadcastPushScheduleResult>
+}
+
 export interface DesktopWindowApi {
   minimize: () => Promise<void>
   toggleMaximize: () => Promise<boolean>
@@ -337,6 +399,7 @@ declare global {
     desktopSettings?: DesktopSettingsApi
     desktopProxyPool?: DesktopProxyPoolApi
     desktopLicense?: DesktopLicenseApi
+    desktopBroadcast?: DesktopBroadcastApi
     desktopWindow?: DesktopWindowApi
     desktopInfo?: {
       appName: string

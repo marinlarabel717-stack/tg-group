@@ -111,9 +111,20 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const generatePreview = useBroadcastStore((state) => state.generatePreview)
   const clearPreview = useBroadcastStore((state) => state.clearPreview)
   const pushScheduleToTelegram = useBroadcastStore((state) => state.pushScheduleToTelegram)
+  const syncing = useBroadcastStore((state) => state.syncing)
+  const errorMessage = useBroadcastStore((state) => state.errorMessage)
 
   const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? null, [selectedTaskId, tasks])
   const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTaskId), [previewItems, selectedTaskId])
+  const taskDiagnostics = useMemo(() => {
+    if (!selectedTask) return [] as string[]
+    const problems: string[] = []
+    if (selectedTask.accountIds.length === 0) problems.push('还没勾发送账号')
+    if (selectedTask.groupIds.length === 0) problems.push('还没勾目标群')
+    if (selectedTask.creativeIds.length === 0) problems.push('还没勾文案')
+    if (selectedTask.startTime === selectedTask.endTime) problems.push('开始时间和结束时间一样，建议拉开时间窗')
+    return problems
+  }, [selectedTask])
 
   return (
     <div className="grid gap-5 xl:grid-cols-[300px_minmax(560px,1fr)_360px]">
@@ -174,6 +185,12 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               </div>
             </div>
 
+            {taskDiagnostics.length > 0 ? (
+              <div className="rounded-[16px] border border-amber-300/15 bg-amber-300/8 px-4 py-3 text-sm text-amber-100">
+                当前任务还有这些缺口：{taskDiagnostics.join('、')}
+              </div>
+            ) : null}
+
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm">
                 <span className="text-textMuted">任务名称</span>
@@ -193,12 +210,15 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               <textarea value={selectedTask.note} onChange={(event) => updateTask(selectedTask.id, { note: event.target.value })} rows={3} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none transition focus:border-violet-400/30" />
             </label>
 
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-5">
               <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
               <label className="space-y-2 text-sm"><span className="text-textMuted">结束时间</span><input type="time" value={selectedTask.endTime} onChange={(event) => updateTask(selectedTask.id, { endTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
               <label className="space-y-2 text-sm"><span className="text-textMuted">间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+              <label className="space-y-2 text-sm"><span className="text-textMuted">随机抖动（分钟）</span><input type="number" min={0} max={30} value={selectedTask.jitterMinutes} onChange={(event) => updateTask(selectedTask.id, { jitterMinutes: Number(event.target.value) || 0 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
               <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
             </div>
+
+            {selectedTask.lastSyncedAt ? <div className="text-xs text-textMuted">最近一次写入 Telegram：{formatDateTimeFull(selectedTask.lastSyncedAt)}</div> : null}
 
             <div className="grid gap-5 lg:grid-cols-3">
               <div>
@@ -260,11 +280,12 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               <button type="button" onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
                 <RefreshCw size={16} /> 预览今日计划
               </button>
-              <button type="button" onClick={pushScheduleToTelegram} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/18">
-                <Send size={16} /> 写入 Telegram 定时消息
+              <button type="button" disabled={syncing} onClick={() => void pushScheduleToTelegram()} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60">
+                <Send size={16} /> {syncing ? '正在写入…' : '写入 Telegram 定时消息'}
               </button>
               <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.04] px-4 py-3 text-sm text-white transition hover:bg-white/[0.08]">清空当前预览</button>
             </div>
+            {errorMessage ? <div className="rounded-[14px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
           </div>
         )}
       </GlassPanel>
@@ -295,6 +316,8 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                   <div>群组：{group?.title || '未匹配群组'}</div>
                   <div>账号：{account?.username || account?.phone || '未分配账号'}</div>
                   <div>文案：{creative?.title || '未匹配文案'}</div>
+                  {item.remoteMessageId ? <div>官方消息 ID：{item.remoteMessageId}</div> : null}
+                  {item.syncedAt ? <div>写入时间：{formatDateTimeFull(item.syncedAt)}</div> : null}
                 </div>
                 {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200">{item.errorMessage}</div> : null}
               </div>

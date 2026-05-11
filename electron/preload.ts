@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
+import type { AccountRecord, BroadcastPushSchedulePayload, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'Telegram Multi Account Manager',
@@ -72,4 +72,8 @@ contextBridge.exposeInMainWorld('desktopLicense', {
   activate: (cardKey: string) => ipcRenderer.invoke('license:activate', cardKey) as Promise<DesktopLicenseActivateResult>,
   validate: () => ipcRenderer.invoke('license:validate') as Promise<DesktopLicenseValidateResult>,
   clear: () => ipcRenderer.invoke('license:clear') as Promise<DesktopLicenseState>
+})
+
+contextBridge.exposeInMainWorld('desktopBroadcast', {
+  pushSchedule: (payload: BroadcastPushSchedulePayload) => ipcRenderer.invoke('broadcast:push-schedule', payload)
 })
