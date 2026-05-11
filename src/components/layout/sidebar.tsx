@@ -1,4 +1,4 @@
-import { Bot, Boxes, ChartColumnBig, ChevronLeft, ChevronRight, FileClock, Network, Settings2, Users } from 'lucide-react'
+import { Boxes, ChartColumnBig, ChevronLeft, ChevronRight, FileClock, Network, Radio, Settings2, Users } from 'lucide-react'
 import { memo } from 'react'
 import type { ModuleKey } from '../../types'
 import { moduleLabelMap } from '../../lib/ui-text'
@@ -8,7 +8,7 @@ import { SidebarNavItem } from './sidebarnavitem'
 const items: { key: ModuleKey; label: string; icon: typeof ChartColumnBig }[] = [
   { key: 'dashboard', label: moduleLabelMap.dashboard, icon: ChartColumnBig },
   { key: 'accounts', label: moduleLabelMap.accounts, icon: Users },
-  { key: 'automation', label: moduleLabelMap.automation, icon: Bot },
+  { key: 'automation', label: moduleLabelMap.automation, icon: Radio },
   { key: 'proxy-pool', label: moduleLabelMap['proxy-pool'], icon: Network },
   { key: 'session-manager', label: moduleLabelMap['session-manager'], icon: Boxes },
   { key: 'logs', label: moduleLabelMap.logs, icon: FileClock },
