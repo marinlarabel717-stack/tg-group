@@ -786,8 +786,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
         <GlassPanel className="bg-card">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-lg font-semibold text-white">账号列表</div>
-              <div className="mt-1 text-sm text-textMuted">点“选择账号”再弹出列表，可全选也可手动勾选。</div>
+              <div className="text-lg font-semibold text-white">第 1 步：选择账号</div>
+              <div className="mt-1 text-sm text-textMuted">先选发送账号，再去读这个账号已经加入的群。</div>
             </div>
             <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">已选 {selectedAccounts.length}</div>
           </div>
@@ -832,22 +832,6 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               </div>
             </div>
 
-            <div className="rounded-[18px] bg-panel p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-white">已绑定目标群</div>
-                <div className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] text-textMuted">{selectedAccountGroups.length} 个</div>
-              </div>
-              <div className="mt-3 space-y-2">
-                {selectedAccountGroups.length === 0 ? (
-                  <div className="text-sm text-textMuted">这个账号还没选中任何群。</div>
-                ) : selectedAccountGroups.map((group) => (
-                  <div key={group.id} className="rounded-[12px] bg-white/[0.04] px-3 py-2">
-                    <div className="text-sm text-white">{group.title}</div>
-                    <div className="mt-1 text-xs text-textMuted">{group.username || group.targetRef || '私密群 / 无公开用户名'}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </GlassPanel>
 
@@ -855,8 +839,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
           <GlassPanel className="bg-card sticky top-4 z-10">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
-                <div className="text-lg font-semibold text-white">发送配置</div>
-                <div className="mt-1 text-sm text-textMuted">开始发送按钮固定放在上面，不用再拉到最底部。</div>
+                <div className="text-lg font-semibold text-white">第 4 步：定时发送</div>
+                <div className="mt-1 text-sm text-textMuted">最后只管预览一下，然后开始发送。</div>
               </div>
               <div className="flex flex-wrap gap-3">
                 <button type="button" onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
@@ -875,8 +859,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
           ) : (
             <>
               <GlassPanel className="bg-card">
-                <div className="text-lg font-semibold text-white">群数据</div>
-                <div className="mt-1 text-sm text-textMuted">左边切换当前账号后，这里显示它已加入的群。先加入目标群，再加入发送。</div>
+                <div className="text-lg font-semibold text-white">第 2 步：读取账号的群</div>
+                <div className="mt-1 text-sm text-textMuted">点上面“重新读取当前账号群”，然后把要发的群点进来就行。</div>
                 <div className="mt-4 grid gap-3 lg:grid-cols-2">
                   {joinedGroups.length === 0 ? (
                     <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted lg:col-span-2">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
@@ -909,8 +893,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               </GlassPanel>
 
               <GlassPanel className="bg-card">
-                <div className="text-lg font-semibold text-white">发送配置</div>
-                <div className="mt-1 text-sm text-textMuted">中间只留真正会影响发送的配置。</div>
+                <div className="text-lg font-semibold text-white">发送时间</div>
+                <div className="mt-1 text-sm text-textMuted">这里只配时间和频率，别的先不折腾。</div>
                 <div className="mt-4 grid gap-4 md:grid-cols-4">
                   <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                   <label className="space-y-2 text-sm"><span className="text-textMuted">结束时间</span><input type="time" value={selectedTask.endTime} onChange={(event) => updateTask(selectedTask.id, { endTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
@@ -922,8 +906,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               <GlassPanel className="bg-card">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-lg font-semibold text-white">文案设置</div>
-                    <div className="mt-1 text-sm text-textMuted">这里直接改标题、图片和正文，不再让你找不到入口。</div>
+                    <div className="text-lg font-semibold text-white">第 3 步：文案设置</div>
+                    <div className="mt-1 text-sm text-textMuted">直接填文案内容，配好以后就能拿去定时发。</div>
                   </div>
                   <button type="button" onClick={createCreative} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
                     <Plus size={16} /> 新建文案
@@ -976,10 +960,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
           {selectedPreview.length > 0 ? (
             <div className="mt-4 space-y-3">
               <div className="rounded-[18px] border border-violet-400/15 bg-violet-400/8 p-4">
-                <div className="text-sm font-semibold text-white">你现在只看这里</div>
+                <div className="text-sm font-semibold text-white">结果先看这里</div>
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
                   <div className="rounded-[14px] bg-panel px-4 py-3">
-                    <div className="text-xs text-textMuted">成功</div>
+                    <div className="text-xs text-textMuted">已写入</div>
                     <div className="mt-1 text-xl font-semibold text-emerald-300">{previewSummary.successCount} 条</div>
                   </div>
                   <div className="rounded-[14px] bg-panel px-4 py-3">
@@ -987,7 +971,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     <div className="mt-1 text-xl font-semibold text-rose-300">{previewSummary.failedCount} 条</div>
                   </div>
                   <div className="rounded-[14px] bg-panel px-4 py-3">
-                    <div className="text-xs text-textMuted">待发送</div>
+                    <div className="text-xs text-textMuted">待写入</div>
                     <div className="mt-1 text-xl font-semibold text-slate-200">{previewSummary.pendingCount} 条</div>
                   </div>
                 </div>
