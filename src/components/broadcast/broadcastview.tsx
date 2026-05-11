@@ -24,6 +24,16 @@ function getTaskStatusTone(status: 'draft' | 'active' | 'paused') {
   return 'text-slate-300 bg-white/5'
 }
 
+function readAccountNickname(account: { username?: string; phone?: string; profile?: Record<string, unknown> }) {
+  const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
+  const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
+  const fullName = [firstName, lastName].filter(Boolean).join(' ')
+  if (fullName) return fullName
+  if (typeof account.username === 'string' && account.username.trim()) return account.username.trim()
+  if (typeof account.phone === 'string' && account.phone.trim()) return account.phone.trim()
+  return '未命名账号'
+}
+
 const BroadcastSummary = memo(function BroadcastSummary() {
   const tasks = useBroadcastStore((state) => state.tasks)
   const previewItems = useBroadcastStore((state) => state.previewItems)
@@ -623,6 +633,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const updateCreative = useBroadcastStore((state) => state.updateCreative)
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [draftAccountIds, setDraftAccountIds] = useState<number[]>([])
+  const [accountSearch, setAccountSearch] = useState('')
 
   const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? tasks[0] ?? null, [selectedTaskId, tasks])
 
@@ -642,6 +653,18 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     return groups.filter((group) => group.accountIds.includes(selectedAccountId))
   }, [groups, selectedAccountId])
 
+  const filteredAccounts = useMemo(() => {
+    const keyword = accountSearch.trim().toLowerCase()
+    if (!keyword) return accounts
+    return accounts.filter((account) => {
+      const nickname = readAccountNickname(account).toLowerCase()
+      return nickname.includes(keyword)
+        || String(account.phone || '').toLowerCase().includes(keyword)
+        || String(account.username || '').toLowerCase().includes(keyword)
+        || String(account.userId || '').toLowerCase().includes(keyword)
+    })
+  }, [accountSearch, accounts])
+
   useEffect(() => {
     if (selectedTask?.accountIds[0] && selectedTargetAccountId == null) {
       setSelectedTargetAccountId(selectedTask.accountIds[0])
@@ -655,6 +678,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
   const openAccountPicker = () => {
     setDraftAccountIds(selectedTask?.accountIds ?? [])
+    setAccountSearch('')
     setAccountPickerOpen(true)
   }
 
@@ -927,11 +951,11 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
       {accountPickerOpen ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 px-4" onClick={() => setAccountPickerOpen(false)}>
-          <div className="w-full max-w-[820px] rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+          <div className="w-full max-w-[980px] rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
               <div>
                 <div className="text-lg font-semibold text-white">选择账号</div>
-                <div className="mt-1 text-sm text-textMuted">跟账号管理一样，能看名字，能全选，也能手动勾选。</div>
+                <div className="mt-1 text-sm text-textMuted">按账号管理的表格方式来选：能搜索、全选、手动勾选。</div>
               </div>
               <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setAccountPickerOpen(false)}>
                 <X size={16} />
@@ -939,30 +963,62 @@ const BroadcastConsole = memo(function BroadcastConsole() {
             </div>
 
             <div className="space-y-4 px-5 py-5">
-              <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={() => setDraftAccountIds(accounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选</button>
-                <button type="button" onClick={() => setDraftAccountIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
-                <div className="rounded-full bg-white/[0.04] px-3 py-2 text-sm text-textMuted">已选 {draftAccountIds.length} / {accounts.length}</div>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <input
+                  value={accountSearch}
+                  onChange={(event) => setAccountSearch(event.target.value)}
+                  placeholder="搜索账号名 / 手机号 / 用户名"
+                  className="h-11 w-full rounded-[12px] border border-white/8 bg-panel px-4 text-sm text-white outline-none focus:border-violet-400/30 lg:max-w-[360px]"
+                />
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={() => setDraftAccountIds(filteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
+                  <button type="button" onClick={() => setDraftAccountIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
+                  <div className="rounded-full bg-white/[0.04] px-3 py-2 text-sm text-textMuted">已选 {draftAccountIds.length} / {accounts.length}</div>
+                </div>
               </div>
 
-              <div className="grid max-h-[480px] gap-3 overflow-y-auto pr-1 md:grid-cols-2">
-                {accounts.map((account) => {
-                  const checked = draftAccountIds.includes(account.id)
-                  return (
-                    <label key={account.id} className={`flex cursor-pointer items-start gap-3 rounded-[16px] border px-4 py-4 transition ${checked ? 'border-violet-400/30 bg-violet-400/10' : 'border-white/8 bg-panel hover:bg-white/[0.04]'}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => setDraftAccountIds((current) => current.includes(account.id) ? current.filter((item) => item !== account.id) : [...current, account.id])}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-white">{account.username || account.phone || `账号#${account.id}`}</div>
-                        <div className="mt-1 text-xs text-textMuted">{account.phone || account.userId || '未识别账号'}</div>
-                        <div className="mt-2 text-xs text-textMuted">{formatAccountStatus(account.status)}</div>
-                      </div>
-                    </label>
-                  )
-                })}
+              <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
+                <div className="grid grid-cols-[64px_180px_1.2fr_140px_120px] border-b border-white/8 bg-white/[0.04] px-4 py-3 text-xs tracking-[0.16em] text-textMuted">
+                  <div className="flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={filteredAccounts.length > 0 && filteredAccounts.every((account) => draftAccountIds.includes(account.id))}
+                      onChange={(event) => setDraftAccountIds(event.target.checked ? filteredAccounts.map((item) => item.id) : [])}
+                    />
+                  </div>
+                  <div>手机号</div>
+                  <div>账号名</div>
+                  <div>状态</div>
+                  <div>用户 ID</div>
+                </div>
+
+                <div className="max-h-[520px] overflow-y-auto">
+                  {filteredAccounts.length === 0 ? (
+                    <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号。</div>
+                  ) : filteredAccounts.map((account) => {
+                    const checked = draftAccountIds.includes(account.id)
+                    return (
+                      <label key={account.id} className={`grid cursor-pointer grid-cols-[64px_180px_1.2fr_140px_120px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.04]'}`}>
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setDraftAccountIds((current) => current.includes(account.id) ? current.filter((item) => item !== account.id) : [...current, account.id])}
+                          />
+                        </div>
+                        <div className="truncate text-white">{account.phone || '—'}</div>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-white">{readAccountNickname(account)}</div>
+                          <div className="mt-1 truncate text-xs text-textMuted">@{account.username || '无用户名'}</div>
+                        </div>
+                        <div>
+                          <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200">{formatAccountStatus(account.status)}</span>
+                        </div>
+                        <div className="truncate text-textMuted">{account.userId || '—'}</div>
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
