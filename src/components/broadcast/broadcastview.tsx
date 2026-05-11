@@ -39,6 +39,20 @@ function readCreativeTitle(creative: { title?: string } | null | undefined) {
   return title || '未命名文案'
 }
 
+function explainPreviewError(errorMessage: string) {
+  if (!errorMessage.trim()) return '这条目前没有报错。'
+  if (errorMessage.includes('排程时间太近') || errorMessage.includes('已过期')) {
+    return '这条时间已经过了。先重新点一次“预览发送”，再马上点“开始发送”。'
+  }
+  if (errorMessage.includes('目标群内没有已加入且可发送的账号')) {
+    return '这个群还没绑到可发送账号。先把群重新绑定到左边当前账号。'
+  }
+  if (errorMessage.includes('缺少可用的 @username') || errorMessage.includes('缺少可用的 @username、私密链接或群链接') || errorMessage.includes('无法识别这个群')) {
+    return '这个群引用不对。请检查 @username、群链接或私密链接。'
+  }
+  return errorMessage
+}
+
 function normalizeGroupRefValue(value: string) {
   return value.trim().toLowerCase()
 }
@@ -679,6 +693,27 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const selectedAccountId = selectedTargetAccountId ?? selectedTask?.accountIds[0] ?? null
   const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedAccountId) ?? null, [accounts, selectedAccountId])
   const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTask?.id), [previewItems, selectedTask])
+  const previewSummary = useMemo(() => {
+    const successCount = selectedPreview.filter((item) => item.status === 'scheduled').length
+    const failedItems = selectedPreview.filter((item) => item.status === 'failed')
+    const pendingCount = selectedPreview.length - successCount - failedItems.length
+    const expiredCount = failedItems.filter((item) => item.errorMessage.includes('排程时间太近') || item.errorMessage.includes('已过期')).length
+    const unboundGroupNames = Array.from(new Set(failedItems
+      .filter((item) => item.errorMessage.includes('目标群内没有已加入且可发送的账号'))
+      .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
+    const invalidRefGroupNames = Array.from(new Set(failedItems
+      .filter((item) => item.errorMessage.includes('缺少可用的 @username') || item.errorMessage.includes('缺少可用的 @username、私密链接或群链接') || item.errorMessage.includes('无法识别这个群'))
+      .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
+    return {
+      total: selectedPreview.length,
+      successCount,
+      failedCount: failedItems.length,
+      pendingCount,
+      expiredCount,
+      unboundGroupNames,
+      invalidRefGroupNames
+    }
+  }, [groups, selectedPreview])
   const selectedAccountGroups = useMemo(() => {
     if (!selectedAccountId) return []
     return groups.filter((group) => group.accountIds.includes(selectedAccountId))
@@ -955,6 +990,40 @@ const BroadcastConsole = memo(function BroadcastConsole() {
           {lastActionMessage ? <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage}</div> : null}
           {errorMessage ? <div className="mt-3 rounded-[14px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
 
+          {selectedPreview.length > 0 ? (
+            <div className="mt-4 space-y-3">
+              <div className="rounded-[18px] border border-violet-400/15 bg-violet-400/8 p-4">
+                <div className="text-sm font-semibold text-white">你现在只看这里</div>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-[14px] bg-panel px-4 py-3">
+                    <div className="text-xs text-textMuted">成功</div>
+                    <div className="mt-1 text-xl font-semibold text-emerald-300">{previewSummary.successCount} 条</div>
+                  </div>
+                  <div className="rounded-[14px] bg-panel px-4 py-3">
+                    <div className="text-xs text-textMuted">失败</div>
+                    <div className="mt-1 text-xl font-semibold text-rose-300">{previewSummary.failedCount} 条</div>
+                  </div>
+                  <div className="rounded-[14px] bg-panel px-4 py-3">
+                    <div className="text-xs text-textMuted">待发送</div>
+                    <div className="mt-1 text-xl font-semibold text-slate-200">{previewSummary.pendingCount} 条</div>
+                  </div>
+                </div>
+              </div>
+
+              {previewSummary.failedCount > 0 ? (
+                <div className="rounded-[18px] border border-rose-400/15 bg-rose-400/8 p-4">
+                  <div className="text-sm font-semibold text-white">先处理这几个问题</div>
+                  <div className="mt-3 space-y-2 text-sm text-rose-100">
+                    {previewSummary.expiredCount > 0 ? <div>1）有 {previewSummary.expiredCount} 条已经过期：先重新点“预览发送”，再马上点“开始发送”。</div> : null}
+                    {previewSummary.unboundGroupNames.length > 0 ? <div>2）这些群还没绑好发送账号：{previewSummary.unboundGroupNames.join('、')}</div> : null}
+                    {previewSummary.invalidRefGroupNames.length > 0 ? <div>3）这些群的群链接 / 私密链接还不对：{previewSummary.invalidRefGroupNames.join('、')}</div> : null}
+                    {previewSummary.expiredCount === 0 && previewSummary.unboundGroupNames.length === 0 && previewSummary.invalidRefGroupNames.length === 0 ? <div>有失败项，但不是上面这两类常见问题，往下看单条报错就行。</div> : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-4 max-h-[820px] space-y-3 overflow-y-auto pr-1">
             {selectedPreview.length === 0 ? (
               <div className="flex min-h-[260px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">还没有运行日志，先点上面的“预览发送”或“开始 / 启动发送”。</div>
@@ -975,7 +1044,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     {item.remoteMessageId ? <div>消息 ID：{item.remoteMessageId}</div> : null}
                     {item.syncedAt ? <div>写入时间：{formatDateTimeFull(item.syncedAt)}</div> : null}
                   </div>
-                  {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200">{item.errorMessage}</div> : null}
+                  {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200">{explainPreviewError(item.errorMessage)}</div> : null}
                 </div>
               )
             })}
