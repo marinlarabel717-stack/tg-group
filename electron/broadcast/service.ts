@@ -1,3 +1,4 @@
+import { Api } from 'telegram'
 import { CustomFile } from 'telegram/client/uploads'
 import type { TelegramClient } from 'telegram'
 import type { AccountRecord } from '../accounts/types'
@@ -14,13 +15,14 @@ function formatBroadcastError(error: unknown) {
   if (!normalized) return '写入 Telegram 定时消息失败'
   if (/USERNAME_INVALID/i.test(normalized)) return '群组 @username 不合法'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '群组 @username 不存在'
-  if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '当前账号无法识别这个群，请确认 @username 或群链接正确'
+  if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '当前账号无法识别这个群，请确认 @username、私密链接或群链接正确'
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '当前账号没有该群的发言/排程权限'
-  if (/USER_NOT_PARTICIPANT/i.test(normalized)) return '当前账号尚未加入这个群'
+  if (/USER_NOT_PARTICIPANT/i.test(normalized)) return '当前账号尚未加入这个群或这个私密链接无权访问'
   if (/SCHEDULE_TOO_MUCH/i.test(normalized)) return '该聊天的官方定时消息已达到上限，请先去 Telegram 清理一部分'
   if (/SCHEDULE_DATE_TOO_LATE/i.test(normalized)) return '排程时间超出 Telegram 允许范围'
   if (/SCHEDULE_DATE_INVALID|MSG_ID_INVALID/i.test(normalized)) return '排程时间无效，请改成未来时间再试'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '当前账号 Session 已失效，请重新登录该账号'
+  if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '私密链接无效、已过期，或当前账号无法使用这个链接'
   if (/FLOOD_WAIT_(\d+)/i.test(normalized)) {
     const matched = normalized.match(/FLOOD_WAIT_(\d+)/i)
     return matched ? `触发 Telegram 限流，请 ${matched[1]} 秒后再试` : '触发 Telegram 限流，请稍后再试'
@@ -28,14 +30,38 @@ function formatBroadcastError(error: unknown) {
   return normalized
 }
 
+function extractInviteHash(input: string) {
+  const raw = input.trim()
+  if (!raw) return ''
+  const plusMatched = raw.match(/(?:https?:\/\/)?t\.me\/(?:joinchat\/|\+)([^/?#]+)/i)
+  if (plusMatched?.[1]) return plusMatched[1].trim()
+  return ''
+}
+
 function normalizeGroupRef(input: string) {
   const raw = input.trim()
   if (!raw) return null
+  const inviteHash = extractInviteHash(raw)
+  if (inviteHash) {
+    return { kind: 'invite' as const, value: inviteHash }
+  }
   const linkMatched = raw.match(/(?:https?:\/\/)?t\.me\/([^/?#]+)/i)
   const candidate = (linkMatched?.[1] ?? raw).trim()
   if (!candidate) return null
-  if (/^-?\d+$/.test(candidate)) return Number(candidate)
-  return candidate.startsWith('@') ? candidate : `@${candidate.replace(/^@+/, '')}`
+  if (/^-?\d+$/.test(candidate)) return { kind: 'peer' as const, value: Number(candidate) }
+  return { kind: 'username' as const, value: candidate.startsWith('@') ? candidate : `@${candidate.replace(/^@+/, '')}` }
+}
+
+async function resolveGroupEntity(client: TelegramClient, groupRef: ReturnType<typeof normalizeGroupRef>) {
+  if (!groupRef) return null
+  if (groupRef.kind === 'invite') {
+    const invite = await client.invoke(new Api.messages.CheckChatInvite({ hash: groupRef.value }))
+    if ((invite as { className?: string }).className === 'ChatInviteAlready') {
+      return (invite as { chat?: unknown }).chat ?? null
+    }
+    throw new Error('USER_NOT_PARTICIPANT')
+  }
+  return client.getEntity(groupRef.value as never)
 }
 
 function inferImageExtension(mimeType: string) {
@@ -155,9 +181,9 @@ export class BroadcastService {
           continue
         }
 
-        const groupRef = normalizeGroupRef(group.username)
+        const groupRef = normalizeGroupRef(group.targetRef || group.username)
         if (!groupRef) {
-          results.push(this.createFailedItem(item, `目标群 ${group.title} 缺少可用的 @username 或 t.me 链接`))
+          results.push(this.createFailedItem(item, `目标群 ${group.title} 缺少可用的 @username、私密链接或群链接`))
           continue
         }
 
@@ -168,10 +194,10 @@ export class BroadcastService {
             clients.set(account.id, client)
           }
 
-          const entityKey = `${account.id}:${String(groupRef)}`
+          const entityKey = `${account.id}:${groupRef.kind}:${String(groupRef.value)}`
           let entity = entityCache.get(entityKey)
           if (!entity) {
-            entity = await client.getEntity(groupRef as never)
+            entity = await resolveGroupEntity(client, groupRef)
             entityCache.set(entityKey, entity)
           }
 
@@ -243,6 +269,7 @@ export class BroadcastService {
             peerId,
             title,
             username,
+            targetRef: username || peerId,
             memberCount: participants,
             type: dialog.isChannel ? 'supergroup' : 'group'
           } satisfies BroadcastJoinedGroup

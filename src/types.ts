@@ -318,6 +318,7 @@ export interface BroadcastGroupPayload {
   id: string
   title: string
   username: string
+  targetRef: string
   memberCount: number
   enabled: boolean
   accountIds: number[]
@@ -365,6 +366,7 @@ export interface BroadcastJoinedGroup {
   peerId: string
   title: string
   username: string
+  targetRef: string
   memberCount: number
   type: 'group' | 'supergroup'
 }

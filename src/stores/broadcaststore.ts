@@ -21,6 +21,7 @@ export interface BroadcastGroupTarget {
   id: string
   title: string
   username: string
+  targetRef: string
   memberCount: number
   enabled: boolean
   accountIds: number[]
@@ -81,7 +82,7 @@ interface BroadcastState {
   toggleTaskCreative: (taskId: string, creativeId: string) => void
   createCreative: () => void
   updateCreative: (creativeId: string, patch: Partial<BroadcastCreative>) => void
-  createGroup: (payload: { title: string; username: string; memberCount: number }) => void
+  createGroup: (payload: { title: string; username: string; targetRef?: string; memberCount: number }) => void
   updateGroup: (groupId: string, patch: Partial<BroadcastGroupTarget>) => void
   toggleGroupAccount: (groupId: string, accountId: number) => void
   setSelectedTargetAccountId: (accountId: number | null) => void
@@ -380,11 +381,14 @@ export const useBroadcastStore = create<BroadcastState>()(
       updateCreative: (creativeId, patch) => set((state) => ({
         creatives: state.creatives.map((item) => item.id === creativeId ? { ...item, ...patch } : item)
       })),
-      createGroup: ({ title, username, memberCount }) => {
+      createGroup: ({ title, username, targetRef, memberCount }) => {
+        const normalizedUsername = username.trim()
+        const normalizedTargetRef = (targetRef ?? username).trim()
         const nextGroup: BroadcastGroupTarget = {
           id: createId('group'),
           title: title.trim() || '新群组',
-          username: username.trim(),
+          username: normalizedUsername,
+          targetRef: normalizedTargetRef,
           memberCount: Number(memberCount) || 0,
           enabled: true,
           accountIds: []
@@ -434,8 +438,13 @@ export const useBroadcastStore = create<BroadcastState>()(
       },
       attachJoinedGroupToAccount: (accountId, group) => set((state) => {
         const normalizedIncomingUsername = normalizeUsername(group.username)
+        const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
         const matched = state.groups.find((item) => {
           const normalizedExistingUsername = normalizeUsername(item.username)
+          const existingTargetRef = (item.targetRef || item.username || '').trim()
+          if (incomingTargetRef && existingTargetRef && incomingTargetRef === existingTargetRef) {
+            return true
+          }
           if (normalizedIncomingUsername && normalizedExistingUsername) {
             return normalizedExistingUsername === normalizedIncomingUsername
           }
@@ -450,6 +459,7 @@ export const useBroadcastStore = create<BroadcastState>()(
                 ...item,
                 title: group.title || item.title,
                 username: group.username || item.username,
+                targetRef: incomingTargetRef || item.targetRef || item.username,
                 memberCount: group.memberCount || item.memberCount,
                 enabled: true,
                 accountIds: item.accountIds.includes(accountId) ? item.accountIds : [...item.accountIds, accountId]
@@ -462,6 +472,7 @@ export const useBroadcastStore = create<BroadcastState>()(
           id: createId('group'),
           title: group.title,
           username: group.username,
+          targetRef: incomingTargetRef,
           memberCount: group.memberCount,
           enabled: true,
           accountIds: [accountId]
@@ -559,10 +570,20 @@ export const useBroadcastStore = create<BroadcastState>()(
     }),
     {
       name: 'tg-group-broadcast-workbench',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => localStorage),
       migrate: (persistedState: any) => ({
         ...persistedState,
+        groups: Array.isArray(persistedState?.groups)
+          ? persistedState.groups.map((group: any) => ({
+            ...group,
+            targetRef: typeof group?.targetRef === 'string' && group.targetRef.trim()
+              ? group.targetRef
+              : typeof group?.username === 'string'
+                ? group.username
+                : ''
+          }))
+          : [],
         previewItems: normalizePreviewItems(Array.isArray(persistedState?.previewItems) ? persistedState.previewItems : []),
         selectedTargetAccountId: null,
         joinedGroups: [],

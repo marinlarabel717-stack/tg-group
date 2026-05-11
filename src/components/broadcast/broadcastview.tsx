@@ -536,13 +536,17 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
               ) : (
                 <div className="grid gap-3 lg:grid-cols-2">
                   {joinedGroups.map((group) => {
-                    const exists = groups.some((item) => (item.username && group.username && item.username.toLowerCase() === group.username.toLowerCase()) || item.title === group.title)
+                    const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
+                    const exists = groups.some((item) => {
+                      const existingTargetRef = (item.targetRef || item.username || '').trim()
+                      return (incomingTargetRef && existingTargetRef && incomingTargetRef === existingTargetRef) || item.title === group.title
+                    })
                     return (
                       <div key={`${group.peerId}:${group.username || group.title}`} className={`rounded-[20px] border p-4 transition ${exists ? 'border-emerald-400/25 bg-emerald-400/8' : 'border-white/8 bg-panel'}`}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate text-base font-semibold text-white">{group.title}</div>
-                            <div className="mt-1 text-xs text-textMuted">{group.username || '没有 @username'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
+                            <div className="mt-1 text-xs text-textMuted">{group.username || group.targetRef || '私密群 / 无公开用户名'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
                           </div>
                           {exists ? <CheckCircle2 size={18} className="shrink-0 text-emerald-300" /> : null}
                         </div>
@@ -578,7 +582,7 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
                   <div key={group.id} className="flex items-center justify-between gap-3 rounded-[18px] bg-panel px-4 py-4">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-white">{group.title}</div>
-                      <div className="mt-1 text-xs text-textMuted">{group.username || '没有 @username'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
+                      <div className="mt-1 text-xs text-textMuted">{group.username || group.targetRef || '私密群 / 无公开用户名'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
                     </div>
                     <label className="flex shrink-0 items-center gap-2 text-xs text-textMuted">
                       启用
@@ -594,9 +598,9 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
               <div className="mt-1 text-sm text-textMuted">如果某个群没读出来，再手动补。</div>
               <div className="mt-4 space-y-3">
                 <label className="block space-y-2 text-sm"><span className="text-textMuted">群名称</span><input value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                <label className="block space-y-2 text-sm"><span className="text-textMuted">群 @username</span><input value={groupUsername} onChange={(event) => setGroupUsername(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <label className="block space-y-2 text-sm"><span className="text-textMuted">群目标引用</span><input value={groupUsername} onChange={(event) => setGroupUsername(event.target.value)} placeholder="@username / t.me/... / 私密邀请链接" className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                 <label className="block space-y-2 text-sm"><span className="text-textMuted">成员数</span><input type="number" value={groupMembers} onChange={(event) => setGroupMembers(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                <button type="button" onClick={() => { createGroup({ title: groupTitle, username: groupUsername, memberCount: Number(groupMembers) || 0 }); setGroupTitle(''); setGroupUsername(''); setGroupMembers('0') }} className="flex w-full items-center justify-center gap-2 rounded-[12px] bg-white/[0.06] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.1]">
+                <button type="button" onClick={() => { createGroup({ title: groupTitle, username: groupUsername, targetRef: groupUsername, memberCount: Number(groupMembers) || 0 }); setGroupTitle(''); setGroupUsername(''); setGroupMembers('0') }} className="flex w-full items-center justify-center gap-2 rounded-[12px] bg-white/[0.06] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.1]">
                   <Plus size={16} /> 手动添加
                 </button>
               </div>
@@ -777,7 +781,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                 ) : selectedAccountGroups.map((group) => (
                   <div key={group.id} className="rounded-[12px] bg-white/[0.04] px-3 py-2">
                     <div className="text-sm text-white">{group.title}</div>
-                    <div className="mt-1 text-xs text-textMuted">{group.username || '没有 @username'}</div>
+                    <div className="mt-1 text-xs text-textMuted">{group.username || group.targetRef || '私密群 / 无公开用户名'}</div>
                   </div>
                 ))}
               </div>
@@ -815,7 +819,11 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   {joinedGroups.length === 0 ? (
                     <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted lg:col-span-2">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
                   ) : joinedGroups.map((group) => {
-                    const matchedGroup = groups.find((item) => ((item.username && group.username && item.username.toLowerCase() === group.username.toLowerCase()) || item.title === group.title))
+                    const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
+                    const matchedGroup = groups.find((item) => {
+                      const existingTargetRef = (item.targetRef || item.username || '').trim()
+                      return (incomingTargetRef && existingTargetRef && incomingTargetRef === existingTargetRef) || item.title === group.title
+                    })
                     const exists = Boolean(matchedGroup && selectedAccountGroups.some((item) => item.id === matchedGroup.id))
                     const checked = Boolean(matchedGroup && selectedTask.groupIds.includes(matchedGroup.id))
                     return (
@@ -823,7 +831,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-semibold text-white">{group.title}</div>
-                            <div className="mt-1 text-xs text-textMuted">{group.username || '没有 @username'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
+                            <div className="mt-1 text-xs text-textMuted">{group.username || group.targetRef || '私密群 / 无公开用户名'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
                           </div>
                           {exists ? <CheckCircle2 size={18} className="shrink-0 text-emerald-300" /> : null}
                         </div>
