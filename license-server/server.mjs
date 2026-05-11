@@ -106,6 +106,12 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, message: '卡密创建成功。', item })
     }
 
+    if (req.method === 'POST' && pathname === '/api/admin/cards/batch-create') {
+      const body = await readJsonBody(req)
+      const items = service.createCardsBatch(body)
+      return json(res, 200, { ok: true, message: `批量创建成功，共 ${items.length} 张卡密。`, items })
+    }
+
     if (req.method === 'POST' && pathname === '/api/admin/cards/disable') {
       const body = await readJsonBody(req)
       const item = service.disableCard({

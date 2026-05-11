@@ -16,6 +16,10 @@ export function randomToken(size = 32) {
   return randomBytes(size).toString('hex')
 }
 
+export function randomCardKeyChunk(size = 3) {
+  return randomBytes(size).toString('hex').toUpperCase()
+}
+
 export function maskCardKey(value) {
   const trimmed = String(value || '').trim()
   if (!trimmed) return ''

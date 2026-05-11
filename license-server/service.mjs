@@ -1,5 +1,5 @@
 import { openLicenseDatabase } from './db.mjs'
-import { addDaysIso, maskCardKey, normalizeCardKey, nowIso, randomToken, sha256 } from './utils.mjs'
+import { addDaysIso, maskCardKey, normalizeCardKey, nowIso, randomCardKeyChunk, randomToken, sha256 } from './utils.mjs'
 
 function toTimestamp(value) {
   if (!value) return null
@@ -11,6 +11,16 @@ function nextExpiryIso(currentExpireAt, days) {
   const current = toTimestamp(currentExpireAt)
   const base = current && current > Date.now() ? current : Date.now()
   return addDaysIso(days, base)
+}
+
+function sanitizeBatchPrefix(value) {
+  const normalized = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-')
+  return normalized.replace(/^-+|-+$/g, '') || 'TG'
+}
+
+function buildBatchCardKey(prefix) {
+  const date = new Date().toISOString().slice(2, 10).replace(/-/g, '')
+  return `${sanitizeBatchPrefix(prefix)}-${date}-${randomCardKeyChunk(3)}`
 }
 
 export class LicenseServerService {
@@ -209,6 +219,43 @@ export class LicenseServerService {
       data.licenseKeys.push(card)
       this.log(data, card.id, null, 'create-card', 'success', `创建卡密：${maskCardKey(normalizedCardKey)}`)
       return this.toCardSummary(card, data)
+    })
+  }
+
+  createCardsBatch({ prefix = 'TG', count = 10, days = 30, maxDevices = 1, note = '' }) {
+    return this.db.transaction((data) => {
+      const total = Math.max(1, Math.min(500, Number(count) || 0))
+      const items = []
+      const existing = new Set(data.licenseKeys.map((item) => item.card_key))
+      for (let i = 0; i < total; i += 1) {
+        let normalizedCardKey = ''
+        let attempts = 0
+        do {
+          attempts += 1
+          normalizedCardKey = normalizeCardKey(buildBatchCardKey(prefix))
+        } while (existing.has(normalizedCardKey) && attempts < 20)
+        if (!normalizedCardKey || existing.has(normalizedCardKey)) {
+          throw new Error('批量生成卡密时出现重复冲突，请重试。')
+        }
+        existing.add(normalizedCardKey)
+        data.counters.licenseId += 1
+        const card = {
+          id: data.counters.licenseId,
+          card_key: normalizedCardKey,
+          status: 'active',
+          duration_days: Number(days),
+          expire_at: null,
+          max_devices: Number(maxDevices),
+          created_at: nowIso(),
+          activated_at: null,
+          last_validated_at: null,
+          note: note || null
+        }
+        data.licenseKeys.push(card)
+        this.log(data, card.id, null, 'create-card', 'success', `批量创建卡密：${maskCardKey(normalizedCardKey)}`)
+        items.push(this.toCardSummary(card, data))
+      }
+      return items
     })
   }
 
