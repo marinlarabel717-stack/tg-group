@@ -739,12 +739,9 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     <>
       <div className="grid gap-5 xl:grid-cols-[280px_minmax(560px,1fr)_360px]">
         <GlassPanel className="bg-card">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-lg font-semibold text-white">第 1 步：选择账号</div>
-              <div className="mt-1 text-sm text-textMuted">先选发送账号，再去读这个账号已经加入的群。</div>
-            </div>
-            <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">已选 {selectedAccounts.length}</div>
+          <div>
+            <div className="text-lg font-semibold text-white">第 1 步：选择账号</div>
+            <div className="mt-1 text-sm text-textMuted">先选发送账号，再去读这个账号已经加入的群。</div>
           </div>
 
           <div className="mt-4 space-y-4">
@@ -769,10 +766,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
             </div>
 
             <div className="rounded-[18px] bg-panel p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-white">已选账号</div>
-                <div className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] text-textMuted">{selectedAccounts.length} 个</div>
-              </div>
+              <div className="text-sm font-semibold text-white">已选账号</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {selectedAccounts.length === 0 ? (
                   <div className="text-sm text-textMuted">还没选择发送账号。</div>
