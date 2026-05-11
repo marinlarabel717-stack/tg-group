@@ -598,6 +598,266 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
   )
 })
 
+const BroadcastConsole = memo(function BroadcastConsole() {
+  const accounts = useAccountStore((state) => state.accounts)
+  const tasks = useBroadcastStore((state) => state.tasks)
+  const groups = useBroadcastStore((state) => state.groups)
+  const creatives = useBroadcastStore((state) => state.creatives)
+  const previewItems = useBroadcastStore((state) => state.previewItems)
+  const selectedTaskId = useBroadcastStore((state) => state.selectedTaskId)
+  const selectedTargetAccountId = useBroadcastStore((state) => state.selectedTargetAccountId)
+  const joinedGroups = useBroadcastStore((state) => state.joinedGroups)
+  const loadingJoinedGroups = useBroadcastStore((state) => state.loadingJoinedGroups)
+  const syncing = useBroadcastStore((state) => state.syncing)
+  const errorMessage = useBroadcastStore((state) => state.errorMessage)
+  const lastActionMessage = useBroadcastStore((state) => state.lastActionMessage)
+  const selectTask = useBroadcastStore((state) => state.selectTask)
+  const updateTask = useBroadcastStore((state) => state.updateTask)
+  const setSelectedTargetAccountId = useBroadcastStore((state) => state.setSelectedTargetAccountId)
+  const loadJoinedGroupsForAccount = useBroadcastStore((state) => state.loadJoinedGroupsForAccount)
+  const attachJoinedGroupToAccount = useBroadcastStore((state) => state.attachJoinedGroupToAccount)
+  const generatePreview = useBroadcastStore((state) => state.generatePreview)
+  const pushScheduleToTelegram = useBroadcastStore((state) => state.pushScheduleToTelegram)
+  const clearPreview = useBroadcastStore((state) => state.clearPreview)
+
+  const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? tasks[0] ?? null, [selectedTaskId, tasks])
+
+  useEffect(() => {
+    if (!selectedTaskId && tasks[0]) {
+      selectTask(tasks[0].id)
+    }
+  }, [selectedTaskId, selectTask, tasks])
+
+  const selectedAccountId = selectedTargetAccountId ?? selectedTask?.accountIds[0] ?? null
+  const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedAccountId) ?? null, [accounts, selectedAccountId])
+  const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTask?.id), [previewItems, selectedTask])
+  const selectedAccountGroups = useMemo(() => {
+    if (!selectedAccountId) return []
+    return groups.filter((group) => group.accountIds.includes(selectedAccountId))
+  }, [groups, selectedAccountId])
+
+  useEffect(() => {
+    if (selectedTask?.accountIds[0] && selectedTargetAccountId == null) {
+      setSelectedTargetAccountId(selectedTask.accountIds[0])
+    }
+  }, [selectedTargetAccountId, selectedTask, setSelectedTargetAccountId])
+
+  const handleAccountChange = async (accountId: number) => {
+    setSelectedTargetAccountId(accountId)
+    if (selectedTask) {
+      updateTask(selectedTask.id, { accountIds: [accountId] })
+    }
+    await loadJoinedGroupsForAccount(accountId)
+  }
+
+  const toggleSendGroup = (groupId: string) => {
+    if (!selectedTask) return
+    const next = selectedTask.groupIds.includes(groupId)
+      ? selectedTask.groupIds.filter((item) => item !== groupId)
+      : [...selectedTask.groupIds, groupId]
+    updateTask(selectedTask.id, { groupIds: next })
+  }
+
+  const toggleCreative = (creativeId: string) => {
+    if (!selectedTask) return
+    const next = selectedTask.creativeIds.includes(creativeId)
+      ? selectedTask.creativeIds.filter((item) => item !== creativeId)
+      : [...selectedTask.creativeIds, creativeId]
+    updateTask(selectedTask.id, { creativeIds: next })
+  }
+
+  return (
+    <div className="grid gap-5 xl:grid-cols-[280px_minmax(560px,1fr)_360px]">
+      <GlassPanel className="bg-card">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-lg font-semibold text-white">账号列表</div>
+            <div className="mt-1 text-sm text-textMuted">点一下下拉框再选账号，不再整页铺开。</div>
+          </div>
+          <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{accounts.length} 个</div>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <label className="block space-y-2 text-sm">
+            <span className="text-textMuted">选择账号</span>
+            <select
+              value={selectedAccountId ?? ''}
+              onChange={(event) => {
+                const value = Number(event.target.value)
+                if (value) void handleAccountChange(value)
+              }}
+              className="w-full rounded-[14px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30"
+            >
+              <option value="">请选择一个账号</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>{account.username || account.phone || `账号#${account.id}`}</option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="button"
+            disabled={!selectedAccountId || loadingJoinedGroups}
+            onClick={() => selectedAccountId ? void loadJoinedGroupsForAccount(selectedAccountId) : undefined}
+            className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-white/[0.06] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw size={16} className={loadingJoinedGroups ? 'animate-spin' : ''} />
+            {loadingJoinedGroups ? '正在读取群...' : '重新读取群列表'}
+          </button>
+
+          <div className="rounded-[18px] bg-panel p-4">
+            <div className="text-xs tracking-[0.18em] text-textMuted">当前账号</div>
+            <div className="mt-2 text-base font-semibold text-white">{selectedAccount ? (selectedAccount.username || selectedAccount.phone || `账号#${selectedAccount.id}`) : '还没选择账号'}</div>
+            <div className="mt-2 text-sm text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '未识别'} · ${formatAccountStatus(selectedAccount.status)}` : '先从上面的账号列表里选择一个账号。'}</div>
+          </div>
+
+          <div className="rounded-[18px] bg-panel p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold text-white">已绑定目标群</div>
+              <div className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] text-textMuted">{selectedAccountGroups.length} 个</div>
+            </div>
+            <div className="mt-3 space-y-2">
+              {selectedAccountGroups.length === 0 ? (
+                <div className="text-sm text-textMuted">这个账号还没选中任何群。</div>
+              ) : selectedAccountGroups.map((group) => (
+                <div key={group.id} className="rounded-[12px] bg-white/[0.04] px-3 py-2">
+                  <div className="text-sm text-white">{group.title}</div>
+                  <div className="mt-1 text-xs text-textMuted">{group.username || '没有 @username'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </GlassPanel>
+
+      <div className="space-y-5">
+        <GlassPanel className="bg-card sticky top-4 z-10">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <div className="text-lg font-semibold text-white">发送配置</div>
+              <div className="mt-1 text-sm text-textMuted">开始发送按钮固定放在上面，不用再拉到最底部。</div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
+                <RefreshCw size={16} /> 预览发送
+              </button>
+              <button type="button" disabled={syncing} onClick={() => void pushScheduleToTelegram()} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/14 px-4 py-3 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-60">
+                <Send size={16} /> {syncing ? '正在启动...' : '开始 / 启动发送'}
+              </button>
+              <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.09]">清空日志</button>
+            </div>
+          </div>
+        </GlassPanel>
+
+        {!selectedTask ? (
+          <GlassPanel className="bg-card"><div className="text-sm text-textMuted">当前没有可用发送配置。</div></GlassPanel>
+        ) : (
+          <>
+            <GlassPanel className="bg-card">
+              <div className="text-lg font-semibold text-white">群数据</div>
+              <div className="mt-1 text-sm text-textMuted">左边选账号后，这里显示它已加入的群。勾上就是本次发送要用的群。</div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {joinedGroups.length === 0 ? (
+                  <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted lg:col-span-2">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
+                ) : joinedGroups.map((group) => {
+                  const exists = selectedAccountGroups.some((item) => (item.username && group.username && item.username.toLowerCase() === group.username.toLowerCase()) || item.title === group.title)
+                  const checked = selectedTask.groupIds.includes(groups.find((item) => ((item.username && group.username && item.username.toLowerCase() === group.username.toLowerCase()) || item.title === group.title))?.id || '')
+                  const matchedGroup = groups.find((item) => ((item.username && group.username && item.username.toLowerCase() === group.username.toLowerCase()) || item.title === group.title))
+                  return (
+                    <div key={`${group.peerId}:${group.username || group.title}`} className={`rounded-[18px] border p-4 ${checked ? 'border-violet-400/30 bg-violet-400/8' : 'border-white/8 bg-panel'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-white">{group.title}</div>
+                          <div className="mt-1 text-xs text-textMuted">{group.username || '没有 @username'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
+                        </div>
+                        {exists ? <CheckCircle2 size={18} className="shrink-0 text-emerald-300" /> : null}
+                      </div>
+                      <div className="mt-4 flex gap-2">
+                        <button type="button" onClick={() => selectedAccount && attachJoinedGroupToAccount(selectedAccount.id, group)} className={`flex-1 rounded-[12px] px-3 py-2 text-sm transition ${exists ? 'bg-emerald-400/12 text-emerald-300' : 'bg-white/[0.06] text-white hover:bg-white/[0.1]'}`}>
+                          {exists ? '已加入目标群' : '加入目标群'}
+                        </button>
+                        <button type="button" disabled={!matchedGroup} onClick={() => matchedGroup ? toggleSendGroup(matchedGroup.id) : undefined} className="flex-1 rounded-[12px] bg-violet-400/12 px-3 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-50">
+                          {checked ? '取消发送' : '加入发送'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </GlassPanel>
+
+            <GlassPanel className="bg-card">
+              <div className="text-lg font-semibold text-white">发送配置</div>
+              <div className="mt-1 text-sm text-textMuted">中间只留真正会影响发送的配置。</div>
+              <div className="mt-4 grid gap-4 md:grid-cols-4">
+                <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">结束时间</span><input type="time" value={selectedTask.endTime} onChange={(event) => updateTask(selectedTask.id, { endTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-[220px_1fr]">
+                <label className="space-y-2 text-sm"><span className="text-textMuted">随机抖动（分钟）</span><input type="number" min={0} max={30} value={selectedTask.jitterMinutes} onChange={(event) => updateTask(selectedTask.id, { jitterMinutes: Number(event.target.value) || 0 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <div>
+                  <div className="mb-2 text-sm text-textMuted">发送文案</div>
+                  <div className="flex flex-wrap gap-2 rounded-[16px] bg-panel p-3">
+                    {creatives.map((creative) => {
+                      const checked = selectedTask.creativeIds.includes(creative.id)
+                      return (
+                        <button key={creative.id} type="button" onClick={() => toggleCreative(creative.id)} className={`rounded-full px-3 py-2 text-sm transition ${checked ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.05] text-textMuted hover:bg-white/[0.1] hover:text-white'}`}>
+                          {creative.title}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </GlassPanel>
+          </>
+        )}
+      </div>
+
+      <GlassPanel className="bg-card">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-lg font-semibold text-white">运行日志</div>
+            <div className="mt-1 text-sm text-textMuted">发送预览、写入结果、报错都放右边。</div>
+          </div>
+          <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{selectedPreview.length} 条</div>
+        </div>
+
+        {lastActionMessage ? <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage}</div> : null}
+        {errorMessage ? <div className="mt-3 rounded-[14px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
+
+        <div className="mt-4 max-h-[820px] space-y-3 overflow-y-auto pr-1">
+          {selectedPreview.length === 0 ? (
+            <div className="flex min-h-[260px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">还没有运行日志，先点上面的“预览发送”或“开始 / 启动发送”。</div>
+          ) : selectedPreview.map((item) => {
+            const creative = creatives.find((entry) => entry.id === item.creativeId)
+            const group = groups.find((entry) => entry.id === item.groupId)
+            const account = accounts.find((entry) => entry.id === item.accountId)
+            return (
+              <div key={item.id} className="rounded-[16px] bg-panel p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-white">{formatDateTimeFull(item.scheduledAt)}</div>
+                  <div className={`rounded-full px-2.5 py-1 text-[11px] ${getPreviewTone(item.status)}`}>{item.status === 'scheduled' ? '已写入' : item.status === 'failed' ? '失败' : '待发送'}</div>
+                </div>
+                <div className="mt-3 space-y-1 text-sm text-slate-200">
+                  <div>群组：{group?.title || '未匹配群组'}</div>
+                  <div>账号：{account?.username || account?.phone || '未分配账号'}</div>
+                  <div>文案：{creative?.title || '未匹配文案'}</div>
+                  {item.remoteMessageId ? <div>消息 ID：{item.remoteMessageId}</div> : null}
+                  {item.syncedAt ? <div>写入时间：{formatDateTimeFull(item.syncedAt)}</div> : null}
+                </div>
+                {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200">{item.errorMessage}</div> : null}
+              </div>
+            )
+          })}
+        </div>
+      </GlassPanel>
+    </div>
+  )
+})
+
 const CalendarWorkbench = memo(function CalendarWorkbench() {
   const previewItems = useBroadcastStore((state) => state.previewItems)
   const creatives = useBroadcastStore((state) => state.creatives)
@@ -654,8 +914,6 @@ const CalendarWorkbench = memo(function CalendarWorkbench() {
 
 export default memo(function BroadcastView() {
   const initAccounts = useAccountStore((state) => state.init)
-  const activeTab = useBroadcastStore((state) => state.activeTab)
-  const lastActionMessage = useBroadcastStore((state) => state.lastActionMessage)
 
   useEffect(() => {
     void initAccounts()
@@ -668,28 +926,13 @@ export default memo(function BroadcastView() {
           <div>
             <div className="flex items-center gap-2 text-xs tracking-[0.22em] text-violet-300"><Radio size={14} /> 官方定时消息工作台</div>
             <h1 className="mt-3 text-3xl font-semibold text-white">定时群发</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-textMuted">先用登录账号配置图文文案、目标群和发送频率，再批量写入 Telegram 官方 scheduled messages。第一版我先把任务页、文案库、目标群和排程预览都立起来。</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={() => useBroadcastStore.getState().createTask()} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18"><Plus size={16} /> 新建任务</button>
-            <button type="button" onClick={() => useBroadcastStore.getState().setActiveTab('tasks')} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/18"><Play size={16} /> 回到任务台</button>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-textMuted">现在改成更直接的操作台：左边选账号，中间看群和发送配置，右边看运行日志。</p>
           </div>
         </div>
       </GlassPanel>
 
       <BroadcastSummary />
-
-      <GlassPanel className="bg-card py-0">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <TabBar />
-          <div className="text-sm text-textMuted">{lastActionMessage}</div>
-        </div>
-      </GlassPanel>
-
-      {activeTab === 'tasks' ? <TasksWorkbench /> : null}
-      {activeTab === 'creatives' ? <CreativesWorkbench /> : null}
-      {activeTab === 'targets' ? <TargetsWorkbench /> : null}
-      {activeTab === 'calendar' ? <CalendarWorkbench /> : null}
+      <BroadcastConsole />
     </div>
   )
 })
