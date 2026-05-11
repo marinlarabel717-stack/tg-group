@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { ArrowRight, CalendarClock, CheckCircle2, CopyPlus, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Send, Users, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
@@ -34,9 +34,13 @@ function readAccountNickname(account: { username?: string; phone?: string; profi
   return '未命名账号'
 }
 
-function readCreativeTitle(creative: { title?: string } | null | undefined) {
+function readCreativeTitle(creative: { title?: string; text?: string; note?: string } | null | undefined) {
+  const text = typeof creative?.text === 'string' ? creative.text.trim() : ''
+  if (text) return text.length > 12 ? `${text.slice(0, 12)}...` : text
+  const button = typeof creative?.note === 'string' ? creative.note.trim() : ''
+  if (button) return button
   const title = typeof creative?.title === 'string' ? creative.title.trim() : ''
-  return title || '未命名文案'
+  return title || '未填写文案'
 }
 
 function explainPreviewError(errorMessage: string) {
@@ -735,6 +739,17 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     updateTask(selectedTask.id, { creativeIds: next })
   }
 
+  const handleCreativeImageUpload = (creativeId: string, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      updateCreative(creativeId, { imageUrl: typeof reader.result === 'string' ? reader.result : '' })
+    }
+    reader.readAsDataURL(file)
+    event.target.value = ''
+  }
+
   return (
     <>
       <div className="grid gap-5 xl:grid-cols-[280px_minmax(560px,1fr)_360px]">
@@ -880,11 +895,15 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                           </div>
                           <div className="text-xs text-textMuted">每日 {creative.dailyQuota} 条 · 权重 {creative.weight}</div>
                         </div>
+                        <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">文本</span><textarea rows={5} value={creative.text} onChange={(event) => updateCreative(creative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                         <div className="mt-4 grid gap-4 md:grid-cols-2">
-                          <label className="space-y-2 text-sm"><span className="text-textMuted">标题</span><input value={creative.title} onChange={(event) => updateCreative(creative.id, { title: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                          <label className="space-y-2 text-sm"><span className="text-textMuted">图片 URL</span><input value={creative.imageUrl} onChange={(event) => updateCreative(creative.id, { imageUrl: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                          <label className="space-y-2 text-sm"><span className="text-textMuted">上传图片</span><input type="file" accept="image/*" onChange={(event) => handleCreativeImageUpload(creative.id, event)} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white file:mr-3 file:rounded-[8px] file:border-0 file:bg-violet-400/14 file:px-3 file:py-2 file:text-sm file:text-violet-300" /></label>
+                          <label className="space-y-2 text-sm"><span className="text-textMuted">图文+按钮</span><input value={creative.note} onChange={(event) => updateCreative(creative.id, { note: event.target.value })} placeholder="先填按钮文案" className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                         </div>
-                        <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">正文</span><textarea rows={5} value={creative.text} onChange={(event) => updateCreative(creative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                        <div className="mt-3 flex items-center justify-between rounded-[12px] bg-card px-4 py-3 text-sm text-textMuted">
+                          <span>{creative.imageUrl ? '已上传图片' : '还没上传图片'}</span>
+                          {creative.imageUrl ? <button type="button" onClick={() => updateCreative(creative.id, { imageUrl: '' })} className="text-white transition hover:text-rose-200">删除图片</button> : null}
+                        </div>
                       </div>
                     )
                   })}
