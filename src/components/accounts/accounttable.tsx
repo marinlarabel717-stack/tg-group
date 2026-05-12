@@ -996,108 +996,108 @@ export const AccountTable = memo(function AccountTable() {
               </div>
             </div>
           )}
-        </div>
-      </GlassPanel>
 
-      {selectedCount > 0 ? (
-        <GlassPanel className="bg-card py-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between" ref={bulkMenuRef}>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleClearSelection}
-                className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-panel text-textMuted transition hover:bg-hover hover:text-white"
-                title="取消当前选中"
-              >
-                <X size={16} />
-              </button>
+          {selectedCount > 0 ? (
+            <div className="border-t border-white/5 px-3 py-3">
+              <div className="flex flex-col gap-3 rounded-[12px] bg-panel/70 px-3 py-3 lg:flex-row lg:items-center lg:justify-between" ref={bulkMenuRef}>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleClearSelection}
+                    className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-card text-textMuted transition hover:bg-hover hover:text-white"
+                    title="取消当前选中"
+                  >
+                    <X size={16} />
+                  </button>
 
-              <div className="rounded-[12px] bg-panel px-4 py-3 text-sm text-white">
-                <span className="text-textMuted">选中数量 / 总数量：</span>
-                <span className="ml-2 font-semibold">{selectedCount} / {totalCount}</span>
-              </div>
-
-              {bulkActionHint ? (
-                <div className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-textMuted">{bulkActionHint}</div>
-              ) : null}
-            </div>
-
-            <div className="relative self-end lg:self-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  setBulkMenuOpen((value) => !value)
-                  setBulkSubmenu(null)
-                }}
-                className={getBulkOperationButtonClass(true)}
-              >
-                <Sparkles size={16} />
-                操作菜单
-              </button>
-
-              {bulkMenuOpen ? (
-                <>
-                  <div className="absolute bottom-[calc(100%+12px)] right-0 z-30 w-[300px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
-                    <div className="mb-2 px-2 text-xs tracking-[0.2em] text-textMuted">已选账号操作</div>
-                    <div className="space-y-2">
-                      <button type="button" onClick={() => handleBulkCheckAction('account-status')} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
-                        <Activity size={16} className="text-neonSoft" />
-                        <span>检查账号是否双向</span>
-                      </button>
-                      <button type="button" onClick={() => handleBulkCheckAction('account-survival')} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
-                        <HeartPulse size={16} className="text-neonSoft" />
-                        <span>检查账号是否存活</span>
-                      </button>
-                      <button type="button" onClick={() => setBulkSubmenu('two-fa')} className="flex w-full items-center justify-between gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
-                        <span className="flex items-center gap-3"><KeyRound size={16} className="text-neonSoft" />2FA 管理</span>
-                        <ChevronRight size={15} className="text-textMuted" />
-                      </button>
-                      <button type="button" onClick={() => setBulkSubmenu('profile')} className="flex w-full items-center justify-between gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
-                        <span className="flex items-center gap-3"><Shuffle size={16} className="text-neonSoft" />随机更换个人资料</span>
-                        <ChevronRight size={15} className="text-textMuted" />
-                      </button>
-                    </div>
+                  <div className="rounded-[12px] bg-card px-4 py-3 text-sm text-white">
+                    <span className="text-textMuted">选中数量 / 总数量：</span>
+                    <span className="ml-2 font-semibold">{selectedCount} / {totalCount}</span>
                   </div>
 
-                  {bulkSubmenu === 'two-fa' ? (
-                    <div className="absolute bottom-[calc(100%+12px)] right-[312px] z-40 w-[260px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
-                      <div className="mb-2 flex items-center justify-between px-2">
-                        <div className="text-xs tracking-[0.2em] text-textMuted">2FA 管理</div>
-                        <button type="button" onClick={() => setBulkSubmenu(null)} className="text-xs text-textMuted transition hover:text-white">关闭</button>
-                      </div>
-                      <div className="space-y-2">
-                        {twoFaMenuItems.map((item) => (
-                          <button key={item.id} type="button" onClick={() => handlePendingBulkAction(item.label)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
-                            <KeyRound size={15} className="text-neonSoft" />
-                            <span>{item.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  {bulkActionHint ? (
+                    <div className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-textMuted">{bulkActionHint}</div>
                   ) : null}
+                </div>
 
-                  {bulkSubmenu === 'profile' ? (
-                    <div className="absolute bottom-[calc(100%+12px)] right-[312px] z-40 w-[280px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
-                      <div className="mb-2 flex items-center justify-between px-2">
-                        <div className="text-xs tracking-[0.2em] text-textMuted">个人资料</div>
-                        <button type="button" onClick={() => setBulkSubmenu(null)} className="text-xs text-textMuted transition hover:text-white">关闭</button>
-                      </div>
-                      <div className="space-y-2">
-                        {profileMenuItems.map((item) => (
-                          <button key={item.id} type="button" onClick={() => handlePendingBulkAction(item.label)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
-                            <UserRoundPen size={15} className="text-neonSoft" />
-                            <span>{item.label}</span>
+                <div className="relative self-end lg:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkMenuOpen((value) => !value)
+                      setBulkSubmenu(null)
+                    }}
+                    className={getBulkOperationButtonClass(true)}
+                  >
+                    <Sparkles size={16} />
+                    操作菜单
+                  </button>
+
+                  {bulkMenuOpen ? (
+                    <>
+                      <div className="absolute bottom-[calc(100%+12px)] right-0 z-30 w-[300px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+                        <div className="mb-2 px-2 text-xs tracking-[0.2em] text-textMuted">已选账号操作</div>
+                        <div className="space-y-2">
+                          <button type="button" onClick={() => handleBulkCheckAction('account-status')} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                            <Activity size={16} className="text-neonSoft" />
+                            <span>检查账号是否双向</span>
                           </button>
-                        ))}
+                          <button type="button" onClick={() => handleBulkCheckAction('account-survival')} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                            <HeartPulse size={16} className="text-neonSoft" />
+                            <span>检查账号是否存活</span>
+                          </button>
+                          <button type="button" onClick={() => setBulkSubmenu('two-fa')} className="flex w-full items-center justify-between gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                            <span className="flex items-center gap-3"><KeyRound size={16} className="text-neonSoft" />2FA 管理</span>
+                            <ChevronRight size={15} className="text-textMuted" />
+                          </button>
+                          <button type="button" onClick={() => setBulkSubmenu('profile')} className="flex w-full items-center justify-between gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                            <span className="flex items-center gap-3"><Shuffle size={16} className="text-neonSoft" />随机更换个人资料</span>
+                            <ChevronRight size={15} className="text-textMuted" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
+
+                      {bulkSubmenu === 'two-fa' ? (
+                        <div className="absolute bottom-[calc(100%+12px)] right-[312px] z-40 w-[260px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+                          <div className="mb-2 flex items-center justify-between px-2">
+                            <div className="text-xs tracking-[0.2em] text-textMuted">2FA 管理</div>
+                            <button type="button" onClick={() => setBulkSubmenu(null)} className="text-xs text-textMuted transition hover:text-white">关闭</button>
+                          </div>
+                          <div className="space-y-2">
+                            {twoFaMenuItems.map((item) => (
+                              <button key={item.id} type="button" onClick={() => handlePendingBulkAction(item.label)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                                <KeyRound size={15} className="text-neonSoft" />
+                                <span>{item.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {bulkSubmenu === 'profile' ? (
+                        <div className="absolute bottom-[calc(100%+12px)] right-[312px] z-40 w-[280px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+                          <div className="mb-2 flex items-center justify-between px-2">
+                            <div className="text-xs tracking-[0.2em] text-textMuted">个人资料</div>
+                            <button type="button" onClick={() => setBulkSubmenu(null)} className="text-xs text-textMuted transition hover:text-white">关闭</button>
+                          </div>
+                          <div className="space-y-2">
+                            {profileMenuItems.map((item) => (
+                              <button key={item.id} type="button" onClick={() => handlePendingBulkAction(item.label)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                                <UserRoundPen size={15} className="text-neonSoft" />
+                                <span>{item.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
                   ) : null}
-                </>
-              ) : null}
+                </div>
+              </div>
             </div>
-          </div>
-        </GlassPanel>
-      ) : null}
+          ) : null}
+        </div>
+      </GlassPanel>
 
       <TablePagination
         pageIndex={table.getState().pagination.pageIndex}
