@@ -490,6 +490,7 @@ export const AccountTable = memo(function AccountTable() {
   const [bulkActionHint, setBulkActionHint] = useState('')
   const [bulkMenuLayout, setBulkMenuLayout] = useState({ left: 16, width: 320 })
   const deferredSearch = useDeferredValue(search)
+  const tableCardRef = useRef<HTMLDivElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const scrollbarRef = useRef<HTMLDivElement | null>(null)
   const bulkMenuRef = useRef<HTMLDivElement | null>(null)
@@ -537,12 +538,12 @@ export const AccountTable = memo(function AccountTable() {
   }, [bulkActionHint])
 
   const syncBulkMenuLayout = useCallback(() => {
-    const viewport = viewportRef.current
-    if (!viewport) return
+    const tableCard = tableCardRef.current
+    if (!tableCard) return
 
-    const rect = viewport.getBoundingClientRect()
-    const nextLeft = Math.max(rect.left + 12, 16)
-    const nextWidth = Math.max(rect.width - 24, 320)
+    const rect = tableCard.getBoundingClientRect()
+    const nextLeft = Math.max(rect.left, 16)
+    const nextWidth = Math.max(Math.min(rect.width, window.innerWidth - nextLeft - 16), 320)
 
     setBulkMenuLayout((previous) => {
       if (Math.abs(previous.left - nextLeft) < 0.5 && Math.abs(previous.width - nextWidth) < 0.5) {
@@ -558,14 +559,14 @@ export const AccountTable = memo(function AccountTable() {
 
     syncBulkMenuLayout()
 
-    const viewport = viewportRef.current
+    const tableCard = tableCardRef.current
     const handleWindowResize = () => syncBulkMenuLayout()
-    const resizeObserver = typeof ResizeObserver !== 'undefined' && viewport
+    const resizeObserver = typeof ResizeObserver !== 'undefined' && tableCard
       ? new ResizeObserver(() => syncBulkMenuLayout())
       : null
 
-    if (viewport && resizeObserver) {
-      resizeObserver.observe(viewport)
+    if (tableCard && resizeObserver) {
+      resizeObserver.observe(tableCard)
     }
 
     window.addEventListener('resize', handleWindowResize)
@@ -944,7 +945,8 @@ export const AccountTable = memo(function AccountTable() {
         onRefresh={handleRefresh}
       />
 
-      <GlassPanel className="overflow-hidden p-0">
+      <div ref={tableCardRef}>
+        <GlassPanel className="overflow-hidden p-0">
         <div className="min-w-0">
           <div
             ref={viewportRef}
@@ -1044,7 +1046,8 @@ export const AccountTable = memo(function AccountTable() {
           )}
 
         </div>
-      </GlassPanel>
+        </GlassPanel>
+      </div>
 
       {selectedCount > 0 && typeof document !== 'undefined'
         ? createPortal(
