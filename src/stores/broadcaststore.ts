@@ -703,17 +703,25 @@ export const useBroadcastStore = create<BroadcastState>()(
           return
         }
 
+        const sanitizedItems = candidateItems.map((item) => ({
+          ...item,
+          repeatPeriodSeconds: task.scheduleMode === 'daily_repeat' ? (item.repeatPeriodSeconds ?? 24 * 60 * 60) : null
+        }))
+
         const payload: BroadcastPushSchedulePayload = {
-          items: candidateItems,
+          items: sanitizedItems,
           creatives: state.creatives,
           groups: state.groups
         }
 
         if (!window.desktopBroadcast?.pushSchedule) {
           set((current) => ({
-            previewItems: current.previewItems.map((item) => candidateItems.some((entry) => entry.id === item.id)
-              ? { ...item, status: 'scheduled', syncedAt: new Date().toISOString(), errorMessage: '' }
-              : item),
+            previewItems: current.previewItems.map((item) => {
+              const matched = sanitizedItems.find((entry) => entry.id === item.id)
+              return matched
+                ? { ...item, status: 'scheduled', syncedAt: new Date().toISOString(), errorMessage: '', repeatPeriodSeconds: matched.repeatPeriodSeconds }
+                : item
+            }),
             tasks: current.tasks.map((item) => item.id === task.id ? { ...item, status: 'active', lastSyncedAt: new Date().toISOString() } : item),
             errorMessage: '',
             lastActionMessage: '当前环境未注入桌面排程 API，已按本地模拟模式标记为已写入。'
@@ -780,7 +788,15 @@ export const useBroadcastStore = create<BroadcastState>()(
           scheduleFlush()
         })
 
-        set({ syncing: true, errorMessage: '', lastActionMessage: `正在写入 0/${candidateItems.length}，请稍候...` })
+        set((current) => ({
+          syncing: true,
+          errorMessage: '',
+          lastActionMessage: `正在写入 0/${sanitizedItems.length}，请稍候...`,
+          previewItems: current.previewItems.map((item) => {
+            const matched = sanitizedItems.find((entry) => entry.id === item.id)
+            return matched ? { ...item, repeatPeriodSeconds: matched.repeatPeriodSeconds } : item
+          })
+        }))
         try {
           const result = await window.desktopBroadcast.pushSchedule(payload)
           const resultMap = new Map(result.items.map((item) => [item.previewItemId, item]))

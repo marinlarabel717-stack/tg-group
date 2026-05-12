@@ -824,6 +824,15 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     }
   }, [selectedTargetAccountId, selectedTask, setSelectedTargetAccountId])
 
+  useEffect(() => {
+    if (!selectedTask) return
+    if (currentAccountIsPremium) return
+    if (selectedTask.scheduleMode !== 'daily_repeat') return
+
+    updateTask(selectedTask.id, { scheduleMode: 'date_range' })
+    clearPreview()
+  }, [clearPreview, currentAccountIsPremium, selectedTask, updateTask])
+
   const syncTaskGroupsForAccount = (accountId: number | null) => {
     if (!selectedTask) return
     const nextGroupIds = accountId == null
