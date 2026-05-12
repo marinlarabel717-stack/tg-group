@@ -1053,8 +1053,8 @@ export const AccountTable = memo(function AccountTable() {
         ? createPortal(
             <div className="fixed bottom-4 z-[999] px-1" ref={bulkMenuRef} style={{ left: `${bulkMenuLayout.left}px`, width: `${bulkMenuLayout.width}px` }}>
               <div className="rounded-[16px] border border-white/10 bg-card/95 px-3 py-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur">
-                <div className="flex flex-col items-center gap-3 rounded-[12px] bg-panel/85 px-3 py-3">
-                  <div className="flex flex-wrap items-center justify-center gap-3">
+                <div className="grid gap-3 rounded-[12px] bg-panel/85 px-3 py-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
+                  <div className="flex flex-wrap items-center gap-3 md:justify-self-start">
                     <button
                       type="button"
                       onClick={handleClearSelection}
@@ -1073,7 +1073,7 @@ export const AccountTable = memo(function AccountTable() {
                     ) : null}
                   </div>
 
-                  <div className="relative self-center">
+                  <div className="relative md:justify-self-center">
                     <button
                       type="button"
                       onClick={() => {
@@ -1146,6 +1146,8 @@ export const AccountTable = memo(function AccountTable() {
                       </>
                     ) : null}
                   </div>
+
+                  <div className="hidden md:block" aria-hidden="true" />
                 </div>
               </div>
             </div>,
