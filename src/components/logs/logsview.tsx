@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef } from 'react'
 import { FileClock, ShieldCheck, ShieldX } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
+import { CheckResultDialog } from '../accounts/checkresultdialog'
 import { useAccountStore } from '../../stores/accountstore'
 import { useProxyPoolStore } from '../../stores/proxypoolstore'
 import { useUIStore } from '../../stores/uistore'
@@ -141,6 +142,7 @@ export default memo(function LogsView() {
 
   return (
     <div className="space-y-5 contain-layout">
+      {logsContext === 'accounts' ? <CheckResultDialog /> : null}
       {logsContext === 'proxy-pool' ? (
         <ProxySummary />
       ) : (
