@@ -1275,22 +1275,6 @@ export const AccountTable = memo(function AccountTable() {
         onRefresh={handleRefresh}
       />
 
-      {premiumFilter !== 'all' ? (
-        <div className="flex flex-wrap items-center gap-2 text-sm text-textMuted">
-          <span className="rounded-full bg-white/[0.05] px-3 py-1.5">会员筛选：{readPremiumFilterLabel(premiumFilter)}</span>
-          <button
-            type="button"
-            onClick={() => {
-              setPremiumFilter('all')
-              setActiveShortcutId(null)
-            }}
-            className="rounded-full bg-white/[0.05] px-3 py-1.5 text-white transition hover:bg-white/[0.1]"
-          >
-            清空会员条件
-          </button>
-        </div>
-      ) : null}
-
       <div ref={tableCardRef}>
         <GlassPanel className="overflow-hidden p-0">
         <div className="min-w-0">
