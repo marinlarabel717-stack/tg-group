@@ -488,6 +488,7 @@ export const AccountTable = memo(function AccountTable() {
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
   const [bulkSubmenu, setBulkSubmenu] = useState<BulkOperationSubmenu>(null)
   const [bulkActionHint, setBulkActionHint] = useState('')
+  const [bulkMenuLayout, setBulkMenuLayout] = useState({ left: 16, width: 320 })
   const deferredSearch = useDeferredValue(search)
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const scrollbarRef = useRef<HTMLDivElement | null>(null)
@@ -534,6 +535,46 @@ export const AccountTable = memo(function AccountTable() {
     const timer = window.setTimeout(() => setBulkActionHint(''), 1800)
     return () => window.clearTimeout(timer)
   }, [bulkActionHint])
+
+  const syncBulkMenuLayout = useCallback(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    const rect = viewport.getBoundingClientRect()
+    const nextLeft = Math.max(rect.left + 12, 16)
+    const nextWidth = Math.max(rect.width - 24, 320)
+
+    setBulkMenuLayout((previous) => {
+      if (Math.abs(previous.left - nextLeft) < 0.5 && Math.abs(previous.width - nextWidth) < 0.5) {
+        return previous
+      }
+
+      return { left: nextLeft, width: nextWidth }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (selectedIds.length === 0) return
+
+    syncBulkMenuLayout()
+
+    const viewport = viewportRef.current
+    const handleWindowResize = () => syncBulkMenuLayout()
+    const resizeObserver = typeof ResizeObserver !== 'undefined' && viewport
+      ? new ResizeObserver(() => syncBulkMenuLayout())
+      : null
+
+    if (viewport && resizeObserver) {
+      resizeObserver.observe(viewport)
+    }
+
+    window.addEventListener('resize', handleWindowResize)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', handleWindowResize)
+    }
+  }, [selectedIds.length, syncBulkMenuLayout])
 
   const handlePhoneCopy = useCallback(async (phone: string) => {
     const normalizedPhone = phone.trim()
@@ -1007,7 +1048,7 @@ export const AccountTable = memo(function AccountTable() {
 
       {selectedCount > 0 && typeof document !== 'undefined'
         ? createPortal(
-            <div className="fixed bottom-4 left-1/2 z-[999] w-[min(1180px,calc(100vw-32px))] -translate-x-1/2 px-1" ref={bulkMenuRef} style={{ marginLeft: '12px' }}>
+            <div className="fixed bottom-4 z-[999] px-1" ref={bulkMenuRef} style={{ left: `${bulkMenuLayout.left}px`, width: `${bulkMenuLayout.width}px` }}>
               <div className="rounded-[16px] border border-white/10 bg-card/95 px-3 py-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur">
                 <div className="flex flex-col gap-3 rounded-[12px] bg-panel/85 px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-3">
