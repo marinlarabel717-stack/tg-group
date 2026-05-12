@@ -42,6 +42,10 @@ function formatBroadcastError(error: unknown) {
     const matched = normalized.match(/FLOOD_WAIT_(\d+)/i)
     return matched ? `当前账号触发 Telegram 限流了，请 ${matched[1]} 秒后再试。` : '当前账号触发 Telegram 限流了，请稍后再试。'
   }
+  if (/A wait of (\d+) seconds is required/i.test(normalized)) {
+    const matched = normalized.match(/A wait of (\d+) seconds is required/i)
+    return matched ? `当前发得有点快了，Telegram 要求先等 ${matched[1]} 秒，再继续发送。` : '当前发得有点快了，Telegram 要求先等几秒，再继续发送。'
+  }
   return `发送失败：${normalized}`
 }
 
