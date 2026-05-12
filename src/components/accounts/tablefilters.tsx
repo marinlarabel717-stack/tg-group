@@ -1,5 +1,4 @@
 import { memo } from 'react'
-import { Loader2, RefreshCcw, SlidersHorizontal } from 'lucide-react'
 
 interface FilterOption {
   label: string
@@ -9,19 +8,13 @@ interface FilterOption {
 interface TableFiltersProps {
   countryFilter: string
   statusFilter: string
-  sourceFilter: string
   proxyFilter: string
-  loading: boolean
-  busy: boolean
   countries: FilterOption[]
   statuses: FilterOption[]
-  sources: FilterOption[]
   proxies: FilterOption[]
   onCountryChange: (value: string) => void
   onStatusChange: (value: string) => void
-  onSourceChange: (value: string) => void
   onProxyChange: (value: string) => void
-  onRefresh: () => void
 }
 
 function FilterSelect({
@@ -36,53 +29,27 @@ function FilterSelect({
   onChange: (value: string) => void
 }) {
   return (
-    <label className="flex min-w-0 flex-col gap-2 xl:min-w-[180px]">
-      <span className="text-[11px] font-semibold tracking-[0.22em] text-textMuted">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-11 w-full rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover"
-      >
-        <option value="">全部</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-11 min-w-[132px] rounded-[12px] bg-card px-4 text-sm text-textMain outline-none transition focus:bg-hover"
+    >
+      <option value="">{label}</option>
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   )
 }
 
 export const TableFilters = memo(function TableFilters(props: TableFiltersProps) {
-  const blocked = props.loading || props.busy
-  const spacerClass = 'text-[11px] font-semibold tracking-[0.22em] text-transparent select-none'
-
   return (
-    <div className="grid gap-4 rounded-[14px] bg-card px-5 py-5 xl:grid-cols-[44px_repeat(4,minmax(0,1fr))_auto] xl:items-end">
-      <div className="flex flex-col gap-2 xl:self-end">
-        <span className={spacerClass}>筛选</span>
-        <div className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-panel text-neonSoft">
-          <SlidersHorizontal size={17} />
-        </div>
-      </div>
-
+    <div className="flex flex-wrap items-center gap-3">
       <FilterSelect label="国家" value={props.countryFilter} options={props.countries} onChange={props.onCountryChange} />
       <FilterSelect label="状态" value={props.statusFilter} options={props.statuses} onChange={props.onStatusChange} />
-      <FilterSelect label="资料来源" value={props.sourceFilter} options={props.sources} onChange={props.onSourceChange} />
-      <FilterSelect label="Proxy" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
-
-      <div className="flex flex-col gap-2 xl:self-end">
-        <span className={spacerClass}>刷新</span>
-        <button
-          onClick={props.onRefresh}
-          disabled={blocked}
-          className="inline-flex h-11 shrink-0 items-center justify-center gap-2.5 rounded-[12px] bg-neon/10 px-4 text-sm font-medium whitespace-nowrap text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {props.loading ? <Loader2 size={16} className="shrink-0 animate-spin" /> : <RefreshCcw size={16} className="shrink-0" />}
-          刷新
-        </button>
-      </div>
+      <FilterSelect label="代理" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
     </div>
   )
 })

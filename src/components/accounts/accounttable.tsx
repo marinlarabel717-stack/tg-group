@@ -930,19 +930,13 @@ export const AccountTable = memo(function AccountTable() {
       <TableFilters
         countryFilter={countryFilter}
         statusFilter={statusFilter === 'all' ? '' : statusFilter}
-        sourceFilter={sourceFilter}
         proxyFilter={proxyFilter}
-        loading={tableLoading}
-        busy={busy}
         countries={countries}
         statuses={statuses}
-        sources={sources}
         proxies={proxies}
         onCountryChange={setCountryFilter}
         onStatusChange={(value) => setStatusFilter((value || 'all') as AccountStatusFilter)}
-        onSourceChange={setSourceFilter}
         onProxyChange={setProxyFilter}
-        onRefresh={handleRefresh}
       />
 
       <div ref={tableCardRef}>
