@@ -1,8 +1,8 @@
 import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { CheckCircle2, Clock3, Copy, Download, LoaderCircle, Play, RefreshCw, Search, Square, Trash2, Upload, Users, Wand2, X } from 'lucide-react'
+import { Clock3, Copy, Download, Play, Search, Trash2, Upload, Wand2, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useAccountStore } from '../../stores/accountstore'
-import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
+import { formatAccountStatus } from '../../lib/ui-text'
 import { parseAutoJoinTargets, useAutoJoinStore, type AutoJoinLogEntry, type AutoJoinTabKey } from '../../stores/autojoinstore'
 
 const tabs: Array<{ key: AutoJoinTabKey; label: string; icon: typeof Play }> = [
@@ -11,13 +11,14 @@ const tabs: Array<{ key: AutoJoinTabKey; label: string; icon: typeof Play }> = [
   { key: 'links', label: '群链接整理', icon: Wand2 }
 ]
 
-function readAccountLabel(account: { id: number; username?: string; phone?: string; profile?: Record<string, unknown> }) {
+function readAccountLabel(account: { id: number; username?: string; phone?: string; userId?: string; profile?: Record<string, unknown> }) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
   const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
   const fullName = [firstName, lastName].filter(Boolean).join(' ')
   if (fullName) return fullName
   if (typeof account.username === 'string' && account.username.trim()) return account.username.trim()
   if (typeof account.phone === 'string' && account.phone.trim()) return account.phone.trim()
+  if (typeof account.userId === 'string' && account.userId.trim()) return account.userId.trim()
   return `账号#${account.id}`
 }
 
@@ -30,10 +31,16 @@ function getAccountStatusTone(status?: string) {
 }
 
 function getLogTone(log: AutoJoinLogEntry) {
-  if (log.level === 'success') return 'border-emerald-400/18 bg-emerald-400/10 text-emerald-200'
-  if (log.level === 'warning') return 'border-amber-400/18 bg-amber-400/10 text-amber-200'
-  if (log.level === 'error') return 'border-rose-400/18 bg-rose-400/10 text-rose-200'
-  return 'border-white/10 bg-white/[0.03] text-slate-200'
+  if (log.status === 'joined') return 'text-emerald-300'
+  if (log.status === 'failed') return 'text-rose-300'
+  if (log.status === 'requested' || log.status === 'already' || log.level === 'warning') return 'text-amber-200'
+  return 'text-slate-200'
+}
+
+function formatLogTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '--:--:--'
+  return date.toLocaleTimeString('zh-CN', { hour12: false })
 }
 
 function readCustomRangeIds<T extends { id: number }>(accounts: T[], startInput: string, endInput: string) {
@@ -57,6 +64,43 @@ function toggleAccountRange(currentIds: number[], rangeIds: number[]) {
     if (!currentSet.has(id)) next.push(id)
   })
   return next
+}
+
+function NumberRangeField(props: {
+  label: string
+  minValue: number
+  maxValue: number
+  onMinChange: (value: number) => void
+  onMaxChange: (value: number) => void
+  min?: number
+  max?: number
+}) {
+  const { label, minValue, maxValue, onMinChange, onMaxChange, min = 0, max = 999 } = props
+  return (
+    <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+      <div className="text-xs tracking-[0.18em] text-textMuted">{label}</div>
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          type="number"
+          min={min}
+          max={max}
+          value={minValue}
+          onChange={(event) => onMinChange(Math.max(min, Number(event.target.value) || min))}
+          className="h-11 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 text-white outline-none focus:border-violet-400/30"
+        />
+        <span className="text-textMuted">-</span>
+        <input
+          type="number"
+          min={min}
+          max={max}
+          value={maxValue}
+          onChange={(event) => onMaxChange(Math.max(min, Number(event.target.value) || min))}
+          className="h-11 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 text-white outline-none focus:border-violet-400/30"
+        />
+      </div>
+      <div className="mt-2 text-xs text-textMuted">单位：分钟</div>
+    </label>
+  )
 }
 
 const TabBar = memo(function TabBar() {
@@ -97,12 +141,22 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const clearLinkInput = useAutoJoinStore((state) => state.clearLinkInput)
   const concurrency = useAutoJoinStore((state) => state.concurrency)
   const setConcurrency = useAutoJoinStore((state) => state.setConcurrency)
-  const intervalSeconds = useAutoJoinStore((state) => state.intervalSeconds)
-  const setIntervalSeconds = useAutoJoinStore((state) => state.setIntervalSeconds)
-  const retryLimit = useAutoJoinStore((state) => state.retryLimit)
-  const setRetryLimit = useAutoJoinStore((state) => state.setRetryLimit)
-  const autoRetryOnFloodWait = useAutoJoinStore((state) => state.autoRetryOnFloodWait)
-  const setAutoRetryOnFloodWait = useAutoJoinStore((state) => state.setAutoRetryOnFloodWait)
+  const accountIntervalMin = useAutoJoinStore((state) => state.accountIntervalMin)
+  const accountIntervalMax = useAutoJoinStore((state) => state.accountIntervalMax)
+  const setAccountIntervalMin = useAutoJoinStore((state) => state.setAccountIntervalMin)
+  const setAccountIntervalMax = useAutoJoinStore((state) => state.setAccountIntervalMax)
+  const joinIntervalMin = useAutoJoinStore((state) => state.joinIntervalMin)
+  const joinIntervalMax = useAutoJoinStore((state) => state.joinIntervalMax)
+  const setJoinIntervalMin = useAutoJoinStore((state) => state.setJoinIntervalMin)
+  const setJoinIntervalMax = useAutoJoinStore((state) => state.setJoinIntervalMax)
+  const floodRestMin = useAutoJoinStore((state) => state.floodRestMin)
+  const floodRestMax = useAutoJoinStore((state) => state.floodRestMax)
+  const setFloodRestMin = useAutoJoinStore((state) => state.setFloodRestMin)
+  const setFloodRestMax = useAutoJoinStore((state) => state.setFloodRestMax)
+  const repeatJoinEnabled = useAutoJoinStore((state) => state.repeatJoinEnabled)
+  const setRepeatJoinEnabled = useAutoJoinStore((state) => state.setRepeatJoinEnabled)
+  const dispatchMode = useAutoJoinStore((state) => state.dispatchMode)
+  const setDispatchMode = useAutoJoinStore((state) => state.setDispatchMode)
   const startTask = useAutoJoinStore((state) => state.startTask)
   const stopTask = useAutoJoinStore((state) => state.stopTask)
   const running = useAutoJoinStore((state) => state.running)
@@ -173,30 +227,39 @@ const TasksWorkbench = memo(function TasksWorkbench() {
 
   return (
     <>
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <button type="button" onClick={() => setAccountPickerOpen(true)} className="rounded-[16px] bg-panel/80 px-4 py-4 text-left transition hover:bg-white/[0.03]">
                 <div className="text-xs tracking-[0.18em] text-textMuted">账号数量</div>
                 <div className="mt-2 text-2xl font-semibold text-white">{selectedAccountIds.length}</div>
                 <div className="mt-1 text-xs text-textMuted">点这里选择账号</div>
               </button>
 
+              <NumberRangeField label="每号间隔" minValue={accountIntervalMin} maxValue={accountIntervalMax} onMinChange={setAccountIntervalMin} onMaxChange={setAccountIntervalMax} min={0} max={600} />
+              <NumberRangeField label="加群间隔" minValue={joinIntervalMin} maxValue={joinIntervalMax} onMinChange={setJoinIntervalMin} onMaxChange={setJoinIntervalMax} min={0} max={600} />
               <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">每号间隔</div>
-                <input type="number" min={1} max={300} value={intervalSeconds} onChange={(event) => setIntervalSeconds(Math.max(1, Number(event.target.value) || 1))} className="mt-3 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 py-3 text-white outline-none focus:border-violet-400/30" />
+                <div className="text-xs tracking-[0.18em] text-textMuted">线程数</div>
+                <input type="number" min={1} max={Math.max(1, selectedAccountIds.length || 1)} value={concurrency} onChange={(event) => setConcurrency(Math.max(1, Number(event.target.value) || 1))} className="mt-3 h-11 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 text-white outline-none focus:border-violet-400/30" />
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_220px]">
+              <NumberRangeField label="限流休息" minValue={floodRestMin} maxValue={floodRestMax} onMinChange={setFloodRestMin} onMaxChange={setFloodRestMax} min={1} max={600} />
+
+              <label className="flex items-center gap-3 rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
+                <input type="checkbox" checked={repeatJoinEnabled} onChange={(event) => setRepeatJoinEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                重复加群
               </label>
 
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">账号并发</div>
-                <input type="number" min={1} max={20} value={concurrency} onChange={(event) => setConcurrency(Math.max(1, Number(event.target.value) || 1))} className="mt-3 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 py-3 text-white outline-none focus:border-violet-400/30" />
-              </label>
-
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">失败重试</div>
-                <input type="number" min={0} max={5} value={retryLimit} onChange={(event) => setRetryLimit(Math.max(0, Number(event.target.value) || 0))} className="mt-3 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 py-3 text-white outline-none focus:border-violet-400/30" />
-              </label>
+              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+                <div className="text-xs tracking-[0.18em] text-textMuted">添加顺序</div>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" onClick={() => setDispatchMode('random')} className={`flex-1 rounded-[12px] px-3 py-2.5 transition ${dispatchMode === 'random' ? 'bg-violet-400 text-slate-950' : 'bg-white/[0.05] text-white hover:bg-white/[0.08]'}`}>随机添加</button>
+                  <button type="button" onClick={() => setDispatchMode('sequential')} className={`flex-1 rounded-[12px] px-3 py-2.5 transition ${dispatchMode === 'sequential' ? 'bg-violet-400 text-slate-950' : 'bg-white/[0.05] text-white hover:bg-white/[0.08]'}`}>按顺序</button>
+                </div>
+              </div>
             </div>
           </GlassPanel>
 
@@ -227,25 +290,10 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 placeholder="一行一个，支持 @username / t.me/xxx / t.me/+invite"
                 className="w-full rounded-[16px] border border-white/8 bg-panel px-4 py-4 text-white outline-none focus:border-violet-400/30"
               />
-              <div className="mt-3 flex flex-wrap gap-2">
-                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300">粘贴进来会自动整理重复和无效格式</div>
+              <div className="mt-3 flex flex-wrap gap-2 text-sm text-textMuted">
+                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-violet-300">会自动去重和过滤无效格式</div>
+                <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">不勾选重复加群时，成功/已在群/已申请的目标会自动从列表移除</div>
               </div>
-            </div>
-          </GlassPanel>
-
-          <GlassPanel className="bg-card">
-            <div className="text-base font-semibold text-white">执行规则</div>
-            <div className="mt-4 rounded-[16px] bg-panel/80 p-4">
-              <label className="flex items-center gap-3 text-sm text-slate-200">
-                <input
-                  type="checkbox"
-                  checked={autoRetryOnFloodWait}
-                  onChange={(event) => setAutoRetryOnFloodWait(event.target.checked)}
-                  className="h-4 w-4 rounded border-white/20 bg-transparent"
-                />
-                遇到 Telegram 限流 / 等待时自动延后继续，不直接判失败
-              </label>
-              <div className="mt-4 text-sm text-textMuted">当前执行模型：单号串行，多号并发。先做和前面模块一致的稳妥版，不堆额外花样。</div>
             </div>
           </GlassPanel>
         </div>
@@ -257,7 +305,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               <button type="button" disabled={running || !runtimeReady} onClick={() => void startTask()} className="w-full rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{running ? '执行中' : '开始加群'}</button>
               <button type="button" disabled={!running || stopping} onClick={() => void stopTask()} className="w-full rounded-[12px] bg-rose-400/12 px-4 py-3 text-sm font-medium text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50">{stopping ? '停止中' : '停止任务'}</button>
             </div>
-            <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '准备开始自动加群'}</div>
+            <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '点击开始后会自动跳到日志页。'}</div>
 
             <div className="mt-4 space-y-3">
               <div className="rounded-[14px] bg-panel/80 px-4 py-3">
@@ -269,17 +317,18 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 <div className="mt-2 text-sm font-medium text-white">{selectedAccounts.length} 个</div>
               </div>
               <div className="rounded-[14px] bg-panel/80 px-4 py-3">
-                <div className="text-xs tracking-[0.18em] text-textMuted">有效目标</div>
+                <div className="text-xs tracking-[0.18em] text-textMuted">本轮目标</div>
                 <div className="mt-2 text-sm font-medium text-white">{summary.items.length} 条</div>
               </div>
               {latestTask ? (
                 <div className="rounded-[14px] bg-panel/80 px-4 py-3">
                   <div className="text-xs tracking-[0.18em] text-textMuted">最近任务</div>
                   <div className="mt-2 text-sm font-medium text-white">{latestTask.name}</div>
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-200">
-                    <div className="rounded-[10px] bg-white/[0.05] px-2 py-2 text-center"><div className="text-sm font-semibold text-white">{latestTask.successCount}</div><div>成功</div></div>
-                    <div className="rounded-[10px] bg-white/[0.05] px-2 py-2 text-center"><div className="text-sm font-semibold text-white">{latestTask.alreadyCount}</div><div>已在群</div></div>
-                    <div className="rounded-[10px] bg-white/[0.05] px-2 py-2 text-center"><div className="text-sm font-semibold text-white">{latestTask.failedCount}</div><div>失败</div></div>
+                  <div className="mt-3 grid grid-cols-4 gap-2 text-xs text-slate-200">
+                    <div className="rounded-[10px] bg-emerald-400/10 px-2 py-2 text-center"><div className="text-sm font-semibold text-emerald-300">{latestTask.successCount ?? 0}</div><div>成功</div></div>
+                    <div className="rounded-[10px] bg-amber-400/10 px-2 py-2 text-center"><div className="text-sm font-semibold text-amber-200">{latestTask.requestedCount ?? 0}</div><div>审核中</div></div>
+                    <div className="rounded-[10px] bg-white/[0.05] px-2 py-2 text-center"><div className="text-sm font-semibold text-white">{latestTask.alreadyCount ?? 0}</div><div>已在群</div></div>
+                    <div className="rounded-[10px] bg-rose-400/10 px-2 py-2 text-center"><div className="text-sm font-semibold text-rose-300">{latestTask.failedCount ?? 0}</div><div>失败</div></div>
                   </div>
                 </div>
               ) : null}
@@ -377,19 +426,13 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const lastActionMessage = useAutoJoinStore((state) => state.lastActionMessage)
 
   return (
-    <GlassPanel className="bg-card" header={<div className="flex items-center justify-between gap-3"><div><div className="text-base font-semibold text-white">加群日志</div><div className="mt-1 text-sm text-textMuted">只看结果，不堆别的说明。</div></div><button type="button" onClick={clearLogs} className="rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button></div>}>
+    <GlassPanel className="bg-card" header={<div className="flex items-center justify-between gap-3"><div><div className="text-base font-semibold text-white">加群日志</div><div className="mt-1 text-sm text-textMuted">成功绿色，失败红色，需要审核黄色。</div></div><button type="button" onClick={clearLogs} className="rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button></div>}>
       <div className="rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '这里会显示自动加群过程里的最新状态。'}</div>
-      <div className="mt-4 space-y-3">
+      <div className="mt-4 space-y-2 font-mono text-sm">
         {logs.length === 0 ? <div className="text-sm text-textMuted">还没有加群日志。</div> : null}
         {logs.map((log) => (
-          <div key={log.id} className={`rounded-[14px] border px-4 py-3 ${getLogTone(log)}`}>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span>{formatDateTimeFull(log.createdAt)}</span>
-              {log.accountLabel ? <span className="rounded-full bg-black/10 px-2 py-1">{log.accountLabel}</span> : null}
-              {log.groupTitle ? <span className="rounded-full bg-black/10 px-2 py-1">{log.groupTitle}</span> : null}
-              {log.target ? <span className="rounded-full bg-black/10 px-2 py-1">{log.target}</span> : null}
-            </div>
-            <div className="mt-2 text-sm text-white">{log.message}</div>
+          <div key={log.id} className={`${getLogTone(log)} break-all`}>
+            [{formatLogTime(log.createdAt)}] [{log.accountLabel || '系统'}] - {log.message}
           </div>
         ))}
       </div>
@@ -456,7 +499,7 @@ export default function AutoJoinView() {
     <div className="flex min-h-full flex-col gap-5">
       <div>
         <div className="text-[24px] font-semibold text-white">自动加群</div>
-        <div className="mt-2 text-sm text-textMuted">先按现有模块的风格做，页面简单一点，能直接配置和执行就够了。</div>
+        <div className="mt-2 text-sm text-textMuted">开始后会自动跳到日志页，并按你设的线程数并发跑账号。</div>
       </div>
 
       <TabBar />

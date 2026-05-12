@@ -549,16 +549,23 @@ export interface AutoJoinPayload {
   accountIds: number[]
   items: AutoJoinPayloadItem[]
   concurrency: number
-  intervalSeconds: number
+  accountIntervalMin: number
+  accountIntervalMax: number
+  joinIntervalMin: number
+  joinIntervalMax: number
+  floodRestMin: number
+  floodRestMax: number
   retryLimit: number
   autoRetryOnFloodWait: boolean
+  repeatJoinEnabled: boolean
+  dispatchMode: 'random' | 'sequential'
 }
 
 export interface AutoJoinResultItem {
   itemId: string
   raw: string
   normalized: string
-  status: 'joined' | 'already' | 'failed'
+  status: 'joined' | 'already' | 'requested' | 'failed'
   errorMessage: string
   accountId: number | null
   accountLabel: string
@@ -572,6 +579,7 @@ export interface AutoJoinTaskResult {
   total: number
   successCount: number
   alreadyCount: number
+  requestedCount: number
   failedCount: number
   items: AutoJoinResultItem[]
   message: string
@@ -588,6 +596,7 @@ export interface AutoJoinProgress {
   completed: number
   successCount: number
   alreadyCount: number
+  requestedCount: number
   failedCount: number
   running: boolean
   item?: AutoJoinResultItem | null

@@ -20,6 +20,7 @@ export interface AutoJoinTaskRecord {
   completed: number
   successCount: number
   alreadyCount: number
+  requestedCount: number
   failedCount: number
   startedAt: string | null
   finishedAt: string | null
@@ -45,9 +46,15 @@ interface AutoJoinState {
   taskName: string
   linkInput: string
   concurrency: number
-  intervalSeconds: number
+  accountIntervalMin: number
+  accountIntervalMax: number
+  joinIntervalMin: number
+  joinIntervalMax: number
+  floodRestMin: number
+  floodRestMax: number
   retryLimit: number
-  autoRetryOnFloodWait: boolean
+  repeatJoinEnabled: boolean
+  dispatchMode: 'random' | 'sequential'
   running: boolean
   stopping: boolean
   runtimeReady: boolean
@@ -60,9 +67,15 @@ interface AutoJoinState {
   setTaskName: (value: string) => void
   setLinkInput: (value: string) => void
   setConcurrency: (value: number) => void
-  setIntervalSeconds: (value: number) => void
+  setAccountIntervalMin: (value: number) => void
+  setAccountIntervalMax: (value: number) => void
+  setJoinIntervalMin: (value: number) => void
+  setJoinIntervalMax: (value: number) => void
+  setFloodRestMin: (value: number) => void
+  setFloodRestMax: (value: number) => void
   setRetryLimit: (value: number) => void
-  setAutoRetryOnFloodWait: (value: boolean) => void
+  setRepeatJoinEnabled: (value: boolean) => void
+  setDispatchMode: (value: 'random' | 'sequential') => void
   clearLogs: () => void
   clearLinkInput: () => void
   startTask: () => Promise<void>
@@ -146,6 +159,7 @@ function createTaskRecord(input: { id: string; name: string; total: number }): A
     completed: 0,
     successCount: 0,
     alreadyCount: 0,
+    requestedCount: 0,
     failedCount: 0,
     startedAt: new Date().toISOString(),
     finishedAt: null,
@@ -160,6 +174,31 @@ function upsertTask(tasks: AutoJoinTaskRecord[], task: AutoJoinTaskRecord) {
 
 function appendLog(logs: AutoJoinLogEntry[], log: AutoJoinLogEntry) {
   return [log, ...logs].slice(0, 400)
+}
+
+function removeTargetFromInput(input: string, target: string) {
+  const normalizedTarget = target.trim().toLowerCase()
+  if (!normalizedTarget) return input
+  const tokens = input
+    .split(/[\n,\r\t ]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  const nextTokens = tokens.filter((token) => {
+    const parsed = normalizeAutoJoinTarget(token)
+    return parsed?.normalized.toLowerCase() !== normalizedTarget
+  })
+
+  return nextTokens.join('\n')
+}
+
+function formatLogMessage(item: AutoJoinResultItem, fallbackMessage: string) {
+  const target = item.normalized || item.raw || '这个群'
+  if (item.status === 'joined') return `成功加入${target}`
+  if (item.status === 'requested') return `${target}需要审核，已申请等待通过`
+  if (item.status === 'already') return `已经在${target}里了`
+  if (item.status === 'failed') return `加入失败（${item.errorMessage || '原因没拿到'}）`
+  return fallbackMessage
 }
 
 function buildProgressLog(payload: AutoJoinProgress): AutoJoinLogEntry | null {
@@ -179,7 +218,7 @@ function buildProgressLog(payload: AutoJoinProgress): AutoJoinLogEntry | null {
     }
   }
 
-  const level: AutoJoinLogLevel = item.status === 'failed' ? 'error' : item.status === 'already' ? 'warning' : 'success'
+  const level: AutoJoinLogLevel = item.status === 'failed' ? 'error' : item.status === 'requested' || item.status === 'already' ? 'warning' : 'success'
   return {
     id: createId('joinlog'),
     taskId: payload.taskId,
@@ -189,7 +228,7 @@ function buildProgressLog(payload: AutoJoinProgress): AutoJoinLogEntry | null {
     target: item.normalized || item.raw,
     groupTitle: item.groupTitle,
     status: item.status,
-    message: item.errorMessage || payload.message,
+    message: formatLogMessage(item, payload.message),
     createdAt: item.joinedAt || new Date().toISOString()
   }
 }
@@ -207,6 +246,7 @@ function applyProgress(tasks: AutoJoinTaskRecord[], payload: AutoJoinProgress) {
     completed: payload.completed,
     successCount: payload.successCount,
     alreadyCount: payload.alreadyCount,
+    requestedCount: payload.requestedCount,
     failedCount: payload.failedCount,
     status: payload.running ? 'running' : current.status === 'stopped' ? 'stopped' : 'completed',
     finishedAt: payload.running ? null : new Date().toISOString(),
@@ -229,6 +269,7 @@ function applyResult(tasks: AutoJoinTaskRecord[], result: AutoJoinTaskResult) {
     completed: result.total,
     successCount: result.successCount,
     alreadyCount: result.alreadyCount,
+    requestedCount: result.requestedCount,
     failedCount: result.failedCount,
     status: current.status === 'stopped' ? 'stopped' : 'completed',
     finishedAt: new Date().toISOString(),
@@ -245,10 +286,16 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       selectedAccountIds: [],
       taskName: '',
       linkInput: '',
-      concurrency: 3,
-      intervalSeconds: 18,
+      concurrency: 10,
+      accountIntervalMin: 5,
+      accountIntervalMax: 30,
+      joinIntervalMin: 60,
+      joinIntervalMax: 120,
+      floodRestMin: 5,
+      floodRestMax: 11,
       retryLimit: 2,
-      autoRetryOnFloodWait: true,
+      repeatJoinEnabled: true,
+      dispatchMode: 'random',
       running: false,
       stopping: false,
       runtimeReady: Boolean(window.desktopAutoJoin),
@@ -261,9 +308,15 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       setTaskName: (value) => set({ taskName: value }),
       setLinkInput: (value) => set({ linkInput: value }),
       setConcurrency: (value) => set({ concurrency: value }),
-      setIntervalSeconds: (value) => set({ intervalSeconds: value }),
+      setAccountIntervalMin: (value) => set({ accountIntervalMin: value }),
+      setAccountIntervalMax: (value) => set({ accountIntervalMax: value }),
+      setJoinIntervalMin: (value) => set({ joinIntervalMin: value }),
+      setJoinIntervalMax: (value) => set({ joinIntervalMax: value }),
+      setFloodRestMin: (value) => set({ floodRestMin: value }),
+      setFloodRestMax: (value) => set({ floodRestMax: value }),
       setRetryLimit: (value) => set({ retryLimit: value }),
-      setAutoRetryOnFloodWait: (value) => set({ autoRetryOnFloodWait: value }),
+      setRepeatJoinEnabled: (value) => set({ repeatJoinEnabled: value }),
+      setDispatchMode: (value) => set({ dispatchMode: value }),
       clearLogs: () => set({ logs: [], lastActionMessage: '加群日志已清空。' }),
       clearLinkInput: () => set({ linkInput: '' }),
       init: () => {
@@ -281,6 +334,9 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             currentTaskId: payload.running ? payload.taskId : state.currentTaskId === payload.taskId ? null : state.currentTaskId,
             tasks: applyProgress(state.tasks, payload),
             logs: nextLogs ? appendLog(state.logs, nextLogs) : state.logs,
+            linkInput: !state.repeatJoinEnabled && payload.item && ['joined', 'already', 'requested'].includes(payload.item.status)
+              ? removeTargetFromInput(state.linkInput, payload.item.normalized || payload.item.raw)
+              : state.linkInput,
             lastActionMessage: payload.message
           }))
         })
@@ -308,6 +364,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
         const taskId = createId('autojoin')
         const taskName = get().taskName.trim() || `自动加群 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
         set((state) => ({
+          activeTab: 'logs',
           running: true,
           stopping: false,
           currentTaskId: taskId,
@@ -323,9 +380,16 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             accountIds: get().selectedAccountIds,
             items,
             concurrency: get().concurrency,
-            intervalSeconds: get().intervalSeconds,
+            accountIntervalMin: Math.min(get().accountIntervalMin, get().accountIntervalMax),
+            accountIntervalMax: Math.max(get().accountIntervalMin, get().accountIntervalMax),
+            joinIntervalMin: Math.min(get().joinIntervalMin, get().joinIntervalMax),
+            joinIntervalMax: Math.max(get().joinIntervalMin, get().joinIntervalMax),
+            floodRestMin: Math.min(get().floodRestMin, get().floodRestMax),
+            floodRestMax: Math.max(get().floodRestMin, get().floodRestMax),
             retryLimit: get().retryLimit,
-            autoRetryOnFloodWait: get().autoRetryOnFloodWait
+            autoRetryOnFloodWait: true,
+            repeatJoinEnabled: get().repeatJoinEnabled,
+            dispatchMode: get().dispatchMode
           })
 
           set((state) => ({
@@ -333,18 +397,6 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             stopping: false,
             currentTaskId: state.currentTaskId === result.taskId ? null : state.currentTaskId,
             tasks: applyResult(state.tasks, result),
-            logs: result.items.reduce<AutoJoinLogEntry[]>((acc, item) => appendLog(acc, {
-              id: createId('joinlog'),
-              taskId: result.taskId,
-              level: item.status === 'failed' ? 'error' : item.status === 'already' ? 'warning' : 'success',
-              accountId: item.accountId,
-              accountLabel: item.accountLabel,
-              target: item.normalized || item.raw,
-              groupTitle: item.groupTitle,
-              status: item.status,
-              message: item.errorMessage || result.message,
-              createdAt: item.joinedAt || new Date().toISOString()
-            }), state.logs),
             lastActionMessage: result.message
           }))
         } catch (error) {
@@ -407,9 +459,15 @@ export const useAutoJoinStore = create<AutoJoinState>()(
         taskName: state.taskName,
         linkInput: state.linkInput,
         concurrency: state.concurrency,
-        intervalSeconds: state.intervalSeconds,
+        accountIntervalMin: state.accountIntervalMin,
+        accountIntervalMax: state.accountIntervalMax,
+        joinIntervalMin: state.joinIntervalMin,
+        joinIntervalMax: state.joinIntervalMax,
+        floodRestMin: state.floodRestMin,
+        floodRestMax: state.floodRestMax,
         retryLimit: state.retryLimit,
-        autoRetryOnFloodWait: state.autoRetryOnFloodWait,
+        repeatJoinEnabled: state.repeatJoinEnabled,
+        dispatchMode: state.dispatchMode,
         tasks: state.tasks,
         logs: state.logs
       })
