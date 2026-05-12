@@ -368,229 +368,256 @@ export class DirectMessageService {
     const results: DirectMessageSendResultItem[] = []
     const unavailableAccountIds = new Set<number>()
     const accountCooldownUntil = new Map<number, number>()
+    const activeAccountIds = new Set<number>()
     const startedAt = Date.now()
     const pendingItems = [...payload.items]
       .sort((left, right) => left.waitSeconds - right.waitSeconds)
       .map((item) => ({ item, dueAt: startedAt + item.waitSeconds * 1000 }))
     const task: ActiveSendTask = { cancelled: false, clients }
+    const concurrency = Math.max(1, Math.min(payload.concurrency ?? 1, Math.max(1, accountIds.length || 1), Math.max(1, pendingItems.length || 1)))
     let stopReason = ''
     this.activeSendTask = task
 
-    try {
-      while (pendingItems.length > 0) {
-        if (task.cancelled) break
+    const pickNextEntry = () => {
+      const now = Date.now()
+      let readyIndex = -1
+      let readyDueAt = Number.POSITIVE_INFINITY
+      let nextFutureDueAt = Number.POSITIVE_INFINITY
 
-        let nextIndex = 0
-        let nextDueAt = Number.POSITIVE_INFINITY
+      for (let index = 0; index < pendingItems.length; index += 1) {
+        const entry = pendingItems[index]
+        const accountId = typeof entry.item.accountId === 'number' ? entry.item.accountId : null
+        if (accountId != null && activeAccountIds.has(accountId)) continue
+        const cooldownUntil = accountId != null ? (accountCooldownUntil.get(accountId) ?? 0) : 0
+        const effectiveDueAt = Math.max(entry.dueAt, cooldownUntil)
+        if (effectiveDueAt <= now && effectiveDueAt < readyDueAt) {
+          readyIndex = index
+          readyDueAt = effectiveDueAt
+        } else if (effectiveDueAt < nextFutureDueAt) {
+          nextFutureDueAt = effectiveDueAt
+        }
+      }
 
-        for (let index = 0; index < pendingItems.length; index += 1) {
-          const entry = pendingItems[index]
-          const accountId = typeof entry.item.accountId === 'number' ? entry.item.accountId : null
-          const cooldownUntil = accountId != null ? (accountCooldownUntil.get(accountId) ?? 0) : 0
-          const effectiveDueAt = Math.max(entry.dueAt, cooldownUntil)
-          if (effectiveDueAt < nextDueAt) {
-            nextDueAt = effectiveDueAt
-            nextIndex = index
+      if (readyIndex >= 0) {
+        const [entry] = pendingItems.splice(readyIndex, 1)
+        return { entry, waitMs: 0 }
+      }
+
+      if (nextFutureDueAt < Number.POSITIVE_INFINITY) {
+        return { entry: null as null, waitMs: Math.max(0, nextFutureDueAt - now) }
+      }
+
+      return { entry: null as null, waitMs: pendingItems.length > 0 ? 150 : 0 }
+    }
+
+    const processEntry = async (item: DirectMessageSendPayload['items'][number]) => {
+      const account = typeof item.accountId === 'number' ? accountsById.get(item.accountId) : null
+      if (typeof item.accountId === 'number' && unavailableAccountIds.has(item.accountId)) {
+        if (unavailableAccountIds.size >= accountIds.length) {
+          stopReason = '无可用账号发送，本次任务已停止。'
+          this.emitSendNotice(results, payload.items.length, stopReason, onProgress, null)
+          task.cancelled = true
+          return
+        }
+        const resultItem = this.createFailedSendItem(item, '这个账号已经不可用了，当前目标已跳过。')
+        results.push(resultItem)
+        this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
+        return
+      }
+      if (!account) {
+        const resultItem = this.createFailedSendItem(item, '发送账号不存在，请重新选择账号后再试。')
+        results.push(resultItem)
+        this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
+        return
+      }
+
+      if (payload.messageType === 'text' && !payload.messageText.trim()) {
+        const resultItem = this.createFailedSendItem(item, '文本内容还没填。')
+        results.push(resultItem)
+        this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
+        return
+      }
+      if ((payload.messageType === 'channel_forward' || payload.messageType === 'hidden_channel_forward') && !payload.sourceLink.trim()) {
+        const resultItem = this.createFailedSendItem(item, '频道消息链接还没填。')
+        results.push(resultItem)
+        this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
+        return
+      }
+      if (payload.messageType === 'postbot_code' && !payload.postbotCode.trim()) {
+        const resultItem = this.createFailedSendItem(item, 'postbot 代码还没填。')
+        results.push(resultItem)
+        this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
+        return
+      }
+
+      let cleanup: undefined | (() => Promise<void>)
+      let requeueItem = false
+      const accountId = typeof item.accountId === 'number' ? item.accountId : null
+      if (accountId != null) activeAccountIds.add(accountId)
+
+      try {
+        if (task.cancelled) return
+        let client = clients.get(account.id)
+        if (!client) {
+          client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+          clients.set(account.id, client)
+        }
+
+        let resultItem: DirectMessageSendResultItem | null = null
+
+        while (!task.cancelled) {
+          try {
+            const resolved = await resolveSendEntity(client, item.targetValue)
+            cleanup = resolved.cleanup
+            let response: unknown = null
+
+            if (payload.messageType === 'channel_forward') {
+              const { parsed } = await loadSourceMessage(client, payload.sourceLink)
+              response = await (client as TelegramClient & {
+                forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
+              }).forwardMessages(resolved.entity as never, {
+                messages: [parsed.messageId],
+                fromPeer: parsed.peerRef as never,
+                dropAuthor: false
+              })
+            } else if (payload.messageType === 'hidden_channel_forward') {
+              const { sourceMessage } = await loadSourceMessage(client, payload.sourceLink)
+              const sourceText = typeof sourceMessage.message === 'string'
+                ? sourceMessage.message
+                : typeof sourceMessage.text === 'string'
+                  ? sourceMessage.text
+                  : ''
+              const sourceMedia = sourceMessage.media
+              const sourceEntities = Array.isArray(sourceMessage.entities) ? sourceMessage.entities : undefined
+              if (!sourceText.trim() && !sourceMedia) {
+                throw new Error('MEDIA_EMPTY')
+              }
+              response = await (client as TelegramClient & {
+                sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
+              }).sendMessage(resolved.entity as never, {
+                message: sourceText || undefined,
+                file: sourceMedia || undefined,
+                formattingEntities: sourceEntities
+              })
+            } else if (payload.messageType === 'postbot_code') {
+              const query = payload.postbotCode.trim()
+              const inlineBot = await client.getEntity('@postbot' as never)
+              const inlineResults = await client.invoke(new Api.messages.GetInlineBotResults({
+                bot: inlineBot as never,
+                peer: resolved.entity as never,
+                query,
+                offset: ''
+              }))
+
+              const firstResult = Array.isArray((inlineResults as { results?: unknown[] }).results)
+                ? (inlineResults as { results: Array<{ id?: string }> }).results[0]
+                : null
+
+              if (!firstResult?.id) {
+                throw new Error('POSTBOT_RESULT_EMPTY')
+              }
+
+              response = await client.invoke(new Api.messages.SendInlineBotResult({
+                peer: resolved.entity as never,
+                queryId: (inlineResults as { queryId: any }).queryId,
+                id: firstResult.id,
+                randomId: createRandomId(),
+                clearDraft: true
+              }))
+            } else {
+              const media = payload.imageUrl.trim() ? resolveMediaFile(payload.imageUrl, payload.messageText || item.targetValue) : undefined
+              response = await (client as TelegramClient & {
+                sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
+              }).sendMessage(resolved.entity as never, {
+                message: payload.messageText.trim() || undefined,
+                file: media
+              })
+            }
+
+            resultItem = {
+              previewItemId: item.id,
+              targetId: item.targetId,
+              targetValue: item.targetValue,
+              status: 'sent',
+              errorMessage: '',
+              remoteMessageId: Array.isArray(response)
+                ? (typeof (response[0] as { id?: unknown } | undefined)?.id === 'number' ? (response[0] as { id: number }).id : null)
+                : (typeof (response as { id?: unknown } | null)?.id === 'number' ? (response as { id: number }).id : extractResponseMessageId(response)),
+              sentAt: new Date().toISOString(),
+              accountId: item.accountId
+            }
+            break
+          } catch (error) {
+            await cleanup?.()
+            cleanup = undefined
+            const waitSeconds = readRiskPauseSeconds(error)
+            if (!waitSeconds || task.cancelled) {
+              throw error
+            }
+
+            const cooldownUntil = Date.now() + waitSeconds * 1000
+            if (typeof item.accountId === 'number') {
+              accountCooldownUntil.set(item.accountId, cooldownUntil)
+            }
+
+            this.emitSendNotice(
+              results,
+              payload.items.length,
+              `[${account.phone || readAccountLabel(account)}] 这个账号触发私信风控，先暂停 ${waitSeconds} 秒，其他账号继续发送，到时间后自动恢复。`,
+              onProgress,
+              waitSeconds
+            )
+
+            pendingItems.push({ item, dueAt: cooldownUntil })
+            requeueItem = true
+            break
           }
         }
 
-        const waitMs = nextDueAt - Date.now()
-        if (waitMs > 0) {
-          await this.sleepWithCancel(waitMs, task)
-          if (task.cancelled) break
-        }
+        if (task.cancelled || requeueItem) return
+        if (!resultItem) return
 
-        const [entry] = pendingItems.splice(nextIndex, 1)
-        const { item } = entry
-        const account = typeof item.accountId === 'number' ? accountsById.get(item.accountId) : null
-        if (typeof item.accountId === 'number' && unavailableAccountIds.has(item.accountId)) {
+        results.push(resultItem)
+        this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
+      } catch (error) {
+        const resultItem = this.createFailedSendItem(item, formatDirectMessageError(error))
+        results.push(resultItem)
+        this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
+        if (typeof item.accountId === 'number' && isUnavailableAccountError(error)) {
+          unavailableAccountIds.add(item.accountId)
+          const currentClient = clients.get(item.accountId)
+          if (currentClient) {
+            await this.clientManager.destroyClient(currentClient).catch(() => undefined)
+            clients.delete(item.accountId)
+          }
           if (unavailableAccountIds.size >= accountIds.length) {
             stopReason = '无可用账号发送，本次任务已停止。'
             this.emitSendNotice(results, payload.items.length, stopReason, onProgress, null)
             task.cancelled = true
-            break
           }
-          const resultItem = this.createFailedSendItem(item, '这个账号已经不可用了，当前目标已跳过。')
-          results.push(resultItem)
-          this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
-          continue
         }
-        if (!account) {
-          const resultItem = this.createFailedSendItem(item, '发送账号不存在，请重新选择账号后再试。')
-          results.push(resultItem)
-          this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
-          continue
-        }
-
-        if (payload.messageType === 'text' && !payload.messageText.trim()) {
-          const resultItem = this.createFailedSendItem(item, '文本内容还没填。')
-          results.push(resultItem)
-          this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
-          continue
-        }
-        if ((payload.messageType === 'channel_forward' || payload.messageType === 'hidden_channel_forward') && !payload.sourceLink.trim()) {
-          const resultItem = this.createFailedSendItem(item, '频道消息链接还没填。')
-          results.push(resultItem)
-          this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
-          continue
-        }
-        if (payload.messageType === 'postbot_code' && !payload.postbotCode.trim()) {
-          const resultItem = this.createFailedSendItem(item, 'postbot 代码还没填。')
-          results.push(resultItem)
-          this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
-          continue
-        }
-
-        let cleanup: undefined | (() => Promise<void>)
-        let requeueItem = false
-
-        try {
-          if (task.cancelled) break
-          let client = clients.get(account.id)
-          if (!client) {
-            client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
-            clients.set(account.id, client)
-          }
-
-          let resultItem: DirectMessageSendResultItem | null = null
-
-          while (!task.cancelled) {
-            try {
-              const resolved = await resolveSendEntity(client, item.targetValue)
-              cleanup = resolved.cleanup
-              let response: unknown = null
-
-              if (payload.messageType === 'channel_forward') {
-                const { parsed } = await loadSourceMessage(client, payload.sourceLink)
-                response = await (client as TelegramClient & {
-                  forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
-                }).forwardMessages(resolved.entity as never, {
-                  messages: [parsed.messageId],
-                  fromPeer: parsed.peerRef as never,
-                  dropAuthor: false
-                })
-              } else if (payload.messageType === 'hidden_channel_forward') {
-                const { sourceMessage } = await loadSourceMessage(client, payload.sourceLink)
-                const sourceText = typeof sourceMessage.message === 'string'
-                  ? sourceMessage.message
-                  : typeof sourceMessage.text === 'string'
-                    ? sourceMessage.text
-                    : ''
-                const sourceMedia = sourceMessage.media
-                const sourceEntities = Array.isArray(sourceMessage.entities) ? sourceMessage.entities : undefined
-                if (!sourceText.trim() && !sourceMedia) {
-                  throw new Error('MEDIA_EMPTY')
-                }
-                response = await (client as TelegramClient & {
-                  sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
-                }).sendMessage(resolved.entity as never, {
-                  message: sourceText || undefined,
-                  file: sourceMedia || undefined,
-                  formattingEntities: sourceEntities
-                })
-              } else if (payload.messageType === 'postbot_code') {
-                const query = payload.postbotCode.trim()
-                const inlineBot = await client.getEntity('@postbot' as never)
-                const inlineResults = await client.invoke(new Api.messages.GetInlineBotResults({
-                  bot: inlineBot as never,
-                  peer: resolved.entity as never,
-                  query,
-                  offset: ''
-                }))
-
-                const firstResult = Array.isArray((inlineResults as { results?: unknown[] }).results)
-                  ? (inlineResults as { results: Array<{ id?: string }> }).results[0]
-                  : null
-
-                if (!firstResult?.id) {
-                  throw new Error('POSTBOT_RESULT_EMPTY')
-                }
-
-                response = await client.invoke(new Api.messages.SendInlineBotResult({
-                  peer: resolved.entity as never,
-                  queryId: (inlineResults as { queryId: any }).queryId,
-                  id: firstResult.id,
-                  randomId: createRandomId(),
-                  clearDraft: true
-                }))
-              } else {
-                const media = payload.imageUrl.trim() ? resolveMediaFile(payload.imageUrl, payload.messageText || item.targetValue) : undefined
-                response = await (client as TelegramClient & {
-                  sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
-                }).sendMessage(resolved.entity as never, {
-                  message: payload.messageText.trim() || undefined,
-                  file: media
-                })
-              }
-
-              resultItem = {
-                previewItemId: item.id,
-                targetId: item.targetId,
-                targetValue: item.targetValue,
-                status: 'sent',
-                errorMessage: '',
-                remoteMessageId: Array.isArray(response)
-                  ? (typeof (response[0] as { id?: unknown } | undefined)?.id === 'number' ? (response[0] as { id: number }).id : null)
-                  : (typeof (response as { id?: unknown } | null)?.id === 'number' ? (response as { id: number }).id : extractResponseMessageId(response)),
-                sentAt: new Date().toISOString(),
-                accountId: item.accountId
-              }
-              break
-            } catch (error) {
-              await cleanup?.()
-              cleanup = undefined
-              const waitSeconds = readRiskPauseSeconds(error)
-              if (!waitSeconds || task.cancelled) {
-                throw error
-              }
-
-              const cooldownUntil = Date.now() + waitSeconds * 1000
-              if (typeof item.accountId === 'number') {
-                accountCooldownUntil.set(item.accountId, cooldownUntil)
-              }
-
-              this.emitSendNotice(
-                results,
-                payload.items.length,
-                `[${account.phone || readAccountLabel(account)}] 这个账号触发私信风控，先暂停 ${waitSeconds} 秒，其他账号继续发送，到时间后自动恢复。`,
-                onProgress,
-                waitSeconds
-              )
-
-              pendingItems.push({ item, dueAt: cooldownUntil })
-              requeueItem = true
-              break
-            }
-          }
-
-          if (task.cancelled) break
-          if (requeueItem) continue
-          if (!resultItem) break
-
-          results.push(resultItem)
-          this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
-        } catch (error) {
-          const resultItem = this.createFailedSendItem(item, formatDirectMessageError(error))
-          results.push(resultItem)
-          this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
-          if (typeof item.accountId === 'number' && isUnavailableAccountError(error)) {
-            unavailableAccountIds.add(item.accountId)
-            const currentClient = clients.get(item.accountId)
-            if (currentClient) {
-              await this.clientManager.destroyClient(currentClient).catch(() => undefined)
-              clients.delete(item.accountId)
-            }
-            if (unavailableAccountIds.size >= accountIds.length) {
-              stopReason = '无可用账号发送，本次任务已停止。'
-              this.emitSendNotice(results, payload.items.length, stopReason, onProgress, null)
-              task.cancelled = true
-              break
-            }
-          }
-        } finally {
-          await cleanup?.()
-        }
+      } finally {
+        if (accountId != null) activeAccountIds.delete(accountId)
+        await cleanup?.()
       }
+    }
+
+    const worker = async () => {
+      while (!task.cancelled) {
+        if (pendingItems.length === 0) return
+        const { entry, waitMs } = pickNextEntry()
+        if (!entry) {
+          if (waitMs > 0) {
+            await this.sleepWithCancel(waitMs, task)
+          }
+          continue
+        }
+        await processEntry(entry.item)
+      }
+    }
+
+    try {
+      await Promise.all(Array.from({ length: concurrency }, () => worker()))
     } finally {
       await Promise.all(Array.from(clients.values()).map((client) => this.clientManager.destroyClient(client)))
       if (this.activeSendTask === task) {

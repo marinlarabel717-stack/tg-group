@@ -439,6 +439,7 @@ export interface DirectMessageSendPayload {
   imageUrl: string
   sourceLink: string
   postbotCode: string
+  concurrency?: number
 }
 
 export interface DirectMessageSendResultItem {

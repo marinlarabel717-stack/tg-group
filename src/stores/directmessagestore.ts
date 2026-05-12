@@ -599,7 +599,8 @@ export const useDirectMessageStore = create<DirectMessageState>()(
             messageText: state.messageText,
             imageUrl: state.imageUrl,
             sourceLink: state.sourceLink,
-            postbotCode: state.postbotCode
+            postbotCode: state.postbotCode,
+            concurrency: state.groupConcurrency
           })
           const run = buildRunFromResult(result, state)
           set((current) => ({
