@@ -4,7 +4,8 @@ import type {
   DirectMessageAutoReplyEvent,
   DirectMessageAutoReplyState,
   DirectMessageCollectedUserPayload,
-  DirectMessageSendResult
+  DirectMessageSendResult,
+  DirectMessageStopResult
 } from '../types'
 
 export type DirectMessageTabKey = 'send' | 'logs' | 'collect' | 'auto-reply'
@@ -116,6 +117,7 @@ interface DirectMessageState {
   autoReplyState: DirectMessageAutoReplyState
   autoReplyEvents: DirectMessageAutoReplyEvent[]
   sending: boolean
+  stopping: boolean
   collecting: boolean
   autoReplySyncing: boolean
   runtimeReady: boolean
@@ -148,6 +150,7 @@ interface DirectMessageState {
   clearCollectedUsers: () => void
   generatePreview: (accounts: Array<{ id: number; username?: string; phone?: string; profile?: Record<string, unknown> }>) => void
   startSend: (accounts: Array<{ id: number; username?: string; phone?: string; profile?: Record<string, unknown> }>) => Promise<void>
+  stopSend: () => Promise<void>
   clearPreview: () => void
   clearRuns: () => void
   initRuntime: () => Promise<void>
@@ -324,6 +327,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       autoReplyState: EMPTY_AUTO_REPLY_STATE,
       autoReplyEvents: [],
       sending: false,
+      stopping: false,
       collecting: false,
       autoReplySyncing: false,
       runtimeReady: false,
@@ -526,7 +530,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           set({ lastActionMessage: '当前还不能直接发送，请先把账号、目标和文案填完整。' })
           return
         }
-        set({ sending: true, activeTab: 'logs', lastActionMessage: '正在把私信发到 Telegram，请稍候...' })
+        set({ sending: true, stopping: false, activeTab: 'logs', lastActionMessage: '正在把私信发到 Telegram，请稍候...' })
         try {
           const result = await window.desktopDirectMessage.sendMessages({
             items: state.previewItems.map((item) => ({
@@ -550,6 +554,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           const run = buildRunFromResult(result, state)
           set((current) => ({
             sending: false,
+            stopping: false,
             targets: result.items.some((item) => item.status === 'sent')
               ? rebuildTargetRecords(current.targets
                 .filter((target) => !result.items.some((item) => item.status === 'sent' && item.targetId === target.id))
@@ -570,6 +575,32 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         } catch (error) {
           set({
             sending: false,
+            stopping: false,
+            lastActionMessage: error instanceof Error ? error.message : String(error)
+          })
+        }
+      },
+      stopSend: async () => {
+        if (!window.desktopDirectMessage) {
+          set({ lastActionMessage: '当前环境没有接入停止发送能力。' })
+          return
+        }
+        if (!get().sending) {
+          set({ lastActionMessage: '当前没有正在发送的私信任务。' })
+          return
+        }
+
+        set({ stopping: true, lastActionMessage: '正在停止当前私信任务...' })
+        try {
+          const result: DirectMessageStopResult = await window.desktopDirectMessage.stopSend()
+          set({
+            sending: false,
+            stopping: false,
+            lastActionMessage: result.message
+          })
+        } catch (error) {
+          set({
+            stopping: false,
             lastActionMessage: error instanceof Error ? error.message : String(error)
           })
         }
@@ -690,6 +721,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           autoReplyState: EMPTY_AUTO_REPLY_STATE,
           autoReplyEvents: [],
           sending: false,
+          stopping: false,
           collecting: false,
           autoReplySyncing: false,
           runtimeReady: false,

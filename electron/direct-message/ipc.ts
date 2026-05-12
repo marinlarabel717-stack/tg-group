@@ -23,6 +23,10 @@ export function registerDirectMessageIpc(options: RegisterDirectMessageIpcOption
     })
   })
 
+  ipcMain.handle('direct-message:stop-send', () => {
+    return directMessageService.stopCurrentSend()
+  })
+
   ipcMain.handle('direct-message:collect-users', async (_event, payload: DirectMessageCollectPayload) => {
     return directMessageService.collectUsers(payload)
   })

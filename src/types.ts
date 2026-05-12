@@ -427,6 +427,11 @@ export interface DirectMessageSendResult {
   message: string
 }
 
+export interface DirectMessageStopResult {
+  stopped: boolean
+  message: string
+}
+
 export interface DirectMessageSendProgress {
   total: number
   completed: number
@@ -525,6 +530,7 @@ export interface DesktopBroadcastApi {
 
 export interface DesktopDirectMessageApi {
   sendMessages: (payload: DirectMessageSendPayload) => Promise<DirectMessageSendResult>
+  stopSend: () => Promise<DirectMessageStopResult>
   collectUsers: (payload: DirectMessageCollectPayload) => Promise<DirectMessageCollectResult>
   configureAutoReply: (payload: DirectMessageAutoReplyPayload) => Promise<DirectMessageAutoReplyState>
   getAutoReplyState: () => Promise<DirectMessageAutoReplyState>

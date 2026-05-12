@@ -142,7 +142,9 @@ const SendWorkbench = memo(function SendWorkbench() {
   const previewItems = useDirectMessageStore((state) => state.previewItems)
   const generatePreview = useDirectMessageStore((state) => state.generatePreview)
   const startSend = useDirectMessageStore((state) => state.startSend)
+  const stopSend = useDirectMessageStore((state) => state.stopSend)
   const sending = useDirectMessageStore((state) => state.sending)
+  const stopping = useDirectMessageStore((state) => state.stopping)
   const clearPreview = useDirectMessageStore((state) => state.clearPreview)
   const runs = useDirectMessageStore((state) => state.runs)
   const lastActionMessage = useDirectMessageStore((state) => state.lastActionMessage)
@@ -232,6 +234,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                 <div className="mt-3 flex gap-2">
                   <button type="button" onClick={() => generatePreview(accounts)} className="flex-1 rounded-[12px] bg-violet-400/12 px-3 py-3 text-sm text-violet-300 transition hover:bg-violet-400/18">预览</button>
                   <button type="button" disabled={sending} onClick={() => void startSend(accounts)} className="flex-1 rounded-[12px] bg-violet-400 px-3 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{sending ? '发送中' : '开始发送'}</button>
+                  <button type="button" disabled={!sending || stopping} onClick={() => void stopSend()} className="flex-1 rounded-[12px] bg-rose-400/12 px-3 py-3 text-sm font-medium text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50">{stopping ? '停止中' : '停止发送'}</button>
                 </div>
               </div>
             </div>

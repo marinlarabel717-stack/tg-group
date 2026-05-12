@@ -17,7 +17,8 @@ import type {
   DirectMessageSendPayload,
   DirectMessageSendProgress,
   DirectMessageSendResult,
-  DirectMessageSendResultItem
+  DirectMessageSendResultItem,
+  DirectMessageStopResult
 } from '../../src/types'
 
 function formatDirectMessageError(error: unknown) {
@@ -270,6 +271,11 @@ interface AutoReplyRuntimeEntry {
   eventBuilder: NewMessage
 }
 
+interface ActiveSendTask {
+  cancelled: boolean
+  clients: Map<number, TelegramClient>
+}
+
 export class DirectMessageService {
   private autoReplyRuntime = new Map<number, AutoReplyRuntimeEntry>()
   private autoReplyState: DirectMessageAutoReplyState = {
@@ -282,6 +288,7 @@ export class DirectMessageService {
   private autoReplyRules: DirectMessageAutoReplyPayload['rules'] = []
   private autoReplyCooldowns = new Map<string, number>()
   private autoReplyEventSink?: (payload: DirectMessageAutoReplyEvent) => void
+  private activeSendTask: ActiveSendTask | null = null
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -293,6 +300,24 @@ export class DirectMessageService {
     this.autoReplyEventSink = sink
   }
 
+  async stopCurrentSend(): Promise<DirectMessageStopResult> {
+    if (!this.activeSendTask) {
+      return {
+        stopped: false,
+        message: '当前没有正在发送的私信任务。'
+      }
+    }
+
+    this.activeSendTask.cancelled = true
+    await Promise.all(Array.from(this.activeSendTask.clients.values()).map((client) => this.clientManager.destroyClient(client).catch(() => undefined)))
+    this.activeSendTask.clients.clear()
+
+    return {
+      stopped: true,
+      message: '已停止当前私信任务。'
+    }
+  }
+
   async sendMessages(payload: DirectMessageSendPayload, onProgress?: (payload: DirectMessageSendProgress) => void): Promise<DirectMessageSendResult> {
     const accountIds = Array.from(new Set(payload.items.map((item) => item.accountId).filter((item): item is number => typeof item === 'number')))
     const accounts = this.accountRepository.getByIds(accountIds)
@@ -301,11 +326,15 @@ export class DirectMessageService {
     const results: DirectMessageSendResultItem[] = []
     const sortedItems = [...payload.items].sort((left, right) => left.waitSeconds - right.waitSeconds)
     const startedAt = Date.now()
+    const task: ActiveSendTask = { cancelled: false, clients }
+    this.activeSendTask = task
 
     try {
       for (const item of sortedItems) {
+        if (task.cancelled) break
         const dueAt = startedAt + item.waitSeconds * 1000
-        await sleep(dueAt - Date.now())
+        await this.sleepWithCancel(dueAt - Date.now(), task)
+        if (task.cancelled) break
 
         const account = typeof item.accountId === 'number' ? accountsById.get(item.accountId) : null
         if (!account) {
@@ -336,6 +365,7 @@ export class DirectMessageService {
         let cleanup: undefined | (() => Promise<void>)
 
         try {
+          if (task.cancelled) break
           let client = clients.get(account.id)
           if (!client) {
             client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
@@ -433,16 +463,24 @@ export class DirectMessageService {
       }
     } finally {
       await Promise.all(Array.from(clients.values()).map((client) => this.clientManager.destroyClient(client)))
+      if (this.activeSendTask === task) {
+        this.activeSendTask = null
+      }
     }
 
     const successCount = results.filter((item) => item.status === 'sent').length
     const failedCount = results.filter((item) => item.status === 'failed').length
+    const remainingCount = Math.max(0, payload.items.length - results.length)
     return {
       total: results.length,
       successCount,
       failedCount,
       items: results,
-      message: failedCount === 0 ? `已成功发出 ${successCount} 条私信。` : `发送完成：成功 ${successCount} 条，失败 ${failedCount} 条。`
+      message: task.cancelled
+        ? `任务已停止：成功 ${successCount} 条，失败 ${failedCount} 条，剩余 ${remainingCount} 条未继续发送。`
+        : failedCount === 0
+          ? `已成功发出 ${successCount} 条私信。`
+          : `发送完成：成功 ${successCount} 条，失败 ${failedCount} 条。`
     }
   }
 
@@ -689,6 +727,15 @@ export class DirectMessageService {
 
   private emitAutoReplyEvent(payload: DirectMessageAutoReplyEvent) {
     this.autoReplyEventSink?.(payload)
+  }
+
+  private async sleepWithCancel(ms: number, task: ActiveSendTask) {
+    let remaining = ms
+    while (remaining > 0 && !task.cancelled) {
+      const step = Math.min(remaining, 200)
+      await sleep(step)
+      remaining -= step
+    }
   }
 
   private createFailedSendItem(item: DirectMessageSendPayload['items'][number], errorMessage: string): DirectMessageSendResultItem {
