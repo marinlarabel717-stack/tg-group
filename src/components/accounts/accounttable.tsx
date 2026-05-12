@@ -1168,7 +1168,7 @@ export const AccountTable = memo(function AccountTable() {
         }}
       />
 
-      <div className="relative pb-14">
+      <div className="relative pr-7">
         <div className="grid grid-cols-5 gap-3">
           {shortcutCards.map((shortcut, index) => {
             const active = activeShortcutId === shortcut.id
@@ -1237,9 +1237,9 @@ export const AccountTable = memo(function AccountTable() {
           type="button"
           title="新建顶部筛选"
           onClick={handleOpenShortcutDialog}
-          className="absolute bottom-0 right-0 flex h-10 w-10 items-center justify-center rounded-full border border-violet-400/28 bg-violet-400/10 text-violet-200 shadow-[0_10px_28px_rgba(0,0,0,0.28)] transition hover:bg-violet-400/16"
+          className="absolute right-0 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[8px] text-textMuted transition hover:bg-white/6 hover:text-white"
         >
-          <Settings2 size={18} />
+          <Settings2 size={14} />
         </button>
       </div>
 
