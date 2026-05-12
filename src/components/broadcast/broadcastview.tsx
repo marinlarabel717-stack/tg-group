@@ -880,212 +880,212 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
   return (
     <>
-      <div className="grid gap-5 xl:grid-cols-[280px_minmax(560px,1fr)]">
-        <GlassPanel className="bg-card">
-          <div>
-            <div className="text-lg font-semibold text-white">第 1 步：选择账号</div>
-            <div className="mt-1 text-sm text-textMuted">先选发送账号，再去读这个账号已经加入的群。</div>
-          </div>
-
-          <div className="mt-4 space-y-4">
-            <button type="button" onClick={openAccountPicker} className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
-              <Users size={16} /> 选择账号
-            </button>
-
-            <button
-              type="button"
-              disabled={!selectedAccountId || loadingJoinedGroups}
-              onClick={() => {
-                if (!selectedAccountId) return
-                syncTaskGroupsForAccount(selectedAccountId)
-                clearPreview()
-                void loadJoinedGroupsForAccount(selectedAccountId)
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-white/[0.06] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw size={16} className={loadingJoinedGroups ? 'animate-spin' : ''} />
-              {loadingJoinedGroups ? '正在读取群...' : '重新读取当前账号群'}
-            </button>
-
-            <div className="rounded-[18px] bg-panel p-4">
-              <div className="text-xs tracking-[0.18em] text-textMuted">当前操作账号</div>
-              <div className="mt-2 text-base font-semibold text-white">{selectedAccount ? (selectedAccount.username || selectedAccount.phone || `账号#${selectedAccount.id}`) : '还没选择账号'}</div>
-              <div className="mt-2 text-sm text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '未识别'} · ${formatAccountStatus(selectedAccount.status)}` : '先点上面的“选择账号”。'}</div>
+      <div className="space-y-5">
+        <GlassPanel className="bg-card sticky top-4 z-10">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <div className="text-lg font-semibold text-white">群组配置</div>
+              <div className="mt-1 text-sm text-textMuted">先选账号，再看群组，往下继续配发送时间和文案。</div>
             </div>
+            <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
+                <RefreshCw size={16} /> 预览发送
+              </button>
+              <button type="button" disabled={syncing} onClick={() => void pushScheduleToTelegram()} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/14 px-4 py-3 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-60">
+                <Send size={16} /> {syncing ? '正在启动...' : '开始定时群发'}
+              </button>
+              <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.09]">清空日志</button>
+            </div>
+          </div>
+        </GlassPanel>
 
-            <div className="rounded-[18px] bg-panel p-4">
-              <div className="text-sm font-semibold text-white">已选账号</div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {selectedAccounts.length === 0 ? (
-                  <div className="text-sm text-textMuted">还没选择发送账号。</div>
-                ) : selectedAccounts.map((account) => {
-                  const active = account.id === selectedAccountId
+        {!selectedTask ? (
+          <GlassPanel className="bg-card"><div className="text-sm text-textMuted">当前没有可用发送配置。</div></GlassPanel>
+        ) : (
+          <>
+            <GlassPanel className="bg-card">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="text-lg font-semibold text-white">选择账号</div>
+                  <div className="mt-1 text-sm text-textMuted">点击选择账号，会弹出账号列表。选完后，下面直接显示这个账号的群组信息。</div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={openAccountPicker} className="flex items-center justify-center gap-2 rounded-[14px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
+                    <Users size={16} /> 选择账号
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selectedAccountId || loadingJoinedGroups}
+                    onClick={() => {
+                      if (!selectedAccountId) return
+                      syncTaskGroupsForAccount(selectedAccountId)
+                      clearPreview()
+                      void loadJoinedGroupsForAccount(selectedAccountId)
+                    }}
+                    className="flex items-center justify-center gap-2 rounded-[14px] bg-white/[0.06] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCw size={16} className={loadingJoinedGroups ? 'animate-spin' : ''} />
+                    {loadingJoinedGroups ? '正在读取群...' : '重新读取当前账号群'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+                <div className="rounded-[18px] bg-panel p-4">
+                  <div className="text-xs tracking-[0.18em] text-textMuted">当前操作账号</div>
+                  <div className="mt-2 text-base font-semibold text-white">{selectedAccount ? (selectedAccount.username || selectedAccount.phone || `账号#${selectedAccount.id}`) : '还没选择账号'}</div>
+                  <div className="mt-2 text-sm text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '未识别'} · ${formatAccountStatus(selectedAccount.status)}` : '先点上面的“选择账号”。'}</div>
+                </div>
+
+                <div className="rounded-[18px] bg-panel p-4">
+                  <div className="text-sm font-semibold text-white">已选账号</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedAccounts.length === 0 ? (
+                      <div className="text-sm text-textMuted">还没选择发送账号。</div>
+                    ) : selectedAccounts.map((account) => {
+                      const active = account.id === selectedAccountId
+                      return (
+                        <button key={account.id} type="button" onClick={() => void handleSwitchAccount(account.id)} className={`rounded-full px-3 py-2 text-sm transition ${active ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.05] text-textMuted hover:bg-white/[0.1] hover:text-white'}`}>
+                          {account.username || account.phone || `账号#${account.id}`}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </GlassPanel>
+
+            <GlassPanel className="bg-card">
+              <div>
+                <div className="text-lg font-semibold text-white">群组信息</div>
+                <div className="mt-1 text-sm text-textMuted">这里显示当前选择账号已经加入的群。点一下就能勾选到定时群发里。</div>
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {joinedGroups.length === 0 ? (
+                  <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted lg:col-span-2">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
+                ) : joinedGroups.map((group) => {
+                  const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
+                  const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+                  const checked = Boolean(matchedGroup && selectedTask.groupIds.includes(matchedGroup.id))
                   return (
-                    <button key={account.id} type="button" onClick={() => void handleSwitchAccount(account.id)} className={`rounded-full px-3 py-2 text-sm transition ${active ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.05] text-textMuted hover:bg-white/[0.1] hover:text-white'}`}>
-                      {account.username || account.phone || `账号#${account.id}`}
+                    <button key={`${group.peerId}:${group.username || group.title}`} type="button" onClick={() => toggleJoinedGroupSelection(group)} className={`w-full rounded-[18px] border p-4 text-left transition ${checked ? 'border-violet-400/30 bg-violet-400/8' : 'border-white/8 bg-panel hover:bg-white/[0.03]'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-white">{group.title}</div>
+                          <div className="mt-1 text-xs text-textMuted">{group.username || group.targetRef || '私密群 / 无公开用户名'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
+                        </div>
+                        {checked ? <CheckCircle2 size={18} className="shrink-0 text-emerald-300" /> : null}
+                      </div>
+                      <div className={`mt-4 inline-flex rounded-[12px] px-3 py-2 text-sm ${checked ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.06] text-white'}`}>
+                        {checked ? '已勾选发送' : '勾选这个群发送'}
+                      </div>
                     </button>
                   )
                 })}
               </div>
-            </div>
+            </GlassPanel>
 
-          </div>
-        </GlassPanel>
-
-        <div className="space-y-5">
-          <GlassPanel className="bg-card sticky top-4 z-10">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <div className="text-lg font-semibold text-white">第 4 步：定时发送</div>
-                <div className="mt-1 text-sm text-textMuted">最后只管预览一下，然后开始发送。</div>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
-                  <RefreshCw size={16} /> 预览发送
-                </button>
-                <button type="button" disabled={syncing} onClick={() => void pushScheduleToTelegram()} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/14 px-4 py-3 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-60">
-                  <Send size={16} /> {syncing ? '正在启动...' : '开始 / 启动发送'}
-                </button>
-                <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.09]">清空日志</button>
-              </div>
-            </div>
-          </GlassPanel>
-
-          {!selectedTask ? (
-            <GlassPanel className="bg-card"><div className="text-sm text-textMuted">当前没有可用发送配置。</div></GlassPanel>
-          ) : (
-            <>
-              <GlassPanel className="bg-card">
-                <div className="text-lg font-semibold text-white">第 2 步：读取账号的群</div>
-                <div className="mt-1 text-sm text-textMuted">点上面“重新读取当前账号群”，然后把要发的群点进来就行。</div>
-                <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                  {joinedGroups.length === 0 ? (
-                    <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted lg:col-span-2">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
-                  ) : joinedGroups.map((group) => {
-                    const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
-                    const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
-                    const checked = Boolean(matchedGroup && selectedTask.groupIds.includes(matchedGroup.id))
-                    return (
-                      <button key={`${group.peerId}:${group.username || group.title}`} type="button" onClick={() => toggleJoinedGroupSelection(group)} className={`w-full rounded-[18px] border p-4 text-left transition ${checked ? 'border-violet-400/30 bg-violet-400/8' : 'border-white/8 bg-panel hover:bg-white/[0.03]'}`}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-white">{group.title}</div>
-                            <div className="mt-1 text-xs text-textMuted">{group.username || group.targetRef || '私密群 / 无公开用户名'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
-                          </div>
-                          {checked ? <CheckCircle2 size={18} className="shrink-0 text-emerald-300" /> : null}
-                        </div>
-                        <div className={`mt-4 inline-flex rounded-[12px] px-3 py-2 text-sm ${checked ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.06] text-white'}`}>
-                          {checked ? '已勾选发送' : '勾选这个群发送'}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </GlassPanel>
-
-              <GlassPanel className="bg-card">
-                <div className="text-lg font-semibold text-white">发送时间</div>
-                <div className="mt-1 text-sm text-textMuted">默认从今天开始排。只要开始时间、间隔和条数，系统就会自动跨天接着往后排。</div>
-                <div className="mt-4 rounded-[16px] bg-panel p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-white">会员快捷模式</div>
-                      <div className="mt-1 text-xs text-textMuted">会员号勾了“每天重复”后，会直接写 Telegram 官方的每天重复；普通号还是自动跨天，单群最多 100 条。</div>
-                    </div>
-                    <label className={`inline-flex items-center gap-2 text-sm ${currentAccountIsPremium ? 'text-white' : 'text-textMuted'}`}>
-                      <input type="checkbox" checked={selectedTask.scheduleMode === 'daily_repeat'} disabled={!currentAccountIsPremium} onChange={(event) => updateTask(selectedTask.id, { scheduleMode: event.target.checked ? 'daily_repeat' : 'date_range' })} />
-                      每天重复
-                    </label>
-                  </div>
-                  {!currentAccountIsPremium ? <div className="mt-3 text-xs text-amber-200">当前账号不是会员号：继续走普通自动跨天模式，单群最多 100 条。</div> : null}
-                </div>
-                <div className="mt-4 grid gap-4 md:grid-cols-3">
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} max={currentAccountIsPremium ? undefined : 100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: currentAccountIsPremium ? (Number(event.target.value) || 1) : Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                </div>
-                {previewSummary.total > 0 ? (
-                  <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
-                    <div>• 从今天开始</div>
-                    <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
-                    <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
-                    <div className="mt-1">• 共 {previewSummary.total} 条</div>
-                    {currentAccountIsPremium && selectedTask.scheduleMode === 'daily_repeat' ? <div className="mt-1 text-emerald-200">• 当前会按 Telegram 官方“每天重复”写入</div> : null}
-                    {!currentAccountIsPremium ? <div className="mt-1 text-amber-200">• 普通号单群最多 100 条，超过会自动压到 100 条</div> : null}
-                  </div>
-                ) : null}
-              </GlassPanel>
-
-              <GlassPanel className="bg-card">
-                <div className="flex items-center justify-between gap-3">
+            <GlassPanel className="bg-card">
+              <div className="text-lg font-semibold text-white">发送时间配置</div>
+              <div className="mt-1 text-sm text-textMuted">默认从今天开始排。只要开始时间、间隔和条数，系统就会自动跨天接着往后排。</div>
+              <div className="mt-4 rounded-[16px] bg-panel p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <div className="text-lg font-semibold text-white">第 3 步：文案设置</div>
-                    <div className="mt-1 text-sm text-textMuted">可以直接写文本/图文，也可以贴频道消息链接做转发定时发送。</div>
+                    <div className="text-sm font-semibold text-white">会员快捷模式</div>
+                    <div className="mt-1 text-xs text-textMuted">会员号勾了“每天重复”后，会直接写 Telegram 官方的每天重复；普通号还是自动跨天，单群最多 100 条。</div>
                   </div>
-                  <button type="button" onClick={createCreative} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
-                    <Plus size={16} /> 新建文案
-                  </button>
+                  <label className={`inline-flex items-center gap-2 text-sm ${currentAccountIsPremium ? 'text-white' : 'text-textMuted'}`}>
+                    <input type="checkbox" checked={selectedTask.scheduleMode === 'daily_repeat'} disabled={!currentAccountIsPremium} onChange={(event) => updateTask(selectedTask.id, { scheduleMode: event.target.checked ? 'daily_repeat' : 'date_range' })} />
+                    每天重复
+                  </label>
                 </div>
-                <div className="mt-4 space-y-4">
-                  {creatives.length === 0 ? <div className="rounded-[18px] border border-dashed border-white/10 bg-panel px-4 py-12 text-center text-sm text-textMuted">这里先保持空白。点右上角“新建文案”，再填你自己的内容。</div> : null}
-                  {creatives.map((creative) => {
-                    const checked = selectedTask.creativeIds.includes(creative.id)
-                    return (
-                      <div key={creative.id} className={`rounded-[18px] border p-4 ${checked ? 'border-violet-400/25 bg-violet-400/8' : 'border-white/8 bg-panel'}`}>
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                          <div className="flex items-center gap-3">
-                            <button type="button" onClick={() => toggleCreative(creative.id)} className={`rounded-full px-3 py-2 text-sm transition ${checked ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.05] text-textMuted hover:bg-white/[0.1] hover:text-white'}`}>
-                              {checked ? '已选中' : '选这条'}
-                            </button>
-                            <label className="flex items-center gap-2 text-sm text-textMuted">
-                              启用
-                              <input type="checkbox" checked={creative.enabled} onChange={(event) => updateCreative(creative.id, { enabled: event.target.checked })} />
-                            </label>
-                          </div>
-                          <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{readCreativeKindLabel(creative.kind)}</div>
-                        </div>
-                        <label className="mt-4 block space-y-2 text-sm">
-                          <span className="text-textMuted">消息类型</span>
-                          <select value={creative.kind || 'text'} onChange={(event) => handleCreativeKindChange(creative.id, event.target.value as 'text' | 'image' | 'image_text' | 'image_button' | 'channel_forward')} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30">
-                            <option value="text">文字</option>
-                            <option value="image">图片</option>
-                            <option value="image_text">图文</option>
-                            <option value="image_button">图文+按钮</option>
-                            <option value="channel_forward">频道链接转发</option>
-                          </select>
-                        </label>
-                        {creative.kind === 'channel_forward' ? (
-                          <label className="mt-4 block space-y-2 text-sm">
-                            <span className="text-textMuted">频道消息链接</span>
-                            <input value={creative.sourceLink || ''} onChange={(event) => updateCreative(creative.id, { sourceLink: event.target.value })} placeholder="https://t.me/频道名/123" className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" />
-                            <div className="text-xs text-textMuted">填一条频道消息链接，发送时会按这条消息做 Telegram 官方转发定时发送。</div>
-                          </label>
-                        ) : null}
-                        {creative.kind !== 'image' && creative.kind !== 'channel_forward' ? <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">文本</span><textarea rows={5} value={creative.text} onChange={(event) => updateCreative(creative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label> : null}
-                        {creative.kind !== 'text' && creative.kind !== 'channel_forward' ? (
-                          <>
-                            <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">上传图片</span><input type="file" accept="image/*" onChange={(event) => handleCreativeImageUpload(creative.id, event)} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white file:mr-3 file:rounded-[8px] file:border-0 file:bg-violet-400/14 file:px-3 file:py-2 file:text-sm file:text-violet-300" /></label>
-                            <div className="mt-3 flex items-center justify-between rounded-[12px] bg-card px-4 py-3 text-sm text-textMuted">
-                              <span>{creative.imageUrl ? '已上传图片' : '还没上传图片'}</span>
-                              {creative.imageUrl ? <button type="button" onClick={() => updateCreative(creative.id, { imageUrl: '' })} className="text-white transition hover:text-rose-200">删除图片</button> : null}
-                            </div>
-                          </>
-                        ) : null}
-                        {creative.kind === 'image_button' ? (
-                          <div className="mt-4 grid gap-4 md:grid-cols-2">
-                            <label className="space-y-2 text-sm"><span className="text-textMuted">按钮文字</span><input value={creative.buttonText || ''} onChange={(event) => updateCreative(creative.id, { buttonText: event.target.value, note: event.target.value })} placeholder="比如：立即查看" className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                            <label className="space-y-2 text-sm"><span className="text-textMuted">按钮链接</span><input value={creative.buttonUrl || ''} onChange={(event) => updateCreative(creative.id, { buttonUrl: event.target.value })} placeholder="https://..." className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                          </div>
-                        ) : null}
-                      </div>
-                    )
-                  })}
+                {!currentAccountIsPremium ? <div className="mt-3 text-xs text-amber-200">当前账号不是会员号：继续走普通自动跨天模式，单群最多 100 条。</div> : null}
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
+                <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} max={currentAccountIsPremium ? undefined : 100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: currentAccountIsPremium ? (Number(event.target.value) || 1) : Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+              </div>
+              {previewSummary.total > 0 ? (
+                <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
+                  <div>• 从今天开始</div>
+                  <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
+                  <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
+                  <div className="mt-1">• 共 {previewSummary.total} 条</div>
+                  {currentAccountIsPremium && selectedTask.scheduleMode === 'daily_repeat' ? <div className="mt-1 text-emerald-200">• 当前会按 Telegram 官方“每天重复”写入</div> : null}
+                  {!currentAccountIsPremium ? <div className="mt-1 text-amber-200">• 普通号单群最多 100 条，超过会自动压到 100 条</div> : null}
                 </div>
-              </GlassPanel>
-            </>
-          )}
-        </div>
+              ) : null}
+            </GlassPanel>
 
+            <GlassPanel className="bg-card">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-lg font-semibold text-white">文案配置</div>
+                  <div className="mt-1 text-sm text-textMuted">可以直接写文本 / 图文，也可以贴频道消息链接做转发定时发送。</div>
+                </div>
+                <button type="button" onClick={createCreative} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
+                  <Plus size={16} /> 新建文案
+                </button>
+              </div>
+              <div className="mt-4 space-y-4">
+                {creatives.length === 0 ? <div className="rounded-[18px] border border-dashed border-white/10 bg-panel px-4 py-12 text-center text-sm text-textMuted">这里先保持空白。点右上角“新建文案”，再填你自己的内容。</div> : null}
+                {creatives.map((creative) => {
+                  const checked = selectedTask.creativeIds.includes(creative.id)
+                  return (
+                    <div key={creative.id} className={`rounded-[18px] border p-4 ${checked ? 'border-violet-400/25 bg-violet-400/8' : 'border-white/8 bg-panel'}`}>
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex items-center gap-3">
+                          <button type="button" onClick={() => toggleCreative(creative.id)} className={`rounded-full px-3 py-2 text-sm transition ${checked ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.05] text-textMuted hover:bg-white/[0.1] hover:text-white'}`}>
+                            {checked ? '已选中' : '选这条'}
+                          </button>
+                          <label className="flex items-center gap-2 text-sm text-textMuted">
+                            启用
+                            <input type="checkbox" checked={creative.enabled} onChange={(event) => updateCreative(creative.id, { enabled: event.target.checked })} />
+                          </label>
+                        </div>
+                        <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{readCreativeKindLabel(creative.kind)}</div>
+                      </div>
+                      <label className="mt-4 block space-y-2 text-sm">
+                        <span className="text-textMuted">消息类型</span>
+                        <select value={creative.kind || 'text'} onChange={(event) => handleCreativeKindChange(creative.id, event.target.value as 'text' | 'image' | 'image_text' | 'image_button' | 'channel_forward')} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30">
+                          <option value="text">文字</option>
+                          <option value="image">图片</option>
+                          <option value="image_text">图文</option>
+                          <option value="image_button">图文+按钮</option>
+                          <option value="channel_forward">频道链接转发</option>
+                        </select>
+                      </label>
+                      {creative.kind === 'channel_forward' ? (
+                        <label className="mt-4 block space-y-2 text-sm">
+                          <span className="text-textMuted">频道消息链接</span>
+                          <input value={creative.sourceLink || ''} onChange={(event) => updateCreative(creative.id, { sourceLink: event.target.value })} placeholder="https://t.me/频道名/123" className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" />
+                          <div className="text-xs text-textMuted">填一条频道消息链接，发送时会按这条消息做 Telegram 官方转发定时发送。</div>
+                        </label>
+                      ) : null}
+                      {creative.kind !== 'image' && creative.kind !== 'channel_forward' ? <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">文本</span><textarea rows={5} value={creative.text} onChange={(event) => updateCreative(creative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label> : null}
+                      {creative.kind !== 'text' && creative.kind !== 'channel_forward' ? (
+                        <>
+                          <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">上传图片</span><input type="file" accept="image/*" onChange={(event) => handleCreativeImageUpload(creative.id, event)} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white file:mr-3 file:rounded-[8px] file:border-0 file:bg-violet-400/14 file:px-3 file:py-2 file:text-sm file:text-violet-300" /></label>
+                          <div className="mt-3 flex items-center justify-between rounded-[12px] bg-card px-4 py-3 text-sm text-textMuted">
+                            <span>{creative.imageUrl ? '已上传图片' : '还没上传图片'}</span>
+                            {creative.imageUrl ? <button type="button" onClick={() => updateCreative(creative.id, { imageUrl: '' })} className="text-white transition hover:text-rose-200">删除图片</button> : null}
+                          </div>
+                        </>
+                      ) : null}
+                      {creative.kind === 'image_button' ? (
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                          <label className="space-y-2 text-sm"><span className="text-textMuted">按钮文字</span><input value={creative.buttonText || ''} onChange={(event) => updateCreative(creative.id, { buttonText: event.target.value, note: event.target.value })} placeholder="比如：立即查看" className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                          <label className="space-y-2 text-sm"><span className="text-textMuted">按钮链接</span><input value={creative.buttonUrl || ''} onChange={(event) => updateCreative(creative.id, { buttonUrl: event.target.value })} placeholder="https://..." className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            </GlassPanel>
+          </>
+        )}
       </div>
 
       {accountPickerOpen ? (
