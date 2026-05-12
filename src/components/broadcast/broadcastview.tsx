@@ -108,7 +108,7 @@ function explainPreviewError(errorMessage: string) {
     return '这个频道消息不允许转发，可能频道开了禁止转发。'
   }
   if (normalized.includes('频道链接转发暂不支持 Telegram 官方重复')) {
-    return '频道链接转发暂时不能配“每天重复”，先关掉重复再发。'
+    return '这是旧版本留下的限制提示。重新点一次“预览发送”再试，现在会员号已经按重复链路放开了。'
   }
   if (normalized.includes('按钮链接格式不对') || /BUTTON_URL_INVALID/i.test(normalized)) {
     return '按钮链接格式不对，请填完整的 https:// 链接。'

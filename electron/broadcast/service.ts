@@ -85,6 +85,31 @@ function extractResponseMessageId(result: unknown) {
   return null
 }
 
+async function loadSourceMessage(client: TelegramClient, sourceLink: string) {
+  const parsed = parseTelegramMessageLink(sourceLink)
+  if (!parsed || !Number.isFinite(parsed.messageId) || parsed.messageId <= 0) {
+    throw new Error('SOURCE_MESSAGE_LINK_INVALID')
+  }
+
+  const messages = await (client as TelegramClient & {
+    getMessages: (entity: unknown, params: Record<string, unknown>) => Promise<Array<{
+      message?: string
+      text?: string
+      media?: unknown
+      entities?: unknown[]
+      id?: number
+      className?: string
+    }>>
+  }).getMessages(parsed.peerRef as never, { ids: [parsed.messageId] })
+
+  const sourceMessage = Array.isArray(messages) ? messages[0] : null
+  if (!sourceMessage || (sourceMessage as { className?: string }).className === 'MessageEmpty') {
+    throw new Error('SOURCE_MESSAGE_LINK_INVALID')
+  }
+
+  return sourceMessage
+}
+
 function extractInviteHash(input: string) {
   const raw = input.trim()
   if (!raw) return ''
@@ -339,26 +364,51 @@ export class BroadcastService {
           let messageId: number | null = null
 
           if (creative.kind === 'channel_forward') {
-            if ((item.repeatPeriodSeconds ?? 0) > 0) {
-              throw new Error('频道链接转发暂不支持 Telegram 官方重复，请先关掉“每天重复”。')
+            const repeatPeriodSeconds = (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
+
+            if (repeatPeriodSeconds) {
+              const sourceMessage = await loadSourceMessage(client, creative.sourceLink)
+              const sourceText = typeof sourceMessage.message === 'string'
+                ? sourceMessage.message
+                : typeof sourceMessage.text === 'string'
+                  ? sourceMessage.text
+                  : ''
+              const sourceMedia = sourceMessage.media
+              const sourceEntities = Array.isArray(sourceMessage.entities) ? sourceMessage.entities : undefined
+
+              if (!sourceText.trim() && !sourceMedia) {
+                throw new Error('MEDIA_EMPTY')
+              }
+
+              const resentMessage = await (client as TelegramClient & {
+                sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
+              }).sendMessage(entity as never, {
+                message: sourceText || undefined,
+                file: sourceMedia || undefined,
+                formattingEntities: sourceEntities,
+                schedule: Math.floor(scheduledAt.getTime() / 1000),
+                scheduleRepeatPeriod: repeatPeriodSeconds
+              })
+
+              messageId = extractResponseMessageId(resentMessage)
+            } else {
+              const sourceMessage = parseTelegramMessageLink(creative.sourceLink)
+              if (!sourceMessage || !Number.isFinite(sourceMessage.messageId) || sourceMessage.messageId <= 0) {
+                throw new Error('SOURCE_MESSAGE_LINK_INVALID')
+              }
+
+              const forwardResult = await (client as TelegramClient & {
+                forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
+              }).forwardMessages(entity as never, {
+                messages: [sourceMessage.messageId],
+                fromPeer: sourceMessage.peerRef as never,
+                schedule: Math.floor(scheduledAt.getTime() / 1000),
+                dropAuthor: false
+              })
+
+              const firstResult = Array.isArray(forwardResult) ? forwardResult[0] : forwardResult
+              messageId = extractResponseMessageId(firstResult)
             }
-
-            const sourceMessage = parseTelegramMessageLink(creative.sourceLink)
-            if (!sourceMessage || !Number.isFinite(sourceMessage.messageId) || sourceMessage.messageId <= 0) {
-              throw new Error('SOURCE_MESSAGE_LINK_INVALID')
-            }
-
-            const forwardResult = await (client as TelegramClient & {
-              forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
-            }).forwardMessages(entity as never, {
-              messages: [sourceMessage.messageId],
-              fromPeer: sourceMessage.peerRef as never,
-              schedule: Math.floor(scheduledAt.getTime() / 1000),
-              dropAuthor: false
-            })
-
-            const firstResult = Array.isArray(forwardResult) ? forwardResult[0] : forwardResult
-            messageId = extractResponseMessageId(firstResult)
           } else {
             const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
             const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
