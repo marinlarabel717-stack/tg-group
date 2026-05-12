@@ -84,7 +84,6 @@ export const TableToolbar = memo(function TableToolbar({
   const [rangeEnd, setRangeEnd] = useState('20')
   const [rangeMenuOpen, setRangeMenuOpen] = useState(false)
   const [checkMenuOpen, setCheckMenuOpen] = useState(false)
-  const [selectedActions, setSelectedActions] = useState<CheckAction[]>(['account-status'])
 
   const checkActions = useMemo(
     () => [
@@ -103,17 +102,10 @@ export const TableToolbar = memo(function TableToolbar({
     onSelectRange(start, end)
   }
 
-  const toggleAction = (actionId: CheckAction) => {
-    setSelectedActions((current) => (current.includes(actionId) ? current : [actionId]))
-  }
-
-  const handleStartCheck = () => {
-    const enabledActions = selectedActions.filter((actionId) =>
-      checkActions.some((item) => item.id === actionId && !item.disabled)
-    )
-
-    if (enabledActions.length === 0) return
-    onStartCheck(enabledActions)
+  const handleStartCheck = (actionId: CheckAction) => {
+    const action = checkActions.find((item) => item.id === actionId)
+    if (!action || action.disabled) return
+    onStartCheck([actionId])
     setCheckMenuOpen(false)
   }
 
@@ -155,12 +147,6 @@ export const TableToolbar = memo(function TableToolbar({
           disabled={busy}
           emphasis
         />
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <ActionButton label="导入文件" icon={<Upload size={16} />} onClick={onImportFiles} disabled={blocked} />
-        <ActionButton label="扫描文件夹" icon={<FolderSearch2 size={16} />} onClick={onImportFolder} disabled={blocked} />
-        <ActionButton label="导出所选" icon={<Download size={16} />} onClick={onExportSelected} disabled={blocked || selectedCount === 0} />
 
         <div className="relative">
           <button
@@ -169,47 +155,38 @@ export const TableToolbar = memo(function TableToolbar({
             className="flex h-11 items-center gap-2 rounded-[12px] bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <WandSparkles size={16} />
-            批量检测
+            检测菜单
             <ChevronDown size={15} className={`transition ${checkMenuOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {checkMenuOpen ? (
             <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[280px] rounded-[14px] border border-white/8 bg-card p-3 shadow-2xl">
-              <div className="mb-2 text-xs tracking-[0.2em] text-textMuted">检测菜单</div>
+              <div className="mb-2 text-xs tracking-[0.2em] text-textMuted">点击后直接开始检测</div>
               <div className="space-y-2">
-                {checkActions.map((action) => {
-                  const checked = selectedActions.includes(action.id)
-                  return (
-                    <button
-                      key={action.id}
-                      onClick={() => !action.disabled && toggleAction(action.id)}
-                      disabled={action.disabled}
-                      className={`flex w-full items-start gap-3 rounded-[12px] px-3 py-2.5 text-left transition ${action.disabled ? 'cursor-not-allowed bg-panel/40 opacity-45' : 'bg-panel hover:bg-hover'}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        readOnly
-                        className="mt-1 h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500"
-                      />
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-white">{action.label}</div>
-                        <div className="mt-1 text-xs text-textMuted">{action.description}</div>
-                      </div>
-                    </button>
-                  )
-                })}
+                {checkActions.map((action) => (
+                  <button
+                    key={action.id}
+                    onClick={() => handleStartCheck(action.id)}
+                    disabled={action.disabled || blocked || selectedCount === 0}
+                    className={`flex w-full items-start gap-3 rounded-[12px] px-3 py-2.5 text-left transition ${action.disabled ? 'cursor-not-allowed bg-panel/40 opacity-45' : 'bg-panel hover:bg-hover'}`}
+                  >
+                    <WandSparkles size={15} className="mt-0.5 shrink-0 text-neonSoft" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-white">{action.label}</div>
+                      <div className="mt-1 text-xs text-textMuted">{action.description}</div>
+                    </div>
+                  </button>
+                ))}
               </div>
-              <button
-                onClick={handleStartCheck}
-                disabled={blocked || selectedCount === 0 || selectedActions.filter((actionId) => checkActions.some((item) => item.id === actionId && !item.disabled)).length === 0}
-                className="mt-3 h-10 w-full rounded-[10px] bg-neon/10 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                开始执行
-              </button>
             </div>
           ) : null}
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <ActionButton label="导入文件" icon={<Upload size={16} />} onClick={onImportFiles} disabled={blocked} />
+        <ActionButton label="扫描文件夹" icon={<FolderSearch2 size={16} />} onClick={onImportFolder} disabled={blocked} />
+        <ActionButton label="导出所选" icon={<Download size={16} />} onClick={onExportSelected} disabled={blocked || selectedCount === 0} />
 
         <ActionButton label="删除所选" icon={<Trash2 size={16} />} onClick={onDeleteSelected} disabled={blocked || selectedCount === 0} />
         <ActionButton label="全选账号" icon={<CheckSquare size={16} />} onClick={onSelectAll} disabled={blocked || totalCount === 0} />
