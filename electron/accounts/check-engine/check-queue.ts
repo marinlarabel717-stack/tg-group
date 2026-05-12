@@ -23,6 +23,16 @@ const STATUS_LABELS: Record<AccountCheckResult['status'], string> = {
   unknown: '未检查'
 }
 
+function formatAccountResultLogLine(payload: {
+  phoneLabel: string
+  progress: string
+  displayLabel: string
+  frozenSinceSuffix?: string
+  reasonSuffix?: string
+}) {
+  return `[${payload.phoneLabel}] - [${payload.progress}] - ${payload.displayLabel}${payload.frozenSinceSuffix || ''}${payload.reasonSuffix || ''}`
+}
+
 interface CheckQueueOptions {
   concurrency?: number
   timeoutMs?: number
@@ -322,7 +332,13 @@ export class CheckQueue extends EventEmitter {
     const frozenSince = displayStatus === 'frozen' ? formatFrozenSince(result.profile?.freeze_since_date) : ''
     const frozenSinceSuffix = frozenSince ? `（${frozenSince}）` : ''
     const progressPrefix = `${this.state.completedCount}/${this.state.totalCount}`
-    this.appendLog(level, task.accountId, `${progressPrefix} — ${phoneLabel} ---- ${displayLabel}${frozenSinceSuffix}${reasonSuffix}`, task.attempt + 1, {
+    this.appendLog(level, task.accountId, formatAccountResultLogLine({
+      phoneLabel,
+      progress: progressPrefix,
+      displayLabel,
+      frozenSinceSuffix,
+      reasonSuffix
+    }), task.attempt + 1, {
       phone: result.phone,
       status: displayStatus
     })

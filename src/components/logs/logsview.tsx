@@ -55,7 +55,7 @@ const LogLines = memo(function LogLines({
         return (
           <div key={log.id} className={`cursor-text select-text text-sm leading-7 ${lineClass}`}>
             <span className={lineClass}>{formatLogTimestamp(log.createdAt)}</span>
-            <span className={`mx-2 ${lineClass}`}>—</span>
+            <span className={`mx-2 ${lineClass}`}>-</span>
             <span className="select-text">{log.message}</span>
           </div>
         )
