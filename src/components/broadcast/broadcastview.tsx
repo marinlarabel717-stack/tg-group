@@ -6,10 +6,8 @@ import { useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
 
 const tabs: Array<{ key: BroadcastTabKey; label: string; icon: typeof ListChecks }> = [
-  { key: 'tasks', label: '定时群发', icon: Play },
-  { key: 'calendar', label: '发送日志', icon: CalendarClock },
-  { key: 'targets', label: '群数据', icon: Users },
-  { key: 'creatives', label: '文案设置', icon: MessageSquareText }
+  { key: 'tasks', label: '群组配置', icon: Users },
+  { key: 'calendar', label: '发送日志', icon: CalendarClock }
 ]
 
 function getPreviewTone(status: BroadcastPreviewItem['status']) {
@@ -1342,19 +1340,23 @@ const CalendarWorkbench = memo(function CalendarWorkbench() {
 export default memo(function BroadcastView() {
   const initAccounts = useAccountStore((state) => state.init)
   const activeTab = useBroadcastStore((state) => state.activeTab)
+  const setActiveTab = useBroadcastStore((state) => state.setActiveTab)
 
   useEffect(() => {
     void initAccounts()
   }, [initAccounts])
 
+  useEffect(() => {
+    if (activeTab !== 'tasks' && activeTab !== 'calendar') {
+      setActiveTab('tasks')
+    }
+  }, [activeTab, setActiveTab])
+
   return (
     <div className="contain-layout">
       <div className="space-y-5">
         <TabBar />
-        {activeTab === 'tasks' ? <BroadcastConsole /> : null}
-        {activeTab === 'calendar' ? <LogsWorkbench /> : null}
-        {activeTab === 'targets' ? <TargetsWorkbench /> : null}
-        {activeTab === 'creatives' ? <CreativesWorkbench /> : null}
+        {activeTab === 'calendar' ? <LogsWorkbench /> : <BroadcastConsole />}
       </div>
     </div>
   )
