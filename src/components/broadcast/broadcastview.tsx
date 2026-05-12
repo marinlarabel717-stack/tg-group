@@ -763,6 +763,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedAccountId) ?? null, [accounts, selectedAccountId])
   const currentAccountIsPremium = Boolean(selectedAccount?.profile?.is_premium)
   const showDateRangeInputs = !currentAccountIsPremium || selectedTask?.scheduleMode !== 'daily_repeat'
+  const checkedGroupCount = useMemo(() => {
+    if (!selectedTask || !selectedAccount) return 0
+    return groups.filter((group) => selectedTask.groupIds.includes(group.id) && group.accountIds.includes(selectedAccount.id)).length
+  }, [groups, selectedAccount, selectedTask])
   const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTask?.id), [previewItems, selectedTask])
   const previewSummary = useMemo(() => {
     const successCount = selectedPreview.filter((item) => item.status === 'scheduled').length
@@ -1082,6 +1086,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   只看已勾选
                 </label>
                 <div className="text-sm text-textMuted">当前显示 {filteredJoinedGroups.length} 个群</div>
+                <div className="rounded-full bg-violet-400/12 px-3 py-1 text-sm text-violet-200">已勾选 {checkedGroupCount} 个群</div>
               </div>
               <div className="mt-4 overflow-hidden rounded-[18px] border border-white/8 bg-panel">
                 {joinedGroups.length === 0 ? (
