@@ -83,10 +83,6 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
       <div className="mr-1 flex h-11 w-11 items-center justify-center rounded-[12px] bg-panel text-neonSoft">
         <SlidersHorizontal size={17} />
       </div>
-      <FilterSelect label="国家" value={props.countryFilter} options={props.countries} onChange={props.onCountryChange} />
-      <FilterSelect label="状态" value={props.statusFilter} options={props.statuses} onChange={props.onStatusChange} />
-      <FilterSelect label="资料来源" value={props.sourceFilter} options={props.sources} onChange={props.onSourceChange} />
-      <FilterSelect label="Proxy" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
 
       <div className="relative">
         <button
@@ -122,10 +118,15 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
         ) : null}
       </div>
 
+      <FilterSelect label="国家" value={props.countryFilter} options={props.countries} onChange={props.onCountryChange} />
+      <FilterSelect label="状态" value={props.statusFilter} options={props.statuses} onChange={props.onStatusChange} />
+      <FilterSelect label="资料来源" value={props.sourceFilter} options={props.sources} onChange={props.onSourceChange} />
+      <FilterSelect label="Proxy" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
+
       <button
         onClick={props.onRefresh}
         disabled={props.busy}
-        className="flex h-11 items-center gap-2 rounded-[12px] bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
+        className="ml-auto flex h-11 items-center gap-2 rounded-[12px] bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {props.loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
         刷新
