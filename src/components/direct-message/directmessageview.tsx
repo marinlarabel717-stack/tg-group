@@ -121,6 +121,7 @@ const SendWorkbench = memo(function SendWorkbench() {
   const setSelectedAccounts = useDirectMessageStore((state) => state.setSelectedAccounts)
   const targetInput = useDirectMessageStore((state) => state.targetInput)
   const setTargetInput = useDirectMessageStore((state) => state.setTargetInput)
+  const targetSummary = useDirectMessageStore((state) => state.targetSummary)
   const targets = useDirectMessageStore((state) => state.targets)
   const importTargets = useDirectMessageStore((state) => state.importTargets)
   const removeTarget = useDirectMessageStore((state) => state.removeTarget)
@@ -137,8 +138,6 @@ const SendWorkbench = memo(function SendWorkbench() {
   const setGroupConcurrency = useDirectMessageStore((state) => state.setGroupConcurrency)
   const intervalSeconds = useDirectMessageStore((state) => state.intervalSeconds)
   const setIntervalSeconds = useDirectMessageStore((state) => state.setIntervalSeconds)
-  const dedupeEnabled = useDirectMessageStore((state) => state.dedupeEnabled)
-  const setDedupeEnabled = useDirectMessageStore((state) => state.setDedupeEnabled)
   const previewItems = useDirectMessageStore((state) => state.previewItems)
   const generatePreview = useDirectMessageStore((state) => state.generatePreview)
   const startSend = useDirectMessageStore((state) => state.startSend)
@@ -168,10 +167,10 @@ const SendWorkbench = memo(function SendWorkbench() {
     })
   }, [accountSearch, accounts])
 
-  const validTargets = useMemo(() => targets.filter((item) => item.valid).length, [targets])
-  const invalidTargets = useMemo(() => targets.filter((item) => !item.valid).length, [targets])
-  const duplicateTargets = useMemo(() => targets.filter((item) => item.duplicate).length, [targets])
-  const effectiveTargets = useMemo(() => targets.filter((item) => item.valid && (dedupeEnabled ? !item.duplicate : true)), [dedupeEnabled, targets])
+  const validTargets = targetSummary.valid
+  const invalidTargets = targetSummary.invalid
+  const duplicateTargets = targetSummary.duplicate
+  const effectiveTargets = targets
   const successCount = useMemo(() => previewItems.filter((item) => item.status === 'sent').length, [previewItems])
   const failedCount = useMemo(() => previewItems.filter((item) => item.status === 'failed').length, [previewItems])
   const latestRun = runs[0] ?? null
@@ -264,17 +263,13 @@ const SendWorkbench = memo(function SendWorkbench() {
                   className="w-full rounded-[16px] border border-white/8 bg-panel px-4 py-4 text-white outline-none focus:border-violet-400/30"
                 />
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => importTargets(targetInput, { mode: 'replace', source: 'manual' })} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">覆盖导入</button>
-                  <button type="button" onClick={() => importTargets(targetInput, { mode: 'append', source: 'manual' })} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.08]">追加导入</button>
-                  <label className="inline-flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.08]">
-                    <input type="checkbox" checked={dedupeEnabled} onChange={(event) => setDedupeEnabled(event.target.checked)} /> 自动去重复
-                  </label>
+                  <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300">复制进来会自动清理重复和格式错误</div>
                   <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.08]">清空预览</button>
                 </div>
               </div>
 
               <div className="grid gap-3">
-                <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">总数量</div><div className="mt-2 text-2xl font-semibold text-white">{targets.length}</div></div>
+                <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">总数量</div><div className="mt-2 text-2xl font-semibold text-white">{targetSummary.total}</div></div>
                 <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">可发送</div><div className="mt-2 text-2xl font-semibold text-white">{effectiveTargets.length}</div></div>
                 <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">重复</div><div className="mt-2 text-2xl font-semibold text-white">{duplicateTargets}</div></div>
                 <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">格式不对</div><div className="mt-2 text-2xl font-semibold text-white">{invalidTargets}</div></div>
