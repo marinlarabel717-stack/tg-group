@@ -1007,7 +1007,7 @@ export const AccountTable = memo(function AccountTable() {
 
       {selectedCount > 0 && typeof document !== 'undefined'
         ? createPortal(
-            <div className="fixed bottom-4 left-1/2 z-[999] w-[min(1180px,calc(100vw-32px))] -translate-x-1/2 px-1" ref={bulkMenuRef}>
+            <div className="fixed bottom-4 left-1/2 z-[999] w-[min(1180px,calc(100vw-32px))] -translate-x-1/2 px-1" ref={bulkMenuRef} style={{ marginLeft: '12px' }}>
               <div className="rounded-[16px] border border-white/10 bg-card/95 px-3 py-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur">
                 <div className="flex flex-col gap-3 rounded-[12px] bg-panel/85 px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-3">
