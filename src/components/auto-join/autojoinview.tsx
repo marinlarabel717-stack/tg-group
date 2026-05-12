@@ -494,13 +494,11 @@ const LogsWorkbench = memo(function LogsWorkbench() {
 
                 <div className="mt-3 space-y-2">
                   {(accountSummaryExpanded ? accountSummary : accountSummary.slice(0, 3)).map((item) => (
-                    <div key={item.accountLabel} className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] bg-white/[0.03] px-3 py-2 text-sm">
-                      <span className="select-text text-white">{item.accountLabel}</span>
-                      <div className="flex flex-wrap items-center gap-3 text-xs">
-                        <span className="text-slate-200">总计 {item.total}</span>
+                    <div key={item.accountLabel} className="rounded-[12px] bg-white/[0.03] px-3 py-3 text-sm">
+                      <div className="select-text text-white">{item.accountLabel}</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
                         <span className="text-emerald-300">成功 {item.success}</span>
                         <span className="text-amber-200">审核 {item.requested}</span>
-                        <span className="text-slate-200">已在群 {item.already}</span>
                         <span className="text-rose-300">失败 {item.failed}</span>
                       </div>
                     </div>
@@ -582,7 +580,6 @@ export default function AutoJoinView() {
   const completionDialogTaskId = useAutoJoinStore((state) => state.completionDialogTaskId)
   const closeCompletionDialog = useAutoJoinStore((state) => state.closeCompletionDialog)
   const completionSnapshot = useMemo(() => taskSnapshots.find((item) => item.taskId === completionDialogTaskId) ?? null, [completionDialogTaskId, taskSnapshots])
-  const completionAccountSummary = useMemo(() => buildAccountSummary(completionSnapshot), [completionSnapshot])
 
   return (
     <>
@@ -616,28 +613,6 @@ export default function AutoJoinView() {
           <ResultStatCard label="失败" value={completionSnapshot?.failedCount || 0} tone="danger" />
           <ResultStatCard label="已在群" value={completionSnapshot?.alreadyCount || 0} tone="neutral" />
         </div>
-
-        {completionAccountSummary.length > 0 ? (
-          <div className="rounded-[16px] border border-white/8 bg-panel px-4 py-4">
-            <div className="text-sm font-medium text-white">各账号群组数量</div>
-            <div className="mt-3 max-h-[220px] space-y-2 overflow-auto">
-              {completionAccountSummary.map((item) => (
-                <div key={item.accountLabel} className="rounded-[12px] bg-white/[0.04] px-3 py-3 text-sm text-slate-200">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="truncate text-white">{item.accountLabel}</div>
-                    <div className="text-textMuted">共 {item.total} 个</div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">成功 {item.success}</span>
-                    <span className="rounded-full bg-amber-400/10 px-2 py-1 text-amber-200">审核 {item.requested}</span>
-                    <span className="rounded-full bg-white/[0.06] px-2 py-1 text-slate-200">已在群 {item.already}</span>
-                    <span className="rounded-full bg-rose-400/10 px-2 py-1 text-rose-300">失败 {item.failed}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
 
         <ResultPrimaryButton label="知道了" onClick={closeCompletionDialog} tone="success" />
       </ResultDialogShell>

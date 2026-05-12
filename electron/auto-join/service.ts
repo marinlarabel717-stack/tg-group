@@ -55,8 +55,8 @@ function requeueItem(queue: PendingJoinItem[], item: PendingJoinItem, dispatchMo
 }
 
 function readAccountLogLabel(account: AccountRecord) {
-  if (account.userId?.trim()) return account.userId.trim()
   if (account.phone?.trim()) return account.phone.trim()
+  if (account.userId?.trim()) return account.userId.trim()
   return String(account.id)
 }
 
