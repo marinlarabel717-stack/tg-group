@@ -149,6 +149,7 @@ interface DirectMessageState {
   generatePreview: (accounts: Array<{ id: number; username?: string; phone?: string; profile?: Record<string, unknown> }>) => void
   startSend: () => Promise<void>
   clearPreview: () => void
+  clearRuns: () => void
   initRuntime: () => Promise<void>
   syncAutoReply: () => Promise<void>
   clearAutoReplyEvents: () => void
@@ -570,6 +571,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         }
       },
       clearPreview: () => set({ previewItems: [], lastActionMessage: '当前私信预览已清空。' }),
+      clearRuns: () => set({ runs: [], lastActionMessage: '私信日志已清空。' }),
       initRuntime: async () => {
         if (!window.desktopDirectMessage || subscribed) {
           if (!window.desktopDirectMessage) set({ runtimeReady: false })

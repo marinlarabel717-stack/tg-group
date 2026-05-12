@@ -435,6 +435,7 @@ const SendWorkbench = memo(function SendWorkbench() {
 
 const LogsWorkbench = memo(function LogsWorkbench() {
   const runs = useDirectMessageStore((state) => state.runs)
+  const clearRuns = useDirectMessageStore((state) => state.clearRuns)
   const detailedItems = useMemo(
     () => runs.flatMap((run) => run.items.map((item) => ({ ...item, fallbackAt: run.createdAt }))),
     [runs]
@@ -442,7 +443,10 @@ const LogsWorkbench = memo(function LogsWorkbench() {
 
   return (
     <GlassPanel className="bg-card">
-      <div className="text-base font-semibold text-white">私信日志</div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-base font-semibold text-white">私信日志</div>
+        <button type="button" onClick={clearRuns} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
+      </div>
       <div className="mt-4 space-y-3">
         {detailedItems.length === 0 ? (
           <div className="rounded-[16px] bg-panel/70 px-4 py-10 text-center text-sm text-textMuted">还没有发送记录</div>
