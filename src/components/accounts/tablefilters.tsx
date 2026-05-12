@@ -51,7 +51,7 @@ function FilterSelect({
 export const TableFilters = memo(function TableFilters(props: TableFiltersProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <div className="relative w-full min-w-[220px] md:w-[320px] xl:w-[380px]">
+      <div className="relative w-full min-w-[180px] md:w-[220px] xl:w-[260px]">
         <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" size={16} />
         <input
           value={props.search}
@@ -78,7 +78,7 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
       <button
         type="button"
         onClick={props.onRefresh}
-        className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-card px-4 text-sm font-medium text-textMain transition hover:bg-hover"
+        className="inline-flex h-11 min-w-[96px] shrink-0 items-center justify-center gap-2 rounded-[12px] bg-card px-5 text-sm font-medium text-textMain transition hover:bg-hover"
       >
         <RefreshCw size={16} />
         刷新
