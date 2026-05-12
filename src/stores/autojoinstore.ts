@@ -403,7 +403,9 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           stopping: false,
           currentTaskId: taskId,
           completionDialogTaskId: null,
-          tasks: upsertTask(state.tasks, createTaskRecord({ id: taskId, name: taskName, total: initialTotal })),
+          logs: [],
+          taskSnapshots: [],
+          tasks: [createTaskRecord({ id: taskId, name: taskName, total: initialTotal })],
           lastActionMessage: duplicates.length > 0 || invalids.length > 0
             ? `已过滤 ${duplicates.length} 条重复、${invalids.length} 条无效目标，准备开始加群。`
             : '自动加群任务已提交，正在启动。'
@@ -523,10 +525,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
         floodRestMax: state.floodRestMax,
         retryLimit: state.retryLimit,
         repeatJoinEnabled: state.repeatJoinEnabled,
-        dispatchMode: state.dispatchMode,
-        tasks: state.tasks,
-        logs: state.logs,
-        taskSnapshots: state.taskSnapshots
+        dispatchMode: state.dispatchMode
       })
     }
   )
