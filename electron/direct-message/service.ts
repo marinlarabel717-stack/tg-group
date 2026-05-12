@@ -368,19 +368,40 @@ export class DirectMessageService {
     const results: DirectMessageSendResultItem[] = []
     const unavailableAccountIds = new Set<number>()
     const accountCooldownUntil = new Map<number, number>()
-    const sortedItems = [...payload.items].sort((left, right) => left.waitSeconds - right.waitSeconds)
     const startedAt = Date.now()
+    const pendingItems = [...payload.items]
+      .sort((left, right) => left.waitSeconds - right.waitSeconds)
+      .map((item) => ({ item, dueAt: startedAt + item.waitSeconds * 1000 }))
     const task: ActiveSendTask = { cancelled: false, clients }
     let stopReason = ''
     this.activeSendTask = task
 
     try {
-      for (const item of sortedItems) {
-        if (task.cancelled) break
-        const dueAt = startedAt + item.waitSeconds * 1000
-        await this.sleepWithCancel(dueAt - Date.now(), task)
+      while (pendingItems.length > 0) {
         if (task.cancelled) break
 
+        let nextIndex = 0
+        let nextDueAt = Number.POSITIVE_INFINITY
+
+        for (let index = 0; index < pendingItems.length; index += 1) {
+          const entry = pendingItems[index]
+          const accountId = typeof entry.item.accountId === 'number' ? entry.item.accountId : null
+          const cooldownUntil = accountId != null ? (accountCooldownUntil.get(accountId) ?? 0) : 0
+          const effectiveDueAt = Math.max(entry.dueAt, cooldownUntil)
+          if (effectiveDueAt < nextDueAt) {
+            nextDueAt = effectiveDueAt
+            nextIndex = index
+          }
+        }
+
+        const waitMs = nextDueAt - Date.now()
+        if (waitMs > 0) {
+          await this.sleepWithCancel(waitMs, task)
+          if (task.cancelled) break
+        }
+
+        const [entry] = pendingItems.splice(nextIndex, 1)
+        const { item } = entry
         const account = typeof item.accountId === 'number' ? accountsById.get(item.accountId) : null
         if (typeof item.accountId === 'number' && unavailableAccountIds.has(item.accountId)) {
           if (unavailableAccountIds.size >= accountIds.length) {
@@ -399,16 +420,6 @@ export class DirectMessageService {
           results.push(resultItem)
           this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
           continue
-        }
-
-        if (typeof item.accountId === 'number') {
-          const cooldownUntil = accountCooldownUntil.get(item.accountId) ?? 0
-          if (cooldownUntil > Date.now()) {
-            const remainingSeconds = Math.max(1, Math.ceil((cooldownUntil - Date.now()) / 1000))
-            this.emitSendNotice(results, payload.items.length, `[${account.phone || readAccountLabel(account)}] 这个账号刚触发私信风控，先暂停 ${remainingSeconds} 秒，到时间后自动继续发送。`, onProgress, remainingSeconds)
-            await this.sleepWithCancel(cooldownUntil - Date.now(), task)
-            if (task.cancelled) break
-          }
         }
 
         if (payload.messageType === 'text' && !payload.messageText.trim()) {
@@ -431,6 +442,7 @@ export class DirectMessageService {
         }
 
         let cleanup: undefined | (() => Promise<void>)
+        let requeueItem = false
 
         try {
           if (task.cancelled) break
@@ -540,16 +552,20 @@ export class DirectMessageService {
               this.emitSendNotice(
                 results,
                 payload.items.length,
-                `[${account.phone || readAccountLabel(account)}] 这个账号触发私信风控，先暂停 ${waitSeconds} 秒，到时间后自动继续发送。`,
+                `[${account.phone || readAccountLabel(account)}] 这个账号触发私信风控，先暂停 ${waitSeconds} 秒，其他账号继续发送，到时间后自动恢复。`,
                 onProgress,
                 waitSeconds
               )
 
-              await this.sleepWithCancel(waitSeconds * 1000, task)
+              pendingItems.push({ item, dueAt: cooldownUntil })
+              requeueItem = true
+              break
             }
           }
 
-          if (task.cancelled || !resultItem) break
+          if (task.cancelled) break
+          if (requeueItem) continue
+          if (!resultItem) break
 
           results.push(resultItem)
           this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
