@@ -6,10 +6,10 @@ import { useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
 
 const tabs: Array<{ key: BroadcastTabKey; label: string; icon: typeof ListChecks }> = [
-  { key: 'tasks', label: '任务', icon: ListChecks },
-  { key: 'creatives', label: '文案库', icon: MessageSquareText },
-  { key: 'targets', label: '账号 / 群', icon: Users },
-  { key: 'calendar', label: '排程日历', icon: CalendarClock }
+  { key: 'tasks', label: '定时群发', icon: Play },
+  { key: 'calendar', label: '发送日志', icon: CalendarClock },
+  { key: 'targets', label: '群数据', icon: Users },
+  { key: 'creatives', label: '文案设置', icon: MessageSquareText }
 ]
 
 function getPreviewTone(status: BroadcastPreviewItem['status']) {
@@ -175,7 +175,7 @@ const TabBar = memo(function TabBar() {
             key={tab.key}
             type="button"
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-2 rounded-[12px] px-4 py-2.5 text-sm transition ${active ? 'bg-violet-400/12 text-violet-300' : 'bg-white/[0.03] text-textMuted hover:bg-white/[0.06] hover:text-white'}`}
+            className={`flex items-center gap-2 rounded-[16px] border px-4 py-2.5 text-sm transition ${active ? 'border-violet-300/60 bg-violet-400/12 text-violet-200 shadow-[0_0_0_1px_rgba(167,139,250,0.08)]' : 'border-white/12 bg-white/[0.02] text-textMuted hover:bg-white/[0.05] hover:text-white'}`}
           >
             <Icon size={16} />
             {tab.label}
@@ -882,7 +882,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
   return (
     <>
-      <div className="grid gap-5 xl:grid-cols-[280px_minmax(560px,1fr)_360px]">
+      <div className="grid gap-5 xl:grid-cols-[280px_minmax(560px,1fr)]">
         <GlassPanel className="bg-card">
           <div>
             <div className="text-lg font-semibold text-white">第 1 步：选择账号</div>
@@ -1088,79 +1088,6 @@ const BroadcastConsole = memo(function BroadcastConsole() {
           )}
         </div>
 
-        <GlassPanel className="bg-card">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-lg font-semibold text-white">运行日志</div>
-              <div className="mt-1 text-sm text-textMuted">发送预览、写入结果、报错都放右边。</div>
-            </div>
-            <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{selectedPreview.length} 条</div>
-          </div>
-
-          {lastActionMessage ? <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage}</div> : null}
-          {errorMessage ? <div className="mt-3 rounded-[14px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
-
-          {selectedPreview.length > 0 ? (
-            <div className="mt-4 space-y-3">
-              <div className="rounded-[18px] border border-violet-400/15 bg-violet-400/8 p-4">
-                <div className="text-sm font-semibold text-white">结果先看这里</div>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-[14px] bg-panel px-4 py-3">
-                    <div className="text-xs text-textMuted">已写入</div>
-                    <div className="mt-1 text-xl font-semibold text-emerald-300">{previewSummary.successCount} 条</div>
-                  </div>
-                  <div className="rounded-[14px] bg-panel px-4 py-3">
-                    <div className="text-xs text-textMuted">失败</div>
-                    <div className="mt-1 text-xl font-semibold text-rose-300">{previewSummary.failedCount} 条</div>
-                  </div>
-                  <div className="rounded-[14px] bg-panel px-4 py-3">
-                    <div className="text-xs text-textMuted">待写入</div>
-                    <div className="mt-1 text-xl font-semibold text-slate-200">{previewSummary.pendingCount} 条</div>
-                  </div>
-                </div>
-              </div>
-
-              {previewSummary.failedCount > 0 ? (
-                <div className="rounded-[18px] border border-rose-400/15 bg-rose-400/8 p-4">
-                  <div className="text-sm font-semibold text-white">先处理这几个问题</div>
-                  <div className="mt-3 space-y-2 text-sm text-rose-100">
-                    {previewSummary.expiredCount > 0 ? <div>1）有 {previewSummary.expiredCount} 条已经过期：先重新点“预览发送”，再马上点“开始发送”。</div> : null}
-                    {previewSummary.unboundGroupNames.length > 0 ? <div>2）这些群还没绑好发送账号：{previewSummary.unboundGroupNames.join('、')}</div> : null}
-                    {previewSummary.invalidRefGroupNames.length > 0 ? <div>3）这些群的群链接 / 私密链接还不对：{previewSummary.invalidRefGroupNames.join('、')}</div> : null}
-                    {previewSummary.expiredCount === 0 && previewSummary.unboundGroupNames.length === 0 && previewSummary.invalidRefGroupNames.length === 0 ? <div>有失败项，但不是上面这两类常见问题，往下看单条报错就行。</div> : null}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="mt-4 max-h-[820px] space-y-3 overflow-y-auto pr-1">
-            {selectedPreview.length === 0 ? (
-              <div className="flex min-h-[260px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">还没有运行日志，先点上面的“预览发送”或“开始 / 启动发送”。</div>
-            ) : selectedPreview.map((item) => {
-              const creative = creatives.find((entry) => entry.id === item.creativeId)
-              const group = groups.find((entry) => entry.id === item.groupId)
-              const account = accounts.find((entry) => entry.id === item.accountId)
-              return (
-                <div key={item.id} className="rounded-[16px] bg-panel p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-white">{formatDateTimeFull(item.scheduledAt)}</div>
-                    <div className={`rounded-full px-2.5 py-1 text-[11px] ${getPreviewTone(item.status)}`}>{item.status === 'scheduled' ? '已写入' : item.status === 'failed' ? '失败' : '待发送'}</div>
-                  </div>
-                  <div className="mt-3 space-y-1 text-sm text-slate-200">
-                    <div>群组：{group?.title || '未匹配群组'}</div>
-                    <div>账号：{account?.username || account?.phone || '未分配账号'}</div>
-                    <div>文案：{creative ? readCreativeTitle(creative) : '未匹配文案'}</div>
-                    <div>重复：{readRepeatLabel(item.repeatPeriodSeconds)}</div>
-                    {item.remoteMessageId ? <div>消息 ID：{item.remoteMessageId}</div> : null}
-                    {item.syncedAt ? <div>写入时间：{formatDateTimeFull(item.syncedAt)}</div> : null}
-                  </div>
-                  {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200">{explainPreviewError(item.errorMessage)}</div> : null}
-                </div>
-              )
-            })}
-          </div>
-        </GlassPanel>
       </div>
 
       {accountPickerOpen ? (
@@ -1247,6 +1174,117 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   )
 })
 
+const LogsWorkbench = memo(function LogsWorkbench() {
+  const accounts = useAccountStore((state) => state.accounts)
+  const tasks = useBroadcastStore((state) => state.tasks)
+  const groups = useBroadcastStore((state) => state.groups)
+  const creatives = useBroadcastStore((state) => state.creatives)
+  const previewItems = useBroadcastStore((state) => state.previewItems)
+  const selectedTaskId = useBroadcastStore((state) => state.selectedTaskId)
+  const lastActionMessage = useBroadcastStore((state) => state.lastActionMessage)
+  const errorMessage = useBroadcastStore((state) => state.errorMessage)
+
+  const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? tasks[0] ?? null, [selectedTaskId, tasks])
+  const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTask?.id), [previewItems, selectedTask])
+  const previewSummary = useMemo(() => {
+    const successCount = selectedPreview.filter((item) => item.status === 'scheduled').length
+    const failedItems = selectedPreview.filter((item) => item.status === 'failed')
+    const pendingCount = selectedPreview.length - successCount - failedItems.length
+    const expiredCount = failedItems.filter((item) => item.errorMessage.includes('排程时间太近') || item.errorMessage.includes('已过期')).length
+    const unboundGroupNames = Array.from(new Set(failedItems
+      .filter((item) => item.errorMessage.includes('目标群内没有已加入且可发送的账号'))
+      .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
+    const invalidRefGroupNames = Array.from(new Set(failedItems
+      .filter((item) => item.errorMessage.includes('缺少可用的 @username') || item.errorMessage.includes('缺少可用的 @username、私密链接或群链接') || item.errorMessage.includes('无法识别这个群'))
+      .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
+    return {
+      total: selectedPreview.length,
+      successCount,
+      failedCount: failedItems.length,
+      pendingCount,
+      expiredCount,
+      unboundGroupNames,
+      invalidRefGroupNames
+    }
+  }, [groups, selectedPreview])
+
+  return (
+    <GlassPanel className="bg-card min-h-[720px]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-lg font-semibold text-white">发送日志</div>
+          <div className="mt-1 text-sm text-textMuted">这里专门看预览结果、写入结果和失败原因。</div>
+        </div>
+        <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{selectedPreview.length} 条</div>
+      </div>
+
+      {lastActionMessage ? <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage}</div> : null}
+      {errorMessage ? <div className="mt-3 rounded-[14px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
+
+      {selectedPreview.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          <div className="rounded-[18px] border border-violet-400/15 bg-violet-400/8 p-4">
+            <div className="text-sm font-semibold text-white">结果先看这里</div>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <div className="rounded-[14px] bg-panel px-4 py-3">
+                <div className="text-xs text-textMuted">已写入</div>
+                <div className="mt-1 text-xl font-semibold text-emerald-300">{previewSummary.successCount} 条</div>
+              </div>
+              <div className="rounded-[14px] bg-panel px-4 py-3">
+                <div className="text-xs text-textMuted">失败</div>
+                <div className="mt-1 text-xl font-semibold text-rose-300">{previewSummary.failedCount} 条</div>
+              </div>
+              <div className="rounded-[14px] bg-panel px-4 py-3">
+                <div className="text-xs text-textMuted">待写入</div>
+                <div className="mt-1 text-xl font-semibold text-slate-200">{previewSummary.pendingCount} 条</div>
+              </div>
+            </div>
+          </div>
+
+          {previewSummary.failedCount > 0 ? (
+            <div className="rounded-[18px] border border-rose-400/15 bg-rose-400/8 p-4">
+              <div className="text-sm font-semibold text-white">先处理这几个问题</div>
+              <div className="mt-3 space-y-2 text-sm text-rose-100">
+                {previewSummary.expiredCount > 0 ? <div>1）有 {previewSummary.expiredCount} 条已经过期：先重新点“预览发送”，再马上点“开始发送”。</div> : null}
+                {previewSummary.unboundGroupNames.length > 0 ? <div>2）这些群还没绑好发送账号：{previewSummary.unboundGroupNames.join('、')}</div> : null}
+                {previewSummary.invalidRefGroupNames.length > 0 ? <div>3）这些群的群链接 / 私密链接还不对：{previewSummary.invalidRefGroupNames.join('、')}</div> : null}
+                {previewSummary.expiredCount === 0 && previewSummary.unboundGroupNames.length === 0 && previewSummary.invalidRefGroupNames.length === 0 ? <div>有失败项，但不是上面这两类常见问题，往下看单条报错就行。</div> : null}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-4 max-h-[820px] space-y-3 overflow-y-auto pr-1">
+        {selectedPreview.length === 0 ? (
+          <div className="flex min-h-[260px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">还没有发送日志，先去“定时群发”页预览或开始发送。</div>
+        ) : selectedPreview.map((item) => {
+          const creative = creatives.find((entry) => entry.id === item.creativeId)
+          const group = groups.find((entry) => entry.id === item.groupId)
+          const account = accounts.find((entry) => entry.id === item.accountId)
+          return (
+            <div key={item.id} className="rounded-[16px] bg-panel p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-white">{formatDateTimeFull(item.scheduledAt)}</div>
+                <div className={`rounded-full px-2.5 py-1 text-[11px] ${getPreviewTone(item.status)}`}>{item.status === 'scheduled' ? '已写入' : item.status === 'failed' ? '失败' : '待发送'}</div>
+              </div>
+              <div className="mt-3 space-y-1 text-sm text-slate-200">
+                <div>群组：{group?.title || '未匹配群组'}</div>
+                <div>账号：{account?.username || account?.phone || '未分配账号'}</div>
+                <div>文案：{creative ? readCreativeTitle(creative) : '未匹配文案'}</div>
+                <div>重复：{readRepeatLabel(item.repeatPeriodSeconds)}</div>
+                {item.remoteMessageId ? <div>消息 ID：{item.remoteMessageId}</div> : null}
+                {item.syncedAt ? <div>写入时间：{formatDateTimeFull(item.syncedAt)}</div> : null}
+              </div>
+              {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200">{explainPreviewError(item.errorMessage)}</div> : null}
+            </div>
+          )
+        })}
+      </div>
+    </GlassPanel>
+  )
+})
+
 const CalendarWorkbench = memo(function CalendarWorkbench() {
   const previewItems = useBroadcastStore((state) => state.previewItems)
   const creatives = useBroadcastStore((state) => state.creatives)
@@ -1303,6 +1341,7 @@ const CalendarWorkbench = memo(function CalendarWorkbench() {
 
 export default memo(function BroadcastView() {
   const initAccounts = useAccountStore((state) => state.init)
+  const activeTab = useBroadcastStore((state) => state.activeTab)
 
   useEffect(() => {
     void initAccounts()
@@ -1310,7 +1349,13 @@ export default memo(function BroadcastView() {
 
   return (
     <div className="contain-layout">
-      <BroadcastConsole />
+      <div className="space-y-5">
+        <TabBar />
+        {activeTab === 'tasks' ? <BroadcastConsole /> : null}
+        {activeTab === 'calendar' ? <LogsWorkbench /> : null}
+        {activeTab === 'targets' ? <TargetsWorkbench /> : null}
+        {activeTab === 'creatives' ? <CreativesWorkbench /> : null}
+      </div>
     </div>
   )
 })
