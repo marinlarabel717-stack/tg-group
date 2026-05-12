@@ -12,6 +12,7 @@ export const moduleLabelMap = {
   dashboard: '仪表盘',
   accounts: '账号管理',
   automation: '定时群发',
+  'direct-message': '私信用户',
   'proxy-pool': '代理池',
   'session-manager': '会话管理',
   logs: '日志中心',

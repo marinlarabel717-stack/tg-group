@@ -2,6 +2,7 @@ export type ModuleKey =
   | 'dashboard'
   | 'accounts'
   | 'automation'
+  | 'direct-message'
   | 'proxy-pool'
   | 'session-manager'
   | 'logs'
