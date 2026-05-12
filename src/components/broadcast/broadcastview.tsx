@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CopyPlus, Eye, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Send, Trash2, Users, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CopyPlus, Eye, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Search, Send, Trash2, Users, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useAccountStore } from '../../stores/accountstore'
@@ -22,6 +22,14 @@ function getTaskStatusTone(status: 'draft' | 'active' | 'paused') {
   if (status === 'active') return 'text-emerald-300 bg-emerald-400/10'
   if (status === 'paused') return 'text-amber-200 bg-amber-300/10'
   return 'text-slate-300 bg-white/5'
+}
+
+function getAccountStatusTone(status?: string) {
+  if (status === 'alive') return 'bg-emerald-400/12 text-emerald-300'
+  if (status === 'limited' || status === 'temporary_limited') return 'bg-amber-300/12 text-amber-200'
+  if (status === 'frozen' || status === 'banned' || status === 'session_expired' || status === 'not_logged_in') return 'bg-rose-400/12 text-rose-200'
+  if (status === 'checking') return 'bg-sky-400/12 text-sky-300'
+  return 'bg-white/10 text-slate-200'
 }
 
 function readAccountNickname(account: { username?: string; phone?: string; profile?: Record<string, unknown> }) {
@@ -1573,6 +1581,9 @@ const CalendarWorkbench = memo(function CalendarWorkbench() {
 const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
   const accounts = useAccountStore((state) => state.accounts)
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false)
+  const [draftAccountId, setDraftAccountId] = useState<number | null>(null)
+  const [accountSearch, setAccountSearch] = useState('')
   const [groups, setGroups] = useState<BroadcastJoinedGroup[]>([])
   const [selectedGroupRef, setSelectedGroupRef] = useState('')
   const [items, setItems] = useState<BroadcastScheduledMessageItem[]>([])
@@ -1593,6 +1604,23 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
     () => groups.find((item) => item.targetRef === selectedGroupRef) ?? null,
     [groups, selectedGroupRef]
   )
+
+  useEffect(() => {
+    if (!accountPickerOpen) {
+      setDraftAccountId(selectedAccountId)
+      setAccountSearch('')
+    }
+  }, [accountPickerOpen, selectedAccountId])
+
+  const filteredAccounts = useMemo(() => {
+    const keyword = accountSearch.trim().toLowerCase()
+    if (!keyword) return accounts
+    return accounts.filter((account) => {
+      const nickname = readAccountNickname(account).toLowerCase()
+      return [nickname, account.username || '', account.phone || '', account.userId || '']
+        .some((value) => String(value).toLowerCase().includes(keyword))
+    })
+  }, [accountSearch, accounts])
 
   useEffect(() => {
     if (accounts.length === 0) {
@@ -1730,6 +1758,17 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
     }
   }
 
+  const openAccountPicker = () => {
+    setDraftAccountId(selectedAccountId)
+    setAccountSearch('')
+    setAccountPickerOpen(true)
+  }
+
+  const applyAccountSelection = () => {
+    setSelectedAccountId(draftAccountId)
+    setAccountPickerOpen(false)
+  }
+
   return (
     <GlassPanel className="bg-card min-h-[720px]">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -1738,21 +1777,15 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
           <div className="mt-1 text-sm text-textMuted">选账号、选群，就能直接看这个群已经定时好的内容，也能删掉不要的。</div>
         </div>
         <div className="flex flex-wrap gap-3">
-          <label className="min-w-[220px] rounded-[16px] bg-panel px-4 py-3">
+          <button
+            type="button"
+            onClick={openAccountPicker}
+            className="min-w-[220px] rounded-[16px] bg-panel px-4 py-3 text-left transition hover:bg-white/[0.05]"
+          >
             <div className="text-xs text-textMuted">选择账号</div>
-            <select
-              value={selectedAccountId ?? ''}
-              onChange={(event) => setSelectedAccountId(event.target.value ? Number(event.target.value) : null)}
-              className="mt-2 w-full bg-transparent text-sm text-white outline-none"
-            >
-              <option value="" className="bg-slate-900 text-white">先选择账号</option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id} className="bg-slate-900 text-white">
-                  {readAccountNickname(account)}（{formatAccountStatus(account.status)}）
-                </option>
-              ))}
-            </select>
-          </label>
+            <div className="mt-2 text-sm font-medium text-white">{selectedAccount ? readAccountNickname(selectedAccount) : '点击选择账号'}</div>
+            <div className="mt-1 text-xs text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '—'} · ${formatAccountStatus(selectedAccount.status)}` : '和前面一样，点开弹窗选择'}</div>
+          </button>
           <label className="min-w-[260px] rounded-[16px] bg-panel px-4 py-3">
             <div className="text-xs text-textMuted">选择群</div>
             <select
@@ -1872,6 +1905,79 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
           })
         )}
       </div>
+
+      {accountPickerOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/60 px-4 py-6" onClick={() => setAccountPickerOpen(false)}>
+          <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/8 bg-card px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="text-lg font-semibold text-white">选择账号</div>
+                <div className="mt-1 text-sm text-textMuted">这里和前面一样，点开账号列表后直接选要查看定时内容的账号。</div>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <button type="button" onClick={() => setDraftAccountId(null)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">清空选择</button>
+                <button type="button" onClick={() => setAccountPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
+                <button type="button" onClick={applyAccountSelection} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">确定使用这个账号</button>
+                <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setAccountPickerOpen(false)}>
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative w-full lg:max-w-[360px]">
+                  <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
+                  <input
+                    value={accountSearch}
+                    onChange={(event) => setAccountSearch(event.target.value)}
+                    placeholder="搜索账号名 / 手机号 / 用户名"
+                    className="h-11 w-full rounded-[12px] border border-white/8 bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-violet-400/30"
+                  />
+                </div>
+                <div className="rounded-full bg-white/[0.04] px-3 py-2 text-sm text-textMuted">当前选择 {draftAccountId ? 1 : 0} / 1</div>
+              </div>
+
+              <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
+                <div className="grid grid-cols-[64px_180px_1.2fr_140px] border-b border-white/8 bg-white/[0.04] px-4 py-3 text-xs tracking-[0.16em] text-textMuted">
+                  <div className="flex items-center justify-center">选择</div>
+                  <div>手机号</div>
+                  <div>账号名</div>
+                  <div>状态</div>
+                </div>
+
+                <div className="max-h-[520px] overflow-y-auto">
+                  {filteredAccounts.length === 0 ? (
+                    <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号。</div>
+                  ) : filteredAccounts.map((account) => {
+                    const checked = draftAccountId === account.id
+                    return (
+                      <label key={account.id} className={`grid cursor-pointer grid-cols-[64px_180px_1.2fr_140px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.04]'}`}>
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="radio"
+                            name="scheduled-account-picker"
+                            checked={checked}
+                            onChange={() => setDraftAccountId(account.id)}
+                          />
+                        </div>
+                        <div className="truncate text-white">{account.phone || '—'}</div>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-white">{readAccountNickname(account)}</div>
+                          <div className="mt-1 truncate text-xs text-textMuted">@{account.username || '无用户名'}</div>
+                        </div>
+                        <div>
+                          <span className={`rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>{formatAccountStatus(account.status)}</span>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </GlassPanel>
   )
 })
