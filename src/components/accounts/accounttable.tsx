@@ -50,6 +50,18 @@ interface PremiumDialogState {
 }
 
 type BulkOperationSubmenu = 'two-fa' | 'profile' | null
+type PremiumFilter = 'all' | 'premium' | 'non-premium'
+
+interface AccountFilterShortcut {
+  id: string
+  name: string
+  countryFilter: string
+  statusFilter: AccountStatusFilter
+  proxyFilter: string
+  premiumFilter: PremiumFilter
+}
+
+const ACCOUNT_FILTER_SHORTCUT_STORAGE_KEY = 'tg-group-account-filter-shortcuts-v1'
 
 const twoFaMenuItems = [
   { id: 'change-2fa', label: '更改 2FA' },
@@ -77,6 +89,35 @@ function createDefaultSorting() {
 
 function createDefaultPagination() {
   return { pageIndex: 0, pageSize: 20 }
+}
+
+function loadAccountFilterShortcuts(): AccountFilterShortcut[] {
+  if (typeof window === 'undefined') return []
+
+  try {
+    const raw = window.localStorage.getItem(ACCOUNT_FILTER_SHORTCUT_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .map((item) => ({
+        id: typeof item?.id === 'string' ? item.id : '',
+        name: typeof item?.name === 'string' ? item.name.trim() : '',
+        countryFilter: typeof item?.countryFilter === 'string' ? item.countryFilter : '',
+        statusFilter: typeof item?.statusFilter === 'string' ? item.statusFilter as AccountStatusFilter : 'all',
+        proxyFilter: typeof item?.proxyFilter === 'string' ? item.proxyFilter : '',
+        premiumFilter: item?.premiumFilter === 'premium' || item?.premiumFilter === 'non-premium' ? item.premiumFilter : 'all'
+      }))
+      .filter((item) => item.id && item.name)
+  } catch {
+    return []
+  }
+}
+
+function saveAccountFilterShortcuts(shortcuts: AccountFilterShortcut[]) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(ACCOUNT_FILTER_SHORTCUT_STORAGE_KEY, JSON.stringify(shortcuts))
 }
 
 function checkboxClass() {
@@ -177,6 +218,12 @@ function readProxy(account: AccountRecord) {
   return '直连'
 }
 
+function matchesPremiumFilter(account: AccountRecord, premiumFilter: PremiumFilter) {
+  if (premiumFilter === 'premium') return Boolean(account.profile?.is_premium)
+  if (premiumFilter === 'non-premium') return !account.profile?.is_premium
+  return true
+}
+
 function readNickname(account: AccountRecord) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
   const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
@@ -274,6 +321,52 @@ function readPremiumExpiry(account: AccountRecord) {
 
 function isPremiumAccount(account: AccountRecord) {
   return Boolean(account.profile?.is_premium)
+}
+
+function readPremiumFilterLabel(value: PremiumFilter) {
+  if (value === 'premium') return '会员'
+  if (value === 'non-premium') return '非会员'
+  return '全部会员状态'
+}
+
+function readStatusFilterLabel(value: AccountStatusFilter) {
+  switch (value) {
+    case 'all':
+      return '全部状态'
+    case 'alive':
+      return '无限制'
+    case 'limited-group':
+      return '双向'
+    case 'timeout-group':
+      return '超时/未检测'
+    case 'premium':
+      return '会员'
+    case 'temporary_limited':
+      return '临时限制'
+    case 'limited':
+      return '限制'
+    case 'frozen':
+      return '冻结'
+    case 'timeout':
+      return '超时'
+    case 'unknown':
+      return '未检测'
+    case 'checking':
+      return '检测中'
+    case 'banned':
+      return '封禁'
+    default:
+      return value
+  }
+}
+
+function readShortcutSummary(shortcut: AccountFilterShortcut) {
+  const parts: string[] = []
+  if (shortcut.countryFilter) parts.push(shortcut.countryFilter)
+  if (shortcut.statusFilter !== 'all') parts.push(readStatusFilterLabel(shortcut.statusFilter))
+  if (shortcut.proxyFilter) parts.push(shortcut.proxyFilter)
+  if (shortcut.premiumFilter !== 'all') parts.push(readPremiumFilterLabel(shortcut.premiumFilter))
+  return parts.length > 0 ? parts.join(' + ') : '全部账号'
 }
 
 function readFreezeSince(account: AccountRecord) {
@@ -479,6 +572,15 @@ export const AccountTable = memo(function AccountTable() {
 
   const [sourceFilter, setSourceFilter] = useState('')
   const [proxyFilter, setProxyFilter] = useState('')
+  const [premiumFilter, setPremiumFilter] = useState<PremiumFilter>('all')
+  const [savedShortcuts, setSavedShortcuts] = useState<AccountFilterShortcut[]>(loadAccountFilterShortcuts)
+  const [activeShortcutId, setActiveShortcutId] = useState<string | null>(null)
+  const [shortcutDialogOpen, setShortcutDialogOpen] = useState(false)
+  const [shortcutName, setShortcutName] = useState('')
+  const [shortcutCountryFilter, setShortcutCountryFilter] = useState('')
+  const [shortcutStatusFilter, setShortcutStatusFilter] = useState<AccountStatusFilter>('all')
+  const [shortcutProxyFilter, setShortcutProxyFilter] = useState('')
+  const [shortcutPremiumFilter, setShortcutPremiumFilter] = useState<PremiumFilter>('all')
   const [sorting, setSorting] = useState(createDefaultSorting)
   const [pagination, setPagination] = useState(createDefaultPagination)
   const [tableLoading, setTableLoading] = useState(true)
@@ -505,9 +607,10 @@ export const AccountTable = memo(function AccountTable() {
       baseData.filter((account) => {
         if (sourceFilter && account.profileSource !== sourceFilter) return false
         if (proxyFilter && readProxy(account) !== proxyFilter) return false
+        if (!matchesPremiumFilter(account, premiumFilter)) return false
         return true
       }),
-    [baseData, sourceFilter, proxyFilter]
+    [baseData, sourceFilter, proxyFilter, premiumFilter]
   )
   const data = useMemo(
     () => filterAccounts(scopedData, { search: '', statusFilter, countryFilter: '' }),
@@ -516,7 +619,29 @@ export const AccountTable = memo(function AccountTable() {
 
   useEffect(() => {
     setPagination((previous) => ({ ...previous, pageIndex: 0 }))
-  }, [deferredSearch, statusFilter, countryFilter, sourceFilter, proxyFilter])
+  }, [deferredSearch, statusFilter, countryFilter, sourceFilter, proxyFilter, premiumFilter])
+
+  useEffect(() => {
+    saveAccountFilterShortcuts(savedShortcuts)
+  }, [savedShortcuts])
+
+  useEffect(() => {
+    if (!activeShortcutId) return
+    const activeShortcut = savedShortcuts.find((item) => item.id === activeShortcutId)
+    if (!activeShortcut) {
+      setActiveShortcutId(null)
+      return
+    }
+
+    const matched = activeShortcut.countryFilter === countryFilter
+      && activeShortcut.statusFilter === statusFilter
+      && activeShortcut.proxyFilter === proxyFilter
+      && activeShortcut.premiumFilter === premiumFilter
+
+    if (!matched) {
+      setActiveShortcutId(null)
+    }
+  }, [activeShortcutId, countryFilter, premiumFilter, proxyFilter, savedShortcuts, statusFilter])
 
   useEffect(() => {
     setTableLoading(true)
@@ -809,6 +934,34 @@ export const AccountTable = memo(function AccountTable() {
     ]
   }, [scopedData])
 
+  const shortcutCards = useMemo(() => (
+    savedShortcuts.map((shortcut) => {
+      const count = accounts.filter((account) => {
+        if (shortcut.countryFilter && formatCountryDisplay(account.country, account.phone) !== shortcut.countryFilter) return false
+        if (shortcut.statusFilter !== 'all') {
+          if (shortcut.statusFilter === 'premium') {
+            if (!isPremiumAccount(account)) return false
+          } else if (shortcut.statusFilter === 'limited-group') {
+            if (account.status !== 'limited' && account.status !== 'temporary_limited') return false
+          } else if (shortcut.statusFilter === 'timeout-group') {
+            if (account.status !== 'timeout' && account.status !== 'unknown' && account.status !== 'checking') return false
+          } else if (account.status !== shortcut.statusFilter) {
+            return false
+          }
+        }
+        if (shortcut.proxyFilter && readProxy(account) !== shortcut.proxyFilter) return false
+        if (!matchesPremiumFilter(account, shortcut.premiumFilter)) return false
+        return true
+      }).length
+
+      return {
+        ...shortcut,
+        count,
+        summary: readShortcutSummary(shortcut)
+      }
+    })
+  ), [accounts, savedShortcuts])
+
   useEffect(() => {
     if (selectedCount > 0) return
     setBulkMenuOpen(false)
@@ -839,6 +992,58 @@ export const AccountTable = memo(function AccountTable() {
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)
   }, [setSearch])
+
+  const handleOpenShortcutDialog = useCallback(() => {
+    setShortcutName('')
+    setShortcutCountryFilter(countryFilter)
+    setShortcutStatusFilter(statusFilter)
+    setShortcutProxyFilter(proxyFilter)
+    setShortcutPremiumFilter(premiumFilter)
+    setShortcutDialogOpen(true)
+  }, [countryFilter, premiumFilter, proxyFilter, statusFilter])
+
+  const handleSaveShortcut = useCallback(() => {
+    const name = shortcutName.trim()
+    if (!name) {
+      setBulkActionHint('先给这个筛选起个名字。')
+      return
+    }
+
+    const nextShortcut: AccountFilterShortcut = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      countryFilter: shortcutCountryFilter,
+      statusFilter: shortcutStatusFilter,
+      proxyFilter: shortcutProxyFilter,
+      premiumFilter: shortcutPremiumFilter
+    }
+
+    setSavedShortcuts((previous) => [...previous, nextShortcut])
+    setActiveShortcutId(nextShortcut.id)
+    setSearch('')
+    setCountryFilter(nextShortcut.countryFilter)
+    setStatusFilter(nextShortcut.statusFilter)
+    setProxyFilter(nextShortcut.proxyFilter)
+    setPremiumFilter(nextShortcut.premiumFilter)
+    setShortcutDialogOpen(false)
+    setBulkActionHint(`已把“${name}”固定到顶部。`)
+  }, [setCountryFilter, setSearch, setStatusFilter, shortcutCountryFilter, shortcutName, shortcutPremiumFilter, shortcutProxyFilter, shortcutStatusFilter])
+
+  const handleApplyShortcut = useCallback((shortcut: AccountFilterShortcut) => {
+    setActiveShortcutId(shortcut.id)
+    setSearch('')
+    setCountryFilter(shortcut.countryFilter)
+    setStatusFilter(shortcut.statusFilter)
+    setProxyFilter(shortcut.proxyFilter)
+    setPremiumFilter(shortcut.premiumFilter)
+    setPagination(createDefaultPagination())
+    setSelectedIds([])
+  }, [setCountryFilter, setSearch, setSelectedIds, setStatusFilter])
+
+  const handleRemoveShortcut = useCallback((shortcutId: string) => {
+    setSavedShortcuts((previous) => previous.filter((item) => item.id !== shortcutId))
+    setActiveShortcutId((current) => current === shortcutId ? null : current)
+  }, [])
 
   const handleSelectAll = useCallback(() => {
     setSelectedIds(orderedIds)
@@ -895,6 +1100,8 @@ export const AccountTable = memo(function AccountTable() {
     setCountryFilter('')
     setSourceFilter('')
     setProxyFilter('')
+    setPremiumFilter('all')
+    setActiveShortcutId(null)
     setSelectedIds([])
     setSorting(createDefaultSorting())
     setPagination(createDefaultPagination())
@@ -936,9 +1143,62 @@ export const AccountTable = memo(function AccountTable() {
     <div className="space-y-4 min-w-0">
       <AccountSummaryCards
         items={summaryCards}
-        activeFilter={statusFilter}
-        onSelect={setStatusFilter}
+        activeFilter={activeShortcutId ? ('__custom__' as AccountStatusFilter) : statusFilter}
+        onSelect={(value) => {
+          setActiveShortcutId(null)
+          setStatusFilter(value)
+        }}
       />
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {shortcutCards.map((shortcut) => {
+          const active = activeShortcutId === shortcut.id
+          return (
+            <div
+              key={shortcut.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => handleApplyShortcut(shortcut)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  handleApplyShortcut(shortcut)
+                }
+              }}
+              className={`group relative rounded-[16px] border px-5 py-4 text-left transition ${active
+                ? 'border-sky-400/45 bg-sky-400/10 shadow-[0_0_0_1px_rgba(56,189,248,0.16)]'
+                : 'border-white/8 bg-card hover:bg-hover'}`}
+            >
+              <button
+                type="button"
+                title="删除这个顶部筛选"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  handleRemoveShortcut(shortcut.id)
+                }}
+                className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full text-textMuted transition hover:bg-white/10 hover:text-white"
+              >
+                <X size={14} />
+              </button>
+              <div className={`pr-8 text-base font-semibold ${active ? 'text-sky-200' : 'text-white'}`}>{shortcut.name}</div>
+              <div className={`mt-2 text-xs ${active ? 'text-sky-100/90' : 'text-textMuted'}`}>{shortcut.summary}</div>
+              <div className={`mt-3 text-2xl font-semibold ${active ? 'text-sky-300' : 'text-white'}`}>{shortcut.count}</div>
+            </div>
+          )
+        })}
+
+        <button
+          type="button"
+          onClick={handleOpenShortcutDialog}
+          className="rounded-[16px] border border-dashed border-violet-400/28 bg-violet-400/6 px-5 py-4 text-left transition hover:bg-violet-400/10"
+        >
+          <div className="flex items-center gap-2 text-base font-semibold text-violet-200">
+            <Sparkles size={16} />
+            新建顶部筛选
+          </div>
+          <div className="mt-2 text-sm text-violet-100/80">自己选国家、状态、代理、会员条件，再自定义名字固定到顶部。</div>
+        </button>
+      </div>
 
       <TableToolbar
         selectedCount={selectedCount}
@@ -969,6 +1229,22 @@ export const AccountTable = memo(function AccountTable() {
         onProxyChange={setProxyFilter}
         onRefresh={handleRefresh}
       />
+
+      {premiumFilter !== 'all' ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-textMuted">
+          <span className="rounded-full bg-white/[0.05] px-3 py-1.5">会员筛选：{readPremiumFilterLabel(premiumFilter)}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setPremiumFilter('all')
+              setActiveShortcutId(null)
+            }}
+            className="rounded-full bg-white/[0.05] px-3 py-1.5 text-white transition hover:bg-white/[0.1]"
+          >
+            清空会员条件
+          </button>
+        </div>
+      ) : null}
 
       <div ref={tableCardRef}>
         <GlassPanel className="overflow-hidden p-0">
@@ -1199,6 +1475,63 @@ export const AccountTable = memo(function AccountTable() {
           premiumExpiryOverride={premiumDialogAccount.premiumExpiryOverride}
           onClose={() => setPremiumDialogAccount(null)}
         />
+      ) : null}
+      {shortcutDialogOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={() => setShortcutDialogOpen(false)}>
+          <div className="w-full max-w-[540px] rounded-[18px] border border-violet-400/20 bg-card shadow-[0_16px_48px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+              <div>
+                <div className="text-base font-semibold text-white">新建顶部筛选</div>
+                <div className="mt-1 text-sm text-textMuted">比如：美国 + 无限制 + 会员，然后自己命名。</div>
+              </div>
+              <button type="button" className="rounded-[8px] px-2 py-1 text-sm text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setShortcutDialogOpen(false)}>关闭</button>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+              <div>
+                <div className="mb-2 text-sm text-textMuted">筛选名称</div>
+                <input
+                  value={shortcutName}
+                  onChange={(event) => setShortcutName(event.target.value)}
+                  placeholder="比如：美国会员精品号"
+                  className="h-11 w-full rounded-[12px] bg-panel px-4 text-sm text-white outline-none transition focus:bg-hover"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <select value={shortcutCountryFilter} onChange={(event) => setShortcutCountryFilter(event.target.value)} className="h-11 rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover">
+                  <option value="">国家（不限）</option>
+                  {countries.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+
+                <select value={shortcutStatusFilter} onChange={(event) => setShortcutStatusFilter(event.target.value as AccountStatusFilter)} className="h-11 rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover">
+                  <option value="all">状态（不限）</option>
+                  {statuses.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+
+                <select value={shortcutProxyFilter} onChange={(event) => setShortcutProxyFilter(event.target.value)} className="h-11 rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover">
+                  <option value="">代理（不限）</option>
+                  {proxies.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+
+                <select value={shortcutPremiumFilter} onChange={(event) => setShortcutPremiumFilter(event.target.value as PremiumFilter)} className="h-11 rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover">
+                  <option value="all">会员（不限）</option>
+                  <option value="premium">只看会员</option>
+                  <option value="non-premium">只看非会员</option>
+                </select>
+              </div>
+
+              <div className="rounded-[12px] bg-panel px-4 py-3 text-sm text-textMuted">
+                保存后会固定在顶部：<span className="text-white">{readShortcutSummary({ id: '', name: shortcutName, countryFilter: shortcutCountryFilter, statusFilter: shortcutStatusFilter, proxyFilter: shortcutProxyFilter, premiumFilter: shortcutPremiumFilter })}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-white/8 px-5 py-4">
+              <button type="button" onClick={() => setShortcutDialogOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
+              <button type="button" onClick={handleSaveShortcut} className="rounded-[12px] bg-violet-400 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-violet-300">保存到顶部</button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   )
