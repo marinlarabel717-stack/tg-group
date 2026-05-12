@@ -434,10 +434,23 @@ const LogsWorkbench = memo(function LogsWorkbench() {
     () => runs.flatMap((run) => run.items.map((item) => ({ ...item, fallbackAt: run.createdAt }))),
     [runs]
   )
+  const summaryItems = useMemo(() => {
+    if (sending) {
+      return previewItems
+        .filter((item) => item.status === 'sent' || item.status === 'failed')
+        .map((item) => ({
+          accountPhone: item.accountPhone,
+          status: item.status,
+          sentAt: item.sentAt,
+          fallbackAt: new Date().toISOString()
+        }))
+    }
+    return latestRun ? latestRun.items.map((item) => ({ ...item, fallbackAt: latestRun.createdAt })) : []
+  }, [latestRun, previewItems, sending])
   const latestAccountStats = useMemo(() => {
-    if (!latestRun) return [] as Array<{ phone: string; total: number; sent: number; failed: number }>
+    if (summaryItems.length === 0) return [] as Array<{ phone: string; total: number; sent: number; failed: number }>
     const grouped = new Map<string, { phone: string; total: number; sent: number; failed: number }>()
-    for (const item of latestRun.items) {
+    for (const item of summaryItems) {
       const phone = item.accountPhone || '未知手机号'
       const current = grouped.get(phone) || { phone, total: 0, sent: 0, failed: 0 }
       current.total += 1
@@ -446,11 +459,15 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       grouped.set(phone, current)
     }
     return Array.from(grouped.values()).sort((left, right) => right.total - left.total || left.phone.localeCompare(right.phone))
-  }, [latestRun])
-  const averagePerAccount = useMemo(() => {
-    if (!latestRun || latestAccountStats.length === 0) return 0
-    return Math.round(latestRun.total / latestAccountStats.length)
-  }, [latestAccountStats, latestRun])
+  }, [summaryItems])
+  const summarySuccessCount = sending ? previewItems.filter((item) => item.status === 'sent').length : (latestRun?.sent ?? 0)
+  const summaryFailedCount = sending ? previewItems.filter((item) => item.status === 'failed').length : (latestRun?.failed ?? 0)
+  const averageSuccessPerAccount = useMemo(() => {
+    const successAccounts = latestAccountStats.filter((item) => item.sent > 0)
+    if (successAccounts.length === 0) return 0
+    const totalSuccess = successAccounts.reduce((sum, item) => sum + item.sent, 0)
+    return Math.round(totalSuccess / successAccounts.length)
+  }, [latestAccountStats])
   const liveItems = useMemo(
     () => previewItems
       .filter((item) => item.status === 'sent' || item.status === 'failed')
@@ -495,21 +512,20 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       {sending ? (
         <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '有新的成功或失败结果会显示在下面。'}</div>
       ) : null}
-      {latestRun && !sending ? (
-        <div className="mt-4 rounded-[16px] bg-panel/70 px-4 py-4">
-          <div className="text-sm font-semibold text-white">{latestRun.summary.includes('任务已停止') ? '本次私信已停止' : '本次私信已完成'}</div>
+      <div className="mt-4 rounded-[16px] bg-panel/70 px-4 py-4">
+        <div className="text-sm font-semibold text-white">{sending ? '本次私信进行中' : latestRun?.summary.includes('任务已停止') ? '本次私信已停止' : latestRun ? '本次私信已完成' : '本次私信总计'}</div>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
             <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
               <div className="text-xs tracking-[0.16em] text-emerald-200/80">发送成功</div>
-              <div className="mt-2 text-2xl font-semibold text-emerald-300">{latestRun.sent}</div>
+              <div className="mt-2 text-2xl font-semibold text-emerald-300">{summarySuccessCount}</div>
             </div>
             <div className="rounded-[14px] bg-rose-400/8 px-4 py-3">
               <div className="text-xs tracking-[0.16em] text-rose-200/80">发送失败</div>
-              <div className="mt-2 text-2xl font-semibold text-rose-300">{latestRun.failed}</div>
+              <div className="mt-2 text-2xl font-semibold text-rose-300">{summaryFailedCount}</div>
             </div>
             <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
-              <div className="text-xs tracking-[0.16em] text-textMuted">均号发送</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{averagePerAccount}</div>
+              <div className="text-xs tracking-[0.16em] text-textMuted">均号成功</div>
+              <div className="mt-2 text-2xl font-semibold text-white">{averageSuccessPerAccount}</div>
             </div>
           </div>
           {latestAccountStats.length > 0 ? (
@@ -529,8 +545,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
               </div>
             </div>
           ) : null}
-        </div>
-      ) : null}
+      </div>
       <div className="mt-4 space-y-3">
         {sending && liveItems.length > 0 ? liveItems.map((item) => (
           <div key={item.id} className={`rounded-[14px] px-4 py-3 ${item.status === 'sent' ? 'bg-emerald-400/8' : 'bg-rose-400/8'}`}>

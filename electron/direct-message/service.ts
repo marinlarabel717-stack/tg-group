@@ -60,6 +60,11 @@ function readRequiredWaitSeconds(error: unknown) {
   return Number.isFinite(seconds) && seconds > 0 ? seconds : null
 }
 
+function isUnavailableAccountError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED|INPUT_USER_DEACTIVATED|PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN|ACCOUNT_RESTRICTED/i.test(message)
+}
+
 function createId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
 }
@@ -339,9 +344,11 @@ export class DirectMessageService {
     const accountsById = new Map(accounts.map((item) => [item.id, item]))
     const clients = new Map<number, TelegramClient>()
     const results: DirectMessageSendResultItem[] = []
+    const unavailableAccountIds = new Set<number>()
     const sortedItems = [...payload.items].sort((left, right) => left.waitSeconds - right.waitSeconds)
     const startedAt = Date.now()
     const task: ActiveSendTask = { cancelled: false, clients }
+    let stopReason = ''
     this.activeSendTask = task
 
     try {
@@ -352,6 +359,18 @@ export class DirectMessageService {
         if (task.cancelled) break
 
         const account = typeof item.accountId === 'number' ? accountsById.get(item.accountId) : null
+        if (typeof item.accountId === 'number' && unavailableAccountIds.has(item.accountId)) {
+          if (unavailableAccountIds.size >= accountIds.length) {
+            stopReason = '无可用账号发送，本次任务已停止。'
+            this.emitSendNotice(results, payload.items.length, stopReason, onProgress, null)
+            task.cancelled = true
+            break
+          }
+          const resultItem = this.createFailedSendItem(item, '这个账号已经不可用了，当前目标已跳过。')
+          results.push(resultItem)
+          this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
+          continue
+        }
         if (!account) {
           const resultItem = this.createFailedSendItem(item, '发送账号不存在，请重新选择账号后再试。')
           results.push(resultItem)
@@ -491,6 +510,20 @@ export class DirectMessageService {
           const resultItem = this.createFailedSendItem(item, formatDirectMessageError(error))
           results.push(resultItem)
           this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
+          if (typeof item.accountId === 'number' && isUnavailableAccountError(error)) {
+            unavailableAccountIds.add(item.accountId)
+            const currentClient = clients.get(item.accountId)
+            if (currentClient) {
+              await this.clientManager.destroyClient(currentClient).catch(() => undefined)
+              clients.delete(item.accountId)
+            }
+            if (unavailableAccountIds.size >= accountIds.length) {
+              stopReason = '无可用账号发送，本次任务已停止。'
+              this.emitSendNotice(results, payload.items.length, stopReason, onProgress, null)
+              task.cancelled = true
+              break
+            }
+          }
         } finally {
           await cleanup?.()
         }
@@ -511,7 +544,7 @@ export class DirectMessageService {
       failedCount,
       items: results,
       message: task.cancelled
-        ? `任务已停止：成功 ${successCount} 条，失败 ${failedCount} 条，剩余 ${remainingCount} 条未继续发送。`
+        ? `${stopReason || '任务已停止。'} 成功 ${successCount} 条，失败 ${failedCount} 条，剩余 ${remainingCount} 条未继续发送。`
         : failedCount === 0
           ? `已成功发出 ${successCount} 条私信。`
           : `发送完成：成功 ${successCount} 条，失败 ${failedCount} 条。`
