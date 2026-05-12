@@ -76,6 +76,18 @@ function readMessageTypeLabel(messageType: 'text' | 'channel_forward' | 'hidden_
   return '文本直发'
 }
 
+function formatTimeOnly(value?: string | null) {
+  if (!value) return '--:--:--'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '--:--:--'
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(date)
+}
+
 const TabBar = memo(function TabBar() {
   const activeTab = useDirectMessageStore((state) => state.activeTab)
   const setActiveTab = useDirectMessageStore((state) => state.setActiveTab)
@@ -441,11 +453,29 @@ const LogsWorkbench = memo(function LogsWorkbench() {
     [runs]
   )
 
+  const exportLogs = () => {
+    if (detailedItems.length === 0) return
+    const content = detailedItems.map((item) => {
+      const line = `[${formatTimeOnly(item.sentAt || item.fallbackAt)}] [${item.accountPhone}] - 通过${readMessageTypeLabel(item.messageType)} - 向${item.targetValue} - ${item.status === 'sent' ? '发送成功' : '发送失败'} -- ${item.sequence}`
+      return item.status === 'failed' ? `${line} (${item.message})` : line
+    }).join('\n')
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'direct-message-logs.txt'
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <GlassPanel className="bg-card">
       <div className="flex items-center justify-between gap-3">
         <div className="text-base font-semibold text-white">私信日志</div>
-        <button type="button" onClick={clearRuns} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={exportLogs} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">导出日志</button>
+          <button type="button" onClick={clearRuns} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
+        </div>
       </div>
       <div className="mt-4 space-y-3">
         {detailedItems.length === 0 ? (
@@ -453,10 +483,10 @@ const LogsWorkbench = memo(function LogsWorkbench() {
         ) : detailedItems.map((item) => (
           <div key={item.id} className={`rounded-[14px] px-4 py-3 ${item.status === 'sent' ? 'bg-emerald-400/8' : 'bg-rose-400/8'}`}>
             <div className={`text-sm font-medium ${item.status === 'sent' ? 'text-emerald-300' : 'text-rose-300'}`}>
-              【{formatDateTimeFull(item.sentAt || item.fallbackAt)}】【{item.accountPhone}】 - 通过{readMessageTypeLabel(item.messageType)} - 向{item.targetValue} - {item.status === 'sent' ? '发送成功' : '发送失败'} -- {item.sequence}
+              <span className="select-text">[{formatTimeOnly(item.sentAt || item.fallbackAt)}] [{item.accountPhone}] - 通过{readMessageTypeLabel(item.messageType)} - 向{item.targetValue} - {item.status === 'sent' ? '发送成功' : '发送失败'} -- {item.sequence}</span>
             </div>
             {item.status === 'failed' ? (
-              <div className="mt-1 text-xs text-rose-200">{item.message}</div>
+              <div className="mt-1 select-text text-xs text-rose-200">{item.message}</div>
             ) : null}
           </div>
         ))}
