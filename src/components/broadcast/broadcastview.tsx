@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { ArrowRight, CalendarClock, CheckCircle2, CopyPlus, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Send, Users, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, CopyPlus, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Send, Users, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useAccountStore } from '../../stores/accountstore'
@@ -70,6 +70,7 @@ function readRepeatLabel(repeatPeriodSeconds?: number | null) {
 }
 
 const MAX_VISIBLE_LOG_ITEMS = 200
+const DEFAULT_VISIBLE_JOINED_GROUPS = 12
 
 function explainPreviewError(errorMessage: string) {
   const normalized = errorMessage.trim()
@@ -718,6 +719,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [draftAccountIds, setDraftAccountIds] = useState<number[]>([])
   const [accountSearch, setAccountSearch] = useState('')
+  const [groupListExpanded, setGroupListExpanded] = useState(false)
 
   const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? tasks[0] ?? null, [selectedTaskId, tasks])
 
@@ -758,6 +760,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       lastScheduledAt: lastItem?.scheduledAt ?? ''
     }
   }, [groups, selectedPreview])
+  const visibleJoinedGroups = useMemo(() => {
+    if (groupListExpanded) return joinedGroups
+    return joinedGroups.slice(0, DEFAULT_VISIBLE_JOINED_GROUPS)
+  }, [groupListExpanded, joinedGroups])
   const filteredAccounts = useMemo(() => {
     const keyword = accountSearch.trim().toLowerCase()
     if (!keyword) return accounts
@@ -997,6 +1003,12 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div className="mt-1 text-sm text-textMuted">这里显示当前选择账号已经加入的群。直接勾选就能加入定时群发。</div>
                 </div>
                 <div className="flex flex-wrap gap-3">
+                  {joinedGroups.length > DEFAULT_VISIBLE_JOINED_GROUPS ? (
+                    <button type="button" onClick={() => setGroupListExpanded((value) => !value)} className="flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">
+                      {groupListExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      {groupListExpanded ? '收起群列表' : `展开全部群（${joinedGroups.length}）`}
+                    </button>
+                  ) : null}
                   <button type="button" onClick={selectAllJoinedGroups} disabled={!selectedAccount || joinedGroups.length === 0} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-50">全选所有群</button>
                   <button type="button" onClick={clearSelectedJoinedGroups} disabled={!selectedAccount || joinedGroups.length === 0} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50">清空已选群</button>
                 </div>
@@ -1004,7 +1016,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               <div className="mt-4 overflow-hidden rounded-[18px] border border-white/8 bg-panel">
                 {joinedGroups.length === 0 ? (
                   <div className="px-4 py-12 text-center text-sm text-textMuted">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
-                ) : joinedGroups.map((group) => {
+                ) : visibleJoinedGroups.map((group) => {
                   const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
                   const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
                   const checked = Boolean(matchedGroup && selectedTask.groupIds.includes(matchedGroup.id))
@@ -1020,6 +1032,9 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   )
                 })}
               </div>
+              {joinedGroups.length > DEFAULT_VISIBLE_JOINED_GROUPS && !groupListExpanded ? (
+                <div className="mt-3 text-sm text-textMuted">当前先显示前 {DEFAULT_VISIBLE_JOINED_GROUPS} 个群，点上面的“展开全部群”就能看完整列表。</div>
+              ) : null}
             </GlassPanel>
 
             <GlassPanel className="bg-card">
