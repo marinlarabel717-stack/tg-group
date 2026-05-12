@@ -20,7 +20,7 @@ import {
   useReactTable
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUpDown, Loader2, Star } from 'lucide-react'
+import { Activity, ArrowUpDown, ChevronRight, HeartPulse, KeyRound, Loader2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
 import type { AccountRecord, CheckAction } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
@@ -46,6 +46,28 @@ interface PremiumDialogState {
   account: AccountRecord
   premiumExpiryOverride?: string | null
 }
+
+type BulkOperationSubmenu = 'two-fa' | 'profile' | null
+
+const twoFaMenuItems = [
+  { id: 'change-2fa', label: '更改 2FA' },
+  { id: 'disable-2fa', label: '关闭 2FA' },
+  { id: 'reset-2fa', label: '重置 2FA' }
+] as const
+
+const profileMenuItems = [
+  { id: 'random-avatar', label: '随机生成头像' },
+  { id: 'random-nickname', label: '随机生成昵称' },
+  { id: 'random-username', label: '随机生成用户名' },
+  { id: 'random-bio', label: '随机生成简介' },
+  { id: 'custom-avatar', label: '自定义头像' },
+  { id: 'custom-nickname', label: '自定义昵称' },
+  { id: 'custom-username', label: '自定义用户名' },
+  { id: 'custom-bio', label: '自定义简介' },
+  { id: 'remove-username', label: '删除用户名' },
+  { id: 'remove-bio', label: '删除简介' },
+  { id: 'clear-all-profile', label: '一键删除（用户名 + 简介 + 头像）' }
+] as const
 
 function createDefaultSorting() {
   return [{ id: 'lastOnlineTime', desc: true }]
@@ -267,6 +289,10 @@ function readFreezeAppealUrl(account: AccountRecord) {
   return typeof value === 'string' && value.trim() ? value.trim() : ''
 }
 
+function getBulkOperationButtonClass(emphasis = false) {
+  return `flex h-11 items-center gap-2 rounded-[12px] px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${emphasis ? 'bg-neon/10 text-neonSoft hover:bg-neon/14' : 'bg-panel text-textMain hover:bg-hover'}`
+}
+
 const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }: { account: AccountRecord; onClose: () => void }) {
   const freezeSince = formatDateTimeFull(readFreezeSince(account))
   const freezeUntil = formatDateTimeFull(readFreezeUntil(account))
@@ -458,9 +484,13 @@ export const AccountTable = memo(function AccountTable() {
   const [frozenDialogAccount, setFrozenDialogAccount] = useState<AccountRecord | null>(null)
   const [premiumDialogAccount, setPremiumDialogAccount] = useState<PremiumDialogState | null>(null)
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null)
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
+  const [bulkSubmenu, setBulkSubmenu] = useState<BulkOperationSubmenu>(null)
+  const [bulkActionHint, setBulkActionHint] = useState('')
   const deferredSearch = useDeferredValue(search)
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const scrollbarRef = useRef<HTMLDivElement | null>(null)
+  const bulkMenuRef = useRef<HTMLDivElement | null>(null)
 
   const baseData = useMemo(
     () => filterAccounts(accounts, { search: deferredSearch, statusFilter, countryFilter }),
@@ -497,6 +527,12 @@ export const AccountTable = memo(function AccountTable() {
     const timer = window.setTimeout(() => setCopiedPhone(null), 1200)
     return () => window.clearTimeout(timer)
   }, [copiedPhone])
+
+  useEffect(() => {
+    if (!bulkActionHint) return
+    const timer = window.setTimeout(() => setBulkActionHint(''), 1800)
+    return () => window.clearTimeout(timer)
+  }, [bulkActionHint])
 
   const handlePhoneCopy = useCallback(async (phone: string) => {
     const normalizedPhone = phone.trim()
@@ -706,6 +742,28 @@ export const AccountTable = memo(function AccountTable() {
   const selectedCount = selectedIds.length
   const totalCount = data.length
 
+  useEffect(() => {
+    if (selectedCount > 0) return
+    setBulkMenuOpen(false)
+    setBulkSubmenu(null)
+    setBulkActionHint('')
+  }, [selectedCount])
+
+  useEffect(() => {
+    if (!bulkMenuOpen) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (bulkMenuRef.current?.contains(target)) return
+      setBulkMenuOpen(false)
+      setBulkSubmenu(null)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [bulkMenuOpen])
+
   const orderedIds = useMemo(
     () => table.getSortedRowModel().rows.map((row) => row.original.id),
     [table, data, sorting]
@@ -735,6 +793,16 @@ export const AccountTable = memo(function AccountTable() {
     setActiveModule('logs')
     void startSelectedCheck(actions)
   }, [setActiveModule, setLogsContext, startSelectedCheck])
+
+  const handleBulkCheckAction = useCallback((action: 'account-status' | 'account-survival') => {
+    handleStartCheck([action])
+    setBulkMenuOpen(false)
+    setBulkSubmenu(null)
+  }, [handleStartCheck])
+
+  const handlePendingBulkAction = useCallback((label: string) => {
+    setBulkActionHint(`${label} 入口我已经先放好了，下一步接真实功能。`)
+  }, [])
 
   const handleOpenPremiumDialog = useCallback(async (account: AccountRecord) => {
     let premiumExpiryOverride: string | null | undefined = readPremiumExpiry(account)
@@ -821,7 +889,6 @@ export const AccountTable = memo(function AccountTable() {
         statusFilter={statusFilter === 'all' ? '' : statusFilter}
         sourceFilter={sourceFilter}
         proxyFilter={proxyFilter}
-        selectedCount={selectedCount}
         loading={tableLoading}
         busy={busy}
         countries={countries}
@@ -832,7 +899,6 @@ export const AccountTable = memo(function AccountTable() {
         onStatusChange={(value) => setStatusFilter((value || 'all') as AccountStatusFilter)}
         onSourceChange={setSourceFilter}
         onProxyChange={setProxyFilter}
-        onStartCheck={handleStartCheck}
         onRefresh={handleRefresh}
       />
 
@@ -932,6 +998,106 @@ export const AccountTable = memo(function AccountTable() {
           )}
         </div>
       </GlassPanel>
+
+      {selectedCount > 0 ? (
+        <GlassPanel className="bg-card py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between" ref={bulkMenuRef}>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-panel text-textMuted transition hover:bg-hover hover:text-white"
+                title="取消当前选中"
+              >
+                <X size={16} />
+              </button>
+
+              <div className="rounded-[12px] bg-panel px-4 py-3 text-sm text-white">
+                <span className="text-textMuted">选中数量 / 总数量：</span>
+                <span className="ml-2 font-semibold">{selectedCount} / {totalCount}</span>
+              </div>
+
+              {bulkActionHint ? (
+                <div className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-textMuted">{bulkActionHint}</div>
+              ) : null}
+            </div>
+
+            <div className="relative self-end lg:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setBulkMenuOpen((value) => !value)
+                  setBulkSubmenu(null)
+                }}
+                className={getBulkOperationButtonClass(true)}
+              >
+                <Sparkles size={16} />
+                操作菜单
+              </button>
+
+              {bulkMenuOpen ? (
+                <>
+                  <div className="absolute bottom-[calc(100%+12px)] right-0 z-30 w-[300px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+                    <div className="mb-2 px-2 text-xs tracking-[0.2em] text-textMuted">已选账号操作</div>
+                    <div className="space-y-2">
+                      <button type="button" onClick={() => handleBulkCheckAction('account-status')} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                        <Activity size={16} className="text-neonSoft" />
+                        <span>检查账号是否双向</span>
+                      </button>
+                      <button type="button" onClick={() => handleBulkCheckAction('account-survival')} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                        <HeartPulse size={16} className="text-neonSoft" />
+                        <span>检查账号是否存活</span>
+                      </button>
+                      <button type="button" onClick={() => setBulkSubmenu('two-fa')} className="flex w-full items-center justify-between gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                        <span className="flex items-center gap-3"><KeyRound size={16} className="text-neonSoft" />2FA 管理</span>
+                        <ChevronRight size={15} className="text-textMuted" />
+                      </button>
+                      <button type="button" onClick={() => setBulkSubmenu('profile')} className="flex w-full items-center justify-between gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                        <span className="flex items-center gap-3"><Shuffle size={16} className="text-neonSoft" />随机更换个人资料</span>
+                        <ChevronRight size={15} className="text-textMuted" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {bulkSubmenu === 'two-fa' ? (
+                    <div className="absolute bottom-[calc(100%+12px)] right-[312px] z-40 w-[260px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+                      <div className="mb-2 flex items-center justify-between px-2">
+                        <div className="text-xs tracking-[0.2em] text-textMuted">2FA 管理</div>
+                        <button type="button" onClick={() => setBulkSubmenu(null)} className="text-xs text-textMuted transition hover:text-white">关闭</button>
+                      </div>
+                      <div className="space-y-2">
+                        {twoFaMenuItems.map((item) => (
+                          <button key={item.id} type="button" onClick={() => handlePendingBulkAction(item.label)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                            <KeyRound size={15} className="text-neonSoft" />
+                            <span>{item.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {bulkSubmenu === 'profile' ? (
+                    <div className="absolute bottom-[calc(100%+12px)] right-[312px] z-40 w-[280px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+                      <div className="mb-2 flex items-center justify-between px-2">
+                        <div className="text-xs tracking-[0.2em] text-textMuted">个人资料</div>
+                        <button type="button" onClick={() => setBulkSubmenu(null)} className="text-xs text-textMuted transition hover:text-white">关闭</button>
+                      </div>
+                      <div className="space-y-2">
+                        {profileMenuItems.map((item) => (
+                          <button key={item.id} type="button" onClick={() => handlePendingBulkAction(item.label)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                            <UserRoundPen size={15} className="text-neonSoft" />
+                            <span>{item.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          </div>
+        </GlassPanel>
+      ) : null}
 
       <TablePagination
         pageIndex={table.getState().pagination.pageIndex}

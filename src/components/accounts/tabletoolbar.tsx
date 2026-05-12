@@ -104,15 +104,6 @@ export const TableToolbar = memo(function TableToolbar({
             </button>
           ) : null}
         </div>
-
-        <div className="flex items-center gap-3 rounded-[12px] bg-panel px-4 py-3.5">
-          <div>
-            <div className="text-[11px] tracking-[0.2em] text-textMuted">批量统计</div>
-            <div className="mt-1 text-sm font-medium text-white">
-              已选 {selectedCount} 项 / 共 {totalCount} 行
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
