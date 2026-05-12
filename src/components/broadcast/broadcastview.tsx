@@ -847,6 +847,35 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     clearPreview()
   }
 
+  const selectAllJoinedGroups = () => {
+    if (!selectedTask || !selectedAccount) return
+
+    for (const group of joinedGroups) {
+      const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
+      const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+      if (!matchedGroup || !matchedGroup.accountIds.includes(selectedAccount.id)) {
+        attachJoinedGroupToAccount(selectedAccount.id, group)
+      }
+    }
+
+    const latestGroups = useBroadcastStore.getState().groups
+    const nextGroupIds = Array.from(new Set(joinedGroups.map((group) => {
+      const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
+      const matchedGroup = latestGroups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+      return matchedGroup?.id || ''
+    }).filter(Boolean)))
+
+    updateTask(selectedTask.id, { groupIds: nextGroupIds })
+    clearPreview()
+  }
+
+  const clearSelectedJoinedGroups = () => {
+    if (!selectedTask || !selectedAccount) return
+    const nextGroupIds = selectedTask.groupIds.filter((groupId) => !groups.some((group) => group.id === groupId && group.accountIds.includes(selectedAccount.id)))
+    updateTask(selectedTask.id, { groupIds: nextGroupIds })
+    clearPreview()
+  }
+
   const handleCreativeImageUpload = (creativeId: string, event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -956,30 +985,32 @@ const BroadcastConsole = memo(function BroadcastConsole() {
             </GlassPanel>
 
             <GlassPanel className="bg-card">
-              <div>
-                <div className="text-lg font-semibold text-white">群组信息</div>
-                <div className="mt-1 text-sm text-textMuted">这里显示当前选择账号已经加入的群。点一下就能勾选到定时群发里。</div>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="text-lg font-semibold text-white">群组信息</div>
+                  <div className="mt-1 text-sm text-textMuted">这里显示当前选择账号已经加入的群。直接勾选就能加入定时群发。</div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={selectAllJoinedGroups} disabled={!selectedAccount || joinedGroups.length === 0} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-50">全选所有群</button>
+                  <button type="button" onClick={clearSelectedJoinedGroups} disabled={!selectedAccount || joinedGroups.length === 0} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50">清空已选群</button>
+                </div>
               </div>
-              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <div className="mt-4 overflow-hidden rounded-[18px] border border-white/8 bg-panel">
                 {joinedGroups.length === 0 ? (
-                  <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted lg:col-span-2">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
+                  <div className="px-4 py-12 text-center text-sm text-textMuted">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
                 ) : joinedGroups.map((group) => {
                   const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
                   const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
                   const checked = Boolean(matchedGroup && selectedTask.groupIds.includes(matchedGroup.id))
                   return (
-                    <button key={`${group.peerId}:${group.username || group.title}`} type="button" onClick={() => toggleJoinedGroupSelection(group)} className={`w-full rounded-[18px] border p-4 text-left transition ${checked ? 'border-violet-400/30 bg-violet-400/8' : 'border-white/8 bg-panel hover:bg-white/[0.03]'}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-white">{group.title}</div>
-                          <div className="mt-1 text-xs text-textMuted">{group.username || group.targetRef || '私密群 / 无公开用户名'}{group.memberCount ? ` · ${group.memberCount} 人` : ''}</div>
-                        </div>
-                        {checked ? <CheckCircle2 size={18} className="shrink-0 text-emerald-300" /> : null}
+                    <label key={`${group.peerId}:${group.username || group.title}`} className={`grid cursor-pointer grid-cols-[56px_minmax(0,1.2fr)_minmax(0,1fr)_110px] items-center gap-3 border-b border-white/6 px-4 py-3 text-sm transition last:border-b-0 ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.04]'}`}>
+                      <div className="flex items-center justify-center">
+                        <input type="checkbox" checked={checked} onChange={() => toggleJoinedGroupSelection(group)} />
                       </div>
-                      <div className={`mt-4 inline-flex rounded-[12px] px-3 py-2 text-sm ${checked ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.06] text-white'}`}>
-                        {checked ? '已勾选发送' : '勾选这个群发送'}
-                      </div>
-                    </button>
+                      <div className="truncate font-medium text-white">{group.title}</div>
+                      <div className="truncate text-textMuted">{group.username || group.targetRef || '私密群 / 无公开用户名'}</div>
+                      <div className="text-right text-textMuted">{group.memberCount ? `${group.memberCount} 人` : '—'}</div>
+                    </label>
                   )
                 })}
               </div>
