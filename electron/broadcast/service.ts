@@ -468,51 +468,22 @@ export class BroadcastService {
               let messageId: number | null = null
 
               if (creative.kind === 'channel_forward') {
-                const repeatPeriodSeconds = (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
-
-                if (repeatPeriodSeconds) {
-                  const sourceMessage = await loadSourceMessage(client, creative.sourceLink)
-                  const sourceText = typeof sourceMessage.message === 'string'
-                    ? sourceMessage.message
-                    : typeof sourceMessage.text === 'string'
-                      ? sourceMessage.text
-                      : ''
-                  const sourceMedia = sourceMessage.media
-                  const sourceEntities = Array.isArray(sourceMessage.entities) ? sourceMessage.entities : undefined
-
-                  if (!sourceText.trim() && !sourceMedia) {
-                    throw new Error('MEDIA_EMPTY')
-                  }
-
-                  const resentMessage = await (client as TelegramClient & {
-                    sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
-                  }).sendMessage(entity as never, {
-                    message: sourceText || undefined,
-                    file: sourceMedia || undefined,
-                    formattingEntities: sourceEntities,
-                    schedule: Math.floor(scheduledAt.getTime() / 1000),
-                    scheduleRepeatPeriod: repeatPeriodSeconds
-                  })
-
-                  messageId = extractResponseMessageId(resentMessage)
-                } else {
-                  const sourceMessage = parseTelegramMessageLink(creative.sourceLink)
-                  if (!sourceMessage || !Number.isFinite(sourceMessage.messageId) || sourceMessage.messageId <= 0) {
-                    throw new Error('SOURCE_MESSAGE_LINK_INVALID')
-                  }
-
-                  const forwardResult = await (client as TelegramClient & {
-                    forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
-                  }).forwardMessages(entity as never, {
-                    messages: [sourceMessage.messageId],
-                    fromPeer: sourceMessage.peerRef as never,
-                    schedule: Math.floor(scheduledAt.getTime() / 1000),
-                    dropAuthor: false
-                  })
-
-                  const firstResult = Array.isArray(forwardResult) ? forwardResult[0] : forwardResult
-                  messageId = extractResponseMessageId(firstResult)
+                const sourceMessage = parseTelegramMessageLink(creative.sourceLink)
+                if (!sourceMessage || !Number.isFinite(sourceMessage.messageId) || sourceMessage.messageId <= 0) {
+                  throw new Error('SOURCE_MESSAGE_LINK_INVALID')
                 }
+
+                const forwardResult = await (client as TelegramClient & {
+                  forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
+                }).forwardMessages(entity as never, {
+                  messages: [sourceMessage.messageId],
+                  fromPeer: sourceMessage.peerRef as never,
+                  schedule: Math.floor(scheduledAt.getTime() / 1000),
+                  dropAuthor: false
+                })
+
+                const firstResult = Array.isArray(forwardResult) ? forwardResult[0] : forwardResult
+                messageId = extractResponseMessageId(firstResult)
               } else {
                 const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
                 const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {

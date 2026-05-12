@@ -391,6 +391,7 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
       const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
       const creative = creativeId ? creatives.find((item) => item.id === creativeId) ?? null : null
       const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[slotIndex % compatibleAccounts.length] : null
+      const repeatPeriodSeconds = useDailyRepeat && creative?.kind !== 'channel_forward' ? 24 * 60 * 60 : null
       let status: BroadcastPreviewStatus = 'queued'
       let errorMessage = ''
 
@@ -412,7 +413,7 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
         accountId,
         groupId: group.id,
         creativeId,
-        repeatPeriodSeconds: useDailyRepeat ? 24 * 60 * 60 : null,
+        repeatPeriodSeconds,
         status,
         errorMessage,
         remoteMessageId: null,
@@ -733,7 +734,11 @@ export const useBroadcastStore = create<BroadcastState>()(
 
         const sanitizedItems = candidateItems.map((item) => ({
           ...item,
-          repeatPeriodSeconds: workingTask.scheduleMode === 'daily_repeat' ? (item.repeatPeriodSeconds ?? 24 * 60 * 60) : null
+          repeatPeriodSeconds: (() => {
+            const creative = item.creativeId ? state.creatives.find((entry) => entry.id === item.creativeId) : null
+            if (creative?.kind === 'channel_forward') return null
+            return workingTask.scheduleMode === 'daily_repeat' ? (item.repeatPeriodSeconds ?? 24 * 60 * 60) : null
+          })()
         }))
 
         const payload: BroadcastPushSchedulePayload = {
