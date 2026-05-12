@@ -98,7 +98,7 @@ function NumberRangeField(props: {
           className="h-11 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 text-white outline-none focus:border-violet-400/30"
         />
       </div>
-      <div className="mt-2 text-xs text-textMuted">单位：分钟</div>
+      <div className="mt-2 text-xs text-textMuted">单位：秒</div>
     </label>
   )
 }

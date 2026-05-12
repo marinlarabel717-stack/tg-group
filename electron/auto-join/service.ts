@@ -27,8 +27,8 @@ function randomInt(min: number, max: number) {
   return Math.floor(Math.random() * (normalizedMax - normalizedMin + 1)) + normalizedMin
 }
 
-function pickDelayMs(minMinutes: number, maxMinutes: number) {
-  return randomInt(minMinutes, maxMinutes) * 60 * 1000
+function pickDelayMs(minSeconds: number, maxSeconds: number) {
+  return randomInt(minSeconds, maxSeconds) * 1000
 }
 
 function shuffleItems<T>(items: T[]) {
@@ -382,7 +382,7 @@ export class AutoJoinService {
               const finalWaitMs = Math.max(waitSeconds * 1000, configuredRestMs)
               cooldownUntil.set(account.id, Date.now() + finalWaitMs)
               pushBackItem(account.id, { ...next, attempts: attempt })
-              emit(`${accountLabel} 触发限流，先休息 ${Math.ceil(finalWaitMs / 60000)} 分钟后继续。`, null, Math.ceil(finalWaitMs / 1000), true)
+              emit(`${accountLabel} 触发限流，先休息 ${Math.ceil(finalWaitMs / 1000)} 秒后继续。`, null, Math.ceil(finalWaitMs / 1000), true)
               continue
             }
 
