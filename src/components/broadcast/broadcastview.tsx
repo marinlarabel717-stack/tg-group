@@ -737,6 +737,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const [draftAccountIds, setDraftAccountIds] = useState<number[]>([])
   const [accountSearch, setAccountSearch] = useState('')
   const [groupListExpanded, setGroupListExpanded] = useState(false)
+  const [groupSearch, setGroupSearch] = useState('')
+  const [showOnlyCheckedGroups, setShowOnlyCheckedGroups] = useState(false)
 
   const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? tasks[0] ?? null, [selectedTaskId, tasks])
 
@@ -777,10 +779,23 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       lastScheduledAt: lastItem?.scheduledAt ?? ''
     }
   }, [groups, selectedPreview])
+  const filteredJoinedGroups = useMemo(() => {
+    const keyword = groupSearch.trim().toLowerCase()
+    return joinedGroups.filter((group) => {
+      const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
+      const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+      const checked = Boolean(matchedGroup && selectedTask?.groupIds.includes(matchedGroup.id))
+      if (showOnlyCheckedGroups && !checked) return false
+      if (!keyword) return true
+      return group.title.toLowerCase().includes(keyword)
+        || String(group.username || '').toLowerCase().includes(keyword)
+        || String(group.targetRef || '').toLowerCase().includes(keyword)
+    })
+  }, [groupSearch, groups, joinedGroups, selectedTask, showOnlyCheckedGroups])
   const visibleJoinedGroups = useMemo(() => {
     if (groupListExpanded) return joinedGroups
-    return joinedGroups.slice(0, DEFAULT_VISIBLE_JOINED_GROUPS)
-  }, [groupListExpanded, joinedGroups])
+    return filteredJoinedGroups.slice(0, DEFAULT_VISIBLE_JOINED_GROUPS)
+  }, [filteredJoinedGroups, groupListExpanded])
   const filteredAccounts = useMemo(() => {
     const keyword = accountSearch.trim().toLowerCase()
     if (!keyword) return accounts
@@ -1020,19 +1035,37 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div className="mt-1 text-sm text-textMuted">这里显示当前选择账号已经加入的群。直接勾选就能加入定时群发。</div>
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  {joinedGroups.length > DEFAULT_VISIBLE_JOINED_GROUPS ? (
+                  {filteredJoinedGroups.length > DEFAULT_VISIBLE_JOINED_GROUPS ? (
                     <button type="button" onClick={() => setGroupListExpanded((value) => !value)} className="flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">
                       {groupListExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      {groupListExpanded ? '收起群列表' : `展开全部群（${joinedGroups.length}）`}
+                      {groupListExpanded ? '收起群列表' : `展开全部群（${filteredJoinedGroups.length}）`}
                     </button>
                   ) : null}
                   <button type="button" onClick={selectAllJoinedGroups} disabled={!selectedAccount || joinedGroups.length === 0} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-50">全选所有群</button>
                   <button type="button" onClick={clearSelectedJoinedGroups} disabled={!selectedAccount || joinedGroups.length === 0} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50">清空已选群</button>
                 </div>
               </div>
+              <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+                <input
+                  value={groupSearch}
+                  onChange={(event) => {
+                    setGroupSearch(event.target.value)
+                    setGroupListExpanded(false)
+                  }}
+                  placeholder="搜索群名 / @用户名"
+                  className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-sm text-white outline-none focus:border-violet-400/30 lg:max-w-[320px]"
+                />
+                <label className="inline-flex items-center gap-2 text-sm text-textMuted">
+                  <input type="checkbox" checked={showOnlyCheckedGroups} onChange={(event) => setShowOnlyCheckedGroups(event.target.checked)} />
+                  只看已勾选
+                </label>
+                <div className="text-sm text-textMuted">当前显示 {filteredJoinedGroups.length} 个群</div>
+              </div>
               <div className="mt-4 overflow-hidden rounded-[18px] border border-white/8 bg-panel">
                 {joinedGroups.length === 0 ? (
                   <div className="px-4 py-12 text-center text-sm text-textMuted">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
+                ) : filteredJoinedGroups.length === 0 ? (
+                  <div className="px-4 py-12 text-center text-sm text-textMuted">没找到符合条件的群，换个关键词试试，或者取消“只看已勾选”。</div>
                 ) : visibleJoinedGroups.map((group) => {
                   const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
                   const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
@@ -1049,7 +1082,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   )
                 })}
               </div>
-              {joinedGroups.length > DEFAULT_VISIBLE_JOINED_GROUPS && !groupListExpanded ? (
+              {filteredJoinedGroups.length > DEFAULT_VISIBLE_JOINED_GROUPS && !groupListExpanded ? (
                 <div className="mt-3 text-sm text-textMuted">当前先显示前 {DEFAULT_VISIBLE_JOINED_GROUPS} 个群，点上面的“展开全部群”就能看完整列表。</div>
               ) : null}
             </GlassPanel>
