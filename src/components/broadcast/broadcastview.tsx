@@ -97,7 +97,9 @@ const DEFAULT_VISIBLE_SELECTED_GROUPS = 8
 
 function explainPreviewError(errorMessage: string) {
   const normalized = errorMessage.trim()
+  const plain = normalized.replace(/^发送失败[:：]\s*/, '').trim()
   if (!normalized) return '这条目前没有报错。'
+  if (plain === '发送失败' || normalized === '发送失败') return '这条没发进去，下面会告诉你具体卡在哪。'
   if (normalized.includes('排程时间太近') || normalized.includes('已过期') || /SCHEDULE_DATE_INVALID|MSG_ID_INVALID/i.test(normalized)) {
     return '这条时间已经过了，或者时间不合法。先重新点一次“预览发送”，再马上点“开始发送”。'
   }
@@ -181,7 +183,10 @@ function explainPreviewError(errorMessage: string) {
   if (normalized.includes('私密链接失效') || /INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) {
     return '私密链接失效了、过期了，或者这个账号用不了这个链接。'
   }
-  return normalized.startsWith('发送失败：') ? normalized : `发送失败：${normalized}`
+  if (normalized.startsWith('发送失败：') || normalized.startsWith('发送失败:')) {
+    return `这条没发进去：${plain || '具体原因没读到'}`
+  }
+  return `这条没发进去：${normalized}`
 }
 
 function normalizeGroupRefValue(value: string) {
@@ -449,7 +454,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               </button>
               <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.04] px-4 py-3 text-sm text-white transition hover:bg-white/[0.08]">清空当前预览</button>
             </div>
-            {errorMessage ? <div className="rounded-[14px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
+            {errorMessage ? <div className="rounded-[14px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{explainPreviewError(errorMessage)}</div> : null}
           </div>
         )}
       </GlassPanel>
@@ -474,7 +479,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               <div key={item.id} className="rounded-[16px] bg-panel p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold text-white">{formatDateTimeFull(item.scheduledAt)}</div>
-                  <div className={`rounded-full px-2.5 py-1 text-[11px] ${getPreviewTone(item.status)}`}>{item.status === 'scheduled' ? '已写入' : item.status === 'failed' ? '失败' : '待写入'}</div>
+                  <div className={`rounded-full px-2.5 py-1 text-[11px] ${getPreviewTone(item.status)}`}>{item.status === 'scheduled' ? '已写入' : item.status === 'failed' ? '没发进去' : '待写入'}</div>
                 </div>
                 <div className="mt-3 space-y-1 text-sm text-slate-200">
                   <div>群组：{group?.title || '未匹配群组'}</div>
@@ -483,7 +488,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                   {item.remoteMessageId ? <div>官方消息 ID：{item.remoteMessageId}</div> : null}
                   {item.syncedAt ? <div>写入时间：{formatDateTimeFull(item.syncedAt)}</div> : null}
                 </div>
-                {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200">{item.errorMessage}</div> : null}
+                {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200">{explainPreviewError(item.errorMessage)}</div> : null}
               </div>
             )
           })}
@@ -1562,7 +1567,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
             <div key={item.id} className="rounded-[16px] bg-panel p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-white">{formatDateTimeFull(item.scheduledAt)}</div>
-                <div className={`rounded-full px-2.5 py-1 text-[11px] ${getPreviewTone(item.status)}`}>{item.status === 'scheduled' ? '已写入' : item.status === 'failed' ? '失败' : '待发送'}</div>
+                <div className={`rounded-full px-2.5 py-1 text-[11px] ${getPreviewTone(item.status)}`}>{item.status === 'scheduled' ? '已写入' : item.status === 'failed' ? '没发进去' : '待发送'}</div>
               </div>
               <div className="mt-3 space-y-1 text-sm text-slate-200">
                 <div>群组：{group?.title || '未匹配群组'}</div>
@@ -1624,8 +1629,8 @@ const CalendarWorkbench = memo(function CalendarWorkbench() {
                       <div className="text-sm font-medium text-white">{creative ? readCreativeTitle(creative) : '未匹配文案'}</div>
                       <div className="mt-1 text-xs text-textMuted">{group?.title || '未匹配群组'} · {account?.username || account?.phone || '未分配账号'}</div>
                     </div>
-                    <div className="text-xs text-textMuted">{item.errorMessage || '已进入本地排程队列'}</div>
-                    <div className={`inline-flex rounded-full px-3 py-1 text-xs ${getPreviewTone(item.status)}`}>{item.status === 'scheduled' ? '已写入' : item.status === 'failed' ? '失败' : '待写入'}</div>
+                    <div className="text-xs text-textMuted">{item.errorMessage ? explainPreviewError(item.errorMessage) : '已进入本地排程队列'}</div>
+                    <div className={`inline-flex rounded-full px-3 py-1 text-xs ${getPreviewTone(item.status)}`}>{item.status === 'scheduled' ? '已写入' : item.status === 'failed' ? '没发进去' : '待写入'}</div>
                   </div>
                 )
               })}
@@ -1916,7 +1921,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
         </div>
       ) : null}
 
-      {errorMessage ? <div className="mt-4 rounded-[16px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
+      {errorMessage ? <div className="mt-4 rounded-[16px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{explainPreviewError(errorMessage)}</div> : null}
       {!errorMessage && visibleActionMessage ? <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{visibleActionMessage}</div> : null}
 
       <div className="mt-5 space-y-3">
