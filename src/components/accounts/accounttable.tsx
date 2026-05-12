@@ -1064,9 +1064,8 @@ export const AccountTable = memo(function AccountTable() {
                       <X size={16} />
                     </button>
 
-                    <div className="rounded-[12px] bg-card px-4 py-3 text-sm text-white">
-                      <span className="text-textMuted">选中数量 / 总数量：</span>
-                      <span className="ml-2 font-semibold">{selectedCount} / {totalCount}</span>
+                    <div className="rounded-[12px] bg-card px-4 py-3 text-sm font-semibold text-white">
+                      {selectedCount} / {totalCount}
                     </div>
 
                     {bulkActionHint ? (
