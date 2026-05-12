@@ -550,6 +550,12 @@ export const useDirectMessageStore = create<DirectMessageState>()(
                 .filter((target) => !result.items.some((item) => item.status === 'sent' && item.targetId === target.id))
                 .map((target) => ({ value: target.value, source: target.source })))
               : current.targets,
+            targetInput: result.items.some((item) => item.status === 'sent')
+              ? current.targets
+                .filter((target) => !result.items.some((item) => item.status === 'sent' && item.targetId === target.id))
+                .map((target) => target.value)
+                .join('\n')
+              : current.targetInput,
             runs: [run, ...current.runs],
             activeTab: 'logs',
             lastActionMessage: result.items.some((item) => item.status === 'sent')

@@ -36,6 +36,7 @@ function formatDirectMessageError(error: unknown) {
   if (/PHOTO_INVALID|MEDIA_INVALID|IMAGE_PROCESS_FAILED/i.test(normalized)) return '图片有问题，Telegram 不认这张图。'
   if (/SOURCE_MESSAGE_LINK_INVALID/i.test(normalized)) return '频道消息链接不对，请检查链接。'
   if (/CHAT_FORWARDS_RESTRICTED/i.test(normalized)) return '这个频道消息禁止转发。'
+  if (/POSTBOT_RESULT_EMPTY/i.test(normalized)) return 'postbot 没返回可发送的图文结果，请检查代码是不是完整可用。'
   if (/FLOOD_WAIT_(\d+)/i.test(normalized)) {
     const matched = normalized.match(/FLOOD_WAIT_(\d+)/i)
     return matched ? `当前账号被限流了，请 ${matched[1]} 秒后再试。` : '当前账号被限流了，请稍后再试。'
@@ -175,6 +176,28 @@ function buildPostbotText(parsed: { text: string; buttonText: string; buttonUrl:
   const base = parsed.text.trim()
   if (!parsed.buttonText || !parsed.buttonUrl) return base
   return `${base}${base ? '\n\n' : ''}${parsed.buttonText}\n${parsed.buttonUrl}`
+}
+
+function createRandomId() {
+  const seed = `${Date.now()}${Math.floor(Math.random() * 1_000_000)}`
+  return bigInt(seed)
+}
+
+function extractResponseMessageId(result: unknown) {
+  if (typeof (result as { id?: unknown } | null)?.id === 'number') {
+    return (result as { id: number }).id
+  }
+
+  const updates = Array.isArray((result as { updates?: unknown[] } | null)?.updates)
+    ? (result as { updates: Array<{ id?: unknown; message?: { id?: unknown } }> }).updates
+    : []
+
+  for (const update of updates) {
+    if (typeof update?.message?.id === 'number') return update.message.id
+    if (typeof update?.id === 'number') return update.id
+  }
+
+  return null
 }
 
 function readAccountLabel(account: AccountRecord) {
@@ -321,7 +344,7 @@ export class DirectMessageService {
 
           const resolved = await resolveSendEntity(client, item.targetValue)
           cleanup = resolved.cleanup
-          let response: { id?: number } | Array<{ id?: number }> | null = null
+          let response: unknown = null
 
           if (payload.messageType === 'channel_forward') {
             const { parsed } = await loadSourceMessage(client, payload.sourceLink)
@@ -352,15 +375,30 @@ export class DirectMessageService {
               formattingEntities: sourceEntities
             })
           } else if (payload.messageType === 'postbot_code') {
-            const parsedPostbot = parsePostbotCode(payload.postbotCode)
-            const composedText = buildPostbotText(parsedPostbot)
-            const media = parsedPostbot.imageUrl ? resolveMediaFile(parsedPostbot.imageUrl, composedText || item.targetValue) : undefined
-            response = await (client as TelegramClient & {
-              sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
-            }).sendMessage(resolved.entity as never, {
-              message: composedText || undefined,
-              file: media
-            })
+            const query = payload.postbotCode.trim()
+            const inlineBot = await client.getEntity('@postbot' as never)
+            const inlineResults = await client.invoke(new Api.messages.GetInlineBotResults({
+              bot: inlineBot as never,
+              peer: resolved.entity as never,
+              query,
+              offset: ''
+            }))
+
+            const firstResult = Array.isArray((inlineResults as { results?: unknown[] }).results)
+              ? (inlineResults as { results: Array<{ id?: string }> }).results[0]
+              : null
+
+            if (!firstResult?.id) {
+              throw new Error('POSTBOT_RESULT_EMPTY')
+            }
+
+            response = await client.invoke(new Api.messages.SendInlineBotResult({
+              peer: resolved.entity as never,
+              queryId: (inlineResults as { queryId: any }).queryId,
+              id: firstResult.id,
+              randomId: createRandomId(),
+              clearDraft: true
+            }))
           } else {
             const media = payload.imageUrl.trim() ? resolveMediaFile(payload.imageUrl, payload.messageText || item.targetValue) : undefined
             response = await (client as TelegramClient & {
@@ -378,8 +416,8 @@ export class DirectMessageService {
             status: 'sent',
             errorMessage: '',
             remoteMessageId: Array.isArray(response)
-              ? (typeof response[0]?.id === 'number' ? response[0].id : null)
-              : (typeof response?.id === 'number' ? response.id : null),
+              ? (typeof (response[0] as { id?: unknown } | undefined)?.id === 'number' ? (response[0] as { id: number }).id : null)
+              : (typeof (response as { id?: unknown } | null)?.id === 'number' ? (response as { id: number }).id : extractResponseMessageId(response)),
             sentAt: new Date().toISOString(),
             accountId: item.accountId
           }
