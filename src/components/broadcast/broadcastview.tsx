@@ -71,6 +71,7 @@ function readRepeatLabel(repeatPeriodSeconds?: number | null) {
 
 const MAX_VISIBLE_LOG_ITEMS = 200
 const DEFAULT_VISIBLE_JOINED_GROUPS = 12
+const DEFAULT_VISIBLE_SELECTED_GROUPS = 8
 
 function explainPreviewError(errorMessage: string) {
   const normalized = errorMessage.trim()
@@ -500,12 +501,17 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
   const [groupTitle, setGroupTitle] = useState('')
   const [groupUsername, setGroupUsername] = useState('')
   const [groupMembers, setGroupMembers] = useState('0')
+  const [selectedGroupListExpanded, setSelectedGroupListExpanded] = useState(false)
 
   const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedTargetAccountId) ?? null, [accounts, selectedTargetAccountId])
   const selectedAccountGroups = useMemo(() => {
     if (!selectedAccount) return groups
     return groups.filter((group) => group.accountIds.includes(selectedAccount.id))
   }, [groups, selectedAccount])
+  const visibleSelectedAccountGroups = useMemo(() => {
+    if (selectedGroupListExpanded) return selectedAccountGroups
+    return selectedAccountGroups.slice(0, DEFAULT_VISIBLE_SELECTED_GROUPS)
+  }, [selectedAccountGroups, selectedGroupListExpanded])
 
   return (
     <div className="space-y-5">
@@ -652,13 +658,21 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
                   <div className="text-lg font-semibold text-white">已选中的目标群</div>
                   <div className="mt-1 text-sm text-textMuted">这些群后面会直接出现在任务页。</div>
                 </div>
-                <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{selectedAccountGroups.length} 个</div>
+                <div className="flex items-center gap-3">
+                  {selectedAccountGroups.length > DEFAULT_VISIBLE_SELECTED_GROUPS ? (
+                    <button type="button" onClick={() => setSelectedGroupListExpanded((value) => !value)} className="flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.1]">
+                      {selectedGroupListExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      {selectedGroupListExpanded ? '收起已选群' : `展开已选群（${selectedAccountGroups.length}）`}
+                    </button>
+                  ) : null}
+                  <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{selectedAccountGroups.length} 个</div>
+                </div>
               </div>
 
               <div className="mt-4 space-y-3">
                 {selectedAccountGroups.length === 0 ? (
                   <div className="rounded-[18px] bg-panel px-4 py-12 text-center text-sm text-textMuted">这个账号还没有选中任何目标群。</div>
-                ) : selectedAccountGroups.map((group) => (
+                ) : visibleSelectedAccountGroups.map((group) => (
                   <div key={group.id} className="flex items-center justify-between gap-3 rounded-[18px] bg-panel px-4 py-4">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-white">{group.title}</div>
@@ -671,6 +685,9 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
                   </div>
                 ))}
               </div>
+              {selectedAccountGroups.length > DEFAULT_VISIBLE_SELECTED_GROUPS && !selectedGroupListExpanded ? (
+                <div className="mt-3 text-sm text-textMuted">当前先显示前 {DEFAULT_VISIBLE_SELECTED_GROUPS} 个已选群，点上面的“展开已选群”就能看完整列表。</div>
+              ) : null}
             </GlassPanel>
 
             <GlassPanel className="bg-card">
@@ -1260,6 +1277,15 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       ? selectedPreview
       : selectedPreview.filter((item) => String(item.accountId ?? '') === accountFilter)
   ), [accountFilter, selectedPreview])
+  const completedPreview = useMemo(() => (
+    filteredPreview
+      .filter((item) => item.status === 'scheduled' || item.status === 'failed')
+      .sort((left, right) => {
+        const rightTime = new Date(right.syncedAt || right.scheduledAt).getTime()
+        const leftTime = new Date(left.syncedAt || left.scheduledAt).getTime()
+        return rightTime - leftTime
+      })
+  ), [filteredPreview])
 
   const buildSummary = (items: BroadcastPreviewItem[]) => {
     const successCount = items.filter((item) => item.status === 'scheduled').length
@@ -1286,9 +1312,9 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const previewSummary = useMemo(() => buildSummary(selectedPreview), [groups, selectedPreview])
   const filteredSummary = useMemo(() => buildSummary(filteredPreview), [groups, filteredPreview])
   const visiblePreview = useMemo(() => {
-    if (filteredPreview.length <= MAX_VISIBLE_LOG_ITEMS) return filteredPreview
-    return filteredPreview.slice(-MAX_VISIBLE_LOG_ITEMS)
-  }, [filteredPreview])
+    if (completedPreview.length <= MAX_VISIBLE_LOG_ITEMS) return completedPreview
+    return completedPreview.slice(0, MAX_VISIBLE_LOG_ITEMS)
+  }, [completedPreview])
 
   return (
     <GlassPanel className="bg-card min-h-[720px]">
@@ -1352,11 +1378,15 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       <div className="mt-4 max-h-[820px] space-y-3 overflow-y-auto pr-1">
         {filteredPreview.length === 0 ? (
           <div className="flex min-h-[260px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">还没有发送日志，先去“定时群发”页预览或开始发送。</div>
+        ) : completedPreview.length === 0 ? (
+          <div className="flex min-h-[260px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">
+            这里现在只显示真实结果。成功定时了会出现在这里，失败也会直接显示原因。
+          </div>
         ) : (
           <>
-            {filteredPreview.length > MAX_VISIBLE_LOG_ITEMS ? (
+            {completedPreview.length > MAX_VISIBLE_LOG_ITEMS ? (
               <div className="rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">
-                当前一共 {filteredPreview.length} 条日志，为了不卡界面，这里先只显示最近 {MAX_VISIBLE_LOG_ITEMS} 条。
+                当前一共 {completedPreview.length} 条真实结果日志，为了不卡界面，这里先只显示最近 {MAX_VISIBLE_LOG_ITEMS} 条。
               </div>
             ) : null}
             {visiblePreview.map((item) => {
