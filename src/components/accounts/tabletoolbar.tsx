@@ -1,19 +1,15 @@
-import { memo, useMemo, useState, type ReactNode } from 'react'
+import { memo, useState, type ReactNode } from 'react'
 import {
   CheckSquare,
   ChevronDown,
   Download,
   FolderSearch2,
-  Loader2,
-  RefreshCcw,
   Search,
   SquareDashedMousePointer,
   Trash2,
   Upload,
-  WandSparkles,
   X
 } from 'lucide-react'
-import type { CheckAction } from '../../types'
 
 interface TableToolbarProps {
   search: string
@@ -30,8 +26,6 @@ interface TableToolbarProps {
   onSelectAll: () => void
   onClearSelection: () => void
   onSelectRange: (start: number, end: number) => void
-  onStartCheck: (actions: CheckAction[]) => void
-  onRefresh: () => void
 }
 
 function ActionButton({
@@ -75,38 +69,18 @@ export const TableToolbar = memo(function TableToolbar({
   onDeleteAll,
   onSelectAll,
   onClearSelection,
-  onSelectRange,
-  onStartCheck,
-  onRefresh
+  onSelectRange
 }: TableToolbarProps) {
   const blocked = loading || busy
   const [rangeStart, setRangeStart] = useState('1')
   const [rangeEnd, setRangeEnd] = useState('20')
   const [rangeMenuOpen, setRangeMenuOpen] = useState(false)
-  const [checkMenuOpen, setCheckMenuOpen] = useState(false)
-
-  const checkActions = useMemo(
-    () => [
-      { id: 'account-status' as const, label: '检测账号状态', description: '登录 + SpamBot + 资料回写', disabled: false },
-      { id: 'account-survival' as const, label: '检查账号存活', description: '尝试把自动注销期限改成 24 个月，仅显示存活/封禁/多 IP/超时', disabled: false },
-      { id: 'profile-refresh' as const, label: '资料补全', description: '后续添加', disabled: true },
-      { id: 'proxy-health' as const, label: '代理连通性', description: '后续添加', disabled: true }
-    ],
-    []
-  )
 
   const handleRangeSelect = () => {
     const start = Number(rangeStart)
     const end = Number(rangeEnd)
     if (!Number.isFinite(start) || !Number.isFinite(end)) return
     onSelectRange(start, end)
-  }
-
-  const handleStartCheck = (actionId: CheckAction) => {
-    const action = checkActions.find((item) => item.id === actionId)
-    if (!action || action.disabled) return
-    onStartCheck([actionId])
-    setCheckMenuOpen(false)
   }
 
   return (
@@ -138,48 +112,6 @@ export const TableToolbar = memo(function TableToolbar({
               已选 {selectedCount} 项 / 共 {totalCount} 行
             </div>
           </div>
-        </div>
-
-        <ActionButton
-          label="刷新"
-          icon={loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
-          onClick={onRefresh}
-          disabled={busy}
-          emphasis
-        />
-
-        <div className="relative">
-          <button
-            onClick={() => setCheckMenuOpen((value) => !value)}
-            disabled={blocked || selectedCount === 0}
-            className="flex h-11 items-center gap-2 rounded-[12px] bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <WandSparkles size={16} />
-            检测菜单
-            <ChevronDown size={15} className={`transition ${checkMenuOpen ? 'rotate-180' : ''}`} />
-          </button>
-
-          {checkMenuOpen ? (
-            <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[280px] rounded-[14px] border border-white/8 bg-card p-3 shadow-2xl">
-              <div className="mb-2 text-xs tracking-[0.2em] text-textMuted">点击后直接开始检测</div>
-              <div className="space-y-2">
-                {checkActions.map((action) => (
-                  <button
-                    key={action.id}
-                    onClick={() => handleStartCheck(action.id)}
-                    disabled={action.disabled || blocked || selectedCount === 0}
-                    className={`flex w-full items-start gap-3 rounded-[12px] px-3 py-2.5 text-left transition ${action.disabled ? 'cursor-not-allowed bg-panel/40 opacity-45' : 'bg-panel hover:bg-hover'}`}
-                  >
-                    <WandSparkles size={15} className="mt-0.5 shrink-0 text-neonSoft" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-white">{action.label}</div>
-                      <div className="mt-1 text-xs text-textMuted">{action.description}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       </div>
 

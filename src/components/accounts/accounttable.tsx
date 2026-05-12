@@ -814,8 +814,6 @@ export const AccountTable = memo(function AccountTable() {
         onSelectAll={handleSelectAll}
         onClearSelection={handleClearSelection}
         onSelectRange={handleSelectRange}
-        onStartCheck={handleStartCheck}
-        onRefresh={handleRefresh}
       />
 
       <TableFilters
@@ -823,6 +821,9 @@ export const AccountTable = memo(function AccountTable() {
         statusFilter={statusFilter === 'all' ? '' : statusFilter}
         sourceFilter={sourceFilter}
         proxyFilter={proxyFilter}
+        selectedCount={selectedCount}
+        loading={tableLoading}
+        busy={busy}
         countries={countries}
         statuses={statuses}
         sources={sources}
@@ -831,6 +832,8 @@ export const AccountTable = memo(function AccountTable() {
         onStatusChange={(value) => setStatusFilter((value || 'all') as AccountStatusFilter)}
         onSourceChange={setSourceFilter}
         onProxyChange={setProxyFilter}
+        onStartCheck={handleStartCheck}
+        onRefresh={handleRefresh}
       />
 
       <GlassPanel className="overflow-hidden p-0">
