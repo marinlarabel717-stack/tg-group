@@ -602,15 +602,18 @@ export const AccountTable = memo(function AccountTable() {
     () => filterAccounts(accounts, { search: deferredSearch, statusFilter: 'all', countryFilter }),
     [accounts, deferredSearch, countryFilter]
   )
-  const scopedData = useMemo(
+  const summaryScopedData = useMemo(
     () =>
       baseData.filter((account) => {
         if (sourceFilter && account.profileSource !== sourceFilter) return false
         if (proxyFilter && readProxy(account) !== proxyFilter) return false
-        if (!matchesPremiumFilter(account, premiumFilter)) return false
         return true
       }),
-    [baseData, sourceFilter, proxyFilter, premiumFilter]
+    [baseData, sourceFilter, proxyFilter]
+  )
+  const scopedData = useMemo(
+    () => summaryScopedData.filter((account) => matchesPremiumFilter(account, premiumFilter)),
+    [premiumFilter, summaryScopedData]
   )
   const data = useMemo(
     () => filterAccounts(scopedData, { search: '', statusFilter, countryFilter: '' }),
@@ -920,19 +923,19 @@ export const AccountTable = memo(function AccountTable() {
   const selectedCount = selectedIds.length
   const totalCount = data.length
   const summaryCards = useMemo(() => {
-    const aliveCount = scopedData.filter((account) => account.status === 'alive').length
-    const limitedCount = scopedData.filter((account) => account.status === 'limited' || account.status === 'temporary_limited').length
-    const frozenCount = scopedData.filter((account) => account.status === 'frozen').length
-    const timeoutCount = scopedData.filter((account) => account.status === 'timeout' || account.status === 'unknown' || account.status === 'checking').length
+    const aliveCount = summaryScopedData.filter((account) => account.status === 'alive').length
+    const limitedCount = summaryScopedData.filter((account) => account.status === 'limited' || account.status === 'temporary_limited').length
+    const frozenCount = summaryScopedData.filter((account) => account.status === 'frozen').length
+    const timeoutCount = summaryScopedData.filter((account) => account.status === 'timeout' || account.status === 'unknown' || account.status === 'checking').length
 
     return [
-      { key: 'all' as AccountStatusFilter, label: '总数量', count: scopedData.length },
+      { key: 'all' as AccountStatusFilter, label: '总数量', count: summaryScopedData.length },
       { key: 'alive' as AccountStatusFilter, label: '无限制', count: aliveCount },
       { key: 'limited-group' as AccountStatusFilter, label: '双向', count: limitedCount },
       { key: 'frozen' as AccountStatusFilter, label: '冻结', count: frozenCount },
       { key: 'timeout-group' as AccountStatusFilter, label: '超时/未检测', count: timeoutCount }
     ]
-  }, [scopedData])
+  }, [summaryScopedData])
 
   const shortcutCards = useMemo(() => (
     savedShortcuts.map((shortcut) => {
