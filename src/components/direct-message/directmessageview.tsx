@@ -81,6 +81,33 @@ function formatTimeOnly(value?: string | null) {
   }).format(date)
 }
 
+function buildAccountRangeOptions<T extends { id: number }>(accounts: T[], step = 10) {
+  const ranges: Array<{ key: string; label: string; ids: number[] }> = []
+  for (let start = 0; start < accounts.length; start += step) {
+    const chunk = accounts.slice(start, start + step)
+    if (chunk.length === 0) continue
+    ranges.push({
+      key: `${start + 1}-${start + chunk.length}`,
+      label: `${start + 1}-${start + chunk.length}`,
+      ids: chunk.map((item) => item.id)
+    })
+  }
+  return ranges
+}
+
+function toggleAccountRange(currentIds: number[], rangeIds: number[]) {
+  const currentSet = new Set(currentIds)
+  const fullySelected = rangeIds.every((id) => currentSet.has(id))
+  if (fullySelected) {
+    return currentIds.filter((id) => !rangeIds.includes(id))
+  }
+  const next = [...currentIds]
+  rangeIds.forEach((id) => {
+    if (!currentSet.has(id)) next.push(id)
+  })
+  return next
+}
+
 const TabBar = memo(function TabBar() {
   const activeTab = useDirectMessageStore((state) => state.activeTab)
   const setActiveTab = useDirectMessageStore((state) => state.setActiveTab)
@@ -154,6 +181,7 @@ const SendWorkbench = memo(function SendWorkbench() {
       return [nickname, account.username || '', account.phone || '', account.userId || ''].some((value) => value.toLowerCase().includes(keyword))
     })
   }, [accountSearch, accounts])
+  const accountRangeOptions = useMemo(() => buildAccountRangeOptions(filteredAccounts), [filteredAccounts])
 
   const validTargets = targetSummary.valid
   const invalidTargets = targetSummary.invalid
@@ -339,6 +367,25 @@ const SendWorkbench = memo(function SendWorkbench() {
                   <button type="button" onClick={() => setDraftAccountIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
                 </div>
               </div>
+
+              {accountRangeOptions.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="mr-1 text-sm text-textMuted">区间选择</div>
+                  {accountRangeOptions.map((range) => {
+                    const active = range.ids.every((id) => draftAccountIds.includes(id))
+                    return (
+                      <button
+                        key={range.key}
+                        type="button"
+                        onClick={() => setDraftAccountIds((current) => toggleAccountRange(current, range.ids))}
+                        className={`rounded-[12px] px-3 py-2 text-sm transition ${active ? 'bg-violet-400 text-slate-950 hover:bg-violet-300' : 'bg-white/[0.05] text-white hover:bg-white/[0.1]'}`}
+                      >
+                        {range.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
 
               <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
                 <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/6 px-4 py-3 text-xs uppercase tracking-[0.16em] text-textMuted">
