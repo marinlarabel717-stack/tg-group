@@ -15,6 +15,10 @@ export function registerBroadcastIpc(options: RegisterBroadcastIpcOptions) {
     })
   })
 
+  ipcMain.handle('broadcast:stop-push-schedule', async () => {
+    return broadcastService.stopCurrentPush()
+  })
+
   ipcMain.handle('broadcast:list-joined-groups', async (_event, accountId: number) => {
     return broadcastService.listJoinedGroups(accountId)
   })

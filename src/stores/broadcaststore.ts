@@ -77,6 +77,7 @@ interface BroadcastState {
   joinedGroups: BroadcastJoinedGroup[]
   lastActionMessage: string
   syncing: boolean
+  stopping: boolean
   loadingJoinedGroups: boolean
   errorMessage: string
   setActiveTab: (tab: BroadcastTabKey) => void
@@ -99,6 +100,7 @@ interface BroadcastState {
   generatePreview: (accounts: Array<{ id: number; status?: string; profile?: { is_premium?: boolean } }>) => void
   clearPreview: () => void
   pushScheduleToTelegram: () => Promise<void>
+  stopPushScheduleToTelegram: () => Promise<void>
 }
 
 function createId(prefix: string) {
@@ -443,6 +445,7 @@ export const useBroadcastStore = create<BroadcastState>()(
       joinedGroups: [],
       lastActionMessage: '先完成任务配置，再写入 Telegram 官方定时消息。',
       syncing: false,
+      stopping: false,
       loadingJoinedGroups: false,
       errorMessage: '',
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -786,6 +789,7 @@ export const useBroadcastStore = create<BroadcastState>()(
         } catch (error) {
           set({
             syncing: false,
+            stopping: false,
             errorMessage: error instanceof Error ? error.message : '写入 Telegram 定时消息失败。',
             lastActionMessage: '写入 Telegram 官方定时消息失败。'
           })
@@ -796,6 +800,29 @@ export const useBroadcastStore = create<BroadcastState>()(
           }
           flushProgress()
           disposeProgress?.()
+          set({ syncing: false, stopping: false })
+        }
+      },
+      stopPushScheduleToTelegram: async () => {
+        if (!window.desktopBroadcast?.stopPushSchedule) {
+          set({ lastActionMessage: '当前环境还没注入停止定时群发的桌面能力。' })
+          return
+        }
+
+        set({ stopping: true, lastActionMessage: '正在停止当前定时群发写入...' })
+        try {
+          const result = await window.desktopBroadcast.stopPushSchedule()
+          set((state) => ({
+            stopping: false,
+            syncing: result.stopped ? false : state.syncing,
+            lastActionMessage: result.message
+          }))
+        } catch (error) {
+          set({
+            stopping: false,
+            errorMessage: error instanceof Error ? error.message : '停止定时群发失败。',
+            lastActionMessage: '停止定时群发失败。'
+          })
         }
       }
     }),

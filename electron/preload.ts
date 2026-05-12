@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
+import type { AccountRecord, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'Telegram Multi Account Manager',
@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld('desktopLicense', {
 
 contextBridge.exposeInMainWorld('desktopBroadcast', {
   pushSchedule: (payload: BroadcastPushSchedulePayload) => ipcRenderer.invoke('broadcast:push-schedule', payload),
+  stopPushSchedule: () => ipcRenderer.invoke('broadcast:stop-push-schedule') as Promise<BroadcastStopResult>,
   listJoinedGroups: (accountId: number) => ipcRenderer.invoke('broadcast:list-joined-groups', accountId),
   onPushProgress: (callback: (payload: BroadcastPushScheduleProgress) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: BroadcastPushScheduleProgress) => callback(payload)

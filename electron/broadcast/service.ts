@@ -5,7 +5,7 @@ import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager } from '../accounts/check-engine/telegram-client-manager'
-import type { BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem } from '../../src/types'
+import type { BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastStopResult } from '../../src/types'
 
 const MIN_SCHEDULE_AHEAD_MS = 60_000
 
@@ -238,11 +238,30 @@ async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: Ses
 }
 
 export class BroadcastService {
+  private activePushTask: { cancelled: boolean; clients: Map<number, TelegramClient> } | null = null
+
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager
   ) {}
+
+  async stopCurrentPush(): Promise<BroadcastStopResult> {
+    if (!this.activePushTask) {
+      return {
+        stopped: false,
+        message: '当前没有正在写入的定时群发任务。'
+      }
+    }
+
+    this.activePushTask.cancelled = true
+    await Promise.all(Array.from(this.activePushTask.clients.values()).map((client) => this.clientManager.destroyClient(client).catch(() => undefined)))
+    this.activePushTask.clients.clear()
+    return {
+      stopped: true,
+      message: '已停止当前定时群发写入，后续不会再继续写入。'
+    }
+  }
 
   async pushSchedule(payload: BroadcastPushSchedulePayload, onProgress?: (payload: BroadcastPushScheduleProgress) => void): Promise<BroadcastPushScheduleResult> {
     const creativesById = new Map(payload.creatives.map((item) => [item.id, item]))
@@ -257,6 +276,8 @@ export class BroadcastService {
     let successCount = 0
     let failedCount = 0
     let completedCount = 0
+    const task = { cancelled: false, clients }
+    this.activePushTask = task
 
     const reportProgress = (item: BroadcastPushScheduleResultItem) => {
       completedCount += 1
@@ -267,6 +288,7 @@ export class BroadcastService {
 
     try {
       for (const item of payload.items) {
+        if (task.cancelled) break
         const existingScheduled = item.status === 'scheduled' && item.remoteMessageId
         if (existingScheduled) {
           const resultItem: BroadcastPushScheduleResultItem = {
@@ -368,6 +390,7 @@ export class BroadcastService {
         if (!account) return
 
         for (const item of items) {
+          if (task.cancelled) break
           const creative = item.creativeId ? creativesById.get(item.creativeId) : null
           const group = groupsById.get(item.groupId)
           const scheduledAt = new Date(item.scheduledAt)
@@ -391,6 +414,10 @@ export class BroadcastService {
             let client = clients.get(account.id)
             if (!client) {
               client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+              if (task.cancelled) {
+                await this.clientManager.destroyClient(client).catch(() => undefined)
+                break
+              }
               clients.set(account.id, client)
             }
 
@@ -473,6 +500,7 @@ export class BroadcastService {
             results.push(resultItem)
             reportProgress(resultItem)
           } catch (error) {
+            if (task.cancelled) break
             const resultItem = this.createFailedItem(item, formatBroadcastError(error))
             results.push(resultItem)
             reportProgress(resultItem)
@@ -481,10 +509,15 @@ export class BroadcastService {
       }))
     } finally {
       await Promise.all(Array.from(clients.values()).map((client) => this.clientManager.destroyClient(client)))
+      if (this.activePushTask === task) {
+        this.activePushTask = null
+      }
     }
 
     const message = results.length === 0
       ? '当前没有可写入的排程'
+      : task.cancelled
+        ? `定时群发已停止。已写入 ${successCount} 条，失败 ${failedCount} 条，剩余 ${Math.max(0, payload.items.length - results.length)} 条未继续写入。`
       : failedCount === 0
         ? `已成功写入 ${successCount} 条 Telegram 官方定时消息。`
         : `写入完成：成功 ${successCount} 条，失败 ${failedCount} 条。`

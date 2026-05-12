@@ -206,6 +206,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const clearPreview = useBroadcastStore((state) => state.clearPreview)
   const pushScheduleToTelegram = useBroadcastStore((state) => state.pushScheduleToTelegram)
   const syncing = useBroadcastStore((state) => state.syncing)
+  const stopping = useBroadcastStore((state) => state.stopping)
   const errorMessage = useBroadcastStore((state) => state.errorMessage)
 
   const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? null, [selectedTaskId, tasks])
@@ -720,6 +721,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const joinedGroups = useBroadcastStore((state) => state.joinedGroups)
   const loadingJoinedGroups = useBroadcastStore((state) => state.loadingJoinedGroups)
   const syncing = useBroadcastStore((state) => state.syncing)
+  const stopping = useBroadcastStore((state) => state.stopping)
   const errorMessage = useBroadcastStore((state) => state.errorMessage)
   const lastActionMessage = useBroadcastStore((state) => state.lastActionMessage)
   const selectTask = useBroadcastStore((state) => state.selectTask)
@@ -729,6 +731,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const attachJoinedGroupToAccount = useBroadcastStore((state) => state.attachJoinedGroupToAccount)
   const generatePreview = useBroadcastStore((state) => state.generatePreview)
   const pushScheduleToTelegram = useBroadcastStore((state) => state.pushScheduleToTelegram)
+  const stopPushScheduleToTelegram = useBroadcastStore((state) => state.stopPushScheduleToTelegram)
   const clearPreview = useBroadcastStore((state) => state.clearPreview)
   const setActiveTab = useBroadcastStore((state) => state.setActiveTab)
   const createCreative = useBroadcastStore((state) => state.createCreative)
@@ -966,6 +969,9 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                 void pushScheduleToTelegram()
               }} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/14 px-4 py-3 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-60">
                 <Send size={16} /> {syncing ? '正在启动...' : '开始定时群发'}
+              </button>
+              <button type="button" disabled={!syncing || stopping} onClick={() => void stopPushScheduleToTelegram()} className="flex items-center gap-2 rounded-[12px] bg-rose-400/12 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50">
+                <X size={16} /> {stopping ? '正在取消...' : '取消定时任务'}
               </button>
               <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.09]">清空日志</button>
             </div>

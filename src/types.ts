@@ -368,6 +368,11 @@ export interface BroadcastPushScheduleResult {
   message: string
 }
 
+export interface BroadcastStopResult {
+  stopped: boolean
+  message: string
+}
+
 export interface BroadcastPushScheduleProgress {
   total: number
   completed: number
@@ -525,6 +530,7 @@ export interface DesktopLicenseApi {
 
 export interface DesktopBroadcastApi {
   pushSchedule: (payload: BroadcastPushSchedulePayload) => Promise<BroadcastPushScheduleResult>
+  stopPushSchedule: () => Promise<BroadcastStopResult>
   listJoinedGroups: (accountId: number) => Promise<BroadcastJoinedGroup[]>
   onPushProgress: (callback: (payload: BroadcastPushScheduleProgress) => void) => () => void
 }
