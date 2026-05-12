@@ -670,13 +670,13 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         subscribed = true
         window.desktopDirectMessage.onSendProgress((payload) => {
           set((state) => ({
-            previewItems: state.previewItems.map((item) => item.id === payload.item.previewItemId ? {
+            previewItems: payload.item ? state.previewItems.map((item) => item.id === payload.item?.previewItemId ? {
               ...item,
               status: payload.item.status,
               errorMessage: payload.item.errorMessage,
               remoteMessageId: payload.item.remoteMessageId,
               sentAt: payload.item.sentAt
-            } : item),
+            } : item) : state.previewItems,
             lastActionMessage: payload.message
           }))
         })

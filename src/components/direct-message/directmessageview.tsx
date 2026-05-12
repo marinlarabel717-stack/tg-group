@@ -427,6 +427,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const clearRuns = useDirectMessageStore((state) => state.clearRuns)
   const previewItems = useDirectMessageStore((state) => state.previewItems)
   const sending = useDirectMessageStore((state) => state.sending)
+  const lastActionMessage = useDirectMessageStore((state) => state.lastActionMessage)
   const messageType = useDirectMessageStore((state) => state.messageType)
   const latestRun = runs[0] ?? null
   const detailedItems = useMemo(
@@ -451,7 +452,9 @@ const LogsWorkbench = memo(function LogsWorkbench() {
     return Math.round(latestRun.total / latestAccountStats.length)
   }, [latestAccountStats, latestRun])
   const liveItems = useMemo(
-    () => previewItems.map((item, index) => ({
+    () => previewItems
+      .filter((item) => item.status === 'sent' || item.status === 'failed')
+      .map((item, index) => ({
       id: item.id,
       sentAt: item.sentAt,
       fallbackAt: new Date().toISOString(),
@@ -489,6 +492,9 @@ const LogsWorkbench = memo(function LogsWorkbench() {
           <button type="button" onClick={clearRuns} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
         </div>
       </div>
+      {sending ? (
+        <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '有新的成功或失败结果会显示在下面。'}</div>
+      ) : null}
       {latestRun && !sending ? (
         <div className="mt-4 rounded-[16px] bg-panel/70 px-4 py-4">
           <div className="text-sm font-semibold text-white">{latestRun.summary.includes('任务已停止') ? '本次私信已停止' : '本次私信已完成'}</div>
@@ -527,9 +533,9 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       ) : null}
       <div className="mt-4 space-y-3">
         {sending && liveItems.length > 0 ? liveItems.map((item) => (
-          <div key={item.id} className={`rounded-[14px] px-4 py-3 ${item.status === 'sent' ? 'bg-emerald-400/8' : item.status === 'failed' ? 'bg-rose-400/8' : 'bg-sky-400/8'}`}>
-            <div className={`text-sm font-medium ${item.status === 'sent' ? 'text-emerald-300' : item.status === 'failed' ? 'text-rose-300' : 'text-sky-300'}`}>
-              <span className="select-text">[{formatTimeOnly(item.sentAt || item.fallbackAt)}] [{item.accountPhone}] - 通过{readMessageTypeLabel(item.messageType)} - 向{item.targetValue} - {item.status === 'sent' ? '发送成功' : item.status === 'failed' ? '发送失败' : '发送中'} -- {item.sequence}</span>
+          <div key={item.id} className={`rounded-[14px] px-4 py-3 ${item.status === 'sent' ? 'bg-emerald-400/8' : 'bg-rose-400/8'}`}>
+            <div className={`text-sm font-medium ${item.status === 'sent' ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <span className="select-text">[{formatTimeOnly(item.sentAt || item.fallbackAt)}] [{item.accountPhone}] - 通过{readMessageTypeLabel(item.messageType)} - 向{item.targetValue} - {item.status === 'sent' ? '发送成功' : '发送失败'} -- {item.sequence}</span>
             </div>
             {item.status === 'failed' && item.message ? (
               <div className="mt-1 select-text text-xs text-rose-200">{item.message}</div>

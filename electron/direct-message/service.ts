@@ -49,9 +49,14 @@ function formatDirectMessageError(error: unknown) {
 
 function readRequiredWaitSeconds(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
-  const matched = message.match(/A wait of (\d+) seconds is required/i)
-  if (!matched?.[1]) return null
-  const seconds = Number(matched[1])
+  const waitMatched = message.match(/A wait of (\d+) seconds is required/i)
+  if (waitMatched?.[1]) {
+    const seconds = Number(waitMatched[1])
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  }
+  const floodMatched = message.match(/FLOOD_WAIT_(\d+)/i)
+  if (!floodMatched?.[1]) return null
+  const seconds = Number(floodMatched[1])
   return Number.isFinite(seconds) && seconds > 0 ? seconds : null
 }
 
@@ -473,6 +478,7 @@ export class DirectMessageService {
               if (!waitSeconds || task.cancelled) {
                 throw error
               }
+              this.emitSendNotice(results, payload.items.length, `当前触发限制，需要等待 ${waitSeconds} 秒，到时间后自动继续发送。`, onProgress, waitSeconds)
               await this.sleepWithCancel(waitSeconds * 1000, task)
             }
           }
@@ -750,6 +756,21 @@ export class DirectMessageService {
       failedCount,
       item,
       message: `正在发送 ${results.length}/${total}，成功 ${successCount}，失败 ${failedCount}。`
+    })
+  }
+
+  private emitSendNotice(results: DirectMessageSendResultItem[], total: number, message: string, onProgress?: (payload: DirectMessageSendProgress) => void, waitSeconds?: number | null) {
+    if (!onProgress) return
+    const successCount = results.filter((entry) => entry.status === 'sent').length
+    const failedCount = results.filter((entry) => entry.status === 'failed').length
+    onProgress({
+      total,
+      completed: results.length,
+      successCount,
+      failedCount,
+      item: null,
+      message,
+      waitSeconds: waitSeconds ?? null
     })
   }
 

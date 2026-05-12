@@ -437,8 +437,9 @@ export interface DirectMessageSendProgress {
   completed: number
   successCount: number
   failedCount: number
-  item: DirectMessageSendResultItem
+  item?: DirectMessageSendResultItem | null
   message: string
+  waitSeconds?: number | null
 }
 
 export interface DirectMessageCollectedUserPayload {
