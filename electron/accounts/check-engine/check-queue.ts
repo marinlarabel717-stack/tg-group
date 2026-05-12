@@ -401,7 +401,7 @@ export class CheckQueue extends EventEmitter {
         this.appendLog(level, null, `${summaryLabel}： ${item.count}`, undefined, { status: item.status })
       }
 
-      this.appendLog('success', null, 'Выполнение задачи завершено!')
+      this.appendLog('success', null, '任务已完成')
     }
   }
 
