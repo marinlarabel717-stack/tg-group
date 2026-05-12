@@ -33,6 +33,19 @@ function formatAccountResultLogLine(payload: {
   return `[${payload.phoneLabel}] - [${payload.progress}] - ${payload.displayLabel}${payload.frozenSinceSuffix || ''}${payload.reasonSuffix || ''}`
 }
 
+function readSummaryLabel(status: AccountCheckResult['status'], runMode: 'account-status' | 'account-survival') {
+  if (status === 'alive') {
+    return runMode === 'account-survival' ? '存活' : '无限制'
+  }
+  if (status === 'limited') return '双向'
+  if (status === 'temporary_limited') return '临时双向'
+  if (status === 'frozen') return '冻结'
+  if (status === 'banned') return '封禁'
+  if (status === 'multi_ip') return '多 IP 登录'
+  if (status === 'timeout') return '超时'
+  return '未知'
+}
+
 interface CheckQueueOptions {
   concurrency?: number
   timeoutMs?: number
@@ -369,7 +382,7 @@ export class CheckQueue extends EventEmitter {
     this.state.running = this.pending.length > 0 || this.active.size > 0
 
     if (wasRunning && !this.state.running && this.state.totalCount === this.state.completedCount) {
-      this.appendLog('success', null, '本次检测已完成')
+      this.appendLog('success', null, '本次检查结果')
       const summaryItems: Array<{ status: AccountCheckResult['status']; count: number }> = [
         { status: 'alive', count: this.state.resultSummary.alive },
         { status: 'limited', count: this.state.resultSummary.limited },
@@ -384,9 +397,11 @@ export class CheckQueue extends EventEmitter {
       for (const item of summaryItems) {
         if (item.count <= 0) continue
         const level: CheckLogLevel = item.status === 'alive' ? 'success' : item.status === 'timeout' ? 'error' : 'warning'
-        const summaryLabel = resolveAccountStatusLabel(item.status, null, this.currentRunMode)
-        this.appendLog(level, null, `${summaryLabel} ${item.count}`, undefined, { status: item.status })
+        const summaryLabel = readSummaryLabel(item.status, this.currentRunMode)
+        this.appendLog(level, null, `${summaryLabel}： ${item.count}`, undefined, { status: item.status })
       }
+
+      this.appendLog('success', null, 'Выполнение задачи завершено!')
     }
   }
 
