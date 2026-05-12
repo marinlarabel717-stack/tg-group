@@ -1599,10 +1599,13 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
       setSelectedAccountId(null)
       return
     }
-    if (typeof selectedAccountId === 'number' && accounts.some((item) => item.id === selectedAccountId)) {
+    if (typeof selectedAccountId !== 'number') {
       return
     }
-    setSelectedAccountId(accounts[0]?.id ?? null)
+    if (accounts.some((item) => item.id === selectedAccountId)) {
+      return
+    }
+    setSelectedAccountId(null)
   }, [accounts, selectedAccountId])
 
   useEffect(() => {
@@ -1611,6 +1614,10 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
       setSelectedGroupRef('')
       setItems([])
       setSelectedMessageIds([])
+      setLoadingGroups(false)
+      setLoadingItems(false)
+      setErrorMessage('')
+      setActionMessage('请先选择账号。')
       return
     }
 
@@ -1738,6 +1745,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
               onChange={(event) => setSelectedAccountId(event.target.value ? Number(event.target.value) : null)}
               className="mt-2 w-full bg-transparent text-sm text-white outline-none"
             >
+              <option value="" className="bg-slate-900 text-white">先选择账号</option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id} className="bg-slate-900 text-white">
                   {readAccountNickname(account)}（{formatAccountStatus(account.status)}）
@@ -1750,10 +1758,12 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
             <select
               value={selectedGroupRef}
               onChange={(event) => setSelectedGroupRef(event.target.value)}
-              disabled={loadingGroups || groups.length === 0}
+              disabled={typeof selectedAccountId !== 'number' || loadingGroups || groups.length === 0}
               className="mt-2 w-full bg-transparent text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {groups.length === 0 ? (
+              {typeof selectedAccountId !== 'number' ? (
+                <option value="" className="bg-slate-900 text-white">请先选择账号</option>
+              ) : groups.length === 0 ? (
                 <option value="" className="bg-slate-900 text-white">{loadingGroups ? '正在读取群...' : '这个账号暂无可选群'}</option>
               ) : groups.map((group) => (
                 <option key={`${group.targetRef}-${group.peerId}`} value={group.targetRef} className="bg-slate-900 text-white">
@@ -1765,6 +1775,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
           <button
             type="button"
             onClick={() => setRefreshNonce((value) => value + 1)}
+            disabled={typeof selectedAccountId !== 'number'}
             className="flex items-center gap-2 rounded-[14px] bg-white/[0.06] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]"
           >
             <RefreshCw size={16} />
@@ -1809,7 +1820,9 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
       {!errorMessage && actionMessage ? <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{actionMessage}</div> : null}
 
       <div className="mt-5 space-y-3">
-        {loadingItems ? (
+        {typeof selectedAccountId !== 'number' ? (
+          <div className="flex min-h-[280px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">请先选择账号，再查看这个账号的群定时内容。</div>
+        ) : loadingItems ? (
           <div className="flex min-h-[280px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">正在读取定时内容...</div>
         ) : items.length === 0 ? (
           <div className="flex min-h-[280px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">这个群现在还没有定时内容。</div>
