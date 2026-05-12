@@ -1,9 +1,10 @@
 import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { Clock3, Copy, Download, Play, Search, Trash2, Upload, Wand2, X } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, Clock3, Copy, Download, Play, Search, Trash2, Upload, Wand2, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
+import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
 import { useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus } from '../../lib/ui-text'
-import { parseAutoJoinTargets, useAutoJoinStore, type AutoJoinLogEntry, type AutoJoinTabKey } from '../../stores/autojoinstore'
+import { parseAutoJoinTargets, useAutoJoinStore, type AutoJoinLogEntry, type AutoJoinTabKey, type AutoJoinTaskSnapshot } from '../../stores/autojoinstore'
 
 const tabs: Array<{ key: AutoJoinTabKey; label: string; icon: typeof Play }> = [
   { key: 'tasks', label: '加群任务', icon: Play },
@@ -103,6 +104,31 @@ function NumberRangeField(props: {
   )
 }
 
+function buildAccountSummary(snapshot: AutoJoinTaskSnapshot | null) {
+  if (!snapshot) return [] as Array<{ accountLabel: string; success: number; requested: number; already: number; failed: number; total: number }>
+  const map = new Map<string, { accountLabel: string; success: number; requested: number; already: number; failed: number; total: number }>()
+  snapshot.items.forEach((item) => {
+    const key = item.accountLabel || '未分配账号'
+    const current = map.get(key) ?? { accountLabel: key, success: 0, requested: 0, already: 0, failed: 0, total: 0 }
+    current.total += 1
+    if (item.status === 'joined') current.success += 1
+    else if (item.status === 'requested') current.requested += 1
+    else if (item.status === 'already') current.already += 1
+    else if (item.status === 'failed') current.failed += 1
+    map.set(key, current)
+  })
+  return Array.from(map.values()).sort((a, b) => b.total - a.total || a.accountLabel.localeCompare(b.accountLabel, 'zh-CN'))
+}
+
+function ProgressCard({ label, value, className }: { label: string; value: number; className: string }) {
+  return (
+    <div className={`rounded-[10px] px-2 py-2 text-center ${className}`}>
+      <div className="text-sm font-semibold">{value}</div>
+      <div>{label}</div>
+    </div>
+  )
+}
+
 const TabBar = memo(function TabBar() {
   const activeTab = useAutoJoinStore((state) => state.activeTab)
   const setActiveTab = useAutoJoinStore((state) => state.setActiveTab)
@@ -164,12 +190,14 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const runtimeReady = useAutoJoinStore((state) => state.runtimeReady)
   const lastActionMessage = useAutoJoinStore((state) => state.lastActionMessage)
   const tasks = useAutoJoinStore((state) => state.tasks)
+  const taskSnapshots = useAutoJoinStore((state) => state.taskSnapshots)
 
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [draftAccountIds, setDraftAccountIds] = useState<number[]>(selectedAccountIds)
   const [accountSearch, setAccountSearch] = useState('')
   const [rangeStart, setRangeStart] = useState('1')
   const [rangeEnd, setRangeEnd] = useState('10')
+  const [accountSummaryExpanded, setAccountSummaryExpanded] = useState(false)
 
   useEffect(() => {
     void initAccounts()
@@ -199,6 +227,9 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   }, [accountSearch, accounts])
   const selectedAccounts = useMemo(() => accounts.filter((item) => selectedAccountIds.includes(item.id)), [accounts, selectedAccountIds])
   const latestTask = tasks[0] ?? null
+  const latestSnapshot = useMemo(() => (latestTask ? taskSnapshots.find((item) => item.taskId === latestTask.id) ?? null : null), [latestTask, taskSnapshots])
+  const accountSummary = useMemo(() => buildAccountSummary(latestSnapshot), [latestSnapshot])
+  const pendingCount = latestTask ? Math.max(0, (latestTask.total || 0) - (latestTask.completed || 0)) : 0
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -325,11 +356,43 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                   <div className="text-xs tracking-[0.18em] text-textMuted">最近任务</div>
                   <div className="mt-2 text-sm font-medium text-white">{latestTask.name}</div>
                   <div className="mt-3 grid grid-cols-4 gap-2 text-xs text-slate-200">
-                    <div className="rounded-[10px] bg-emerald-400/10 px-2 py-2 text-center"><div className="text-sm font-semibold text-emerald-300">{latestTask.successCount ?? 0}</div><div>成功</div></div>
-                    <div className="rounded-[10px] bg-amber-400/10 px-2 py-2 text-center"><div className="text-sm font-semibold text-amber-200">{latestTask.requestedCount ?? 0}</div><div>审核中</div></div>
-                    <div className="rounded-[10px] bg-white/[0.05] px-2 py-2 text-center"><div className="text-sm font-semibold text-white">{latestTask.alreadyCount ?? 0}</div><div>已在群</div></div>
-                    <div className="rounded-[10px] bg-rose-400/10 px-2 py-2 text-center"><div className="text-sm font-semibold text-rose-300">{latestTask.failedCount ?? 0}</div><div>失败</div></div>
+                    <ProgressCard label="成功" value={latestTask.successCount ?? 0} className="bg-emerald-400/10 text-emerald-300" />
+                    <ProgressCard label="审核" value={latestTask.requestedCount ?? 0} className="bg-amber-400/10 text-amber-200" />
+                    <ProgressCard label="失败" value={latestTask.failedCount ?? 0} className="bg-rose-400/10 text-rose-300" />
+                    <ProgressCard label="待加入" value={pendingCount} className="bg-sky-400/10 text-sky-300" />
                   </div>
+
+                  {latestSnapshot ? (
+                    <div className="mt-4 rounded-[12px] bg-white/[0.04]">
+                      <button
+                        type="button"
+                        onClick={() => setAccountSummaryExpanded((value) => !value)}
+                        className="flex w-full items-center justify-between px-3 py-3 text-left text-sm text-white"
+                      >
+                        <span>各账号群组数量</span>
+                        <span className="inline-flex items-center gap-1 text-textMuted">{accountSummaryExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}{accountSummary.length}</span>
+                      </button>
+
+                      {accountSummaryExpanded ? (
+                        <div className="space-y-2 border-t border-white/8 px-3 py-3 text-xs text-slate-200">
+                          {accountSummary.map((item) => (
+                            <div key={item.accountLabel} className="rounded-[10px] bg-white/[0.04] px-3 py-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="truncate text-white">{item.accountLabel}</div>
+                                <div className="text-textMuted">共 {item.total} 个</div>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">成功 {item.success}</span>
+                                <span className="rounded-full bg-amber-400/10 px-2 py-1 text-amber-200">审核 {item.requested}</span>
+                                <span className="rounded-full bg-white/[0.06] px-2 py-1 text-slate-200">已在群 {item.already}</span>
+                                <span className="rounded-full bg-rose-400/10 px-2 py-1 text-rose-300">失败 {item.failed}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -494,19 +557,69 @@ const LinksWorkbench = memo(function LinksWorkbench() {
 
 export default function AutoJoinView() {
   const activeTab = useAutoJoinStore((state) => state.activeTab)
+  const taskSnapshots = useAutoJoinStore((state) => state.taskSnapshots)
+  const completionDialogTaskId = useAutoJoinStore((state) => state.completionDialogTaskId)
+  const closeCompletionDialog = useAutoJoinStore((state) => state.closeCompletionDialog)
+  const completionSnapshot = useMemo(() => taskSnapshots.find((item) => item.taskId === completionDialogTaskId) ?? null, [completionDialogTaskId, taskSnapshots])
+  const completionAccountSummary = useMemo(() => buildAccountSummary(completionSnapshot), [completionSnapshot])
 
   return (
-    <div className="flex min-h-full flex-col gap-5">
-      <div>
-        <div className="text-[24px] font-semibold text-white">自动加群</div>
-        <div className="mt-2 text-sm text-textMuted">开始后会自动跳到日志页，并按你设的线程数并发跑账号。</div>
+    <>
+      <div className="flex min-h-full flex-col gap-5">
+        <div>
+          <div className="text-[24px] font-semibold text-white">自动加群</div>
+          <div className="mt-2 text-sm text-textMuted">开始后会自动跳到日志页，并按你设的线程数并发跑账号。</div>
+        </div>
+
+        <TabBar />
+
+        {activeTab === 'tasks' ? <TasksWorkbench /> : null}
+        {activeTab === 'logs' ? <LogsWorkbench /> : null}
+        {activeTab === 'links' ? <LinksWorkbench /> : null}
       </div>
 
-      <TabBar />
+      <ResultDialogShell
+        open={Boolean(completionSnapshot)}
+        onClose={closeCompletionDialog}
+        title="自动加群任务完成"
+        subtitle={completionSnapshot?.message || '这轮加群已经跑完了。'}
+        icon={<CheckCircle2 size={18} />}
+        tone="success"
+        maxWidth="max-w-[560px]"
+      >
+        <ResultHero label="本轮已完成" value={`${completionSnapshot?.total || 0} 条`} tone="success" />
 
-      {activeTab === 'tasks' ? <TasksWorkbench /> : null}
-      {activeTab === 'logs' ? <LogsWorkbench /> : null}
-      {activeTab === 'links' ? <LinksWorkbench /> : null}
-    </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <ResultStatCard label="成功" value={completionSnapshot?.successCount || 0} tone="success" />
+          <ResultStatCard label="审核" value={completionSnapshot?.requestedCount || 0} tone="warning" />
+          <ResultStatCard label="失败" value={completionSnapshot?.failedCount || 0} tone="danger" />
+          <ResultStatCard label="已在群" value={completionSnapshot?.alreadyCount || 0} tone="neutral" />
+        </div>
+
+        {completionAccountSummary.length > 0 ? (
+          <div className="rounded-[16px] border border-white/8 bg-panel px-4 py-4">
+            <div className="text-sm font-medium text-white">各账号群组数量</div>
+            <div className="mt-3 max-h-[220px] space-y-2 overflow-auto">
+              {completionAccountSummary.map((item) => (
+                <div key={item.accountLabel} className="rounded-[12px] bg-white/[0.04] px-3 py-3 text-sm text-slate-200">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="truncate text-white">{item.accountLabel}</div>
+                    <div className="text-textMuted">共 {item.total} 个</div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">成功 {item.success}</span>
+                    <span className="rounded-full bg-amber-400/10 px-2 py-1 text-amber-200">审核 {item.requested}</span>
+                    <span className="rounded-full bg-white/[0.06] px-2 py-1 text-slate-200">已在群 {item.already}</span>
+                    <span className="rounded-full bg-rose-400/10 px-2 py-1 text-rose-300">失败 {item.failed}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <ResultPrimaryButton label="知道了" onClick={closeCompletionDialog} tone="success" />
+      </ResultDialogShell>
+    </>
   )
 }

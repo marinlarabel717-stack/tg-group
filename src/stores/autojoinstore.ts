@@ -40,6 +40,19 @@ export interface AutoJoinLogEntry {
   createdAt: string
 }
 
+export interface AutoJoinTaskSnapshot {
+  taskId: string
+  name: string
+  total: number
+  successCount: number
+  alreadyCount: number
+  requestedCount: number
+  failedCount: number
+  items: AutoJoinResultItem[]
+  finishedAt: string
+  message: string
+}
+
 interface AutoJoinState {
   activeTab: AutoJoinTabKey
   selectedAccountIds: number[]
@@ -62,6 +75,8 @@ interface AutoJoinState {
   lastActionMessage: string
   tasks: AutoJoinTaskRecord[]
   logs: AutoJoinLogEntry[]
+  taskSnapshots: AutoJoinTaskSnapshot[]
+  completionDialogTaskId: string | null
   setActiveTab: (tab: AutoJoinTabKey) => void
   setSelectedAccountIds: (ids: number[]) => void
   setTaskName: (value: string) => void
@@ -76,6 +91,7 @@ interface AutoJoinState {
   setRetryLimit: (value: number) => void
   setRepeatJoinEnabled: (value: boolean) => void
   setDispatchMode: (value: 'random' | 'sequential') => void
+  closeCompletionDialog: () => void
   clearLogs: () => void
   clearLinkInput: () => void
   startTask: () => Promise<void>
@@ -174,6 +190,11 @@ function upsertTask(tasks: AutoJoinTaskRecord[], task: AutoJoinTaskRecord) {
 
 function appendLog(logs: AutoJoinLogEntry[], log: AutoJoinLogEntry) {
   return [log, ...logs].slice(0, 400)
+}
+
+function upsertTaskSnapshot(snapshots: AutoJoinTaskSnapshot[], snapshot: AutoJoinTaskSnapshot) {
+  const next = snapshots.filter((item) => item.taskId !== snapshot.taskId)
+  return [snapshot, ...next].slice(0, 10)
 }
 
 function removeTargetFromInput(input: string, target: string) {
@@ -303,6 +324,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       lastActionMessage: '',
       tasks: [],
       logs: [],
+      taskSnapshots: [],
+      completionDialogTaskId: null,
       setActiveTab: (tab) => set({ activeTab: tab }),
       setSelectedAccountIds: (ids) => set({ selectedAccountIds: ids }),
       setTaskName: (value) => set({ taskName: value }),
@@ -317,6 +340,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       setRetryLimit: (value) => set({ retryLimit: value }),
       setRepeatJoinEnabled: (value) => set({ repeatJoinEnabled: value }),
       setDispatchMode: (value) => set({ dispatchMode: value }),
+      closeCompletionDialog: () => set({ completionDialogTaskId: null }),
       clearLogs: () => set({ logs: [], lastActionMessage: '加群日志已清空。' }),
       clearLinkInput: () => set({ linkInput: '' }),
       init: () => {
@@ -363,12 +387,14 @@ export const useAutoJoinStore = create<AutoJoinState>()(
 
         const taskId = createId('autojoin')
         const taskName = get().taskName.trim() || `自动加群 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
+        const initialTotal = get().repeatJoinEnabled ? items.length * get().selectedAccountIds.length : items.length
         set((state) => ({
           activeTab: 'logs',
           running: true,
           stopping: false,
           currentTaskId: taskId,
-          tasks: upsertTask(state.tasks, createTaskRecord({ id: taskId, name: taskName, total: items.length })),
+          completionDialogTaskId: null,
+          tasks: upsertTask(state.tasks, createTaskRecord({ id: taskId, name: taskName, total: initialTotal })),
           lastActionMessage: duplicates.length > 0 || invalids.length > 0
             ? `已过滤 ${duplicates.length} 条重复、${invalids.length} 条无效目标，准备开始加群。`
             : '自动加群任务已提交，正在启动。'
@@ -397,6 +423,19 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             stopping: false,
             currentTaskId: state.currentTaskId === result.taskId ? null : state.currentTaskId,
             tasks: applyResult(state.tasks, result),
+            taskSnapshots: upsertTaskSnapshot(state.taskSnapshots, {
+              taskId: result.taskId,
+              name: state.tasks.find((item) => item.id === result.taskId)?.name || taskName,
+              total: result.total,
+              successCount: result.successCount,
+              alreadyCount: result.alreadyCount,
+              requestedCount: result.requestedCount,
+              failedCount: result.failedCount,
+              items: result.items,
+              finishedAt: new Date().toISOString(),
+              message: result.message
+            }),
+            completionDialogTaskId: result.taskId,
             lastActionMessage: result.message
           }))
         } catch (error) {
@@ -469,7 +508,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
         repeatJoinEnabled: state.repeatJoinEnabled,
         dispatchMode: state.dispatchMode,
         tasks: state.tasks,
-        logs: state.logs
+        logs: state.logs,
+        taskSnapshots: state.taskSnapshots
       })
     }
   )
