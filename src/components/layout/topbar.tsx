@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Sparkles } from 'lucide-react'
 import { TopbarSearch } from './topbarsearch'
 import { TopbarActions } from './topbaractions'
+import { useUIStore } from '../../stores/uistore'
 
 const TopbarBrand = memo(function TopbarBrand() {
   return (
@@ -16,10 +17,13 @@ const TopbarBrand = memo(function TopbarBrand() {
 })
 
 export const Topbar = memo(function Topbar() {
+  const activeModule = useUIStore((state) => state.activeModule)
+  const isAccountsModule = activeModule === 'accounts'
+
   return (
-    <div className="flex h-full items-center gap-5 px-5 contain-layout">
-      <TopbarBrand />
-      <TopbarSearch />
+    <div className={`flex h-full items-center px-5 contain-layout ${isAccountsModule ? 'justify-end gap-3' : 'gap-5'}`}>
+      {!isAccountsModule ? <TopbarBrand /> : null}
+      {!isAccountsModule ? <TopbarSearch /> : null}
       <TopbarActions />
     </div>
   )
