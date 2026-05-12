@@ -61,6 +61,14 @@ function getTargetTone(target: DirectMessageTargetRecord) {
   return 'bg-emerald-400/10 text-emerald-200'
 }
 
+function getAccountStatusTone(status?: string) {
+  if (status === 'alive') return 'bg-emerald-400/12 text-emerald-300'
+  if (status === 'limited' || status === 'temporary_limited') return 'bg-amber-300/12 text-amber-200'
+  if (status === 'frozen' || status === 'banned' || status === 'session_expired' || status === 'not_logged_in') return 'bg-rose-400/12 text-rose-200'
+  if (status === 'checking') return 'bg-sky-400/12 text-sky-300'
+  return 'bg-white/10 text-slate-200'
+}
+
 const TabBar = memo(function TabBar() {
   const activeTab = useDirectMessageStore((state) => state.activeTab)
   const setActiveTab = useDirectMessageStore((state) => state.setActiveTab)
@@ -367,7 +375,7 @@ const SendWorkbench = memo(function SendWorkbench() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="relative w-full lg:max-w-[360px]">
                   <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
-                  <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名 / 用户 ID" className="h-11 w-full rounded-[12px] border border-white/8 bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-violet-400/30" />
+                  <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名" className="h-11 w-full rounded-[12px] border border-white/8 bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-violet-400/30" />
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <button type="button" onClick={() => setDraftAccountIds(filteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
@@ -376,12 +384,11 @@ const SendWorkbench = memo(function SendWorkbench() {
               </div>
 
               <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
-                <div className="grid grid-cols-[64px_180px_1.2fr_140px_120px] border-b border-white/6 px-4 py-3 text-xs uppercase tracking-[0.16em] text-textMuted">
+                <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/6 px-4 py-3 text-xs uppercase tracking-[0.16em] text-textMuted">
                   <div>选择</div>
                   <div>手机号</div>
                   <div>账号名</div>
                   <div>状态</div>
-                  <div>用户 ID</div>
                 </div>
 
                 <div className="max-h-[520px] overflow-y-auto">
@@ -392,12 +399,15 @@ const SendWorkbench = memo(function SendWorkbench() {
                   ) : filteredAccounts.map((account) => {
                     const checked = draftAccountIds.includes(account.id)
                     return (
-                      <label key={account.id} className={`grid cursor-pointer grid-cols-[64px_180px_1.2fr_140px_120px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.04]'}`}>
+                      <label key={account.id} className={`grid cursor-pointer grid-cols-[64px_220px_1.4fr_160px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.04]'}`}>
                         <div className="flex items-center justify-center"><input type="checkbox" checked={checked} onChange={(event) => setDraftAccountIds((current) => event.target.checked ? [...current, account.id] : current.filter((item) => item !== account.id))} /></div>
                         <div className="truncate text-white">{account.phone || '—'}</div>
                         <div className="truncate text-white">{readAccountLabel(account)}</div>
-                        <div className="truncate text-textMuted">{formatAccountStatus(account.status)}</div>
-                        <div className="truncate text-textMuted">{account.userId || '—'}</div>
+                        <div>
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>
+                            {formatAccountStatus(account.status)}
+                          </span>
+                        </div>
                       </label>
                     )
                   })}
