@@ -30,6 +30,7 @@ function formatDirectMessageError(error: unknown) {
   if (/PEER_FLOOD/i.test(normalized)) return '这个账号触发 Telegram 私信风控了，先暂停一会再发。'
   if (/USERNAME_INVALID/i.test(normalized)) return '这个用户名不对，请检查 @username 是否填错。'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '这个用户名不存在，请确认目标用户写对了。'
+  if (/ALLOW_PAYMENT_REQUIRED/i.test(normalized)) return '对方开启了付费私信，当前账号不能直接发送。'
   if (/PHONE_NUMBER_INVALID/i.test(normalized)) return '这个手机号格式不对，请检查手机号。'
   if (/USER_PRIVACY_RESTRICTED/i.test(normalized)) return '对方隐私限制了私信，当前账号发不过去。'
   if (/USER_IS_BLOCKED/i.test(normalized)) return '对方已经把当前账号拉黑了。'
@@ -58,6 +59,18 @@ function readRequiredWaitSeconds(error: unknown) {
   if (!floodMatched?.[1]) return null
   const seconds = Number(floodMatched[1])
   return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+}
+
+function readRiskPauseSeconds(error: unknown) {
+  const explicitWait = readRequiredWaitSeconds(error)
+  if (explicitWait) return explicitWait
+
+  const message = error instanceof Error ? error.message : String(error)
+  if (/PEER_FLOOD/i.test(message)) {
+    return 15 * 60
+  }
+
+  return null
 }
 
 function isUnavailableAccountError(error: unknown) {
@@ -345,6 +358,7 @@ export class DirectMessageService {
     const clients = new Map<number, TelegramClient>()
     const results: DirectMessageSendResultItem[] = []
     const unavailableAccountIds = new Set<number>()
+    const accountCooldownUntil = new Map<number, number>()
     const sortedItems = [...payload.items].sort((left, right) => left.waitSeconds - right.waitSeconds)
     const startedAt = Date.now()
     const task: ActiveSendTask = { cancelled: false, clients }
@@ -377,6 +391,17 @@ export class DirectMessageService {
           this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
+
+        if (typeof item.accountId === 'number') {
+          const cooldownUntil = accountCooldownUntil.get(item.accountId) ?? 0
+          if (cooldownUntil > Date.now()) {
+            const remainingSeconds = Math.max(1, Math.ceil((cooldownUntil - Date.now()) / 1000))
+            this.emitSendNotice(results, payload.items.length, `[${account.phone || readAccountLabel(account)}] 这个账号刚触发私信风控，先暂停 ${remainingSeconds} 秒，到时间后自动继续发送。`, onProgress, remainingSeconds)
+            await this.sleepWithCancel(cooldownUntil - Date.now(), task)
+            if (task.cancelled) break
+          }
+        }
+
         if (payload.messageType === 'text' && !payload.messageText.trim()) {
           const resultItem = this.createFailedSendItem(item, '文本内容还没填。')
           results.push(resultItem)
@@ -493,11 +518,24 @@ export class DirectMessageService {
             } catch (error) {
               await cleanup?.()
               cleanup = undefined
-              const waitSeconds = readRequiredWaitSeconds(error)
+              const waitSeconds = readRiskPauseSeconds(error)
               if (!waitSeconds || task.cancelled) {
                 throw error
               }
-              this.emitSendNotice(results, payload.items.length, `当前触发限制，需要等待 ${waitSeconds} 秒，到时间后自动继续发送。`, onProgress, waitSeconds)
+
+              const cooldownUntil = Date.now() + waitSeconds * 1000
+              if (typeof item.accountId === 'number') {
+                accountCooldownUntil.set(item.accountId, cooldownUntil)
+              }
+
+              this.emitSendNotice(
+                results,
+                payload.items.length,
+                `[${account.phone || readAccountLabel(account)}] 这个账号触发私信风控，先暂停 ${waitSeconds} 秒，到时间后自动继续发送。`,
+                onProgress,
+                waitSeconds
+              )
+
               await this.sleepWithCancel(waitSeconds * 1000, task)
             }
           }
