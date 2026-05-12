@@ -1166,6 +1166,9 @@ export const AccountTable = memo(function AccountTable() {
         activeFilter={activeShortcutId ? ('__custom__' as AccountStatusFilter) : statusFilter}
         onSelect={(value) => {
           setActiveShortcutId(null)
+          setCountryFilter('')
+          setProxyFilter('')
+          setPremiumFilter('all')
           setStatusFilter(value)
         }}
         action={(
