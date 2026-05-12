@@ -213,6 +213,15 @@ function removeTargetFromInput(input: string, target: string) {
   return nextTokens.join('\n')
 }
 
+function removeTargetsFromInput(input: string, targets: string[]) {
+  if (targets.length === 0) return input
+  let nextInput = input
+  for (const target of targets) {
+    nextInput = removeTargetFromInput(nextInput, target)
+  }
+  return nextInput
+}
+
 function formatLogMessage(item: AutoJoinResultItem, fallbackMessage: string) {
   const target = item.normalized || item.raw || '这个群'
   if (item.status === 'joined') return `成功加入${target}`
@@ -423,6 +432,14 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             stopping: false,
             currentTaskId: state.currentTaskId === result.taskId ? null : state.currentTaskId,
             tasks: applyResult(state.tasks, result),
+            linkInput: !state.repeatJoinEnabled
+              ? removeTargetsFromInput(
+                  state.linkInput,
+                  result.items
+                    .filter((item) => item.status === 'joined')
+                    .map((item) => item.normalized || item.raw)
+                )
+              : state.linkInput,
             taskSnapshots: upsertTaskSnapshot(state.taskSnapshots, {
               taskId: result.taskId,
               name: state.tasks.find((item) => item.id === result.taskId)?.name || taskName,
