@@ -9,6 +9,29 @@ import type { BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushS
 
 const MIN_SCHEDULE_AHEAD_MS = 60_000
 
+function readRequiredWaitSeconds(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  const explicitWait = message.match(/A wait of (\d+) seconds is required/i)
+  if (explicitWait?.[1]) {
+    const seconds = Number(explicitWait[1])
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  }
+
+  const floodWait = message.match(/FLOOD_WAIT_(\d+)/i)
+  if (floodWait?.[1]) {
+    const seconds = Number(floodWait[1])
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  }
+
+  const slowModeWait = message.match(/SLOWMODE_WAIT_(\d+)/i)
+  if (slowModeWait?.[1]) {
+    const seconds = Number(slowModeWait[1])
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  }
+
+  return null
+}
+
 function formatBroadcastError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
@@ -414,100 +437,121 @@ export class BroadcastService {
             continue
           }
 
-          try {
-            let client = clients.get(account.id)
-            if (!client) {
-              client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
-              if (task.cancelled) {
-                await this.clientManager.destroyClient(client).catch(() => undefined)
-                break
-              }
-              clients.set(account.id, client)
-            }
-
-            const entityKey = `${account.id}:${groupRef.kind}:${String(groupRef.value)}`
-            let entity = entityCache.get(entityKey)
-            if (!entity) {
-              entity = await resolveGroupEntity(client, groupRef)
-              entityCache.set(entityKey, entity)
-            }
-
-            let messageId: number | null = null
-
-            if (creative.kind === 'channel_forward') {
-              const repeatPeriodSeconds = (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
-
-              if (repeatPeriodSeconds) {
-                const sourceMessage = await loadSourceMessage(client, creative.sourceLink)
-                const sourceText = typeof sourceMessage.message === 'string'
-                  ? sourceMessage.message
-                  : typeof sourceMessage.text === 'string'
-                    ? sourceMessage.text
-                    : ''
-                const sourceMedia = sourceMessage.media
-                const sourceEntities = Array.isArray(sourceMessage.entities) ? sourceMessage.entities : undefined
-
-                if (!sourceText.trim() && !sourceMedia) {
-                  throw new Error('MEDIA_EMPTY')
+          let finished = false
+          while (!finished && !task.cancelled) {
+            try {
+              let client = clients.get(account.id)
+              if (!client) {
+                client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+                if (task.cancelled) {
+                  await this.clientManager.destroyClient(client).catch(() => undefined)
+                  break
                 }
+                clients.set(account.id, client)
+              }
 
-                const resentMessage = await (client as TelegramClient & {
-                  sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
-                }).sendMessage(entity as never, {
-                  message: sourceText || undefined,
-                  file: sourceMedia || undefined,
-                  formattingEntities: sourceEntities,
-                  schedule: Math.floor(scheduledAt.getTime() / 1000),
-                  scheduleRepeatPeriod: repeatPeriodSeconds
-                })
+              const entityKey = `${account.id}:${groupRef.kind}:${String(groupRef.value)}`
+              let entity = entityCache.get(entityKey)
+              if (!entity) {
+                entity = await resolveGroupEntity(client, groupRef)
+                entityCache.set(entityKey, entity)
+              }
 
-                messageId = extractResponseMessageId(resentMessage)
+              let messageId: number | null = null
+
+              if (creative.kind === 'channel_forward') {
+                const repeatPeriodSeconds = (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
+
+                if (repeatPeriodSeconds) {
+                  const sourceMessage = await loadSourceMessage(client, creative.sourceLink)
+                  const sourceText = typeof sourceMessage.message === 'string'
+                    ? sourceMessage.message
+                    : typeof sourceMessage.text === 'string'
+                      ? sourceMessage.text
+                      : ''
+                  const sourceMedia = sourceMessage.media
+                  const sourceEntities = Array.isArray(sourceMessage.entities) ? sourceMessage.entities : undefined
+
+                  if (!sourceText.trim() && !sourceMedia) {
+                    throw new Error('MEDIA_EMPTY')
+                  }
+
+                  const resentMessage = await (client as TelegramClient & {
+                    sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
+                  }).sendMessage(entity as never, {
+                    message: sourceText || undefined,
+                    file: sourceMedia || undefined,
+                    formattingEntities: sourceEntities,
+                    schedule: Math.floor(scheduledAt.getTime() / 1000),
+                    scheduleRepeatPeriod: repeatPeriodSeconds
+                  })
+
+                  messageId = extractResponseMessageId(resentMessage)
+                } else {
+                  const sourceMessage = parseTelegramMessageLink(creative.sourceLink)
+                  if (!sourceMessage || !Number.isFinite(sourceMessage.messageId) || sourceMessage.messageId <= 0) {
+                    throw new Error('SOURCE_MESSAGE_LINK_INVALID')
+                  }
+
+                  const forwardResult = await (client as TelegramClient & {
+                    forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
+                  }).forwardMessages(entity as never, {
+                    messages: [sourceMessage.messageId],
+                    fromPeer: sourceMessage.peerRef as never,
+                    schedule: Math.floor(scheduledAt.getTime() / 1000),
+                    dropAuthor: false
+                  })
+
+                  const firstResult = Array.isArray(forwardResult) ? forwardResult[0] : forwardResult
+                  messageId = extractResponseMessageId(firstResult)
+                }
               } else {
-                const sourceMessage = parseTelegramMessageLink(creative.sourceLink)
-                if (!sourceMessage || !Number.isFinite(sourceMessage.messageId) || sourceMessage.messageId <= 0) {
-                  throw new Error('SOURCE_MESSAGE_LINK_INVALID')
-                }
-
-                const forwardResult = await (client as TelegramClient & {
-                  forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
-                }).forwardMessages(entity as never, {
-                  messages: [sourceMessage.messageId],
-                  fromPeer: sourceMessage.peerRef as never,
+                const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
+                const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
+                  message: buildCreativeMessage(creative),
+                  file: media,
                   schedule: Math.floor(scheduledAt.getTime() / 1000),
-                  dropAuthor: false
+                  scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
                 })
-
-                const firstResult = Array.isArray(forwardResult) ? forwardResult[0] : forwardResult
-                messageId = extractResponseMessageId(firstResult)
+                messageId = extractResponseMessageId(message)
               }
-            } else {
-              const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
-              const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
-                message: buildCreativeMessage(creative),
-                file: media,
-                schedule: Math.floor(scheduledAt.getTime() / 1000),
-                scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
-              })
-              messageId = extractResponseMessageId(message)
-            }
 
-            const resultItem: BroadcastPushScheduleResultItem = {
-              previewItemId: item.id,
-              status: 'scheduled',
-              errorMessage: '',
-              remoteMessageId: messageId,
-              syncedAt: new Date().toISOString(),
-              accountId: item.accountId,
-              groupId: item.groupId,
-              creativeId: item.creativeId
+              const resultItem: BroadcastPushScheduleResultItem = {
+                previewItemId: item.id,
+                status: 'scheduled',
+                errorMessage: '',
+                remoteMessageId: messageId,
+                syncedAt: new Date().toISOString(),
+                accountId: item.accountId,
+                groupId: item.groupId,
+                creativeId: item.creativeId
+              }
+              results.push(resultItem)
+              reportProgress(resultItem)
+              finished = true
+            } catch (error) {
+              if (task.cancelled) break
+
+              const waitSeconds = readRequiredWaitSeconds(error)
+              if (waitSeconds) {
+                this.emitNoticeProgress(
+                  payload.items.length,
+                  completedCount,
+                  successCount,
+                  failedCount,
+                  item,
+                  `当前账号发得有点快了，Telegram 要求先等 ${waitSeconds} 秒，时间到了会自动继续。`,
+                  onProgress
+                )
+                await this.sleepWithCancel(waitSeconds * 1000, task)
+                continue
+              }
+
+              const resultItem = this.createFailedItem(item, formatBroadcastError(error))
+              results.push(resultItem)
+              reportProgress(resultItem)
+              finished = true
             }
-            results.push(resultItem)
-            reportProgress(resultItem)
-          } catch (error) {
-            if (task.cancelled) break
-            const resultItem = this.createFailedItem(item, formatBroadcastError(error))
-            results.push(resultItem)
-            reportProgress(resultItem)
           }
         }
       }))
@@ -595,6 +639,46 @@ export class BroadcastService {
       item,
       message: `正在写入 ${completed}/${total}，已写入 ${successCount} 条，失败 ${failedCount} 条。`
     })
+  }
+
+  private emitNoticeProgress(
+    total: number,
+    completed: number,
+    successCount: number,
+    failedCount: number,
+    item: BroadcastPushSchedulePayload['items'][number],
+    message: string,
+    onProgress?: (payload: BroadcastPushScheduleProgress) => void
+  ) {
+    if (!onProgress) return
+    onProgress({
+      total,
+      completed,
+      successCount,
+      failedCount,
+      item: {
+        previewItemId: item.id,
+        status: 'queued',
+        errorMessage: '',
+        remoteMessageId: null,
+        syncedAt: null,
+        accountId: item.accountId,
+        groupId: item.groupId,
+        creativeId: item.creativeId
+      },
+      message
+    })
+  }
+
+  private async sleepWithCancel(ms: number, task: { cancelled: boolean }) {
+    if (ms <= 0) return
+    const step = 500
+    let remaining = ms
+    while (remaining > 0 && !task.cancelled) {
+      const wait = Math.min(step, remaining)
+      await new Promise((resolve) => setTimeout(resolve, wait))
+      remaining -= wait
+    }
   }
 
   private createFailedItem(item: BroadcastPushSchedulePayload['items'][number], errorMessage: string): BroadcastPushScheduleResultItem {
