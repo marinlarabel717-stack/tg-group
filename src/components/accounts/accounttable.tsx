@@ -141,7 +141,7 @@ function CountryCell({ country, phone }: { country: string; phone: string }) {
 }
 
 function isCenteredColumn(columnId: string) {
-  return columnId === 'index' || columnId === 'status' || columnId === 'avatar'
+  return columnId === 'index' || columnId === 'status' || columnId === 'avatar' || columnId === 'actions'
 }
 
 function cellShellClass(columnId: string, isHeader = false) {
@@ -162,7 +162,7 @@ function cellShellClass(columnId: string, isHeader = false) {
   }
 
   if (columnId === 'actions') {
-    return 'flex h-full w-full items-center justify-start pl-1 pr-1'
+    return 'flex h-full w-full items-center justify-center px-2'
   }
 
   return 'flex h-full w-full min-w-0 items-center justify-start px-2'
@@ -424,7 +424,7 @@ const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }
   }, [account.id, openingWeb])
 
   return (
-    <div className="flex w-full items-center justify-start gap-1.5 whitespace-nowrap">
+    <div className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap">
       <span title={`用户名：${username}`} className={actionButtonClass(username !== '-')}>@</span>
       <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>🔓</span>
       <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>

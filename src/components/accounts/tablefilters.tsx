@@ -56,11 +56,15 @@ function FilterSelect({
 
 export const TableFilters = memo(function TableFilters(props: TableFiltersProps) {
   const blocked = props.loading || props.busy
+  const spacerClass = 'text-[11px] font-semibold tracking-[0.22em] text-transparent select-none'
 
   return (
-    <div className="flex flex-wrap items-end gap-4 rounded-[14px] bg-card px-5 py-5">
-      <div className="mr-1 flex h-11 w-11 items-center justify-center rounded-[12px] bg-panel text-neonSoft">
-        <SlidersHorizontal size={17} />
+    <div className="flex flex-wrap gap-4 rounded-[14px] bg-card px-5 py-5">
+      <div className="mr-1 flex flex-col gap-2">
+        <span className={spacerClass}>筛选</span>
+        <div className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-panel text-neonSoft">
+          <SlidersHorizontal size={17} />
+        </div>
       </div>
 
       <FilterSelect label="国家" value={props.countryFilter} options={props.countries} onChange={props.onCountryChange} />
@@ -68,14 +72,17 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
       <FilterSelect label="资料来源" value={props.sourceFilter} options={props.sources} onChange={props.onSourceChange} />
       <FilterSelect label="Proxy" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
 
-      <button
-        onClick={props.onRefresh}
-        disabled={props.busy}
-        className="flex h-11 items-center gap-2 rounded-[12px] bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {props.loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
-        刷新
-      </button>
+      <div className="flex flex-col gap-2 self-start">
+        <span className={spacerClass}>刷新</span>
+        <button
+          onClick={props.onRefresh}
+          disabled={blocked}
+          className="flex h-11 items-center gap-2 rounded-[12px] bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {props.loading ? <Loader2 size={16} className="shrink-0 animate-spin" /> : <RefreshCcw size={16} className="shrink-0" />}
+          刷新
+        </button>
+      </div>
     </div>
   )
 })

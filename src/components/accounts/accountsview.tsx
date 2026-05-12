@@ -28,8 +28,8 @@ const AccountsSummary = memo(function AccountsSummary() {
 
   return (
     <GlassPanel className="bg-card">
-      <div className="flex items-center justify-between gap-6">
-        <div>
+      <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-xs tracking-[0.24em] text-neonSoft">
             <Sparkles size={14} /> 企业数据表格
           </div>
@@ -39,17 +39,17 @@ const AccountsSummary = memo(function AccountsSummary() {
           </p>
         </div>
 
-        <div className="grid min-w-[360px] grid-cols-3 gap-3">
-          <div className="rounded-[14px] bg-panel p-5">
-            <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><MonitorCog size={14} /> 存活</div>
+        <div className="grid w-full gap-3 sm:grid-cols-3 xl:max-w-[420px] xl:min-w-[360px] xl:self-start">
+          <div className="flex min-h-[112px] flex-col justify-between rounded-[14px] bg-panel p-5">
+            <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><MonitorCog size={14} className="shrink-0" /> 存活</div>
             <div className="mt-3 text-3xl font-semibold text-white">{aliveCount}</div>
           </div>
-          <div className="rounded-[14px] bg-panel p-5">
-            <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><ShieldCheck size={14} /> 风险</div>
+          <div className="flex min-h-[112px] flex-col justify-between rounded-[14px] bg-panel p-5">
+            <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><ShieldCheck size={14} className="shrink-0" /> 风险</div>
             <div className="mt-3 text-3xl font-semibold text-white">{riskCount}</div>
           </div>
-          <div className="rounded-[14px] bg-panel p-5">
-            <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><Sparkles size={14} /> 已检测</div>
+          <div className="flex min-h-[112px] flex-col justify-between rounded-[14px] bg-panel p-5">
+            <div className="flex items-center gap-2 text-xs tracking-[0.2em] text-textMuted"><Sparkles size={14} className="shrink-0" /> 已检测</div>
             <div className="mt-3 text-3xl font-semibold text-white">{checkedCount}</div>
           </div>
         </div>
