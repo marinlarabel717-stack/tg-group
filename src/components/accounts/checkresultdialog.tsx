@@ -2,6 +2,41 @@ import { memo } from 'react'
 import { CheckCircle2, X } from 'lucide-react'
 import { useAccountStore } from '../../stores/accountstore'
 
+function ResultStatCard({
+  label,
+  value,
+  tone,
+  wide = false
+}: {
+  label: string
+  value: number
+  tone: 'success' | 'info' | 'warning' | 'danger' | 'violet'
+  wide?: boolean
+}) {
+  const toneClass = {
+    success: 'border-emerald-400/20 bg-emerald-400/12 text-emerald-100',
+    info: 'border-sky-400/20 bg-sky-400/12 text-sky-100',
+    warning: 'border-amber-400/20 bg-amber-400/12 text-amber-100',
+    danger: 'border-rose-400/20 bg-rose-400/12 text-rose-100',
+    violet: 'border-violet-400/20 bg-violet-400/12 text-violet-100'
+  }[tone]
+
+  const valueClass = {
+    success: 'text-emerald-300',
+    info: 'text-sky-300',
+    warning: 'text-amber-300',
+    danger: 'text-rose-300',
+    violet: 'text-violet-300'
+  }[tone]
+
+  return (
+    <div className={`rounded-[14px] border px-3 py-3 text-center shadow-[0_8px_24px_rgba(15,23,42,0.18)] ${toneClass} ${wide ? 'sm:col-span-2' : ''}`}>
+      <div className="text-xs tracking-[0.08em] opacity-85">{label}</div>
+      <div className={`mt-1 text-xl font-semibold ${valueClass}`}>{value}</div>
+    </div>
+  )
+}
+
 export const CheckResultDialog = memo(function CheckResultDialog() {
   const checkResultDialog = useAccountStore((state) => state.checkResultDialog)
   const closeCheckResultDialog = useAccountStore((state) => state.closeCheckResultDialog)
@@ -39,41 +74,17 @@ export const CheckResultDialog = memo(function CheckResultDialog() {
 
           {checkResultDialog.runMode === 'account-survival' ? (
             <div className="grid grid-cols-3 gap-3 text-center text-sm">
-              <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                <div className="text-xs text-slate-500">存活</div>
-                <div className="mt-1 font-semibold text-slate-900">{checkResultDialog.alive}</div>
-              </div>
-              <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                <div className="text-xs text-slate-500">封禁</div>
-                <div className="mt-1 font-semibold text-slate-900">{checkResultDialog.banned}</div>
-              </div>
-              <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                <div className="text-xs text-slate-500">冻结</div>
-                <div className="mt-1 font-semibold text-slate-900">{checkResultDialog.frozen}</div>
-              </div>
+              <ResultStatCard label="存活" value={checkResultDialog.alive} tone="success" />
+              <ResultStatCard label="封禁" value={checkResultDialog.banned} tone="danger" />
+              <ResultStatCard label="冻结" value={checkResultDialog.frozen} tone="info" />
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 text-center text-sm sm:grid-cols-3">
-              <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                <div className="text-xs text-slate-500">无限制</div>
-                <div className="mt-1 font-semibold text-slate-900">{checkResultDialog.alive}</div>
-              </div>
-              <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                <div className="text-xs text-slate-500">双向</div>
-                <div className="mt-1 font-semibold text-slate-900">{checkResultDialog.limited}</div>
-              </div>
-              <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                <div className="text-xs text-slate-500">临时双向</div>
-                <div className="mt-1 font-semibold text-slate-900">{checkResultDialog.temporaryLimited}</div>
-              </div>
-              <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                <div className="text-xs text-slate-500">冻结</div>
-                <div className="mt-1 font-semibold text-slate-900">{checkResultDialog.frozen}</div>
-              </div>
-              <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)] sm:col-span-2">
-                <div className="text-xs text-slate-500">封禁</div>
-                <div className="mt-1 font-semibold text-slate-900">{checkResultDialog.banned}</div>
-              </div>
+              <ResultStatCard label="无限制" value={checkResultDialog.alive} tone="success" />
+              <ResultStatCard label="双向" value={checkResultDialog.limited} tone="info" />
+              <ResultStatCard label="临时双向" value={checkResultDialog.temporaryLimited} tone="warning" />
+              <ResultStatCard label="冻结" value={checkResultDialog.frozen} tone="violet" />
+              <ResultStatCard label="封禁" value={checkResultDialog.banned} tone="danger" wide />
             </div>
           )}
 

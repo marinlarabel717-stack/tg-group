@@ -5,6 +5,43 @@ import { AccountTable } from './accounttable'
 import { CheckResultDialog } from './checkresultdialog'
 import { useAccountStore } from '../../stores/accountstore'
 
+function DialogStatCard({
+  label,
+  value,
+  tone,
+  wide = false
+}: {
+  label: string
+  value: number | string
+  tone: 'success' | 'info' | 'warning' | 'danger' | 'violet' | 'neutral'
+  wide?: boolean
+}) {
+  const toneClass = {
+    success: 'border-emerald-400/20 bg-emerald-400/12 text-emerald-100',
+    info: 'border-sky-400/20 bg-sky-400/12 text-sky-100',
+    warning: 'border-amber-400/20 bg-amber-400/12 text-amber-100',
+    danger: 'border-rose-400/20 bg-rose-400/12 text-rose-100',
+    violet: 'border-violet-400/20 bg-violet-400/12 text-violet-100',
+    neutral: 'border-white/10 bg-panel text-slate-100'
+  }[tone]
+
+  const valueClass = {
+    success: 'text-emerald-300',
+    info: 'text-sky-300',
+    warning: 'text-amber-300',
+    danger: 'text-rose-300',
+    violet: 'text-violet-300',
+    neutral: 'text-white'
+  }[tone]
+
+  return (
+    <div className={`rounded-[14px] border px-3 py-3 text-center shadow-[0_8px_24px_rgba(15,23,42,0.18)] ${toneClass} ${wide ? 'col-span-full' : ''}`}>
+      <div className="text-xs tracking-[0.08em] opacity-85">{label}</div>
+      <div className={`mt-1 text-lg font-semibold ${valueClass}`}>{value}</div>
+    </div>
+  )
+}
+
 export function AccountsView() {
   const importProgress = useAccountStore((state) => state.importProgress)
   const importResultDialog = useAccountStore((state) => state.importResultDialog)
@@ -66,18 +103,9 @@ export function AccountsView() {
               </div>
 
               <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                <div className="rounded-[12px] bg-panel px-3 py-3">
-                  <div className="text-xs text-textMuted">已导入</div>
-                  <div className="mt-1 font-semibold text-white">{importProgress.importedCount}</div>
-                </div>
-                <div className="rounded-[12px] bg-panel px-3 py-3">
-                  <div className="text-xs text-textMuted">补 JSON</div>
-                  <div className="mt-1 font-semibold text-white">{importProgress.generatedJsonCount}</div>
-                </div>
-                <div className="rounded-[12px] bg-panel px-3 py-3">
-                  <div className="text-xs text-textMuted">跳过</div>
-                  <div className="mt-1 font-semibold text-white">{importProgress.skippedCount}</div>
-                </div>
+                <DialogStatCard label="已导入" value={importProgress.importedCount} tone="success" />
+                <DialogStatCard label="补 JSON" value={importProgress.generatedJsonCount} tone="violet" />
+                <DialogStatCard label="跳过" value={importProgress.skippedCount} tone="warning" />
               </div>
             </div>
           </div>
@@ -110,18 +138,9 @@ export function AccountsView() {
               </div>
 
               <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                  <div className="text-xs text-slate-500">扫描到</div>
-                  <div className="mt-1 font-semibold text-slate-900">{importResultDialog.scannedCount}</div>
-                </div>
-                <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                  <div className="text-xs text-slate-500">补 JSON</div>
-                  <div className="mt-1 font-semibold text-slate-900">{importResultDialog.generatedJsonCount}</div>
-                </div>
-                <div className="rounded-[12px] bg-white px-3 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.18)]">
-                  <div className="text-xs text-slate-500">跳过</div>
-                  <div className="mt-1 font-semibold text-slate-900">{importResultDialog.skippedCount}</div>
-                </div>
+                <DialogStatCard label="扫描到" value={importResultDialog.scannedCount} tone="info" />
+                <DialogStatCard label="补 JSON" value={importResultDialog.generatedJsonCount} tone="violet" />
+                <DialogStatCard label="跳过" value={importResultDialog.skippedCount} tone="warning" />
               </div>
 
               {importResultDialog.warning ? (
@@ -167,9 +186,9 @@ export function AccountsView() {
                 <div className="mt-2 text-2xl font-semibold text-sky-300">本次成功导出 {exportResultDialog.exportedCount} 个</div>
               </div>
 
-              <div className="rounded-[12px] bg-panel px-4 py-4 text-sm">
-                <div className="text-xs text-textMuted">导出目录</div>
-                <div className="mt-2 break-all font-medium text-white">{exportResultDialog.targetDirectory}</div>
+              <div className="grid grid-cols-1 gap-3 text-center text-sm">
+                <DialogStatCard label="导出数量" value={exportResultDialog.exportedCount} tone="info" />
+                <DialogStatCard label="导出目录" value={exportResultDialog.targetDirectory} tone="neutral" wide />
               </div>
 
               <div className="rounded-[12px] border border-sky-300/15 bg-sky-300/8 px-4 py-3 text-sm text-sky-100">
@@ -217,9 +236,8 @@ export function AccountsView() {
                 </div>
               </div>
 
-              <div className="rounded-[12px] bg-panel px-4 py-4 text-sm text-white">
-                <div className="text-xs text-textMuted">删除数量</div>
-                <div className="mt-2 text-lg font-semibold">{deleteResultDialog.deletedCount}</div>
+              <div className="grid grid-cols-1 gap-3 text-center text-sm">
+                <DialogStatCard label="删除数量" value={deleteResultDialog.deletedCount} tone="danger" />
               </div>
 
               <button
