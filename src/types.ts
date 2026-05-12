@@ -373,6 +373,34 @@ export interface BroadcastStopResult {
   message: string
 }
 
+export interface BroadcastScheduledMessageItem {
+  messageId: number
+  scheduledAt: string | null
+  text: string
+  hasMedia: boolean
+  mediaLabel: string
+  hasButtons: boolean
+  isForwarded: boolean
+  forwardLabel: string
+}
+
+export interface BroadcastScheduledMessageListResult {
+  total: number
+  items: BroadcastScheduledMessageItem[]
+  message: string
+}
+
+export interface BroadcastDeleteScheduledMessagesPayload {
+  accountId: number
+  groupRef: string
+  messageIds: number[]
+}
+
+export interface BroadcastDeleteScheduledMessagesResult {
+  deletedCount: number
+  message: string
+}
+
 export interface BroadcastPushScheduleProgress {
   total: number
   completed: number
@@ -532,6 +560,8 @@ export interface DesktopBroadcastApi {
   pushSchedule: (payload: BroadcastPushSchedulePayload) => Promise<BroadcastPushScheduleResult>
   stopPushSchedule: () => Promise<BroadcastStopResult>
   listJoinedGroups: (accountId: number) => Promise<BroadcastJoinedGroup[]>
+  listScheduledMessages: (accountId: number, groupRef: string) => Promise<BroadcastScheduledMessageListResult>
+  deleteScheduledMessages: (payload: BroadcastDeleteScheduledMessagesPayload) => Promise<BroadcastDeleteScheduledMessagesResult>
   onPushProgress: (callback: (payload: BroadcastPushScheduleProgress) => void) => () => void
 }
 

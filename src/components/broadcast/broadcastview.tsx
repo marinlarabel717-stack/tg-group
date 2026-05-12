@@ -1,12 +1,14 @@
 import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, CopyPlus, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Send, Users, X } from 'lucide-react'
+import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CopyPlus, Eye, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Send, Trash2, Users, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useAccountStore } from '../../stores/accountstore'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
+import type { BroadcastJoinedGroup, BroadcastScheduledMessageItem } from '../../types'
 
 const tabs: Array<{ key: BroadcastTabKey; label: string; icon: typeof ListChecks }> = [
   { key: 'tasks', label: '群组配置', icon: Users },
+  { key: 'scheduled', label: '查看定时内容', icon: Eye },
   { key: 'calendar', label: '发送日志', icon: CalendarClock }
 ]
 
@@ -68,6 +70,12 @@ function formatDateInputLabel(value: string) {
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return '未设置'
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function readScheduledContentLabel(item: BroadcastScheduledMessageItem) {
+  if (item.text) return item.text.length > 80 ? `${item.text.slice(0, 80)}...` : item.text
+  if (item.hasMedia) return `【${item.mediaLabel}】`
+  return '无文字内容'
 }
 
 function readRepeatLabel(repeatPeriodSeconds?: number | null) {
@@ -1562,6 +1570,299 @@ const CalendarWorkbench = memo(function CalendarWorkbench() {
   )
 })
 
+const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
+  const accounts = useAccountStore((state) => state.accounts)
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
+  const [groups, setGroups] = useState<BroadcastJoinedGroup[]>([])
+  const [selectedGroupRef, setSelectedGroupRef] = useState('')
+  const [items, setItems] = useState<BroadcastScheduledMessageItem[]>([])
+  const [selectedMessageIds, setSelectedMessageIds] = useState<number[]>([])
+  const [loadingGroups, setLoadingGroups] = useState(false)
+  const [loadingItems, setLoadingItems] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [refreshNonce, setRefreshNonce] = useState(0)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [actionMessage, setActionMessage] = useState('')
+
+  const selectedAccount = useMemo(
+    () => accounts.find((item) => item.id === selectedAccountId) ?? null,
+    [accounts, selectedAccountId]
+  )
+
+  const selectedGroup = useMemo(
+    () => groups.find((item) => item.targetRef === selectedGroupRef) ?? null,
+    [groups, selectedGroupRef]
+  )
+
+  useEffect(() => {
+    if (accounts.length === 0) {
+      setSelectedAccountId(null)
+      return
+    }
+    if (typeof selectedAccountId === 'number' && accounts.some((item) => item.id === selectedAccountId)) {
+      return
+    }
+    setSelectedAccountId(accounts[0]?.id ?? null)
+  }, [accounts, selectedAccountId])
+
+  useEffect(() => {
+    if (typeof selectedAccountId !== 'number') {
+      setGroups([])
+      setSelectedGroupRef('')
+      setItems([])
+      setSelectedMessageIds([])
+      return
+    }
+
+    const broadcastApi = window.desktopBroadcast
+    if (!broadcastApi) {
+      setErrorMessage('当前桌面环境不支持读取定时内容。')
+      return
+    }
+
+    let cancelled = false
+    setLoadingGroups(true)
+    setErrorMessage('')
+    setActionMessage('正在读取这个账号加入的群...')
+    setItems([])
+    setSelectedMessageIds([])
+
+    void broadcastApi.listJoinedGroups(selectedAccountId)
+      .then((nextGroups) => {
+        if (cancelled) return
+        setGroups(nextGroups)
+        const preferredRef = nextGroups.some((item) => item.targetRef === selectedGroupRef)
+          ? selectedGroupRef
+          : nextGroups[0]?.targetRef ?? ''
+        setSelectedGroupRef(preferredRef)
+        setActionMessage(nextGroups.length > 0 ? `已读取到 ${nextGroups.length} 个群。` : '这个账号当前没读到可选群。')
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setGroups([])
+        setSelectedGroupRef('')
+        setErrorMessage(error instanceof Error ? error.message : '读取群列表失败。')
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingGroups(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [refreshNonce, selectedAccountId])
+
+  useEffect(() => {
+    if (typeof selectedAccountId !== 'number' || !selectedGroupRef) {
+      setItems([])
+      setSelectedMessageIds([])
+      return
+    }
+
+    const broadcastApi = window.desktopBroadcast
+    if (!broadcastApi) {
+      setErrorMessage('当前桌面环境不支持读取定时内容。')
+      return
+    }
+
+    let cancelled = false
+    setLoadingItems(true)
+    setErrorMessage('')
+    setActionMessage('正在读取这个群的定时内容...')
+    setSelectedMessageIds([])
+
+    void broadcastApi.listScheduledMessages(selectedAccountId, selectedGroupRef)
+      .then((result) => {
+        if (cancelled) return
+        setItems(result.items)
+        setActionMessage(result.message)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setItems([])
+        setErrorMessage(error instanceof Error ? error.message : '读取定时内容失败。')
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingItems(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [refreshNonce, selectedAccountId, selectedGroupRef])
+
+  const toggleMessageSelection = (messageId: number) => {
+    setSelectedMessageIds((current) => current.includes(messageId)
+      ? current.filter((item) => item !== messageId)
+      : [...current, messageId])
+  }
+
+  const handleDelete = async (messageIds: number[]) => {
+    if (typeof selectedAccountId !== 'number' || !selectedGroupRef || messageIds.length === 0 || !window.desktopBroadcast) return
+    setDeleting(true)
+    setErrorMessage('')
+    try {
+      const result = await window.desktopBroadcast.deleteScheduledMessages({
+        accountId: selectedAccountId,
+        groupRef: selectedGroupRef,
+        messageIds
+      })
+      setActionMessage(result.message)
+      const nextResult = await window.desktopBroadcast.listScheduledMessages(selectedAccountId, selectedGroupRef)
+      setItems(nextResult.items)
+      setSelectedMessageIds([])
+      setRefreshNonce((value) => value + 1)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '删除定时内容失败。')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <GlassPanel className="bg-card min-h-[720px]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="text-lg font-semibold text-white">查看定时内容</div>
+          <div className="mt-1 text-sm text-textMuted">选账号、选群，就能直接看这个群已经定时好的内容，也能删掉不要的。</div>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <label className="min-w-[220px] rounded-[16px] bg-panel px-4 py-3">
+            <div className="text-xs text-textMuted">选择账号</div>
+            <select
+              value={selectedAccountId ?? ''}
+              onChange={(event) => setSelectedAccountId(event.target.value ? Number(event.target.value) : null)}
+              className="mt-2 w-full bg-transparent text-sm text-white outline-none"
+            >
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id} className="bg-slate-900 text-white">
+                  {readAccountNickname(account)}（{formatAccountStatus(account.status)}）
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="min-w-[260px] rounded-[16px] bg-panel px-4 py-3">
+            <div className="text-xs text-textMuted">选择群</div>
+            <select
+              value={selectedGroupRef}
+              onChange={(event) => setSelectedGroupRef(event.target.value)}
+              disabled={loadingGroups || groups.length === 0}
+              className="mt-2 w-full bg-transparent text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {groups.length === 0 ? (
+                <option value="" className="bg-slate-900 text-white">{loadingGroups ? '正在读取群...' : '这个账号暂无可选群'}</option>
+              ) : groups.map((group) => (
+                <option key={`${group.targetRef}-${group.peerId}`} value={group.targetRef} className="bg-slate-900 text-white">
+                  {group.title}{group.username ? ` (${group.username})` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setRefreshNonce((value) => value + 1)}
+            className="flex items-center gap-2 rounded-[14px] bg-white/[0.06] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]"
+          >
+            <RefreshCw size={16} />
+            刷新当前内容
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDelete(selectedMessageIds)}
+            disabled={deleting || selectedMessageIds.length === 0}
+            className="flex items-center gap-2 rounded-[14px] bg-rose-400/14 px-4 py-3 text-sm font-semibold text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Trash2 size={16} />
+            删除已选（{selectedMessageIds.length}）
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+        <div className="rounded-[18px] bg-panel p-4">
+          <div className="text-xs text-textMuted">当前账号</div>
+          <div className="mt-2 text-sm font-semibold text-white">{selectedAccount ? readAccountNickname(selectedAccount) : '未选择账号'}</div>
+        </div>
+        <div className="rounded-[18px] bg-panel p-4">
+          <div className="text-xs text-textMuted">当前群定时条数</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{items.length}</div>
+        </div>
+        <div className="rounded-[18px] bg-panel p-4">
+          <div className="text-xs text-textMuted">已勾选删除</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{selectedMessageIds.length}</div>
+        </div>
+      </div>
+
+      {selectedGroup ? (
+        <div className="mt-4 rounded-[18px] bg-panel px-4 py-3 text-sm text-slate-200">
+          当前群：<span className="font-semibold text-white">{selectedGroup.title}</span>
+          {selectedGroup.username ? <span className="ml-2 text-textMuted">{selectedGroup.username}</span> : null}
+          <span className="ml-3 text-textMuted">约 {selectedGroup.memberCount || 0} 人</span>
+        </div>
+      ) : null}
+
+      {errorMessage ? <div className="mt-4 rounded-[16px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
+      {!errorMessage && actionMessage ? <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{actionMessage}</div> : null}
+
+      <div className="mt-5 space-y-3">
+        {loadingItems ? (
+          <div className="flex min-h-[280px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">正在读取定时内容...</div>
+        ) : items.length === 0 ? (
+          <div className="flex min-h-[280px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">这个群现在还没有定时内容。</div>
+        ) : (
+          items.map((item) => {
+            const checked = selectedMessageIds.includes(item.messageId)
+            return (
+              <div key={item.messageId} className="rounded-[18px] bg-panel p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <label className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleMessageSelection(item.messageId)}
+                      className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent text-violet-300"
+                    />
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-white">
+                        <span>消息 ID：{item.messageId}</span>
+                        {item.hasMedia ? <span className="rounded-full bg-sky-400/10 px-2.5 py-1 text-[11px] text-sky-200">{item.mediaLabel}</span> : null}
+                        {item.hasButtons ? <span className="rounded-full bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-200">带按钮</span> : null}
+                        {item.isForwarded ? <span className="rounded-full bg-violet-400/10 px-2.5 py-1 text-[11px] text-violet-200">频道转发</span> : null}
+                      </div>
+                      <div className="mt-2 text-sm text-slate-200">{readScheduledContentLabel(item)}</div>
+                      {item.forwardLabel ? <div className="mt-2 text-xs text-textMuted">来源：{item.forwardLabel}</div> : null}
+                    </div>
+                  </label>
+
+                  <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+                    <div className="flex items-center gap-2 rounded-[14px] bg-card px-3 py-2 text-xs text-textMuted">
+                      <Clock3 size={14} />
+                      {item.scheduledAt ? formatDateTimeFull(item.scheduledAt) : '未读到时间'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete([item.messageId])}
+                      disabled={deleting}
+                      className="flex items-center gap-2 rounded-[12px] bg-rose-400/14 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Trash2 size={14} />
+                      删除
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+    </GlassPanel>
+  )
+})
+
 export default memo(function BroadcastView() {
   const initAccounts = useAccountStore((state) => state.init)
   const activeTab = useBroadcastStore((state) => state.activeTab)
@@ -1572,7 +1873,7 @@ export default memo(function BroadcastView() {
   }, [initAccounts])
 
   useEffect(() => {
-    if (activeTab !== 'tasks' && activeTab !== 'calendar') {
+    if (activeTab !== 'tasks' && activeTab !== 'scheduled' && activeTab !== 'calendar') {
       setActiveTab('tasks')
     }
   }, [activeTab, setActiveTab])
@@ -1581,7 +1882,7 @@ export default memo(function BroadcastView() {
     <div className="contain-layout">
       <div className="space-y-5">
         <TabBar />
-        {activeTab === 'calendar' ? <LogsWorkbench /> : <BroadcastConsole />}
+        {activeTab === 'calendar' ? <LogsWorkbench /> : activeTab === 'scheduled' ? <ScheduledContentWorkbench /> : <BroadcastConsole />}
       </div>
     </div>
   )

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { BroadcastJoinedGroup, BroadcastPushSchedulePayload } from '../types'
 
-export type BroadcastTabKey = 'tasks' | 'creatives' | 'targets' | 'calendar'
+export type BroadcastTabKey = 'tasks' | 'creatives' | 'targets' | 'scheduled' | 'calendar'
 export type BroadcastTaskStatus = 'draft' | 'active' | 'paused'
 export type BroadcastPreviewStatus = 'queued' | 'scheduled' | 'failed'
 

@@ -1,11 +1,12 @@
 import { Api } from 'telegram'
 import { CustomFile } from 'telegram/client/uploads'
 import type { TelegramClient } from 'telegram'
+import bigInt from 'big-integer'
 import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager } from '../accounts/check-engine/telegram-client-manager'
-import type { BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastStopResult } from '../../src/types'
+import type { BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastScheduledMessageItem, BroadcastScheduledMessageListResult, BroadcastStopResult } from '../../src/types'
 
 const MIN_SCHEDULE_AHEAD_MS = 60_000
 
@@ -101,6 +102,68 @@ function parseTelegramMessageLink(input: string) {
   }
 
   return null
+}
+
+function toIsoDateTime(value: unknown) {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : null
+  }
+  if (typeof value === 'number') {
+    const date = new Date(value > 1_000_000_000_000 ? value : value * 1000)
+    return Number.isFinite(date.getTime()) ? date.toISOString() : null
+  }
+  if (typeof value === 'bigint') {
+    const date = new Date(Number(value) * 1000)
+    return Number.isFinite(date.getTime()) ? date.toISOString() : null
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const date = new Date(value)
+    return Number.isFinite(date.getTime()) ? date.toISOString() : null
+  }
+  return null
+}
+
+function readScheduledMediaLabel(message: any) {
+  const mediaClass = String(message?.media?.className || '')
+  if (mediaClass.includes('MessageMediaPhoto')) return '图片'
+  if (mediaClass.includes('Document')) return '文件'
+  if (mediaClass.includes('Geo')) return '位置'
+  if (mediaClass.includes('Contact')) return '联系人'
+  if (mediaClass.includes('Poll')) return '投票'
+  if (mediaClass.includes('WebPage')) return '链接预览'
+  if (message?.media) return '媒体'
+  return '文字'
+}
+
+function readForwardLabel(message: any) {
+  const header = message?.fwdFrom?.fromName
+  if (typeof header === 'string' && header.trim()) return header.trim()
+  const postAuthor = message?.postAuthor
+  if (typeof postAuthor === 'string' && postAuthor.trim()) return postAuthor.trim()
+  return ''
+}
+
+function serializeScheduledMessage(message: any): BroadcastScheduledMessageItem | null {
+  const messageId = typeof message?.id === 'number' ? message.id : null
+  if (!messageId) return null
+  const text = typeof message?.message === 'string'
+    ? message.message.trim()
+    : typeof message?.text === 'string'
+      ? message.text.trim()
+      : ''
+  const hasMedia = Boolean(message?.media)
+  const hasButtons = Boolean(message?.replyMarkup)
+  const forwardLabel = readForwardLabel(message)
+  return {
+    messageId,
+    scheduledAt: toIsoDateTime(message?.date),
+    text,
+    hasMedia,
+    mediaLabel: readScheduledMediaLabel(message),
+    hasButtons,
+    isForwarded: Boolean(message?.fwdFrom),
+    forwardLabel
+  }
 }
 
 function extractResponseMessageId(result: unknown) {
@@ -594,6 +657,82 @@ export class BroadcastService {
         .sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'))
 
       return dedupedGroups
+    } catch (error) {
+      throw new Error(formatBroadcastError(error))
+    } finally {
+      await this.clientManager.destroyClient(client)
+    }
+  }
+
+  async listScheduledMessages(accountId: number, groupRefRaw: string): Promise<BroadcastScheduledMessageListResult> {
+    const account = this.accountRepository.getByIds([accountId])[0]
+    if (!account) {
+      throw new Error('账号不存在')
+    }
+
+    const groupRef = normalizeGroupRef(groupRefRaw)
+    if (!groupRef) {
+      throw new Error('群组引用不对，请重新选一个群。')
+    }
+
+    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+    try {
+      const entity = await resolveGroupEntity(client, groupRef)
+      const result = await client.invoke(new Api.messages.GetScheduledHistory({
+        peer: entity as never,
+        hash: bigInt.zero
+      })) as { messages?: any[] }
+
+      const items = Array.isArray(result?.messages)
+        ? result.messages.map((message) => serializeScheduledMessage(message)).filter((item): item is BroadcastScheduledMessageItem => Boolean(item))
+          .sort((left, right) => {
+            const leftTime = left.scheduledAt ? new Date(left.scheduledAt).getTime() : 0
+            const rightTime = right.scheduledAt ? new Date(right.scheduledAt).getTime() : 0
+            return leftTime - rightTime
+          })
+        : []
+
+      return {
+        total: items.length,
+        items,
+        message: items.length > 0 ? `已读取到 ${items.length} 条定时内容。` : '这个群当前还没有定时内容。'
+      }
+    } catch (error) {
+      throw new Error(formatBroadcastError(error))
+    } finally {
+      await this.clientManager.destroyClient(client)
+    }
+  }
+
+  async deleteScheduledMessages(payload: BroadcastDeleteScheduledMessagesPayload): Promise<BroadcastDeleteScheduledMessagesResult> {
+    const account = this.accountRepository.getByIds([payload.accountId])[0]
+    if (!account) {
+      throw new Error('账号不存在')
+    }
+    const messageIds = Array.from(new Set(payload.messageIds.filter((item) => Number.isFinite(item) && item > 0)))
+    if (messageIds.length === 0) {
+      return {
+        deletedCount: 0,
+        message: '还没有选中要删除的定时内容。'
+      }
+    }
+
+    const groupRef = normalizeGroupRef(payload.groupRef)
+    if (!groupRef) {
+      throw new Error('群组引用不对，请重新选一个群。')
+    }
+
+    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+    try {
+      const entity = await resolveGroupEntity(client, groupRef)
+      await client.invoke(new Api.messages.DeleteScheduledMessages({
+        peer: entity as never,
+        id: messageIds
+      }))
+      return {
+        deletedCount: messageIds.length,
+        message: `已删除 ${messageIds.length} 条定时内容。`
+      }
     } catch (error) {
       throw new Error(formatBroadcastError(error))
     } finally {

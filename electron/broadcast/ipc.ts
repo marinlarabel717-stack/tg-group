@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { BroadcastPushSchedulePayload } from '../../src/types'
+import type { BroadcastDeleteScheduledMessagesPayload, BroadcastPushSchedulePayload } from '../../src/types'
 import type { BroadcastService } from './service'
 
 interface RegisterBroadcastIpcOptions {
@@ -21,5 +21,13 @@ export function registerBroadcastIpc(options: RegisterBroadcastIpcOptions) {
 
   ipcMain.handle('broadcast:list-joined-groups', async (_event, accountId: number) => {
     return broadcastService.listJoinedGroups(accountId)
+  })
+
+  ipcMain.handle('broadcast:list-scheduled-messages', async (_event, payload: { accountId: number; groupRef: string }) => {
+    return broadcastService.listScheduledMessages(payload.accountId, payload.groupRef)
+  })
+
+  ipcMain.handle('broadcast:delete-scheduled-messages', async (_event, payload: BroadcastDeleteScheduledMessagesPayload) => {
+    return broadcastService.deleteScheduledMessages(payload)
   })
 }
