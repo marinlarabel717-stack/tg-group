@@ -25,6 +25,8 @@ function formatDirectMessageError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '私信发送失败'
+  const waitMatched = normalized.match(/A wait of (\d+) seconds is required/i)
+  if (waitMatched?.[1]) return `操作太快了，Telegram 要求先等 ${waitMatched[1]} 秒再继续。`
   if (/PEER_FLOOD/i.test(normalized)) return '这个账号触发 Telegram 私信风控了，先暂停一会再发。'
   if (/USERNAME_INVALID/i.test(normalized)) return '这个用户名不对，请检查 @username 是否填错。'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '这个用户名不存在，请确认目标用户写对了。'
@@ -43,6 +45,14 @@ function formatDirectMessageError(error: unknown) {
     return matched ? `当前账号被限流了，请 ${matched[1]} 秒后再试。` : '当前账号被限流了，请稍后再试。'
   }
   return `发送失败：${normalized}`
+}
+
+function readRequiredWaitSeconds(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  const matched = message.match(/A wait of (\d+) seconds is required/i)
+  if (!matched?.[1]) return null
+  const seconds = Number(matched[1])
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null
 }
 
 function createId(prefix: string) {
@@ -372,85 +382,103 @@ export class DirectMessageService {
             clients.set(account.id, client)
           }
 
-          const resolved = await resolveSendEntity(client, item.targetValue)
-          cleanup = resolved.cleanup
-          let response: unknown = null
+          let resultItem: DirectMessageSendResultItem | null = null
 
-          if (payload.messageType === 'channel_forward') {
-            const { parsed } = await loadSourceMessage(client, payload.sourceLink)
-            response = await (client as TelegramClient & {
-              forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
-            }).forwardMessages(resolved.entity as never, {
-              messages: [parsed.messageId],
-              fromPeer: parsed.peerRef as never,
-              dropAuthor: false
-            })
-          } else if (payload.messageType === 'hidden_channel_forward') {
-            const { sourceMessage } = await loadSourceMessage(client, payload.sourceLink)
-            const sourceText = typeof sourceMessage.message === 'string'
-              ? sourceMessage.message
-              : typeof sourceMessage.text === 'string'
-                ? sourceMessage.text
-                : ''
-            const sourceMedia = sourceMessage.media
-            const sourceEntities = Array.isArray(sourceMessage.entities) ? sourceMessage.entities : undefined
-            if (!sourceText.trim() && !sourceMedia) {
-              throw new Error('MEDIA_EMPTY')
+          while (!task.cancelled) {
+            try {
+              const resolved = await resolveSendEntity(client, item.targetValue)
+              cleanup = resolved.cleanup
+              let response: unknown = null
+
+              if (payload.messageType === 'channel_forward') {
+                const { parsed } = await loadSourceMessage(client, payload.sourceLink)
+                response = await (client as TelegramClient & {
+                  forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
+                }).forwardMessages(resolved.entity as never, {
+                  messages: [parsed.messageId],
+                  fromPeer: parsed.peerRef as never,
+                  dropAuthor: false
+                })
+              } else if (payload.messageType === 'hidden_channel_forward') {
+                const { sourceMessage } = await loadSourceMessage(client, payload.sourceLink)
+                const sourceText = typeof sourceMessage.message === 'string'
+                  ? sourceMessage.message
+                  : typeof sourceMessage.text === 'string'
+                    ? sourceMessage.text
+                    : ''
+                const sourceMedia = sourceMessage.media
+                const sourceEntities = Array.isArray(sourceMessage.entities) ? sourceMessage.entities : undefined
+                if (!sourceText.trim() && !sourceMedia) {
+                  throw new Error('MEDIA_EMPTY')
+                }
+                response = await (client as TelegramClient & {
+                  sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
+                }).sendMessage(resolved.entity as never, {
+                  message: sourceText || undefined,
+                  file: sourceMedia || undefined,
+                  formattingEntities: sourceEntities
+                })
+              } else if (payload.messageType === 'postbot_code') {
+                const query = payload.postbotCode.trim()
+                const inlineBot = await client.getEntity('@postbot' as never)
+                const inlineResults = await client.invoke(new Api.messages.GetInlineBotResults({
+                  bot: inlineBot as never,
+                  peer: resolved.entity as never,
+                  query,
+                  offset: ''
+                }))
+
+                const firstResult = Array.isArray((inlineResults as { results?: unknown[] }).results)
+                  ? (inlineResults as { results: Array<{ id?: string }> }).results[0]
+                  : null
+
+                if (!firstResult?.id) {
+                  throw new Error('POSTBOT_RESULT_EMPTY')
+                }
+
+                response = await client.invoke(new Api.messages.SendInlineBotResult({
+                  peer: resolved.entity as never,
+                  queryId: (inlineResults as { queryId: any }).queryId,
+                  id: firstResult.id,
+                  randomId: createRandomId(),
+                  clearDraft: true
+                }))
+              } else {
+                const media = payload.imageUrl.trim() ? resolveMediaFile(payload.imageUrl, payload.messageText || item.targetValue) : undefined
+                response = await (client as TelegramClient & {
+                  sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
+                }).sendMessage(resolved.entity as never, {
+                  message: payload.messageText.trim() || undefined,
+                  file: media
+                })
+              }
+
+              resultItem = {
+                previewItemId: item.id,
+                targetId: item.targetId,
+                targetValue: item.targetValue,
+                status: 'sent',
+                errorMessage: '',
+                remoteMessageId: Array.isArray(response)
+                  ? (typeof (response[0] as { id?: unknown } | undefined)?.id === 'number' ? (response[0] as { id: number }).id : null)
+                  : (typeof (response as { id?: unknown } | null)?.id === 'number' ? (response as { id: number }).id : extractResponseMessageId(response)),
+                sentAt: new Date().toISOString(),
+                accountId: item.accountId
+              }
+              break
+            } catch (error) {
+              await cleanup?.()
+              cleanup = undefined
+              const waitSeconds = readRequiredWaitSeconds(error)
+              if (!waitSeconds || task.cancelled) {
+                throw error
+              }
+              await this.sleepWithCancel(waitSeconds * 1000, task)
             }
-            response = await (client as TelegramClient & {
-              sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
-            }).sendMessage(resolved.entity as never, {
-              message: sourceText || undefined,
-              file: sourceMedia || undefined,
-              formattingEntities: sourceEntities
-            })
-          } else if (payload.messageType === 'postbot_code') {
-            const query = payload.postbotCode.trim()
-            const inlineBot = await client.getEntity('@postbot' as never)
-            const inlineResults = await client.invoke(new Api.messages.GetInlineBotResults({
-              bot: inlineBot as never,
-              peer: resolved.entity as never,
-              query,
-              offset: ''
-            }))
-
-            const firstResult = Array.isArray((inlineResults as { results?: unknown[] }).results)
-              ? (inlineResults as { results: Array<{ id?: string }> }).results[0]
-              : null
-
-            if (!firstResult?.id) {
-              throw new Error('POSTBOT_RESULT_EMPTY')
-            }
-
-            response = await client.invoke(new Api.messages.SendInlineBotResult({
-              peer: resolved.entity as never,
-              queryId: (inlineResults as { queryId: any }).queryId,
-              id: firstResult.id,
-              randomId: createRandomId(),
-              clearDraft: true
-            }))
-          } else {
-            const media = payload.imageUrl.trim() ? resolveMediaFile(payload.imageUrl, payload.messageText || item.targetValue) : undefined
-            response = await (client as TelegramClient & {
-              sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
-            }).sendMessage(resolved.entity as never, {
-              message: payload.messageText.trim() || undefined,
-              file: media
-            })
           }
 
-          const resultItem: DirectMessageSendResultItem = {
-            previewItemId: item.id,
-            targetId: item.targetId,
-            targetValue: item.targetValue,
-            status: 'sent',
-            errorMessage: '',
-            remoteMessageId: Array.isArray(response)
-              ? (typeof (response[0] as { id?: unknown } | undefined)?.id === 'number' ? (response[0] as { id: number }).id : null)
-              : (typeof (response as { id?: unknown } | null)?.id === 'number' ? (response as { id: number }).id : extractResponseMessageId(response)),
-            sentAt: new Date().toISOString(),
-            accountId: item.accountId
-          }
+          if (task.cancelled || !resultItem) break
+
           results.push(resultItem)
           this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
         } catch (error) {

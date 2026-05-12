@@ -454,10 +454,28 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const previewItems = useDirectMessageStore((state) => state.previewItems)
   const sending = useDirectMessageStore((state) => state.sending)
   const messageType = useDirectMessageStore((state) => state.messageType)
+  const latestRun = runs[0] ?? null
   const detailedItems = useMemo(
     () => runs.flatMap((run) => run.items.map((item) => ({ ...item, fallbackAt: run.createdAt }))),
     [runs]
   )
+  const latestAccountStats = useMemo(() => {
+    if (!latestRun) return [] as Array<{ phone: string; total: number; sent: number; failed: number }>
+    const grouped = new Map<string, { phone: string; total: number; sent: number; failed: number }>()
+    for (const item of latestRun.items) {
+      const phone = item.accountPhone || '未知手机号'
+      const current = grouped.get(phone) || { phone, total: 0, sent: 0, failed: 0 }
+      current.total += 1
+      if (item.status === 'sent') current.sent += 1
+      if (item.status === 'failed') current.failed += 1
+      grouped.set(phone, current)
+    }
+    return Array.from(grouped.values()).sort((left, right) => right.total - left.total || left.phone.localeCompare(right.phone))
+  }, [latestRun])
+  const averagePerAccount = useMemo(() => {
+    if (!latestRun || latestAccountStats.length === 0) return 0
+    return Math.round(latestRun.total / latestAccountStats.length)
+  }, [latestAccountStats, latestRun])
   const liveItems = useMemo(
     () => previewItems.map((item, index) => ({
       id: item.id,
@@ -497,6 +515,42 @@ const LogsWorkbench = memo(function LogsWorkbench() {
           <button type="button" onClick={clearRuns} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
         </div>
       </div>
+      {latestRun && !sending ? (
+        <div className="mt-4 rounded-[16px] bg-panel/70 px-4 py-4">
+          <div className="text-sm font-semibold text-white">{latestRun.summary.includes('任务已停止') ? '本次私信已停止' : '本次私信已完成'}</div>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
+              <div className="text-xs tracking-[0.16em] text-emerald-200/80">发送成功</div>
+              <div className="mt-2 text-2xl font-semibold text-emerald-300">{latestRun.sent}</div>
+            </div>
+            <div className="rounded-[14px] bg-rose-400/8 px-4 py-3">
+              <div className="text-xs tracking-[0.16em] text-rose-200/80">发送失败</div>
+              <div className="mt-2 text-2xl font-semibold text-rose-300">{latestRun.failed}</div>
+            </div>
+            <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
+              <div className="text-xs tracking-[0.16em] text-textMuted">均号发送</div>
+              <div className="mt-2 text-2xl font-semibold text-white">{averagePerAccount}</div>
+            </div>
+          </div>
+          {latestAccountStats.length > 0 ? (
+            <div className="mt-4 rounded-[14px] bg-black/10 px-4 py-4">
+              <div className="text-sm font-medium text-white">本次各号码发送情况</div>
+              <div className="mt-3 space-y-2">
+                {latestAccountStats.map((item) => (
+                  <div key={item.phone} className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] bg-white/[0.03] px-3 py-2 text-sm">
+                    <span className="select-text text-white">{item.phone}</span>
+                    <div className="flex flex-wrap items-center gap-3 text-xs">
+                      <span className="text-slate-200">发送 {item.total}</span>
+                      <span className="text-emerald-300">成功 {item.sent}</span>
+                      <span className="text-rose-300">失败 {item.failed}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-4 space-y-3">
         {sending && liveItems.length > 0 ? liveItems.map((item) => (
           <div key={item.id} className={`rounded-[14px] px-4 py-3 ${item.status === 'sent' ? 'bg-emerald-400/8' : item.status === 'failed' ? 'bg-rose-400/8' : 'bg-sky-400/8'}`}>
