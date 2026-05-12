@@ -1053,8 +1053,8 @@ export const AccountTable = memo(function AccountTable() {
         ? createPortal(
             <div className="fixed bottom-4 z-[999] px-1" ref={bulkMenuRef} style={{ left: `${bulkMenuLayout.left}px`, width: `${bulkMenuLayout.width}px` }}>
               <div className="rounded-[16px] border border-white/10 bg-card/95 px-3 py-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur">
-                <div className="flex flex-col gap-3 rounded-[12px] bg-panel/85 px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center gap-3 rounded-[12px] bg-panel/85 px-3 py-3">
+                  <div className="flex flex-wrap items-center justify-center gap-3">
                     <button
                       type="button"
                       onClick={handleClearSelection}
@@ -1074,7 +1074,7 @@ export const AccountTable = memo(function AccountTable() {
                     ) : null}
                   </div>
 
-                  <div className="relative self-end lg:self-auto">
+                  <div className="relative self-center">
                     <button
                       type="button"
                       onClick={() => {
@@ -1089,7 +1089,7 @@ export const AccountTable = memo(function AccountTable() {
 
                     {bulkMenuOpen ? (
                       <>
-                        <div className="absolute bottom-[calc(100%+12px)] right-0 z-30 w-[300px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+                        <div className="absolute bottom-[calc(100%+12px)] left-1/2 z-30 w-[300px] -translate-x-1/2 rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
                           <div className="mb-2 px-2 text-xs tracking-[0.2em] text-textMuted">已选账号操作</div>
                           <div className="space-y-2">
                             <button type="button" onClick={() => handleBulkCheckAction('account-status')} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
@@ -1112,7 +1112,7 @@ export const AccountTable = memo(function AccountTable() {
                         </div>
 
                         {bulkSubmenu === 'two-fa' ? (
-                          <div className="absolute bottom-[calc(100%+12px)] right-[312px] z-40 w-[260px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+                          <div className="absolute bottom-[calc(100%+12px)] left-[calc(100%+12px)] z-40 w-[260px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
                             <div className="mb-2 flex items-center justify-between px-2">
                               <div className="text-xs tracking-[0.2em] text-textMuted">2FA 管理</div>
                               <button type="button" onClick={() => setBulkSubmenu(null)} className="text-xs text-textMuted transition hover:text-white">关闭</button>
@@ -1129,7 +1129,7 @@ export const AccountTable = memo(function AccountTable() {
                         ) : null}
 
                         {bulkSubmenu === 'profile' ? (
-                          <div className="absolute bottom-[calc(100%+12px)] right-[312px] z-40 w-[280px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+                          <div className="absolute bottom-[calc(100%+12px)] left-[calc(100%+12px)] z-40 w-[280px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
                             <div className="mb-2 flex items-center justify-between px-2">
                               <div className="text-xs tracking-[0.2em] text-textMuted">个人资料</div>
                               <button type="button" onClick={() => setBulkSubmenu(null)} className="text-xs text-textMuted transition hover:text-white">关闭</button>
