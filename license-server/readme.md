@@ -34,6 +34,18 @@ GET /health
 npm run license:create-card -- --key TEST-2026-0001 --days 30 --devices 1 --note 本地测试卡
 ```
 
+### 批量创建卡密
+
+当前后台页面已支持批量生成卡密。
+
+默认格式类似：
+
+```bash
+TG-260511-9B0F18
+```
+
+可自定义前缀、数量、有效期、设备上限与备注。
+
 ### 查看全部卡密
 
 ```bash
@@ -114,6 +126,7 @@ dev-admin-token
 - `GET /api/admin/card?cardKey=...`
 - `GET /api/admin/logs?cardKey=...&limit=20`
 - `POST /api/admin/cards/create`
+- `POST /api/admin/cards/batch-create`
 - `POST /api/admin/cards/disable`
 - `POST /api/admin/cards/extend`
 - `POST /api/admin/cards/reset-devices`
