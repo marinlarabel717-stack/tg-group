@@ -316,6 +316,14 @@ export class AutoJoinService {
       return Boolean(sharedQueue && sharedQueue.length > 0)
     }
 
+    const shouldWaitAfterAttempt = (accountId: number) => {
+      if (task.cancelled) return false
+      if (payload.repeatJoinEnabled) {
+        return (perAccountQueue.get(accountId)?.length ?? 0) > 0
+      }
+      return hasPendingItems()
+    }
+
     try {
       const runAccount = async (account: AccountRecord) => {
         let client: TelegramClient | null = null
@@ -372,9 +380,11 @@ export class AutoJoinService {
               attempt
             })
 
-            const baseDelay = pickDelayMs(payload.accountIntervalMin, payload.accountIntervalMax)
-            const joinDelay = pickDelayMs(payload.joinIntervalMin, payload.joinIntervalMax)
-            await sleep(baseDelay + joinDelay)
+            if (shouldWaitAfterAttempt(account.id)) {
+              const baseDelay = pickDelayMs(payload.accountIntervalMin, payload.accountIntervalMax)
+              const joinDelay = pickDelayMs(payload.joinIntervalMin, payload.joinIntervalMax)
+              await sleep(baseDelay + joinDelay)
+            }
           } catch (error) {
             const waitSeconds = readRequiredWaitSeconds(error)
             if (waitSeconds && payload.autoRetryOnFloodWait && attempt <= Math.max(1, payload.retryLimit + 1)) {
@@ -398,7 +408,9 @@ export class AutoJoinService {
               joinedAt: new Date().toISOString(),
               attempt
             })
-            await sleep(pickDelayMs(payload.accountIntervalMin, payload.accountIntervalMax))
+            if (shouldWaitAfterAttempt(account.id)) {
+              await sleep(pickDelayMs(payload.accountIntervalMin, payload.accountIntervalMax))
+            }
           }
         }
       }
