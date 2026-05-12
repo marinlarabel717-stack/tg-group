@@ -386,6 +386,116 @@ export interface BroadcastJoinedGroup {
   type: 'group' | 'supergroup'
 }
 
+export interface DirectMessageSendPayloadItem {
+  id: string
+  targetId: string
+  targetValue: string
+  accountId: number | null
+  waitSeconds: number
+  batchIndex: number
+  status: 'queued' | 'sent' | 'failed'
+  errorMessage?: string
+  remoteMessageId?: number | null
+  sentAt?: string | null
+}
+
+export interface DirectMessageSendPayload {
+  items: DirectMessageSendPayloadItem[]
+  messageType: 'text' | 'channel_forward' | 'hidden_channel_forward' | 'postbot_code'
+  messageText: string
+  imageUrl: string
+  sourceLink: string
+  postbotCode: string
+}
+
+export interface DirectMessageSendResultItem {
+  previewItemId: string
+  targetId: string
+  targetValue: string
+  status: 'sent' | 'failed'
+  errorMessage: string
+  remoteMessageId: number | null
+  sentAt: string | null
+  accountId: number | null
+}
+
+export interface DirectMessageSendResult {
+  total: number
+  successCount: number
+  failedCount: number
+  items: DirectMessageSendResultItem[]
+  message: string
+}
+
+export interface DirectMessageSendProgress {
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  item: DirectMessageSendResultItem
+  message: string
+}
+
+export interface DirectMessageCollectedUserPayload {
+  value: string
+  normalizedValue: string
+  sourceLabel: string
+  userId: string
+  username: string
+  phone: string
+}
+
+export interface DirectMessageCollectPayload {
+  accountId: number
+  mode: 'contact' | 'group_members' | 'comment_users' | 'react_users'
+  source: string
+  limit?: number
+}
+
+export interface DirectMessageCollectResult {
+  total: number
+  added: number
+  skipped: number
+  items: DirectMessageCollectedUserPayload[]
+  message: string
+}
+
+export interface DirectMessageAutoReplyRulePayload {
+  id: string
+  keyword: string
+  replyText: string
+  enabled: boolean
+  matchMode: 'contains' | 'exact'
+  cooldownSeconds: number
+}
+
+export interface DirectMessageAutoReplyPayload {
+  accountIds: number[]
+  enabled: boolean
+  rules: DirectMessageAutoReplyRulePayload[]
+}
+
+export interface DirectMessageAutoReplyState {
+  enabled: boolean
+  accountIds: number[]
+  activeCount: number
+  ruleCount: number
+  startedAt: string | null
+}
+
+export interface DirectMessageAutoReplyEvent {
+  accountId: number
+  accountLabel: string
+  senderId: string
+  senderLabel: string
+  messageText: string
+  matchedKeyword: string
+  replyText: string
+  status: 'replied' | 'failed'
+  errorMessage: string
+  createdAt: string
+}
+
 export interface DesktopSettingsApi {
   get: () => Promise<DesktopAppSettings>
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
@@ -413,6 +523,15 @@ export interface DesktopBroadcastApi {
   onPushProgress: (callback: (payload: BroadcastPushScheduleProgress) => void) => () => void
 }
 
+export interface DesktopDirectMessageApi {
+  sendMessages: (payload: DirectMessageSendPayload) => Promise<DirectMessageSendResult>
+  collectUsers: (payload: DirectMessageCollectPayload) => Promise<DirectMessageCollectResult>
+  configureAutoReply: (payload: DirectMessageAutoReplyPayload) => Promise<DirectMessageAutoReplyState>
+  getAutoReplyState: () => Promise<DirectMessageAutoReplyState>
+  onSendProgress: (callback: (payload: DirectMessageSendProgress) => void) => () => void
+  onAutoReplyEvent: (callback: (payload: DirectMessageAutoReplyEvent) => void) => () => void
+}
+
 export interface DesktopWindowApi {
   minimize: () => Promise<void>
   toggleMaximize: () => Promise<boolean>
@@ -427,6 +546,7 @@ declare global {
     desktopProxyPool?: DesktopProxyPoolApi
     desktopLicense?: DesktopLicenseApi
     desktopBroadcast?: DesktopBroadcastApi
+    desktopDirectMessage?: DesktopDirectMessageApi
     desktopWindow?: DesktopWindowApi
     desktopInfo?: {
       appName: string

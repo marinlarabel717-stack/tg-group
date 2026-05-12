@@ -28,6 +28,8 @@ import { LicenseStore } from './license/license-store'
 import { LicenseService } from './license/license-service'
 import { BroadcastService } from './broadcast/service'
 import { registerBroadcastIpc } from './broadcast/ipc'
+import { DirectMessageService } from './direct-message/service'
+import { registerDirectMessageIpc } from './direct-message/ipc'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -165,6 +167,7 @@ async function bootstrap() {
   const statusResolver = new StatusResolver()
   const updateService = new AccountUpdateService(accountsRootPath)
   const broadcastService = new BroadcastService(repository, sessionLoader, clientManager)
+  const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager)
   const resultWriter = new CheckResultWriter(repository, {
     onWrite: (accounts) => emitAccountsUpdated(accounts)
   })
@@ -222,6 +225,10 @@ async function bootstrap() {
   registerBroadcastIpc({
     broadcastService
   })
+  registerDirectMessageIpc({
+    directMessageService,
+    getMainWindow: () => mainWindow
+  })
   createWindow()
 
   app.on('activate', () => {
@@ -240,4 +247,8 @@ app.whenReady()
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', () => {
+  managedSessionsWatcher?.close()
 })

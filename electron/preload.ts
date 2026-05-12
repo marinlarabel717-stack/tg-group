@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
+import type { AccountRecord, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'Telegram Multi Account Manager',
@@ -81,5 +81,22 @@ contextBridge.exposeInMainWorld('desktopBroadcast', {
     const listener = (_event: Electron.IpcRendererEvent, payload: BroadcastPushScheduleProgress) => callback(payload)
     ipcRenderer.on('broadcast:push-progress', listener)
     return () => ipcRenderer.removeListener('broadcast:push-progress', listener)
+  }
+})
+
+contextBridge.exposeInMainWorld('desktopDirectMessage', {
+  sendMessages: (payload: DirectMessageSendPayload) => ipcRenderer.invoke('direct-message:send', payload),
+  collectUsers: (payload: DirectMessageCollectPayload) => ipcRenderer.invoke('direct-message:collect-users', payload) as Promise<DirectMessageCollectResult>,
+  configureAutoReply: (payload: DirectMessageAutoReplyPayload) => ipcRenderer.invoke('direct-message:configure-auto-reply', payload) as Promise<DirectMessageAutoReplyState>,
+  getAutoReplyState: () => ipcRenderer.invoke('direct-message:get-auto-reply-state') as Promise<DirectMessageAutoReplyState>,
+  onSendProgress: (callback: (payload: DirectMessageSendProgress) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: DirectMessageSendProgress) => callback(payload)
+    ipcRenderer.on('direct-message:send-progress', listener)
+    return () => ipcRenderer.removeListener('direct-message:send-progress', listener)
+  },
+  onAutoReplyEvent: (callback: (payload: DirectMessageAutoReplyEvent) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: DirectMessageAutoReplyEvent) => callback(payload)
+    ipcRenderer.on('direct-message:auto-reply-event', listener)
+    return () => ipcRenderer.removeListener('direct-message:auto-reply-event', listener)
   }
 })

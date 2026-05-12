@@ -1,11 +1,17 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import type {
+  DirectMessageAutoReplyEvent,
+  DirectMessageAutoReplyState,
+  DirectMessageCollectedUserPayload,
+  DirectMessageSendResult
+} from '../types'
 
 export type DirectMessageTabKey = 'send' | 'logs' | 'collect' | 'auto-reply'
-export type DirectMessageMessageType = 'text' | 'image_text'
+export type DirectMessageMessageType = 'text' | 'channel_forward' | 'hidden_channel_forward' | 'postbot_code'
 export type DirectMessageSendMode = 'username' | 'contact' | 'txt'
-export type DirectMessageCollectorMode = 'manual' | 'group_members' | 'comment_users' | 'react_users'
-export type DirectMessagePreviewStatus = 'queued' | 'sent'
+export type DirectMessageCollectorMode = 'manual' | 'contact' | 'group_members' | 'comment_users' | 'react_users'
+export type DirectMessagePreviewStatus = 'queued' | 'sent' | 'failed'
 
 export interface DirectMessageTargetRecord {
   id: string
@@ -22,6 +28,9 @@ export interface DirectMessageCollectedUser {
   normalizedValue: string
   sourceLabel: string
   importedAt: string
+  userId?: string
+  username?: string
+  phone?: string
 }
 
 export interface DirectMessagePreviewItem {
@@ -33,14 +42,19 @@ export interface DirectMessagePreviewItem {
   status: DirectMessagePreviewStatus
   waitSeconds: number
   batchIndex: number
+  errorMessage: string
+  remoteMessageId: number | null
+  sentAt: string | null
 }
 
 export interface DirectMessageRunItem {
   id: string
   targetValue: string
   accountLabel: string
-  status: 'sent'
+  status: 'sent' | 'failed'
   message: string
+  remoteMessageId?: number | null
+  sentAt?: string | null
 }
 
 export interface DirectMessageRun {
@@ -63,6 +77,14 @@ export interface DirectMessageAutoReplyRule {
   cooldownSeconds: number
 }
 
+const EMPTY_AUTO_REPLY_STATE: DirectMessageAutoReplyState = {
+  enabled: false,
+  accountIds: [],
+  activeCount: 0,
+  ruleCount: 0,
+  startedAt: null
+}
+
 interface DirectMessageState {
   activeTab: DirectMessageTabKey
   sendMode: DirectMessageSendMode
@@ -77,6 +99,8 @@ interface DirectMessageState {
   messageText: string
   imageUrl: string
   imageName: string
+  sourceLink: string
+  postbotCode: string
   groupConcurrency: number
   accountPerGroup: number
   intervalSeconds: number
@@ -85,6 +109,12 @@ interface DirectMessageState {
   previewItems: DirectMessagePreviewItem[]
   runs: DirectMessageRun[]
   autoReplyRules: DirectMessageAutoReplyRule[]
+  autoReplyState: DirectMessageAutoReplyState
+  autoReplyEvents: DirectMessageAutoReplyEvent[]
+  sending: boolean
+  collecting: boolean
+  autoReplySyncing: boolean
+  runtimeReady: boolean
   lastActionMessage: string
   setActiveTab: (tab: DirectMessageTabKey) => void
   setSendMode: (mode: DirectMessageSendMode) => void
@@ -95,6 +125,8 @@ interface DirectMessageState {
   setMessageText: (value: string) => void
   setImagePayload: (payload: { url: string; name?: string }) => void
   clearImage: () => void
+  setSourceLink: (value: string) => void
+  setPostbotCode: (value: string) => void
   setGroupConcurrency: (value: number) => void
   setAccountPerGroup: (value: number) => void
   setIntervalSeconds: (value: number) => void
@@ -107,11 +139,15 @@ interface DirectMessageState {
   removeTarget: (targetId: string) => void
   clearTargets: () => void
   collectUsers: (text: string, sourceLabel: string) => { total: number; added: number }
+  collectUsersFromSource: () => Promise<void>
   appendCollectedUsersToTargets: () => void
   clearCollectedUsers: () => void
   generatePreview: (accounts: Array<{ id: number; username?: string; phone?: string; profile?: Record<string, unknown> }>) => void
-  startMockSend: () => void
+  startSend: () => Promise<void>
   clearPreview: () => void
+  initRuntime: () => Promise<void>
+  syncAutoReply: () => Promise<void>
+  clearAutoReplyEvents: () => void
   addAutoReplyRule: () => void
   updateAutoReplyRule: (ruleId: string, patch: Partial<DirectMessageAutoReplyRule>) => void
   removeAutoReplyRule: (ruleId: string) => void
@@ -124,9 +160,7 @@ function createId(prefix: string) {
 function normalizeTargetValue(input: string) {
   const value = input.trim()
   if (!value) return ''
-  if (/^@?[a-zA-Z0-9_]{5,}$/i.test(value)) {
-    return `@${value.replace(/^@+/, '').toLowerCase()}`
-  }
+  if (/^@?[a-zA-Z0-9_]{5,}$/i.test(value)) return `@${value.replace(/^@+/, '').toLowerCase()}`
   return value.toLowerCase()
 }
 
@@ -187,6 +221,65 @@ function createDefaultAutoReplyRule(): DirectMessageAutoReplyRule {
   }
 }
 
+function parsePostbotCode(code: string) {
+  const raw = code.trim()
+  if (!raw) return { text: '', imageUrl: '', buttonText: '', buttonUrl: '' }
+
+  const normalized = raw.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim()
+  try {
+    const parsed = JSON.parse(normalized) as Record<string, unknown>
+    const text = [parsed.text, parsed.message, parsed.caption, parsed.content].find((item) => typeof item === 'string' && item.trim())
+    const imageUrl = [parsed.imageUrl, parsed.image, parsed.photo, parsed.media].find((item) => typeof item === 'string' && item.trim())
+    const buttonText = [parsed.buttonText, parsed.button_title, parsed.buttonLabel].find((item) => typeof item === 'string' && item.trim())
+    const buttonUrl = [parsed.buttonUrl, parsed.url, parsed.link].find((item) => typeof item === 'string' && item.trim())
+    return {
+      text: typeof text === 'string' ? text.trim() : '',
+      imageUrl: typeof imageUrl === 'string' ? imageUrl.trim() : '',
+      buttonText: typeof buttonText === 'string' ? buttonText.trim() : '',
+      buttonUrl: typeof buttonUrl === 'string' ? buttonUrl.trim() : ''
+    }
+  } catch {
+    return { text: normalized, imageUrl: '', buttonText: '', buttonUrl: '' }
+  }
+}
+
+function mapCollectedUsers(items: DirectMessageCollectedUserPayload[]) {
+  return items.map((item) => ({
+    id: createId('dm_collect'),
+    value: item.value,
+    normalizedValue: item.normalizedValue,
+    sourceLabel: item.sourceLabel,
+    importedAt: new Date().toISOString(),
+    userId: item.userId,
+    username: item.username,
+    phone: item.phone
+  }))
+}
+
+function buildRunFromResult(result: DirectMessageSendResult, state: Pick<DirectMessageState, 'selectedAccountIds' | 'previewItems'>): DirectMessageRun {
+  const previewById = new Map(state.previewItems.map((item) => [item.id, item]))
+  return {
+    id: createId('dm_run'),
+    createdAt: new Date().toISOString(),
+    total: result.total,
+    sent: result.successCount,
+    failed: result.failedCount,
+    accountCount: state.selectedAccountIds.length,
+    summary: result.message,
+    items: result.items.map((item) => ({
+      id: createId('dm_run_item'),
+      targetValue: item.targetValue,
+      accountLabel: previewById.get(item.previewItemId)?.accountLabel || '未知账号',
+      status: item.status,
+      message: item.errorMessage || (item.status === 'sent' ? '已成功发出私信。' : '发送失败。'),
+      remoteMessageId: item.remoteMessageId,
+      sentAt: item.sentAt
+    }))
+  }
+}
+
+let subscribed = false
+
 export const useDirectMessageStore = create<DirectMessageState>()(
   persist(
     (set, get) => ({
@@ -203,6 +296,8 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       messageText: '',
       imageUrl: '',
       imageName: '',
+      sourceLink: '',
+      postbotCode: '',
       groupConcurrency: 3,
       accountPerGroup: 5,
       intervalSeconds: 25,
@@ -211,6 +306,12 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       previewItems: [],
       runs: [],
       autoReplyRules: [createDefaultAutoReplyRule()],
+      autoReplyState: EMPTY_AUTO_REPLY_STATE,
+      autoReplyEvents: [],
+      sending: false,
+      collecting: false,
+      autoReplySyncing: false,
+      runtimeReady: false,
       lastActionMessage: '先选账号，再导入目标用户。',
       setActiveTab: (tab) => set({ activeTab: tab }),
       setSendMode: (mode) => set({ sendMode: mode }),
@@ -221,10 +322,12 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       setMessageText: (value) => set({ messageText: value }),
       setImagePayload: ({ url, name }) => set({ imageUrl: url, imageName: name || '', previewItems: [] }),
       clearImage: () => set({ imageUrl: '', imageName: '', previewItems: [] }),
+      setSourceLink: (value) => set({ sourceLink: value, previewItems: [] }),
+      setPostbotCode: (value) => set({ postbotCode: value, previewItems: [] }),
       setGroupConcurrency: (value) => set({ groupConcurrency: Math.max(1, value || 1) }),
-      setAccountPerGroup: (value) => set({ accountPerGroup: Math.max(1, value || 1) }),
-      setIntervalSeconds: (value) => set({ intervalSeconds: Math.max(5, value || 5) }),
-      setDedupeEnabled: (value) => set({ dedupeEnabled: value }),
+      setAccountPerGroup: (value) => set({ accountPerGroup: Math.max(1, value || 1), previewItems: [] }),
+      setIntervalSeconds: (value) => set({ intervalSeconds: Math.max(5, value || 5), previewItems: [] }),
+      setDedupeEnabled: (value) => set({ dedupeEnabled: value, previewItems: [] }),
       setAutoReplyEnabled: (value) => set({ autoReplyEnabled: value }),
       setSelectedAccounts: (ids) => set((state) => ({
         selectedAccountIds: Array.from(new Set(ids)),
@@ -287,6 +390,48 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         }))
         return { total: tokens.length, added: added.length }
       },
+      collectUsersFromSource: async () => {
+        const state = get()
+        if (!window.desktopDirectMessage) {
+          set({ lastActionMessage: '当前环境没有接入私信采集能力。' })
+          return
+        }
+        const accountId = state.selectedAccountId ?? state.selectedAccountIds[0] ?? null
+        if (!accountId) {
+          set({ lastActionMessage: '先选一个账号，再去采集用户。' })
+          return
+        }
+        if (state.collectorMode === 'manual') {
+          set({ lastActionMessage: '手工模式直接贴名单后点“识别名单”就行，不走 Telegram 实时采集。' })
+          return
+        }
+        if ((state.collectorMode === 'group_members' || state.collectorMode === 'comment_users' || state.collectorMode === 'react_users') && !state.collectorInput.trim()) {
+          set({ lastActionMessage: '先把群链接或消息链接贴上，再开始采集。' })
+          return
+        }
+
+        set({ collecting: true, lastActionMessage: '正在读取 Telegram 里的目标用户，请稍候...' })
+        try {
+          const result = await window.desktopDirectMessage.collectUsers({
+            accountId,
+            mode: state.collectorMode,
+            source: state.collectorInput.trim(),
+            limit: 200
+          })
+          const existing = new Set(state.collectedUsers.map((item) => item.normalizedValue))
+          const merged = [...mapCollectedUsers(result.items).filter((item) => !existing.has(item.normalizedValue)), ...state.collectedUsers]
+          set({
+            collecting: false,
+            collectedUsers: merged,
+            lastActionMessage: result.message
+          })
+        } catch (error) {
+          set({
+            collecting: false,
+            lastActionMessage: error instanceof Error ? error.message : String(error)
+          })
+        }
+      },
       appendCollectedUsersToTargets: () => {
         const state = get()
         if (state.collectedUsers.length === 0) {
@@ -317,8 +462,16 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           set({ previewItems: [], lastActionMessage: '先导入可用目标用户，再生成私信预览。' })
           return
         }
-        if (!state.messageText.trim() && !(state.messageType === 'image_text' && state.imageUrl.trim())) {
-          set({ previewItems: [], lastActionMessage: '先把私信内容填好，再生成发送预览。' })
+        if (state.messageType === 'text' && !state.messageText.trim()) {
+          set({ previewItems: [], lastActionMessage: '文本直发要先填内容。' })
+          return
+        }
+        if ((state.messageType === 'channel_forward' || state.messageType === 'hidden_channel_forward') && !state.sourceLink.trim()) {
+          set({ previewItems: [], lastActionMessage: '先把频道消息链接填上。' })
+          return
+        }
+        if (state.messageType === 'postbot_code' && !state.postbotCode.trim()) {
+          set({ previewItems: [], lastActionMessage: '先把 postbot 生成代码填上。' })
           return
         }
         const previewItems = usableTargets.map((target, index) => {
@@ -332,7 +485,10 @@ export const useDirectMessageStore = create<DirectMessageState>()(
             accountLabel: account ? readAccountLabel(account) : '未分配账号',
             status: 'queued' as const,
             waitSeconds: batchIndex * state.intervalSeconds,
-            batchIndex
+            batchIndex,
+            errorMessage: '',
+            remoteMessageId: null,
+            sentAt: null
           }
         })
         set({
@@ -340,37 +496,125 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           lastActionMessage: `已生成 ${previewItems.length} 条私信预览，当前按每 ${state.intervalSeconds} 秒一批往后排。`
         })
       },
-      startMockSend: () => {
+      startSend: async () => {
         const state = get()
+        if (!window.desktopDirectMessage) {
+          set({ lastActionMessage: '当前环境没有接入真实私信发送能力。' })
+          return
+        }
         if (state.previewItems.length === 0) {
           set({ lastActionMessage: '先生成发送预览，再开始发送。' })
           return
         }
-        const items = state.previewItems.map((item) => ({
-          id: createId('dm_run_item'),
-          targetValue: item.targetValue,
-          accountLabel: item.accountLabel,
-          status: 'sent' as const,
-          message: '已进入当前工作台发送队列，下一步再接 Telegram 实际出站。'
-        }))
-        const run: DirectMessageRun = {
-          id: createId('dm_run'),
-          createdAt: new Date().toISOString(),
-          total: items.length,
-          sent: items.length,
-          failed: 0,
-          accountCount: state.selectedAccountIds.length,
-          summary: `本次按 ${state.selectedAccountIds.length} 个账号分配了 ${items.length} 个私信目标。`,
-          items
+        set({ sending: true, lastActionMessage: '正在把私信发到 Telegram，请稍候...' })
+        try {
+          const result = await window.desktopDirectMessage.sendMessages({
+            items: state.previewItems.map((item) => ({
+              id: item.id,
+              targetId: item.targetId,
+              targetValue: item.targetValue,
+              accountId: item.accountId,
+              waitSeconds: item.waitSeconds,
+              batchIndex: item.batchIndex,
+              status: item.status,
+              errorMessage: item.errorMessage,
+              remoteMessageId: item.remoteMessageId,
+              sentAt: item.sentAt
+            })),
+            messageType: state.messageType,
+            messageText: state.messageText,
+            imageUrl: state.imageUrl,
+            sourceLink: state.sourceLink,
+            postbotCode: state.postbotCode
+          })
+          const run = buildRunFromResult(result, state)
+          set((current) => ({
+            sending: false,
+            targets: result.items.some((item) => item.status === 'sent')
+              ? rebuildTargetRecords(current.targets
+                .filter((target) => !result.items.some((item) => item.status === 'sent' && item.targetId === target.id))
+                .map((target) => ({ value: target.value, source: target.source })))
+              : current.targets,
+            runs: [run, ...current.runs],
+            activeTab: 'logs',
+            lastActionMessage: result.items.some((item) => item.status === 'sent')
+              ? `${result.message} 发送成功的目标已自动从名单里移除。`
+              : result.message
+          }))
+        } catch (error) {
+          set({
+            sending: false,
+            lastActionMessage: error instanceof Error ? error.message : String(error)
+          })
         }
-        set({
-          previewItems: state.previewItems.map((item) => ({ ...item, status: 'sent' })),
-          runs: [run, ...state.runs],
-          activeTab: 'logs',
-          lastActionMessage: `已把 ${items.length} 条私信加入当前发送队列。`
-        })
       },
       clearPreview: () => set({ previewItems: [], lastActionMessage: '当前私信预览已清空。' }),
+      initRuntime: async () => {
+        if (!window.desktopDirectMessage || subscribed) {
+          if (!window.desktopDirectMessage) set({ runtimeReady: false })
+          return
+        }
+        subscribed = true
+        window.desktopDirectMessage.onSendProgress((payload) => {
+          set((state) => ({
+            previewItems: state.previewItems.map((item) => item.id === payload.item.previewItemId ? {
+              ...item,
+              status: payload.item.status,
+              errorMessage: payload.item.errorMessage,
+              remoteMessageId: payload.item.remoteMessageId,
+              sentAt: payload.item.sentAt
+            } : item),
+            lastActionMessage: payload.message
+          }))
+        })
+        window.desktopDirectMessage.onAutoReplyEvent((payload) => {
+          set((state) => ({
+            autoReplyEvents: [payload, ...state.autoReplyEvents].slice(0, 100),
+            lastActionMessage: payload.status === 'replied'
+              ? `自动回复已发送：${payload.senderLabel}`
+              : `自动回复失败：${payload.errorMessage || '未知错误'}`
+          }))
+        })
+        try {
+          const autoReplyState = await window.desktopDirectMessage.getAutoReplyState()
+          set({ runtimeReady: true, autoReplyState })
+        } catch {
+          set({ runtimeReady: true })
+        }
+      },
+      syncAutoReply: async () => {
+        const state = get()
+        if (!window.desktopDirectMessage) {
+          set({ lastActionMessage: '当前环境没有接入自动回复能力。' })
+          return
+        }
+        set({ autoReplySyncing: true, lastActionMessage: '正在同步自动回复规则，请稍候...' })
+        try {
+          const autoReplyState = await window.desktopDirectMessage.configureAutoReply({
+            accountIds: state.selectedAccountIds,
+            enabled: state.autoReplyEnabled,
+            rules: state.autoReplyRules.map((rule) => ({
+              id: rule.id,
+              keyword: rule.keyword,
+              replyText: rule.replyText,
+              enabled: rule.enabled,
+              matchMode: rule.matchMode,
+              cooldownSeconds: rule.cooldownSeconds
+            }))
+          })
+          set({
+            autoReplySyncing: false,
+            autoReplyState,
+            lastActionMessage: autoReplyState.enabled ? `自动回复已在 ${autoReplyState.activeCount} 个账号上启用。` : '自动回复已关闭。'
+          })
+        } catch (error) {
+          set({
+            autoReplySyncing: false,
+            lastActionMessage: error instanceof Error ? error.message : String(error)
+          })
+        }
+      },
+      clearAutoReplyEvents: () => set({ autoReplyEvents: [] }),
       addAutoReplyRule: () => set((state) => ({ autoReplyRules: [...state.autoReplyRules, createDefaultAutoReplyRule()] })),
       updateAutoReplyRule: (ruleId, patch) => set((state) => ({
         autoReplyRules: state.autoReplyRules.map((item) => item.id === ruleId ? { ...item, ...patch } : item)
@@ -381,8 +625,49 @@ export const useDirectMessageStore = create<DirectMessageState>()(
     }),
     {
       name: 'tg-group-direct-message-store',
-      version: 1,
-      storage: createJSONStorage(() => window.localStorage)
+      version: 3,
+      storage: createJSONStorage(() => window.localStorage),
+      migrate: (persistedState) => {
+        const state = persistedState as Partial<DirectMessageState> | undefined
+        return {
+          activeTab: state?.activeTab || 'send',
+          sendMode: state?.sendMode || 'username',
+          messageType: state?.messageType || 'text',
+          collectorMode: state?.collectorMode || 'manual',
+          selectedAccountIds: state?.selectedAccountIds || [],
+          selectedAccountId: state?.selectedAccountId || null,
+          targetInput: state?.targetInput || '',
+          collectorInput: state?.collectorInput || '',
+          targets: state?.targets || [],
+          collectedUsers: state?.collectedUsers || [],
+          messageText: state?.messageText || '',
+          imageUrl: state?.imageUrl || '',
+          imageName: state?.imageName || '',
+          sourceLink: state?.sourceLink || '',
+          postbotCode: state?.postbotCode || '',
+          groupConcurrency: state?.groupConcurrency || 3,
+          accountPerGroup: state?.accountPerGroup || 5,
+          intervalSeconds: state?.intervalSeconds || 25,
+          dedupeEnabled: typeof state?.dedupeEnabled === 'boolean' ? state.dedupeEnabled : true,
+          autoReplyEnabled: typeof state?.autoReplyEnabled === 'boolean' ? state.autoReplyEnabled : false,
+          previewItems: (state?.previewItems || []).map((item) => ({
+            ...item,
+            status: item.status === 'failed' ? 'failed' : item.status === 'sent' ? 'sent' : 'queued',
+            errorMessage: item.errorMessage || '',
+            remoteMessageId: item.remoteMessageId ?? null,
+            sentAt: item.sentAt ?? null
+          })),
+          runs: state?.runs || [],
+          autoReplyRules: state?.autoReplyRules || [createDefaultAutoReplyRule()],
+          autoReplyState: EMPTY_AUTO_REPLY_STATE,
+          autoReplyEvents: [],
+          sending: false,
+          collecting: false,
+          autoReplySyncing: false,
+          runtimeReady: false,
+          lastActionMessage: state?.lastActionMessage || '先选账号，再导入目标用户。'
+        }
+      }
     }
   )
 )
