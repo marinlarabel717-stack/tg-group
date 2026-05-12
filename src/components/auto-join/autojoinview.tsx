@@ -120,15 +120,6 @@ function buildAccountSummary(snapshot: AutoJoinTaskSnapshot | null) {
   return Array.from(map.values()).sort((a, b) => b.total - a.total || a.accountLabel.localeCompare(b.accountLabel, 'zh-CN'))
 }
 
-function ProgressCard({ label, value, className }: { label: string; value: number; className: string }) {
-  return (
-    <div className={`rounded-[10px] px-2 py-2 text-center ${className}`}>
-      <div className="text-sm font-semibold">{value}</div>
-      <div>{label}</div>
-    </div>
-  )
-}
-
 const TabBar = memo(function TabBar() {
   const activeTab = useAutoJoinStore((state) => state.activeTab)
   const setActiveTab = useAutoJoinStore((state) => state.setActiveTab)
@@ -445,53 +436,81 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const accountSummary = useMemo(() => buildAccountSummary(latestSnapshot), [latestSnapshot])
   const pendingCount = latestTask ? Math.max(0, (latestTask.total || 0) - (latestTask.completed || 0)) : 0
   const [accountSummaryExpanded, setAccountSummaryExpanded] = useState(false)
+  const statusTitle = latestTask
+    ? latestTask.status === 'running'
+      ? '本次加群进行中'
+      : latestTask.status === 'stopped'
+        ? '本次加群已停止'
+        : '本次加群已完成'
+    : '本次加群总计'
 
   return (
-    <GlassPanel className="bg-card" header={<div className="flex items-center justify-between gap-3"><div><div className="text-base font-semibold text-white">加群日志</div><div className="mt-1 text-sm text-textMuted">成功绿色，失败红色，需要审核黄色。</div></div><button type="button" onClick={clearLogs} className="rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button></div>}>
-      <div className="rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '这里会显示自动加群过程里的最新状态。'}</div>
+    <GlassPanel className="bg-card">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-base font-semibold text-white">加群日志</div>
+        <button type="button" onClick={clearLogs} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
+      </div>
 
-      {latestTask ? (
-        <div className="mt-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 text-xs text-slate-200">
-            <ProgressCard label="成功" value={latestTask.successCount ?? 0} className="bg-emerald-400/10 text-emerald-300" />
-            <ProgressCard label="审核" value={latestTask.requestedCount ?? 0} className="bg-amber-400/10 text-amber-200" />
-            <ProgressCard label="失败" value={latestTask.failedCount ?? 0} className="bg-rose-400/10 text-rose-300" />
-            <ProgressCard label="待加入" value={pendingCount} className="bg-sky-400/10 text-sky-300" />
-          </div>
+      <div className="mt-4 rounded-[16px] bg-panel/70 px-4 py-4">
+        <div className="text-sm font-semibold text-white">{statusTitle}</div>
+        <div className="mt-2 text-sm text-textMuted">{lastActionMessage || '这里会显示自动加群过程里的最新状态。'}</div>
 
-          {latestSnapshot ? (
-            <div className="rounded-[12px] bg-white/[0.04]">
-              <button
-                type="button"
-                onClick={() => setAccountSummaryExpanded((value) => !value)}
-                className="flex w-full items-center justify-between px-3 py-3 text-left text-sm text-white"
-              >
-                <span>各账号群组数量</span>
-                <span className="inline-flex items-center gap-1 text-textMuted">{accountSummaryExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}{accountSummary.length}</span>
-              </button>
+        {latestTask ? (
+          <>
+            <div className="mt-3 grid gap-3 md:grid-cols-4">
+              <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
+                <div className="text-xs tracking-[0.16em] text-emerald-200/80">成功</div>
+                <div className="mt-2 text-2xl font-semibold text-emerald-300">{latestTask.successCount ?? 0}</div>
+              </div>
+              <div className="rounded-[14px] bg-amber-400/8 px-4 py-3">
+                <div className="text-xs tracking-[0.16em] text-amber-200/80">审核</div>
+                <div className="mt-2 text-2xl font-semibold text-amber-200">{latestTask.requestedCount ?? 0}</div>
+              </div>
+              <div className="rounded-[14px] bg-rose-400/8 px-4 py-3">
+                <div className="text-xs tracking-[0.16em] text-rose-200/80">失败</div>
+                <div className="mt-2 text-2xl font-semibold text-rose-300">{latestTask.failedCount ?? 0}</div>
+              </div>
+              <div className="rounded-[14px] bg-sky-400/8 px-4 py-3">
+                <div className="text-xs tracking-[0.16em] text-sky-200/80">待加入</div>
+                <div className="mt-2 text-2xl font-semibold text-sky-300">{pendingCount}</div>
+              </div>
+            </div>
 
-              {accountSummaryExpanded ? (
-                <div className="space-y-2 border-t border-white/8 px-3 py-3 text-xs text-slate-200">
-                  {accountSummary.map((item) => (
-                    <div key={item.accountLabel} className="rounded-[10px] bg-white/[0.04] px-3 py-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="truncate text-white">{item.accountLabel}</div>
-                        <div className="text-textMuted">共 {item.total} 个</div>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-emerald-300">成功 {item.success}</span>
-                        <span className="rounded-full bg-amber-400/10 px-2 py-1 text-amber-200">审核 {item.requested}</span>
-                        <span className="rounded-full bg-white/[0.06] px-2 py-1 text-slate-200">已在群 {item.already}</span>
-                        <span className="rounded-full bg-rose-400/10 px-2 py-1 text-rose-300">失败 {item.failed}</span>
+            {latestSnapshot ? (
+              <div className="mt-4 rounded-[14px] bg-black/10 px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-white">各账号群组数量</div>
+                  {accountSummary.length > 3 ? (
+                    <button
+                      type="button"
+                      onClick={() => setAccountSummaryExpanded((value) => !value)}
+                      className="inline-flex items-center gap-1 text-sm text-violet-300 transition hover:text-violet-200"
+                    >
+                      {accountSummaryExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                      {accountSummaryExpanded ? '收起' : `查看全部（${accountSummary.length}）`}
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {(accountSummaryExpanded ? accountSummary : accountSummary.slice(0, 3)).map((item) => (
+                    <div key={item.accountLabel} className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] bg-white/[0.03] px-3 py-2 text-sm">
+                      <span className="select-text text-white">{item.accountLabel}</span>
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
+                        <span className="text-slate-200">总计 {item.total}</span>
+                        <span className="text-emerald-300">成功 {item.success}</span>
+                        <span className="text-amber-200">审核 {item.requested}</span>
+                        <span className="text-slate-200">已在群 {item.already}</span>
+                        <span className="text-rose-300">失败 {item.failed}</span>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </div>
 
       <div className="mt-4 space-y-2 font-mono text-sm">
         {logs.length === 0 ? <div className="text-sm text-textMuted">还没有加群日志。</div> : null}
