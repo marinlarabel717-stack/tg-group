@@ -1830,17 +1830,17 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
 
   return (
     <GlassPanel className="bg-card min-h-[720px]">
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-stretch gap-3">
         <button
           type="button"
           onClick={openAccountPicker}
-          className="min-w-[220px] rounded-[16px] bg-panel px-4 py-3 text-left transition hover:bg-white/[0.05]"
+          className="flex h-[76px] min-w-[220px] flex-col justify-center rounded-[16px] bg-panel px-4 text-left shadow-none transition hover:bg-white/[0.05]"
         >
           <div className="text-xs text-textMuted">选择账号</div>
           <div className="mt-2 text-sm font-medium text-white">{selectedAccount ? readAccountNickname(selectedAccount) : '点击选择账号'}</div>
           <div className="mt-1 text-xs text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '—'} · ${formatAccountStatus(selectedAccount.status)}` : '点开弹窗选择账号'}</div>
         </button>
-        <label className="min-w-[260px] rounded-[16px] bg-panel px-4 py-3">
+        <label className="flex h-[76px] min-w-[260px] flex-col justify-center rounded-[16px] bg-panel px-4 shadow-none">
           <div className="text-xs text-textMuted">选择群</div>
           <select
             value={selectedGroupRef}
@@ -1863,7 +1863,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
           type="button"
           onClick={() => setRefreshNonce((value) => value + 1)}
           disabled={typeof selectedAccountId !== 'number'}
-          className="flex h-[52px] items-center gap-2 rounded-[14px] bg-white/[0.06] px-5 text-sm font-medium text-white transition hover:bg-white/[0.1]"
+          className="flex h-[76px] min-w-[164px] items-center gap-2 rounded-[16px] bg-panel px-5 text-sm font-medium text-white shadow-none transition hover:bg-white/[0.05]"
         >
           <RefreshCw size={16} />
           刷新当前内容
@@ -1872,7 +1872,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
           type="button"
           onClick={() => void handleDelete(selectedMessageIds)}
           disabled={deleting || selectedMessageIds.length === 0}
-          className="flex h-[52px] items-center gap-2 rounded-[14px] bg-rose-400/14 px-5 text-sm font-semibold text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-[76px] min-w-[164px] items-center gap-2 rounded-[16px] bg-panel px-5 text-sm font-semibold text-rose-200 shadow-none transition hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Trash2 size={16} />
           删除已选（{selectedMessageIds.length}）
