@@ -51,7 +51,7 @@ function FilterSelect({
 export const TableFilters = memo(function TableFilters(props: TableFiltersProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <div className="relative min-w-[280px] flex-1">
+      <div className="relative w-full min-w-[220px] md:w-[320px] xl:w-[380px]">
         <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" size={16} />
         <input
           value={props.search}

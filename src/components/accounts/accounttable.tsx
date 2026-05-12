@@ -26,6 +26,7 @@ import * as FlagIcons from 'country-flag-icons/react/3x2'
 import type { AccountRecord, CheckAction } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
+import { AccountSummaryCards } from './accountsummarycards'
 import { TableFilters } from './tablefilters'
 import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
@@ -34,8 +35,8 @@ import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTi
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '56px 84px 176px 120px 124px 96px 184px 132px 228px'
-const ACCOUNT_GRID_WIDTH = 1200
+const ACCOUNT_GRID_TEMPLATE = '46px 68px 176px 120px 124px 96px 184px 132px 228px'
+const ACCOUNT_GRID_WIDTH = 1174
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -496,10 +497,10 @@ export const AccountTable = memo(function AccountTable() {
   const bulkMenuRef = useRef<HTMLDivElement | null>(null)
 
   const baseData = useMemo(
-    () => filterAccounts(accounts, { search: deferredSearch, statusFilter, countryFilter }),
-    [accounts, deferredSearch, statusFilter, countryFilter]
+    () => filterAccounts(accounts, { search: deferredSearch, statusFilter: 'all', countryFilter }),
+    [accounts, deferredSearch, countryFilter]
   )
-  const data = useMemo(
+  const scopedData = useMemo(
     () =>
       baseData.filter((account) => {
         if (sourceFilter && account.profileSource !== sourceFilter) return false
@@ -507,6 +508,10 @@ export const AccountTable = memo(function AccountTable() {
         return true
       }),
     [baseData, sourceFilter, proxyFilter]
+  )
+  const data = useMemo(
+    () => filterAccounts(scopedData, { search: '', statusFilter, countryFilter: '' }),
+    [scopedData, statusFilter]
   )
 
   useEffect(() => {
@@ -762,6 +767,11 @@ export const AccountTable = memo(function AccountTable() {
         }
       })
 
+      options.unshift(
+        { label: '超时/未检测', value: 'timeout-group' as AccountStatusFilter },
+        { label: '双向', value: 'limited-group' as AccountStatusFilter }
+      )
+
       if (accounts.some((item) => item.profile?.is_premium)) {
         options.unshift({ label: '会员', value: 'premium' as AccountStatusFilter })
       }
@@ -784,6 +794,20 @@ export const AccountTable = memo(function AccountTable() {
 
   const selectedCount = selectedIds.length
   const totalCount = data.length
+  const summaryCards = useMemo(() => {
+    const aliveCount = scopedData.filter((account) => account.status === 'alive').length
+    const limitedCount = scopedData.filter((account) => account.status === 'limited' || account.status === 'temporary_limited').length
+    const frozenCount = scopedData.filter((account) => account.status === 'frozen').length
+    const timeoutCount = scopedData.filter((account) => account.status === 'timeout' || account.status === 'unknown' || account.status === 'checking').length
+
+    return [
+      { key: 'all' as AccountStatusFilter, label: '总数量', count: scopedData.length },
+      { key: 'alive' as AccountStatusFilter, label: '无限制', count: aliveCount },
+      { key: 'limited-group' as AccountStatusFilter, label: '双向', count: limitedCount },
+      { key: 'frozen' as AccountStatusFilter, label: '冻结', count: frozenCount },
+      { key: 'timeout-group' as AccountStatusFilter, label: '超时/未检测', count: timeoutCount }
+    ]
+  }, [scopedData])
 
   useEffect(() => {
     if (selectedCount > 0) return
@@ -910,6 +934,12 @@ export const AccountTable = memo(function AccountTable() {
 
   return (
     <div className="space-y-4 min-w-0">
+      <AccountSummaryCards
+        items={summaryCards}
+        activeFilter={statusFilter}
+        onSelect={setStatusFilter}
+      />
+
       <TableToolbar
         selectedCount={selectedCount}
         totalCount={totalCount}

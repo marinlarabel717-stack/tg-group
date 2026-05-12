@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { formatCountryDisplay } from '../lib/ui-text'
 import type { AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload } from '../types'
 
-export type AccountStatusFilter = 'all' | AccountStatus | 'premium'
+export type AccountStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
 
 interface ImportResultDialogState {
   open: boolean
@@ -469,6 +469,10 @@ export function filterAccounts(accounts: AccountRecord[], filters: {
     if (filters.statusFilter !== 'all') {
       if (filters.statusFilter === 'premium') {
         if (!account.profile?.is_premium) return false
+      } else if (filters.statusFilter === 'limited-group') {
+        if (account.status !== 'limited' && account.status !== 'temporary_limited') return false
+      } else if (filters.statusFilter === 'timeout-group') {
+        if (account.status !== 'timeout' && account.status !== 'unknown' && account.status !== 'checking') return false
       } else if (account.status !== filters.statusFilter) {
         return false
       }
