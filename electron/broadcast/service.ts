@@ -254,6 +254,16 @@ export class BroadcastService {
     const clients = new Map<number, TelegramClient>()
     const entityCache = new Map<string, unknown>()
     const pendingItemsByAccount = new Map<number, BroadcastPushSchedulePayload['items']>()
+    let successCount = 0
+    let failedCount = 0
+    let completedCount = 0
+
+    const reportProgress = (item: BroadcastPushScheduleResultItem) => {
+      completedCount += 1
+      if (item.status === 'scheduled') successCount += 1
+      if (item.status === 'failed') failedCount += 1
+      this.emitProgress(payload.items.length, completedCount, successCount, failedCount, item, onProgress)
+    }
 
     try {
       for (const item of payload.items) {
@@ -270,7 +280,7 @@ export class BroadcastService {
             creativeId: item.creativeId
           }
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
 
@@ -282,61 +292,61 @@ export class BroadcastService {
         if (!group) {
           const resultItem = this.createFailedItem(item, '目标群不存在，请重新生成预览')
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
         if (!group.enabled) {
           const resultItem = this.createFailedItem(item, `目标群 ${group.title} 当前已停用`)
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
         if (!creative) {
           const resultItem = this.createFailedItem(item, '文案不存在，请重新生成预览')
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
         if (!creative.enabled) {
           const resultItem = this.createFailedItem(item, `文案 ${creative.title} 当前已停用`)
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
         if (!account) {
           const resultItem = this.createFailedItem(item, '发送账号不存在，请检查账号列表')
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
         if (!Number.isFinite(scheduledAt.getTime())) {
           const resultItem = this.createFailedItem(item, '排程时间格式不正确')
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
         if (scheduledAt.getTime() <= Date.now() + MIN_SCHEDULE_AHEAD_MS) {
           const resultItem = this.createFailedItem(item, '排程时间太近或已过期，请重新生成未来时间段的计划')
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
         if (creative.kind === 'channel_forward' && !creative.sourceLink.trim()) {
           const resultItem = this.createFailedItem(item, '频道消息链接还没填，请先贴一条频道消息链接')
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
         if (creative.kind !== 'channel_forward' && !creative.text.trim() && !creative.imageUrl.trim()) {
           const resultItem = this.createFailedItem(item, '文案正文和图片不能同时为空')
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
         if ((item.repeatPeriodSeconds ?? 0) > 0 && !account.profile?.is_premium) {
           const resultItem = this.createFailedItem(item, '当前账号不是会员号，不能写入 Telegram 重复定时发送')
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
 
@@ -344,7 +354,7 @@ export class BroadcastService {
         if (!groupRef) {
           const resultItem = this.createFailedItem(item, `目标群 ${group.title} 缺少可用的 @username、私密链接或群链接`)
           results.push(resultItem)
-          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          reportProgress(resultItem)
           continue
         }
 
@@ -365,7 +375,7 @@ export class BroadcastService {
           if (!creative || !group) {
             const resultItem = this.createFailedItem(item, !group ? '目标群不存在，请重新生成预览' : '文案不存在，请重新生成预览')
             results.push(resultItem)
-            this.emitProgress(results, payload.items.length, resultItem, onProgress)
+            reportProgress(resultItem)
             continue
           }
 
@@ -373,7 +383,7 @@ export class BroadcastService {
           if (!groupRef) {
             const resultItem = this.createFailedItem(item, `目标群 ${group.title} 缺少可用的 @username、私密链接或群链接`)
             results.push(resultItem)
-            this.emitProgress(results, payload.items.length, resultItem, onProgress)
+            reportProgress(resultItem)
             continue
           }
 
@@ -461,11 +471,11 @@ export class BroadcastService {
               creativeId: item.creativeId
             }
             results.push(resultItem)
-            this.emitProgress(results, payload.items.length, resultItem, onProgress)
+            reportProgress(resultItem)
           } catch (error) {
             const resultItem = this.createFailedItem(item, formatBroadcastError(error))
             results.push(resultItem)
-            this.emitProgress(results, payload.items.length, resultItem, onProgress)
+            reportProgress(resultItem)
           }
         }
       }))
@@ -473,8 +483,6 @@ export class BroadcastService {
       await Promise.all(Array.from(clients.values()).map((client) => this.clientManager.destroyClient(client)))
     }
 
-    const successCount = results.filter((item) => item.status === 'scheduled').length
-    const failedCount = results.filter((item) => item.status === 'failed').length
     const message = results.length === 0
       ? '当前没有可写入的排程'
       : failedCount === 0
@@ -534,21 +542,21 @@ export class BroadcastService {
   }
 
   private emitProgress(
-    results: BroadcastPushScheduleResultItem[],
     total: number,
+    completed: number,
+    successCount: number,
+    failedCount: number,
     item: BroadcastPushScheduleResultItem,
     onProgress?: (payload: BroadcastPushScheduleProgress) => void
   ) {
     if (!onProgress) return
-    const successCount = results.filter((entry) => entry.status === 'scheduled').length
-    const failedCount = results.filter((entry) => entry.status === 'failed').length
     onProgress({
       total,
-      completed: results.length,
+      completed,
       successCount,
       failedCount,
       item,
-      message: `正在写入 ${results.length}/${total}，已写入 ${successCount} 条，失败 ${failedCount} 条。`
+      message: `正在写入 ${completed}/${total}，已写入 ${successCount} 条，失败 ${failedCount} 条。`
     })
   }
 

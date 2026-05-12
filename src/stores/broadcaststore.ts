@@ -696,20 +696,63 @@ export const useBroadcastStore = create<BroadcastState>()(
           return
         }
 
-        const disposeProgress = window.desktopBroadcast?.onPushProgress?.((progress) => {
+        let flushTimer: ReturnType<typeof setTimeout> | null = null
+        const pendingProgressMap = new Map<string, { status: BroadcastPreviewStatus; errorMessage: string; remoteMessageId?: number | null; syncedAt?: string | null }>()
+        let latestProgressMessage = ''
+        let latestFailedCount = 0
+
+        const flushProgress = () => {
+          flushTimer = null
+          if (pendingProgressMap.size === 0 && !latestProgressMessage) return
+          const updateMap = new Map(pendingProgressMap)
+          pendingProgressMap.clear()
+          const nextMessage = latestProgressMessage
+          const nextFailedCount = latestFailedCount
+
           set((current) => ({
-            previewItems: current.previewItems.map((item) => item.id === progress.item.previewItemId
-              ? {
-                ...item,
-                status: progress.item.status,
-                errorMessage: progress.item.errorMessage,
-                remoteMessageId: progress.item.remoteMessageId,
-                syncedAt: progress.item.syncedAt
-              }
-              : item),
-            lastActionMessage: progress.message,
-            errorMessage: progress.failedCount > 0 ? `已有 ${progress.failedCount} 条写入失败，可直接看右侧报错逐条修。` : ''
+            previewItems: updateMap.size === 0
+              ? current.previewItems
+              : current.previewItems.map((item) => {
+                const matched = updateMap.get(item.id)
+                if (!matched) return item
+                return {
+                  ...item,
+                  status: matched.status,
+                  errorMessage: matched.errorMessage,
+                  remoteMessageId: matched.remoteMessageId,
+                  syncedAt: matched.syncedAt
+                }
+              }),
+            lastActionMessage: nextMessage || current.lastActionMessage,
+            errorMessage: nextFailedCount > 0 ? `已有 ${nextFailedCount} 条写入失败，可直接看右侧报错逐条修。` : ''
           }))
+        }
+
+        const scheduleFlush = () => {
+          if (flushTimer) return
+          flushTimer = setTimeout(flushProgress, 120)
+        }
+
+        const disposeProgress = window.desktopBroadcast?.onPushProgress?.((progress) => {
+          pendingProgressMap.set(progress.item.previewItemId, {
+            status: progress.item.status,
+            errorMessage: progress.item.errorMessage,
+            remoteMessageId: progress.item.remoteMessageId,
+            syncedAt: progress.item.syncedAt
+          })
+          latestProgressMessage = progress.message
+          latestFailedCount = progress.failedCount
+
+          if (progress.completed === progress.total || pendingProgressMap.size >= 25) {
+            if (flushTimer) {
+              clearTimeout(flushTimer)
+              flushTimer = null
+            }
+            flushProgress()
+            return
+          }
+
+          scheduleFlush()
         })
 
         set({ syncing: true, errorMessage: '', lastActionMessage: `正在写入 0/${candidateItems.length}，请稍候...` })
@@ -747,6 +790,11 @@ export const useBroadcastStore = create<BroadcastState>()(
             lastActionMessage: '写入 Telegram 官方定时消息失败。'
           })
         } finally {
+          if (flushTimer) {
+            clearTimeout(flushTimer)
+            flushTimer = null
+          }
+          flushProgress()
           disposeProgress?.()
         }
       }

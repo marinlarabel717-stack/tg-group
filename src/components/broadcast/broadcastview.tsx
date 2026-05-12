@@ -69,6 +69,8 @@ function readRepeatLabel(repeatPeriodSeconds?: number | null) {
   return '绝不'
 }
 
+const MAX_VISIBLE_LOG_ITEMS = 200
+
 function explainPreviewError(errorMessage: string) {
   const normalized = errorMessage.trim()
   if (!normalized) return '这条目前没有报错。'
@@ -1268,6 +1270,10 @@ const LogsWorkbench = memo(function LogsWorkbench() {
 
   const previewSummary = useMemo(() => buildSummary(selectedPreview), [groups, selectedPreview])
   const filteredSummary = useMemo(() => buildSummary(filteredPreview), [groups, filteredPreview])
+  const visiblePreview = useMemo(() => {
+    if (filteredPreview.length <= MAX_VISIBLE_LOG_ITEMS) return filteredPreview
+    return filteredPreview.slice(-MAX_VISIBLE_LOG_ITEMS)
+  }, [filteredPreview])
 
   return (
     <GlassPanel className="bg-card min-h-[720px]">
@@ -1331,7 +1337,14 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       <div className="mt-4 max-h-[820px] space-y-3 overflow-y-auto pr-1">
         {filteredPreview.length === 0 ? (
           <div className="flex min-h-[260px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">还没有发送日志，先去“定时群发”页预览或开始发送。</div>
-        ) : filteredPreview.map((item) => {
+        ) : (
+          <>
+            {filteredPreview.length > MAX_VISIBLE_LOG_ITEMS ? (
+              <div className="rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">
+                当前一共 {filteredPreview.length} 条日志，为了不卡界面，这里先只显示最近 {MAX_VISIBLE_LOG_ITEMS} 条。
+              </div>
+            ) : null}
+            {visiblePreview.map((item) => {
           const creative = creatives.find((entry) => entry.id === item.creativeId)
           const group = groups.find((entry) => entry.id === item.groupId)
           const account = accounts.find((entry) => entry.id === item.accountId)
@@ -1352,7 +1365,9 @@ const LogsWorkbench = memo(function LogsWorkbench() {
               {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200">{explainPreviewError(item.errorMessage)}</div> : null}
             </div>
           )
-        })}
+            })}
+          </>
+        )}
       </div>
     </GlassPanel>
   )
