@@ -81,18 +81,14 @@ function formatTimeOnly(value?: string | null) {
   }).format(date)
 }
 
-function buildAccountRangeOptions<T extends { id: number }>(accounts: T[], step = 10) {
-  const ranges: Array<{ key: string; label: string; ids: number[] }> = []
-  for (let start = 0; start < accounts.length; start += step) {
-    const chunk = accounts.slice(start, start + step)
-    if (chunk.length === 0) continue
-    ranges.push({
-      key: `${start + 1}-${start + chunk.length}`,
-      label: `${start + 1}-${start + chunk.length}`,
-      ids: chunk.map((item) => item.id)
-    })
-  }
-  return ranges
+function readCustomRangeIds<T extends { id: number }>(accounts: T[], startInput: string, endInput: string) {
+  const start = Number(startInput)
+  const end = Number(endInput)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return [] as number[]
+  const normalizedStart = Math.max(1, Math.min(start, end))
+  const normalizedEnd = Math.min(accounts.length, Math.max(start, end))
+  if (normalizedStart > normalizedEnd) return [] as number[]
+  return accounts.slice(normalizedStart - 1, normalizedEnd).map((item) => item.id)
 }
 
 function toggleAccountRange(currentIds: number[], rangeIds: number[]) {
@@ -166,12 +162,20 @@ const SendWorkbench = memo(function SendWorkbench() {
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [draftAccountIds, setDraftAccountIds] = useState<number[]>(selectedAccountIds)
   const [accountSearch, setAccountSearch] = useState('')
+  const [rangeStart, setRangeStart] = useState('1')
+  const [rangeEnd, setRangeEnd] = useState('10')
 
   useEffect(() => {
     if (!accountPickerOpen) {
       setDraftAccountIds(selectedAccountIds)
     }
   }, [accountPickerOpen, selectedAccountIds])
+
+  useEffect(() => {
+    if (!accountPickerOpen) return
+    setRangeStart('1')
+    setRangeEnd(String(Math.min(10, Math.max(accounts.length, 1))))
+  }, [accountPickerOpen, accounts.length])
 
   const filteredAccounts = useMemo(() => {
     const keyword = accountSearch.trim().toLowerCase()
@@ -181,7 +185,6 @@ const SendWorkbench = memo(function SendWorkbench() {
       return [nickname, account.username || '', account.phone || '', account.userId || ''].some((value) => value.toLowerCase().includes(keyword))
     })
   }, [accountSearch, accounts])
-  const accountRangeOptions = useMemo(() => buildAccountRangeOptions(filteredAccounts), [filteredAccounts])
 
   const validTargets = targetSummary.valid
   const invalidTargets = targetSummary.invalid
@@ -368,22 +371,35 @@ const SendWorkbench = memo(function SendWorkbench() {
                 </div>
               </div>
 
-              {accountRangeOptions.length > 0 ? (
+              {filteredAccounts.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="mr-1 text-sm text-textMuted">区间选择</div>
-                  {accountRangeOptions.map((range) => {
-                    const active = range.ids.every((id) => draftAccountIds.includes(id))
-                    return (
-                      <button
-                        key={range.key}
-                        type="button"
-                        onClick={() => setDraftAccountIds((current) => toggleAccountRange(current, range.ids))}
-                        className={`rounded-[12px] px-3 py-2 text-sm transition ${active ? 'bg-violet-400 text-slate-950 hover:bg-violet-300' : 'bg-white/[0.05] text-white hover:bg-white/[0.1]'}`}
-                      >
-                        {range.label}
-                      </button>
-                    )
-                  })}
+                  <div className="text-sm text-textMuted">区间选择</div>
+                  <input
+                    inputMode="numeric"
+                    value={rangeStart}
+                    onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="开始"
+                    className="h-10 w-20 rounded-[12px] border border-white/8 bg-panel px-3 text-sm text-white outline-none focus:border-violet-400/30"
+                  />
+                  <span className="text-textMuted">-</span>
+                  <input
+                    inputMode="numeric"
+                    value={rangeEnd}
+                    onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="结束"
+                    className="h-10 w-20 rounded-[12px] border border-white/8 bg-panel px-3 text-sm text-white outline-none focus:border-violet-400/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rangeIds = readCustomRangeIds(filteredAccounts, rangeStart, rangeEnd)
+                      if (rangeIds.length === 0) return
+                      setDraftAccountIds((current) => toggleAccountRange(current, rangeIds))
+                    }}
+                    className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18"
+                  >
+                    应用区间
+                  </button>
                 </div>
               ) : null}
 
