@@ -1168,10 +1168,17 @@ export const AccountTable = memo(function AccountTable() {
           setActiveShortcutId(null)
           setStatusFilter(value)
         }}
-      />
-
-      <div className="relative pr-7">
-        <div className="grid grid-cols-5 gap-3">
+        action={(
+          <button
+            type="button"
+            title="新建顶部筛选"
+            onClick={handleOpenShortcutDialog}
+            className="absolute right-0 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[8px] text-textMuted transition hover:bg-white/6 hover:text-white"
+          >
+            <Settings2 size={14} />
+          </button>
+        )}
+      >
           {shortcutCards.map((shortcut, index) => {
             const active = activeShortcutId === shortcut.id
             return (
@@ -1233,17 +1240,7 @@ export const AccountTable = memo(function AccountTable() {
               </div>
             )
           })}
-        </div>
-
-        <button
-          type="button"
-          title="新建顶部筛选"
-          onClick={handleOpenShortcutDialog}
-          className="absolute right-0 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[8px] text-textMuted transition hover:bg-white/6 hover:text-white"
-        >
-          <Settings2 size={14} />
-        </button>
-      </div>
+      </AccountSummaryCards>
 
       <TableToolbar
         selectedCount={selectedCount}
