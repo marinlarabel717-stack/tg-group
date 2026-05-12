@@ -902,9 +902,13 @@ export const AccountTable = memo(function AccountTable() {
         onRefresh={handleRefresh}
       />
 
-      <GlassPanel className="overflow-hidden p-0">
+      <GlassPanel className="relative overflow-hidden p-0">
         <div className="min-w-0">
-          <div ref={viewportRef} className="virtual-scroll-shell min-w-0 max-h-[580px] overflow-y-auto overflow-x-hidden" onWheel={handleViewportWheel}>
+          <div
+            ref={viewportRef}
+            className={`virtual-scroll-shell min-w-0 max-h-[580px] overflow-y-auto overflow-x-hidden ${selectedCount > 0 ? 'pb-[92px]' : ''}`}
+            onWheel={handleViewportWheel}
+          >
             <div className="relative overflow-hidden" style={{ height: `${tableLoading ? 8 * 52 + 56 : totalSize + 56}px` }}>
               <div
                 className="absolute left-0 top-0"
@@ -998,8 +1002,8 @@ export const AccountTable = memo(function AccountTable() {
           )}
 
           {selectedCount > 0 ? (
-            <div className="border-t border-white/5 px-3 py-3">
-              <div className="flex flex-col gap-3 rounded-[12px] bg-panel/70 px-3 py-3 lg:flex-row lg:items-center lg:justify-between" ref={bulkMenuRef}>
+            <div className="absolute bottom-0 left-0 right-0 z-20 border-t border-white/5 bg-card/95 px-3 py-3 backdrop-blur" ref={bulkMenuRef}>
+              <div className="flex flex-col gap-3 rounded-[12px] bg-panel/85 px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
