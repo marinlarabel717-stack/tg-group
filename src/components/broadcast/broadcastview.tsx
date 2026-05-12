@@ -381,7 +381,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               <button type="button" onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
                 <RefreshCw size={16} /> 预览今日计划
               </button>
-              <button type="button" disabled={syncing} onClick={() => void pushScheduleToTelegram()} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60">
+              <button type="button" disabled={syncing} onClick={() => void pushScheduleToTelegram(accounts)} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60">
                 <Send size={16} /> {syncing ? '正在写入…' : '写入 Telegram 定时消息'}
               </button>
               <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.04] px-4 py-3 text-sm text-white transition hover:bg-white/[0.08]">清空当前预览</button>
@@ -986,7 +986,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               </button>
               <button type="button" disabled={syncing} onClick={() => {
                 setActiveTab('calendar')
-                void pushScheduleToTelegram()
+                void pushScheduleToTelegram(accounts)
               }} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/14 px-4 py-3 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-60">
                 <Send size={16} /> {syncing ? '正在启动...' : '开始定时群发'}
               </button>

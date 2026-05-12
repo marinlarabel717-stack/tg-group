@@ -99,7 +99,7 @@ interface BroadcastState {
   attachJoinedGroupToAccount: (accountId: number, group: BroadcastJoinedGroup) => void
   generatePreview: (accounts: Array<{ id: number; status?: string; profile?: { is_premium?: boolean } }>) => void
   clearPreview: () => void
-  pushScheduleToTelegram: () => Promise<void>
+  pushScheduleToTelegram: (accounts: Array<{ id: number; status?: string; profile?: { is_premium?: boolean } }>) => Promise<void>
   stopPushScheduleToTelegram: () => Promise<void>
 }
 
@@ -689,7 +689,7 @@ export const useBroadcastStore = create<BroadcastState>()(
         })
       },
       clearPreview: () => set({ previewItems: [], errorMessage: '', lastActionMessage: '当前任务预览已清空。' }),
-      pushScheduleToTelegram: async () => {
+      pushScheduleToTelegram: async (accounts) => {
         const state = get()
         const task = state.tasks.find((item) => item.id === state.selectedTaskId)
         if (!task) {
@@ -697,7 +697,35 @@ export const useBroadcastStore = create<BroadcastState>()(
           return
         }
 
-        const candidateItems = state.previewItems.filter((item) => item.taskId === task.id && item.status !== 'failed' && !item.remoteMessageId)
+        let workingPreviewItems = state.previewItems
+        let workingTask = task
+
+        if (!workingPreviewItems.some((item) => item.taskId === task.id)) {
+          const hasPremiumAccount = task.accountIds.some((accountId) => accounts.some((account) => account.id === accountId && account.profile?.is_premium))
+          const requestedLimitPerGroup = Math.max(1, Number(task.dailyLimitPerGroup) || 1)
+          const effectiveLimitPerGroup = Math.min(hasPremiumAccount ? requestedLimitPerGroup : Math.min(requestedLimitPerGroup, 100), 100)
+          const generatedPreviewItems = normalizePreviewItems(generatePreviewItems({ ...task, dailyLimitPerGroup: effectiveLimitPerGroup }, state.creatives, state.groups, accounts))
+
+          workingTask = { ...task, dailyLimitPerGroup: effectiveLimitPerGroup }
+          workingPreviewItems = [
+            ...state.previewItems.filter((item) => item.taskId !== task.id),
+            ...generatedPreviewItems
+          ]
+
+          set((current) => ({
+            previewItems: [
+              ...current.previewItems.filter((item) => item.taskId !== task.id),
+              ...generatedPreviewItems
+            ],
+            tasks: current.tasks.map((item) => item.id === task.id ? { ...item, dailyLimitPerGroup: effectiveLimitPerGroup } : item),
+            errorMessage: '',
+            lastActionMessage: generatedPreviewItems.length > 0
+              ? `已自动生成 ${generatedPreviewItems.length} 条排程，正在开始写入 Telegram。`
+              : '当前配置还生成不出任何排程，请检查账号、群或文案。'
+          }))
+        }
+
+        const candidateItems = workingPreviewItems.filter((item) => item.taskId === task.id && item.status !== 'failed' && !item.remoteMessageId)
         if (candidateItems.length === 0) {
           set({ errorMessage: '', lastActionMessage: '当前没有新的可写入排程，已经写过的不会重复补发。' })
           return
@@ -705,7 +733,7 @@ export const useBroadcastStore = create<BroadcastState>()(
 
         const sanitizedItems = candidateItems.map((item) => ({
           ...item,
-          repeatPeriodSeconds: task.scheduleMode === 'daily_repeat' ? (item.repeatPeriodSeconds ?? 24 * 60 * 60) : null
+          repeatPeriodSeconds: workingTask.scheduleMode === 'daily_repeat' ? (item.repeatPeriodSeconds ?? 24 * 60 * 60) : null
         }))
 
         const payload: BroadcastPushSchedulePayload = {
