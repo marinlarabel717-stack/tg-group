@@ -206,7 +206,12 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       window.desktopAccounts?.onCheckState(async (checkState) => {
         const previousState = get().checkState
         set({ checkState })
-        if (previousState.running && !checkState.running) {
+        const fullyCompleted = !checkState.running
+          && checkState.totalCount > 0
+          && checkState.completedCount >= checkState.totalCount
+          && checkState.resultSummary.total >= checkState.totalCount
+
+        if (previousState.running && fullyCompleted) {
           await syncAccounts(set, get)
           set({
             checkResultDialog: {
@@ -422,6 +427,16 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       const actionLabel = normalizedActions.includes('account-survival') ? '账号存活检测' : '账号状态检测'
       set({
         checkState,
+        checkResultDialog: {
+          open: false,
+          runMode: checkState.runMode,
+          total: 0,
+          alive: 0,
+          limited: 0,
+          temporaryLimited: 0,
+          frozen: 0,
+          banned: 0
+        },
         lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务。`
       })
       await syncAccounts(set, get)
