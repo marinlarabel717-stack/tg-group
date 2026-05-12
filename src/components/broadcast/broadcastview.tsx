@@ -34,9 +34,11 @@ function readAccountNickname(account: { username?: string; phone?: string; profi
   return '未命名账号'
 }
 
-function readCreativeTitle(creative: { title?: string; text?: string; buttonText?: string; note?: string } | null | undefined) {
+function readCreativeTitle(creative: { title?: string; text?: string; buttonText?: string; sourceLink?: string; note?: string } | null | undefined) {
   const text = typeof creative?.text === 'string' ? creative.text.trim() : ''
   if (text) return text.length > 12 ? `${text.slice(0, 12)}...` : text
+  const sourceLink = typeof creative?.sourceLink === 'string' ? creative.sourceLink.trim() : ''
+  if (sourceLink) return sourceLink.length > 24 ? `转发：${sourceLink.slice(0, 24)}...` : `转发：${sourceLink}`
   const button = typeof creative?.buttonText === 'string' ? creative.buttonText.trim() : ''
   if (button) return button
   const legacyButton = typeof creative?.note === 'string' ? creative.note.trim() : ''
@@ -49,6 +51,7 @@ function readCreativeKindLabel(kind?: string) {
   if (kind === 'image') return '图片'
   if (kind === 'image_text') return '图文'
   if (kind === 'image_button') return '图文+按钮'
+  if (kind === 'channel_forward') return '频道转发'
   return '文字'
 }
 
@@ -97,6 +100,15 @@ function explainPreviewError(errorMessage: string) {
   }
   if (normalized.includes('图片有问题') || /PHOTO_INVALID|MEDIA_INVALID|IMAGE_PROCESS_FAILED/i.test(normalized)) {
     return '图片有问题，可能格式不对、图片坏了，或者 Telegram 不认这张图。'
+  }
+  if (normalized.includes('频道消息链接不对') || /SOURCE_MESSAGE_LINK_INVALID|MESSAGE_ID_INVALID/i.test(normalized)) {
+    return '频道消息链接不对，或者这条频道消息不存在。请重新复制一条正确的频道消息链接。'
+  }
+  if (normalized.includes('这个频道消息不允许转发') || /CHAT_FORWARDS_RESTRICTED/i.test(normalized)) {
+    return '这个频道消息不允许转发，可能频道开了禁止转发。'
+  }
+  if (normalized.includes('频道链接转发暂不支持 Telegram 官方重复')) {
+    return '频道链接转发暂时不能配“每天重复”，先关掉重复再发。'
   }
   if (normalized.includes('按钮链接格式不对') || /BUTTON_URL_INVALID/i.test(normalized)) {
     return '按钮链接格式不对，请填完整的 https:// 链接。'
@@ -848,20 +860,24 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     event.target.value = ''
   }
 
-  const handleCreativeKindChange = (creativeId: string, kind: 'text' | 'image' | 'image_text' | 'image_button') => {
+  const handleCreativeKindChange = (creativeId: string, kind: 'text' | 'image' | 'image_text' | 'image_button' | 'channel_forward') => {
     if (kind === 'text') {
-      updateCreative(creativeId, { kind, imageUrl: '', buttonText: '', buttonUrl: '', note: '' })
+      updateCreative(creativeId, { kind, imageUrl: '', buttonText: '', buttonUrl: '', sourceLink: '', note: '' })
       return
     }
     if (kind === 'image') {
-      updateCreative(creativeId, { kind, buttonText: '', buttonUrl: '', note: '' })
+      updateCreative(creativeId, { kind, buttonText: '', buttonUrl: '', sourceLink: '', note: '' })
       return
     }
     if (kind === 'image_text') {
-      updateCreative(creativeId, { kind, buttonText: '', buttonUrl: '', note: '' })
+      updateCreative(creativeId, { kind, buttonText: '', buttonUrl: '', sourceLink: '', note: '' })
       return
     }
-    updateCreative(creativeId, { kind })
+    if (kind === 'channel_forward') {
+      updateCreative(creativeId, { kind, text: '', imageUrl: '', buttonText: '', buttonUrl: '', note: '' })
+      return
+    }
+    updateCreative(creativeId, { kind, sourceLink: '' })
   }
 
   return (
@@ -1006,7 +1022,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-lg font-semibold text-white">第 3 步：文案设置</div>
-                    <div className="mt-1 text-sm text-textMuted">直接填文案内容，配好以后就能拿去定时发。</div>
+                    <div className="mt-1 text-sm text-textMuted">可以直接写文本/图文，也可以贴频道消息链接做转发定时发送。</div>
                   </div>
                   <button type="button" onClick={createCreative} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
                     <Plus size={16} /> 新建文案
@@ -1032,15 +1048,23 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                         </div>
                         <label className="mt-4 block space-y-2 text-sm">
                           <span className="text-textMuted">消息类型</span>
-                          <select value={creative.kind || 'text'} onChange={(event) => handleCreativeKindChange(creative.id, event.target.value as 'text' | 'image' | 'image_text' | 'image_button')} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30">
+                          <select value={creative.kind || 'text'} onChange={(event) => handleCreativeKindChange(creative.id, event.target.value as 'text' | 'image' | 'image_text' | 'image_button' | 'channel_forward')} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30">
                             <option value="text">文字</option>
                             <option value="image">图片</option>
                             <option value="image_text">图文</option>
                             <option value="image_button">图文+按钮</option>
+                            <option value="channel_forward">频道链接转发</option>
                           </select>
                         </label>
-                        {creative.kind !== 'image' ? <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">文本</span><textarea rows={5} value={creative.text} onChange={(event) => updateCreative(creative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label> : null}
-                        {creative.kind !== 'text' ? (
+                        {creative.kind === 'channel_forward' ? (
+                          <label className="mt-4 block space-y-2 text-sm">
+                            <span className="text-textMuted">频道消息链接</span>
+                            <input value={creative.sourceLink || ''} onChange={(event) => updateCreative(creative.id, { sourceLink: event.target.value })} placeholder="https://t.me/频道名/123" className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" />
+                            <div className="text-xs text-textMuted">填一条频道消息链接，发送时会按这条消息做 Telegram 官方转发定时发送。</div>
+                          </label>
+                        ) : null}
+                        {creative.kind !== 'image' && creative.kind !== 'channel_forward' ? <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">文本</span><textarea rows={5} value={creative.text} onChange={(event) => updateCreative(creative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label> : null}
+                        {creative.kind !== 'text' && creative.kind !== 'channel_forward' ? (
                           <>
                             <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">上传图片</span><input type="file" accept="image/*" onChange={(event) => handleCreativeImageUpload(creative.id, event)} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white file:mr-3 file:rounded-[8px] file:border-0 file:bg-violet-400/14 file:px-3 file:py-2 file:text-sm file:text-violet-300" /></label>
                             <div className="mt-3 flex items-center justify-between rounded-[12px] bg-card px-4 py-3 text-sm text-textMuted">

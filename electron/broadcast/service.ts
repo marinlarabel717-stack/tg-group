@@ -13,11 +13,14 @@ function formatBroadcastError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '写入 Telegram 定时消息失败'
+  if (/SOURCE_MESSAGE_LINK_INVALID/i.test(normalized)) return '频道消息链接不对，请填完整的频道消息链接。'
   if (/USERNAME_INVALID/i.test(normalized)) return '这个群的 @username 不对，请检查群用户名。'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '这个群的 @username 不存在，请确认群链接填对了。'
   if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '当前账号认不出这个群，请检查 @username、群链接或私密链接。'
+  if (/CHANNEL_PRIVATE/i.test(normalized)) return '这个频道当前账号进不去，可能没加入，或者频道本身是私密的。'
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '当前账号在这个群没有发送或定时发送权限。'
   if (/CHAT_WRITE_FORBIDDEN/i.test(normalized)) return '当前账号在这个群不能发消息，可能被禁言了。'
+  if (/CHAT_FORWARDS_RESTRICTED/i.test(normalized)) return '这个频道消息不允许转发，可能频道开了禁止转发。'
   if (/USER_BANNED_IN_CHANNEL|CHAT_RESTRICTED/i.test(normalized)) return '当前账号在这个群被限制发言，先去 Telegram 里确认群权限。'
   if (/USER_NOT_PARTICIPANT/i.test(normalized)) return '当前账号还没加入这个群，或者这个私密链接当前账号没权限进。'
   if (/CHAT_SEND_PLAIN_FORBIDDEN/i.test(normalized)) return '这个群不允许发纯文字，请改成图文或图片发送。'
@@ -40,6 +43,46 @@ function formatBroadcastError(error: unknown) {
     return matched ? `当前账号触发 Telegram 限流了，请 ${matched[1]} 秒后再试。` : '当前账号触发 Telegram 限流了，请稍后再试。'
   }
   return `发送失败：${normalized}`
+}
+
+function parseTelegramMessageLink(input: string) {
+  const raw = input.trim()
+  if (!raw) return null
+
+  const privateMatched = raw.match(/(?:https?:\/\/)?t\.me\/c\/(\d+)\/(\d+)(?:\?.*)?$/i)
+  if (privateMatched) {
+    return {
+      peerRef: BigInt(`-100${privateMatched[1]}`),
+      messageId: Number(privateMatched[2])
+    }
+  }
+
+  const publicMatched = raw.match(/(?:https?:\/\/)?t\.me\/(?:(?:s|a)\/)?([A-Za-z0-9_]{3,})\/(\d+)(?:\?.*)?$/i)
+  if (publicMatched) {
+    return {
+      peerRef: `@${publicMatched[1].replace(/^@+/, '')}`,
+      messageId: Number(publicMatched[2])
+    }
+  }
+
+  return null
+}
+
+function extractResponseMessageId(result: unknown) {
+  if (typeof (result as { id?: unknown } | null)?.id === 'number') {
+    return (result as { id: number }).id
+  }
+
+  const updates = Array.isArray((result as { updates?: unknown[] } | null)?.updates)
+    ? (result as { updates: Array<{ id?: unknown; message?: { id?: unknown } }> }).updates
+    : []
+
+  for (const update of updates) {
+    if (typeof update?.message?.id === 'number') return update.message.id
+    if (typeof update?.id === 'number') return update.id
+  }
+
+  return null
 }
 
 function extractInviteHash(input: string) {
@@ -252,7 +295,13 @@ export class BroadcastService {
           this.emitProgress(results, payload.items.length, resultItem, onProgress)
           continue
         }
-        if (!creative.text.trim() && !creative.imageUrl.trim()) {
+        if (creative.kind === 'channel_forward' && !creative.sourceLink.trim()) {
+          const resultItem = this.createFailedItem(item, '频道消息链接还没填，请先贴一条频道消息链接')
+          results.push(resultItem)
+          this.emitProgress(results, payload.items.length, resultItem, onProgress)
+          continue
+        }
+        if (creative.kind !== 'channel_forward' && !creative.text.trim() && !creative.imageUrl.trim()) {
           const resultItem = this.createFailedItem(item, '文案正文和图片不能同时为空')
           results.push(resultItem)
           this.emitProgress(results, payload.items.length, resultItem, onProgress)
@@ -287,19 +336,45 @@ export class BroadcastService {
             entityCache.set(entityKey, entity)
           }
 
-          const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
-          const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
-            message: buildCreativeMessage(creative),
-            file: media,
-            schedule: Math.floor(scheduledAt.getTime() / 1000),
-            scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
-          })
+          let messageId: number | null = null
+
+          if (creative.kind === 'channel_forward') {
+            if ((item.repeatPeriodSeconds ?? 0) > 0) {
+              throw new Error('频道链接转发暂不支持 Telegram 官方重复，请先关掉“每天重复”。')
+            }
+
+            const sourceMessage = parseTelegramMessageLink(creative.sourceLink)
+            if (!sourceMessage || !Number.isFinite(sourceMessage.messageId) || sourceMessage.messageId <= 0) {
+              throw new Error('SOURCE_MESSAGE_LINK_INVALID')
+            }
+
+            const forwardResult = await (client as TelegramClient & {
+              forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
+            }).forwardMessages(entity as never, {
+              messages: [sourceMessage.messageId],
+              fromPeer: sourceMessage.peerRef as never,
+              schedule: Math.floor(scheduledAt.getTime() / 1000),
+              dropAuthor: false
+            })
+
+            const firstResult = Array.isArray(forwardResult) ? forwardResult[0] : forwardResult
+            messageId = extractResponseMessageId(firstResult)
+          } else {
+            const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
+            const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
+              message: buildCreativeMessage(creative),
+              file: media,
+              schedule: Math.floor(scheduledAt.getTime() / 1000),
+              scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
+            })
+            messageId = extractResponseMessageId(message)
+          }
 
           const resultItem: BroadcastPushScheduleResultItem = {
             previewItemId: item.id,
             status: 'scheduled',
             errorMessage: '',
-            remoteMessageId: typeof message?.id === 'number' ? message.id : null,
+            remoteMessageId: messageId,
             syncedAt: new Date().toISOString(),
             accountId: item.accountId,
             groupId: item.groupId,

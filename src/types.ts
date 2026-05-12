@@ -306,7 +306,7 @@ export interface DesktopLicenseValidateResult {
 export interface BroadcastCreativePayload {
   id: string
   title: string
-  kind: 'text' | 'image' | 'image_text' | 'image_button'
+  kind: 'text' | 'image' | 'image_text' | 'image_button' | 'channel_forward'
   text: string
   imageUrl: string
   dailyQuota: number
@@ -314,6 +314,7 @@ export interface BroadcastCreativePayload {
   enabled: boolean
   buttonText: string
   buttonUrl: string
+  sourceLink: string
   note: string
 }
 

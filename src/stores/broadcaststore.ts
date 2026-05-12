@@ -9,7 +9,7 @@ export type BroadcastPreviewStatus = 'queued' | 'scheduled' | 'failed'
 export interface BroadcastCreative {
   id: string
   title: string
-  kind: 'text' | 'image' | 'image_text' | 'image_button'
+  kind: 'text' | 'image' | 'image_text' | 'image_button' | 'channel_forward'
   text: string
   imageUrl: string
   dailyQuota: number
@@ -17,6 +17,7 @@ export interface BroadcastCreative {
   enabled: boolean
   buttonText: string
   buttonUrl: string
+  sourceLink: string
   note: string
 }
 
@@ -364,13 +365,17 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
       const scheduledMinute = minute + jitterOffset
       const scheduledAt = setMinutes(today, scheduledMinute)
       const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
+      const creative = creativeId ? creatives.find((item) => item.id === creativeId) ?? null : null
       const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[slotIndex % compatibleAccounts.length] : null
       let status: BroadcastPreviewStatus = 'queued'
       let errorMessage = ''
 
       if (!creativeId) {
         status = 'failed'
-        errorMessage = '当前任务还没有启用中的图文文案'
+        errorMessage = '当前任务还没有启用中的发送内容'
+      } else if (creative?.kind === 'channel_forward' && !creative.sourceLink.trim()) {
+        status = 'failed'
+        errorMessage = '频道消息链接还没填，先把要转发的频道消息链接贴上'
       } else if (!accountId) {
         status = 'failed'
         errorMessage = '目标群内没有已加入且可发送的账号'
@@ -526,6 +531,7 @@ export const useBroadcastStore = create<BroadcastState>()(
           enabled: true,
           buttonText: '',
           buttonUrl: '',
+          sourceLink: '',
           note: ''
         }
         set((state) => ({
@@ -747,7 +753,7 @@ export const useBroadcastStore = create<BroadcastState>()(
     }),
     {
       name: 'tg-group-broadcast-workbench',
-      version: 9,
+      version: 10,
       storage: createJSONStorage(() => localStorage),
       migrate: (persistedState: any) => {
         const defaultCreativeTitles = new Set(['早间图文 A', '转化图文 B'])
@@ -763,8 +769,11 @@ export const useBroadcastStore = create<BroadcastState>()(
                   ? creative.note
                   : ''
               const buttonUrl = typeof creative?.buttonUrl === 'string' ? creative.buttonUrl : ''
+              const sourceLink = typeof creative?.sourceLink === 'string' ? creative.sourceLink : ''
               const kind = typeof creative?.kind === 'string' && creative.kind
                 ? creative.kind
+                : sourceLink.trim()
+                  ? 'channel_forward'
                 : buttonText.trim() || buttonUrl.trim()
                   ? 'image_button'
                   : imageUrl.trim() && text.trim()
@@ -777,7 +786,8 @@ export const useBroadcastStore = create<BroadcastState>()(
                 ...creative,
                 kind,
                 buttonText,
-                buttonUrl
+                buttonUrl,
+                sourceLink
               }
             })
           : []
