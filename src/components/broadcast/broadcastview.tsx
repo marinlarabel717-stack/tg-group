@@ -1824,9 +1824,23 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
   }
 
   const applyAccountSelection = () => {
+    if (typeof draftAccountId !== 'number') {
+      setSelectedAccountId(null)
+      setGroups([])
+      setSelectedGroupRef('')
+      setItems([])
+      setSelectedMessageIds([])
+      setErrorMessage('')
+      setActionMessage('请先选择账号。')
+      setAccountPickerOpen(false)
+      return
+    }
+
     setSelectedAccountId(draftAccountId)
     setAccountPickerOpen(false)
   }
+
+  const visibleActionMessage = typeof selectedAccountId === 'number' ? actionMessage : '请先选择账号。'
 
   return (
     <GlassPanel className="bg-card min-h-[720px]">
@@ -1903,7 +1917,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
       ) : null}
 
       {errorMessage ? <div className="mt-4 rounded-[16px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
-      {!errorMessage && actionMessage ? <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{actionMessage}</div> : null}
+      {!errorMessage && visibleActionMessage ? <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{visibleActionMessage}</div> : null}
 
       <div className="mt-5 space-y-3">
         {typeof selectedAccountId !== 'number' ? (
