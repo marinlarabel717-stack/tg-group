@@ -36,12 +36,12 @@ function FilterSelect({
   onChange: (value: string) => void
 }) {
   return (
-    <label className="flex min-w-[180px] flex-col gap-2">
+    <label className="flex min-w-0 flex-col gap-2 xl:min-w-[180px]">
       <span className="text-[11px] font-semibold tracking-[0.22em] text-textMuted">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover"
+        className="h-11 w-full rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover"
       >
         <option value="">全部</option>
         {options.map((option) => (
@@ -59,8 +59,8 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
   const spacerClass = 'text-[11px] font-semibold tracking-[0.22em] text-transparent select-none'
 
   return (
-    <div className="flex flex-wrap gap-4 rounded-[14px] bg-card px-5 py-5">
-      <div className="mr-1 flex flex-col gap-2">
+    <div className="grid gap-4 rounded-[14px] bg-card px-5 py-5 xl:grid-cols-[44px_repeat(4,minmax(0,1fr))_auto] xl:items-end">
+      <div className="flex flex-col gap-2 xl:self-end">
         <span className={spacerClass}>筛选</span>
         <div className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-panel text-neonSoft">
           <SlidersHorizontal size={17} />
@@ -72,12 +72,12 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
       <FilterSelect label="资料来源" value={props.sourceFilter} options={props.sources} onChange={props.onSourceChange} />
       <FilterSelect label="Proxy" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
 
-      <div className="flex flex-col gap-2 self-start">
+      <div className="flex flex-col gap-2 xl:self-end">
         <span className={spacerClass}>刷新</span>
         <button
           onClick={props.onRefresh}
           disabled={blocked}
-          className="flex h-11 items-center gap-2 rounded-[12px] bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-11 shrink-0 items-center justify-center gap-2.5 rounded-[12px] bg-neon/10 px-4 text-sm font-medium whitespace-nowrap text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {props.loading ? <Loader2 size={16} className="shrink-0 animate-spin" /> : <RefreshCcw size={16} className="shrink-0" />}
           刷新

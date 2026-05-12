@@ -45,12 +45,12 @@ function ActionButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex h-11 items-center gap-2 rounded-[12px] px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`inline-flex h-11 shrink-0 items-center justify-center gap-2.5 rounded-[12px] px-4 text-sm font-medium whitespace-nowrap transition disabled:cursor-not-allowed disabled:opacity-40 ${
         emphasis ? 'bg-neon/10 text-neonSoft hover:bg-neon/14' : 'bg-panel text-textMain hover:bg-hover'
       }`}
     >
-      {icon}
-      {label}
+      <span className="shrink-0">{icon}</span>
+      <span>{label}</span>
     </button>
   )
 }
@@ -92,7 +92,7 @@ export const TableToolbar = memo(function TableToolbar({
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="按手机号、用户名、userId、路径搜索"
-            className="h-11 w-full rounded-[12px] bg-panel pl-11 pr-10 text-sm text-textMain outline-none transition focus:bg-hover"
+            className="h-11 w-full rounded-[12px] bg-panel pl-11 pr-10 text-sm leading-none text-textMain outline-none transition focus:bg-hover"
           />
           {search ? (
             <button
@@ -106,7 +106,7 @@ export const TableToolbar = memo(function TableToolbar({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <ActionButton label="导入文件" icon={<Upload size={16} />} onClick={onImportFiles} disabled={blocked} />
         <ActionButton label="扫描文件夹" icon={<FolderSearch2 size={16} />} onClick={onImportFolder} disabled={blocked} />
         <ActionButton label="导出所选" icon={<Download size={16} />} onClick={onExportSelected} disabled={blocked || selectedCount === 0} />
@@ -115,13 +115,13 @@ export const TableToolbar = memo(function TableToolbar({
         <ActionButton label="全选账号" icon={<CheckSquare size={16} />} onClick={onSelectAll} disabled={blocked || totalCount === 0} />
         <ActionButton label="取消选中" icon={<SquareDashedMousePointer size={16} />} onClick={onClearSelection} disabled={blocked || selectedCount === 0} />
 
-        <div className="relative">
+        <div className="relative shrink-0">
           <button
             onClick={() => setRangeMenuOpen((value) => !value)}
             disabled={blocked || totalCount === 0}
-            className="flex h-11 items-center gap-2 rounded-[12px] bg-panel px-4 text-sm font-medium text-textMain transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2.5 rounded-[12px] bg-panel px-4 text-sm font-medium whitespace-nowrap text-textMain transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <CheckSquare size={16} />
+            <CheckSquare size={16} className="shrink-0" />
             选择区间
             <ChevronDown size={15} className={`transition ${rangeMenuOpen ? 'rotate-180' : ''}`} />
           </button>
