@@ -438,6 +438,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const lastActionMessage = useDirectMessageStore((state) => state.lastActionMessage)
   const messageType = useDirectMessageStore((state) => state.messageType)
   const latestRun = runs[0] ?? null
+  const [accountStatsExpanded, setAccountStatsExpanded] = useState(false)
   const detailedItems = useMemo(
     () => runs.flatMap((run) => run.items.map((item) => ({ ...item, fallbackAt: run.createdAt }))),
     [runs]
@@ -470,6 +471,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   }, [summaryItems])
   const summarySuccessCount = sending ? previewItems.filter((item) => item.status === 'sent').length : (latestRun?.sent ?? 0)
   const summaryFailedCount = sending ? previewItems.filter((item) => item.status === 'failed').length : (latestRun?.failed ?? 0)
+  const visibleAccountStats = accountStatsExpanded ? latestAccountStats : latestAccountStats.slice(0, 3)
   const averageSuccessPerAccount = useMemo(() => {
     const successAccounts = latestAccountStats.filter((item) => item.sent > 0)
     if (successAccounts.length === 0) return 0
@@ -540,7 +542,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
             <div className="mt-4 rounded-[14px] bg-black/10 px-4 py-4">
               <div className="text-sm font-medium text-white">本次各号码发送情况</div>
               <div className="mt-3 space-y-2">
-                {latestAccountStats.map((item) => (
+                {visibleAccountStats.map((item) => (
                   <div key={item.phone} className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] bg-white/[0.03] px-3 py-2 text-sm">
                     <span className="select-text text-white">{item.phone}</span>
                     <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -551,6 +553,15 @@ const LogsWorkbench = memo(function LogsWorkbench() {
                   </div>
                 ))}
               </div>
+              {latestAccountStats.length > 3 ? (
+                <button
+                  type="button"
+                  onClick={() => setAccountStatsExpanded((value) => !value)}
+                  className="mt-3 text-sm text-violet-300 transition hover:text-violet-200"
+                >
+                  {accountStatsExpanded ? '收起' : `查看全部（${latestAccountStats.length}）`}
+                </button>
+              ) : null}
             </div>
           ) : null}
       </div>
