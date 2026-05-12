@@ -1,46 +1,10 @@
 import { memo } from 'react'
-import { CheckCircle2, Download, Loader2, Trash2, Upload, X } from 'lucide-react'
+import { CheckCircle2, Download, Loader2, Trash2, Upload } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { AccountTable } from './accounttable'
 import { CheckResultDialog } from './checkresultdialog'
 import { useAccountStore } from '../../stores/accountstore'
-
-function DialogStatCard({
-  label,
-  value,
-  tone,
-  wide = false
-}: {
-  label: string
-  value: number | string
-  tone: 'success' | 'info' | 'warning' | 'danger' | 'violet' | 'neutral'
-  wide?: boolean
-}) {
-  const toneClass = {
-    success: 'border-emerald-400/20 bg-emerald-400/12 text-emerald-100',
-    info: 'border-sky-400/20 bg-sky-400/12 text-sky-100',
-    warning: 'border-amber-400/20 bg-amber-400/12 text-amber-100',
-    danger: 'border-rose-400/20 bg-rose-400/12 text-rose-100',
-    violet: 'border-violet-400/20 bg-violet-400/12 text-violet-100',
-    neutral: 'border-white/10 bg-panel text-slate-100'
-  }[tone]
-
-  const valueClass = {
-    success: 'text-emerald-300',
-    info: 'text-sky-300',
-    warning: 'text-amber-300',
-    danger: 'text-rose-300',
-    violet: 'text-violet-300',
-    neutral: 'text-white'
-  }[tone]
-
-  return (
-    <div className={`rounded-[14px] border px-3 py-3 text-center shadow-[0_8px_24px_rgba(15,23,42,0.18)] ${toneClass} ${wide ? 'col-span-full' : ''}`}>
-      <div className="text-xs tracking-[0.08em] opacity-85">{label}</div>
-      <div className={`mt-1 text-lg font-semibold ${valueClass}`}>{value}</div>
-    </div>
-  )
-}
+import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from './resultdialog'
 
 export function AccountsView() {
   const importProgress = useAccountStore((state) => state.importProgress)
@@ -103,154 +67,85 @@ export function AccountsView() {
               </div>
 
               <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                <DialogStatCard label="已导入" value={importProgress.importedCount} tone="success" />
-                <DialogStatCard label="补 JSON" value={importProgress.generatedJsonCount} tone="violet" />
-                <DialogStatCard label="跳过" value={importProgress.skippedCount} tone="warning" />
+                <ResultStatCard label="已导入" value={importProgress.importedCount} tone="success" />
+                <ResultStatCard label="补 JSON" value={importProgress.generatedJsonCount} tone="violet" />
+                <ResultStatCard label="跳过" value={importProgress.skippedCount} tone="warning" />
               </div>
             </div>
           </div>
         </div>
       ) : null}
 
-      {showImportResultDialog ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4" onClick={closeImportResultDialog}>
-          <div className="w-full max-w-[420px] rounded-[20px] border border-emerald-400/20 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
-              <div className="flex items-center gap-3 text-white">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-emerald-400/10 text-emerald-300">
-                  <CheckCircle2 size={18} />
-                </div>
-                <div>
-                  <div className="text-base font-semibold text-white">导入完成</div>
-                  <div className="mt-1 text-xs text-slate-300">本次导入结果如下</div>
-                </div>
-              </div>
+      <ResultDialogShell
+        open={showImportResultDialog}
+        onClose={closeImportResultDialog}
+        title="导入完成"
+        subtitle="本次导入结果如下"
+        icon={<CheckCircle2 size={18} />}
+        tone="success"
+        maxWidth="max-w-[420px]"
+      >
+        <ResultHero label="导入结果" value={`本次成功导入 ${importResultDialog.importedCount} 个`} tone="success" />
 
-              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={closeImportResultDialog}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-4 px-5 py-5">
-              <div className="rounded-[16px] bg-emerald-400/10 px-4 py-4 text-center">
-                <div className="text-xs tracking-[0.18em] text-emerald-200/80">导入结果</div>
-                <div className="mt-2 text-2xl font-semibold text-emerald-300">本次成功导入 {importResultDialog.importedCount} 个</div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                <DialogStatCard label="扫描到" value={importResultDialog.scannedCount} tone="info" />
-                <DialogStatCard label="补 JSON" value={importResultDialog.generatedJsonCount} tone="violet" />
-                <DialogStatCard label="跳过" value={importResultDialog.skippedCount} tone="warning" />
-              </div>
-
-              {importResultDialog.warning ? (
-                <div className="rounded-[12px] border border-amber-300/15 bg-amber-300/8 px-4 py-3 text-sm text-amber-200">
-                  {importResultDialog.warning}
-                </div>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={closeImportResultDialog}
-                className="h-11 w-full rounded-[12px] bg-emerald-400/12 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/16"
-              >
-                知道了
-              </button>
-            </div>
-          </div>
+        <div className="grid grid-cols-3 gap-3 text-center text-sm">
+          <ResultStatCard label="扫描到" value={importResultDialog.scannedCount} tone="info" />
+          <ResultStatCard label="补 JSON" value={importResultDialog.generatedJsonCount} tone="violet" />
+          <ResultStatCard label="跳过" value={importResultDialog.skippedCount} tone="warning" />
         </div>
-      ) : null}
 
-      {showExportResultDialog ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4" onClick={closeExportResultDialog}>
-          <div className="w-full max-w-[460px] rounded-[20px] border border-sky-400/20 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
-              <div className="flex items-center gap-3 text-white">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-sky-400/10 text-sky-300">
-                  <Download size={18} />
-                </div>
-                <div>
-                  <div className="text-base font-semibold text-white">导出完成</div>
-                  <div className="mt-1 text-xs text-slate-300">导出的账号已从当前列表移出</div>
-                </div>
-              </div>
-
-              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={closeExportResultDialog}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-4 px-5 py-5">
-              <div className="rounded-[16px] bg-sky-400/10 px-4 py-4 text-center">
-                <div className="text-xs tracking-[0.18em] text-sky-200/80">导出结果</div>
-                <div className="mt-2 text-2xl font-semibold text-sky-300">本次成功导出 {exportResultDialog.exportedCount} 个</div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 text-center text-sm">
-                <DialogStatCard label="导出数量" value={exportResultDialog.exportedCount} tone="info" />
-                <DialogStatCard label="导出目录" value={exportResultDialog.targetDirectory} tone="neutral" wide />
-              </div>
-
-              <div className="rounded-[12px] border border-sky-300/15 bg-sky-300/8 px-4 py-3 text-sm text-sky-100">
-                已导出的账号文件已移动到目标目录，当前账号列表不再显示这些账号。
-              </div>
-
-              <button
-                type="button"
-                onClick={closeExportResultDialog}
-                className="h-11 w-full rounded-[12px] bg-sky-400/12 text-sm font-medium text-sky-300 transition hover:bg-sky-400/16"
-              >
-                知道了
-              </button>
-            </div>
+        {importResultDialog.warning ? (
+          <div className="rounded-[12px] border border-amber-300/15 bg-amber-300/8 px-4 py-3 text-sm text-amber-200">
+            {importResultDialog.warning}
           </div>
+        ) : null}
+
+        <ResultPrimaryButton label="知道了" onClick={closeImportResultDialog} tone="success" />
+      </ResultDialogShell>
+
+      <ResultDialogShell
+        open={showExportResultDialog}
+        onClose={closeExportResultDialog}
+        title="导出完成"
+        subtitle="导出的账号已从当前列表移出"
+        icon={<Download size={18} />}
+        tone="info"
+        maxWidth="max-w-[460px]"
+      >
+        <ResultHero label="导出结果" value={`本次成功导出 ${exportResultDialog.exportedCount} 个`} tone="info" />
+
+        <div className="grid grid-cols-1 gap-3 text-center text-sm">
+          <ResultStatCard label="导出数量" value={exportResultDialog.exportedCount} tone="info" />
+          <ResultStatCard label="导出目录" value={exportResultDialog.targetDirectory} tone="neutral" wide />
         </div>
-      ) : null}
 
-      {showDeleteResultDialog ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4" onClick={closeDeleteResultDialog}>
-          <div className="w-full max-w-[420px] rounded-[20px] border border-rose-400/20 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
-              <div className="flex items-center gap-3 text-white">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-rose-400/10 text-rose-300">
-                  <Trash2 size={18} />
-                </div>
-                <div>
-                  <div className="text-base font-semibold text-white">删除完成</div>
-                  <div className="mt-1 text-xs text-slate-300">
-                    {deleteResultDialog.mode === 'all' ? '当前账号已全部清空' : '已删除所选账号'}
-                  </div>
-                </div>
-              </div>
-
-              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={closeDeleteResultDialog}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-4 px-5 py-5">
-              <div className="rounded-[16px] bg-rose-400/10 px-4 py-4 text-center">
-                <div className="text-xs tracking-[0.18em] text-rose-200/80">删除结果</div>
-                <div className="mt-2 text-2xl font-semibold text-rose-300">
-                  {deleteResultDialog.mode === 'all' ? '本次已全部删除' : `本次成功删除 ${deleteResultDialog.deletedCount} 个`}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 text-center text-sm">
-                <DialogStatCard label="删除数量" value={deleteResultDialog.deletedCount} tone="danger" />
-              </div>
-
-              <button
-                type="button"
-                onClick={closeDeleteResultDialog}
-                className="h-11 w-full rounded-[12px] bg-rose-400/12 text-sm font-medium text-rose-300 transition hover:bg-rose-400/16"
-              >
-                知道了
-              </button>
-            </div>
-          </div>
+        <div className="rounded-[12px] border border-sky-300/15 bg-sky-300/8 px-4 py-3 text-sm text-sky-100">
+          已导出的账号文件已移动到目标目录，当前账号列表不再显示这些账号。
         </div>
-      ) : null}
+
+        <ResultPrimaryButton label="知道了" onClick={closeExportResultDialog} tone="info" />
+      </ResultDialogShell>
+
+      <ResultDialogShell
+        open={showDeleteResultDialog}
+        onClose={closeDeleteResultDialog}
+        title="删除完成"
+        subtitle={deleteResultDialog.mode === 'all' ? '当前账号已全部清空' : '已删除所选账号'}
+        icon={<Trash2 size={18} />}
+        tone="danger"
+        maxWidth="max-w-[420px]"
+      >
+        <ResultHero
+          label="删除结果"
+          value={deleteResultDialog.mode === 'all' ? '本次已全部删除' : `本次成功删除 ${deleteResultDialog.deletedCount} 个`}
+          tone="danger"
+        />
+
+        <div className="grid grid-cols-1 gap-3 text-center text-sm">
+          <ResultStatCard label="删除数量" value={deleteResultDialog.deletedCount} tone="danger" />
+        </div>
+
+        <ResultPrimaryButton label="知道了" onClick={closeDeleteResultDialog} tone="danger" />
+      </ResultDialogShell>
 
       <CheckResultDialog />
     </div>
