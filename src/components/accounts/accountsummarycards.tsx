@@ -15,7 +15,7 @@ interface AccountSummaryCardsProps {
 
 export const AccountSummaryCards = memo(function AccountSummaryCards({ items, activeFilter, onSelect }: AccountSummaryCardsProps) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid grid-cols-5 gap-3">
       {items.map((item) => {
         const active = activeFilter === item.key
         return (

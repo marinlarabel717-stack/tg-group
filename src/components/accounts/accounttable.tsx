@@ -21,7 +21,7 @@ import {
   useReactTable
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Activity, ArrowUpDown, ChevronRight, HeartPulse, KeyRound, Loader2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
+import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, HeartPulse, KeyRound, Loader2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
 import type { AccountRecord, CheckAction } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
@@ -1045,6 +1045,21 @@ export const AccountTable = memo(function AccountTable() {
     setActiveShortcutId((current) => current === shortcutId ? null : current)
   }, [])
 
+  const handleMoveShortcut = useCallback((shortcutId: string, direction: 'left' | 'right') => {
+    setSavedShortcuts((previous) => {
+      const index = previous.findIndex((item) => item.id === shortcutId)
+      if (index < 0) return previous
+
+      const targetIndex = direction === 'left' ? index - 1 : index + 1
+      if (targetIndex < 0 || targetIndex >= previous.length) return previous
+
+      const next = [...previous]
+      const [item] = next.splice(index, 1)
+      next.splice(targetIndex, 0, item)
+      return next
+    })
+  }, [])
+
   const handleSelectAll = useCallback(() => {
     setSelectedIds(orderedIds)
   }, [orderedIds, setSelectedIds])
@@ -1150,8 +1165,8 @@ export const AccountTable = memo(function AccountTable() {
         }}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {shortcutCards.map((shortcut) => {
+      <div className="grid grid-cols-5 gap-3">
+        {shortcutCards.map((shortcut, index) => {
           const active = activeShortcutId === shortcut.id
           return (
             <div
@@ -1169,18 +1184,44 @@ export const AccountTable = memo(function AccountTable() {
                 ? 'border-sky-400/45 bg-sky-400/10 shadow-[0_0_0_1px_rgba(56,189,248,0.16)]'
                 : 'border-white/8 bg-card hover:bg-hover'}`}
             >
-              <button
-                type="button"
-                title="删除这个顶部筛选"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  handleRemoveShortcut(shortcut.id)
-                }}
-                className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full text-textMuted transition hover:bg-white/10 hover:text-white"
-              >
-                <X size={14} />
-              </button>
-              <div className={`pr-8 text-base font-semibold ${active ? 'text-sky-200' : 'text-white'}`}>{shortcut.name}</div>
+              <div className="absolute right-3 top-3 flex items-center gap-1">
+                <button
+                  type="button"
+                  title="左移"
+                  disabled={index === 0}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleMoveShortcut(shortcut.id, 'left')
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-textMuted transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button
+                  type="button"
+                  title="右移"
+                  disabled={index === shortcutCards.length - 1}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleMoveShortcut(shortcut.id, 'right')
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-textMuted transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <ChevronRight size={14} />
+                </button>
+                <button
+                  type="button"
+                  title="删除这个顶部筛选"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleRemoveShortcut(shortcut.id)
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-textMuted transition hover:bg-white/10 hover:text-white"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className={`pr-24 text-base font-semibold ${active ? 'text-sky-200' : 'text-white'}`}>{shortcut.name}</div>
               <div className={`mt-2 text-xs ${active ? 'text-sky-100/90' : 'text-textMuted'}`}>{shortcut.summary}</div>
               <div className={`mt-3 text-2xl font-semibold ${active ? 'text-sky-300' : 'text-white'}`}>{shortcut.count}</div>
             </div>
