@@ -28,6 +28,7 @@ export function ResultDialogShell({
   subtitle,
   icon,
   tone,
+  closable = true,
   maxWidth = 'max-w-[440px]',
   children
 }: {
@@ -37,13 +38,14 @@ export function ResultDialogShell({
   subtitle: string
   icon: ReactNode
   tone: Exclude<ResultTone, 'neutral'>
+  closable?: boolean
   maxWidth?: string
   children: ReactNode
 }) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4" onClick={closable ? onClose : undefined}>
       <div className={`w-full ${maxWidth} rounded-[20px] border bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)] ${toneBoxClass[tone]}`} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div className="flex items-center gap-3 text-white">
@@ -56,9 +58,11 @@ export function ResultDialogShell({
             </div>
           </div>
 
-          <button type="button" className="flex h-11 w-11 items-center justify-center rounded-[12px] text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}>
-            <X size={16} />
-          </button>
+          {closable ? (
+            <button type="button" className="flex h-11 w-11 items-center justify-center rounded-[12px] text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}>
+              <X size={16} />
+            </button>
+          ) : <div className="h-11 w-11" aria-hidden="true" />}
         </div>
 
         <div className="space-y-4 px-5 py-5">{children}</div>

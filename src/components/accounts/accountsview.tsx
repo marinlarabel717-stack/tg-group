@@ -35,46 +35,45 @@ export function AccountsView() {
 
       <AccountTable />
 
-      {showImportProgressDialog && importProgress ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4">
-          <div className="w-full max-w-[420px] rounded-[20px] border border-neon/20 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]">
-            <div className="border-b border-white/8 px-5 py-4">
-              <div className="flex items-center gap-3 text-white">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-neon/10 text-neonSoft">
-                  <Upload size={18} />
-                </div>
-                <div>
-                  <div className="text-base font-semibold text-white">正在导入账号</div>
-                  <div className="mt-1 text-xs text-slate-300">请稍等，正在处理你刚导入的账号文件</div>
-                </div>
-              </div>
-            </div>
+      <ResultDialogShell
+        open={showImportProgressDialog && Boolean(importProgress)}
+        onClose={() => {}}
+        title="正在导入账号"
+        subtitle="请稍等，正在处理你刚导入的账号文件"
+        icon={<Upload size={18} />}
+        tone="violet"
+        maxWidth="max-w-[420px]"
+        closable={false}
+      >
+        <ResultHero
+          label="当前进度"
+          value={importProgress ? `${importProgress.current} / ${importProgress.total}` : '0 / 0'}
+          tone="violet"
+        />
 
-            <div className="space-y-4 px-5 py-5">
-              <div className="flex items-center justify-between rounded-[14px] bg-panel px-4 py-3 text-sm">
-                <div className="flex items-center gap-2 text-white">
-                  <Loader2 size={16} className="animate-spin text-neonSoft" />
-                  <span>{importProgress.message}</span>
-                </div>
-                <div className="font-medium text-neonSoft">{importProgress.current} / {importProgress.total}</div>
-              </div>
-
-              <div className="h-2 overflow-hidden rounded-full bg-panel">
-                <div
-                  className="h-full rounded-full bg-neonSoft transition-all duration-300"
-                  style={{ width: `${importProgress.total > 0 ? Math.min((importProgress.current / importProgress.total) * 100, 100) : 0}%` }}
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                <ResultStatCard label="已导入" value={importProgress.importedCount} tone="success" />
-                <ResultStatCard label="补 JSON" value={importProgress.generatedJsonCount} tone="violet" />
-                <ResultStatCard label="跳过" value={importProgress.skippedCount} tone="warning" />
-              </div>
-            </div>
+        <div className="flex items-center justify-between rounded-[14px] bg-panel px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 text-white">
+            <Loader2 size={16} className="animate-spin text-violet-300" />
+            <span>{importProgress?.message || '正在处理...'}</span>
+          </div>
+          <div className="font-medium text-violet-300">
+            {importProgress ? `${importProgress.current} / ${importProgress.total}` : '0 / 0'}
           </div>
         </div>
-      ) : null}
+
+        <div className="h-2 overflow-hidden rounded-full bg-panel">
+          <div
+            className="h-full rounded-full bg-violet-300 transition-all duration-300"
+            style={{ width: `${importProgress && importProgress.total > 0 ? Math.min((importProgress.current / importProgress.total) * 100, 100) : 0}%` }}
+          />
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 text-center text-sm">
+          <ResultStatCard label="已导入" value={importProgress?.importedCount ?? 0} tone="success" />
+          <ResultStatCard label="补 JSON" value={importProgress?.generatedJsonCount ?? 0} tone="violet" />
+          <ResultStatCard label="跳过" value={importProgress?.skippedCount ?? 0} tone="warning" />
+        </div>
+      </ResultDialogShell>
 
       <ResultDialogShell
         open={showImportResultDialog}
