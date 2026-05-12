@@ -1054,25 +1054,6 @@ export const AccountTable = memo(function AccountTable() {
             <div className="fixed bottom-4 z-[999] px-1" ref={bulkMenuRef} style={{ left: `${bulkMenuLayout.left}px`, width: `${bulkMenuLayout.width}px` }}>
               <div className="rounded-[16px] border border-white/10 bg-card/95 px-3 py-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur">
                 <div className="flex flex-col items-center gap-3 rounded-[12px] bg-panel/85 px-3 py-3">
-                  <div className="flex flex-wrap items-center justify-center gap-3">
-                    <button
-                      type="button"
-                      onClick={handleClearSelection}
-                      className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-card text-textMuted transition hover:bg-hover hover:text-white"
-                      title="取消当前选中"
-                    >
-                      <X size={16} />
-                    </button>
-
-                    <div className="rounded-[12px] bg-card px-4 py-3 text-sm font-semibold text-white">
-                      {selectedCount} / {totalCount}
-                    </div>
-
-                    {bulkActionHint ? (
-                      <div className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-textMuted">{bulkActionHint}</div>
-                    ) : null}
-                  </div>
-
                   <div className="relative self-center">
                     <button
                       type="button"
