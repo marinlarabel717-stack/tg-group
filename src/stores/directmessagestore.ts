@@ -147,7 +147,7 @@ interface DirectMessageState {
   appendCollectedUsersToTargets: () => void
   clearCollectedUsers: () => void
   generatePreview: (accounts: Array<{ id: number; username?: string; phone?: string; profile?: Record<string, unknown> }>) => void
-  startSend: () => Promise<void>
+  startSend: (accounts: Array<{ id: number; username?: string; phone?: string; profile?: Record<string, unknown> }>) => Promise<void>
   clearPreview: () => void
   clearRuns: () => void
   initRuntime: () => Promise<void>
@@ -512,17 +512,21 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           lastActionMessage: `已生成 ${previewItems.length} 条私信预览，当前按每 ${state.intervalSeconds} 秒一批往后排。`
         })
       },
-      startSend: async () => {
-        const state = get()
+      startSend: async (accounts) => {
+        let state = get()
         if (!window.desktopDirectMessage) {
           set({ lastActionMessage: '当前环境没有接入真实私信发送能力。' })
           return
         }
         if (state.previewItems.length === 0) {
-          set({ lastActionMessage: '先生成发送预览，再开始发送。' })
+          get().generatePreview(accounts)
+          state = get()
+        }
+        if (state.previewItems.length === 0) {
+          set({ lastActionMessage: '当前还不能直接发送，请先把账号、目标和文案填完整。' })
           return
         }
-        set({ sending: true, lastActionMessage: '正在把私信发到 Telegram，请稍候...' })
+        set({ sending: true, activeTab: 'logs', lastActionMessage: '正在把私信发到 Telegram，请稍候...' })
         try {
           const result = await window.desktopDirectMessage.sendMessages({
             items: state.previewItems.map((item) => ({

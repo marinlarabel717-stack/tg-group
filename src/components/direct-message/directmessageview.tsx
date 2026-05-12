@@ -231,7 +231,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                 <div className="text-xs tracking-[0.18em] text-textMuted">发送操作</div>
                 <div className="mt-3 flex gap-2">
                   <button type="button" onClick={() => generatePreview(accounts)} className="flex-1 rounded-[12px] bg-violet-400/12 px-3 py-3 text-sm text-violet-300 transition hover:bg-violet-400/18">预览</button>
-                  <button type="button" disabled={sending} onClick={() => void startSend()} className="flex-1 rounded-[12px] bg-violet-400 px-3 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{sending ? '发送中' : '开始发送'}</button>
+                  <button type="button" disabled={sending} onClick={() => void startSend(accounts)} className="flex-1 rounded-[12px] bg-violet-400 px-3 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{sending ? '发送中' : '开始发送'}</button>
                 </div>
               </div>
             </div>
@@ -448,9 +448,26 @@ const SendWorkbench = memo(function SendWorkbench() {
 const LogsWorkbench = memo(function LogsWorkbench() {
   const runs = useDirectMessageStore((state) => state.runs)
   const clearRuns = useDirectMessageStore((state) => state.clearRuns)
+  const previewItems = useDirectMessageStore((state) => state.previewItems)
+  const sending = useDirectMessageStore((state) => state.sending)
+  const messageType = useDirectMessageStore((state) => state.messageType)
   const detailedItems = useMemo(
     () => runs.flatMap((run) => run.items.map((item) => ({ ...item, fallbackAt: run.createdAt }))),
     [runs]
+  )
+  const liveItems = useMemo(
+    () => previewItems.map((item, index) => ({
+      id: item.id,
+      sentAt: item.sentAt,
+      fallbackAt: new Date().toISOString(),
+      accountPhone: item.accountPhone,
+      messageType,
+      targetValue: item.targetValue,
+      status: item.status,
+      sequence: index + 1,
+      message: item.errorMessage
+    })),
+    [previewItems, messageType]
   )
 
   const exportLogs = () => {
@@ -478,7 +495,16 @@ const LogsWorkbench = memo(function LogsWorkbench() {
         </div>
       </div>
       <div className="mt-4 space-y-3">
-        {detailedItems.length === 0 ? (
+        {sending && liveItems.length > 0 ? liveItems.map((item) => (
+          <div key={item.id} className={`rounded-[14px] px-4 py-3 ${item.status === 'sent' ? 'bg-emerald-400/8' : item.status === 'failed' ? 'bg-rose-400/8' : 'bg-sky-400/8'}`}>
+            <div className={`text-sm font-medium ${item.status === 'sent' ? 'text-emerald-300' : item.status === 'failed' ? 'text-rose-300' : 'text-sky-300'}`}>
+              <span className="select-text">[{formatTimeOnly(item.sentAt || item.fallbackAt)}] [{item.accountPhone}] - 通过{readMessageTypeLabel(item.messageType)} - 向{item.targetValue} - {item.status === 'sent' ? '发送成功' : item.status === 'failed' ? '发送失败' : '发送中'} -- {item.sequence}</span>
+            </div>
+            {item.status === 'failed' && item.message ? (
+              <div className="mt-1 select-text text-xs text-rose-200">{item.message}</div>
+            ) : null}
+          </div>
+        )) : detailedItems.length === 0 ? (
           <div className="rounded-[16px] bg-panel/70 px-4 py-10 text-center text-sm text-textMuted">还没有发送记录</div>
         ) : detailedItems.map((item) => (
           <div key={item.id} className={`rounded-[14px] px-4 py-3 ${item.status === 'sent' ? 'bg-emerald-400/8' : 'bg-rose-400/8'}`}>
