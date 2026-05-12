@@ -2,6 +2,7 @@ export type ModuleKey =
   | 'dashboard'
   | 'accounts'
   | 'automation'
+  | 'auto-join'
   | 'direct-message'
   | 'proxy-pool'
   | 'session-manager'
@@ -536,6 +537,64 @@ export interface DirectMessageAutoReplyEvent {
   createdAt: string
 }
 
+export interface AutoJoinPayloadItem {
+  id: string
+  raw: string
+  normalized: string
+  kind: 'invite' | 'username'
+}
+
+export interface AutoJoinPayload {
+  taskId: string
+  accountIds: number[]
+  items: AutoJoinPayloadItem[]
+  concurrency: number
+  intervalSeconds: number
+  retryLimit: number
+  autoRetryOnFloodWait: boolean
+}
+
+export interface AutoJoinResultItem {
+  itemId: string
+  raw: string
+  normalized: string
+  status: 'joined' | 'already' | 'failed'
+  errorMessage: string
+  accountId: number | null
+  accountLabel: string
+  groupTitle: string
+  joinedAt: string | null
+  attempt: number
+}
+
+export interface AutoJoinTaskResult {
+  taskId: string
+  total: number
+  successCount: number
+  alreadyCount: number
+  failedCount: number
+  items: AutoJoinResultItem[]
+  message: string
+}
+
+export interface AutoJoinStopResult {
+  stopped: boolean
+  message: string
+}
+
+export interface AutoJoinProgress {
+  taskId: string
+  total: number
+  completed: number
+  successCount: number
+  alreadyCount: number
+  failedCount: number
+  running: boolean
+  item?: AutoJoinResultItem | null
+  message: string
+  waitSeconds?: number | null
+}
+
 export interface DesktopSettingsApi {
   get: () => Promise<DesktopAppSettings>
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
@@ -576,6 +635,12 @@ export interface DesktopDirectMessageApi {
   onAutoReplyEvent: (callback: (payload: DirectMessageAutoReplyEvent) => void) => () => void
 }
 
+export interface DesktopAutoJoinApi {
+  start: (payload: AutoJoinPayload) => Promise<AutoJoinTaskResult>
+  stop: () => Promise<AutoJoinStopResult>
+  onProgress: (callback: (payload: AutoJoinProgress) => void) => () => void
+}
+
 export interface DesktopWindowApi {
   minimize: () => Promise<void>
   toggleMaximize: () => Promise<boolean>
@@ -591,6 +656,7 @@ declare global {
     desktopLicense?: DesktopLicenseApi
     desktopBroadcast?: DesktopBroadcastApi
     desktopDirectMessage?: DesktopDirectMessageApi
+    desktopAutoJoin?: DesktopAutoJoinApi
     desktopWindow?: DesktopWindowApi
     desktopInfo?: {
       appName: string

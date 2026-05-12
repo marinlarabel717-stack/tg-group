@@ -30,6 +30,8 @@ import { BroadcastService } from './broadcast/service'
 import { registerBroadcastIpc } from './broadcast/ipc'
 import { DirectMessageService } from './direct-message/service'
 import { registerDirectMessageIpc } from './direct-message/ipc'
+import { AutoJoinService } from './auto-join/service'
+import { registerAutoJoinIpc } from './auto-join/ipc'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -168,6 +170,7 @@ async function bootstrap() {
   const updateService = new AccountUpdateService(accountsRootPath)
   const broadcastService = new BroadcastService(repository, sessionLoader, clientManager)
   const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager)
+  const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager)
   const resultWriter = new CheckResultWriter(repository, {
     onWrite: (accounts) => emitAccountsUpdated(accounts)
   })
@@ -228,6 +231,9 @@ async function bootstrap() {
   registerDirectMessageIpc({
     directMessageService,
     getMainWindow: () => mainWindow
+  })
+  registerAutoJoinIpc({
+    autoJoinService
   })
   createWindow()
 

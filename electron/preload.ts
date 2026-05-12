@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
+import type { AccountRecord, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'Telegram Multi Account Manager',
@@ -102,5 +102,15 @@ contextBridge.exposeInMainWorld('desktopDirectMessage', {
     const listener = (_event: Electron.IpcRendererEvent, payload: DirectMessageAutoReplyEvent) => callback(payload)
     ipcRenderer.on('direct-message:auto-reply-event', listener)
     return () => ipcRenderer.removeListener('direct-message:auto-reply-event', listener)
+  }
+})
+
+contextBridge.exposeInMainWorld('desktopAutoJoin', {
+  start: (payload: AutoJoinPayload) => ipcRenderer.invoke('auto-join:start', payload) as Promise<AutoJoinTaskResult>,
+  stop: () => ipcRenderer.invoke('auto-join:stop') as Promise<AutoJoinStopResult>,
+  onProgress: (callback: (payload: AutoJoinProgress) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: AutoJoinProgress) => callback(payload)
+    ipcRenderer.on('auto-join:progress', listener)
+    return () => ipcRenderer.removeListener('auto-join:progress', listener)
   }
 })
