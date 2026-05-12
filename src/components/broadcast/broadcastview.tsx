@@ -94,6 +94,30 @@ function explainPreviewError(errorMessage: string) {
   if (normalized.includes('这个群不允许发纯文字') || /CHAT_SEND_PLAIN_FORBIDDEN/i.test(normalized)) {
     return '这个群不允许发纯文字。请改成图文或图片发送。'
   }
+  if (normalized.includes('这个群不允许发图片') || /CHAT_SEND_PHOTOS_FORBIDDEN/i.test(normalized)) {
+    return '这个群不让发图片，所以这条带图内容发不过去。'
+  }
+  if (normalized.includes('这个群不允许发视频') || /CHAT_SEND_VIDEOS_FORBIDDEN/i.test(normalized)) {
+    return '这个群不让发视频。'
+  }
+  if (normalized.includes('这个群不允许发动图') || /CHAT_SEND_GIFS_FORBIDDEN/i.test(normalized)) {
+    return '这个群不让发动图。'
+  }
+  if (normalized.includes('这个群不允许发文件') || /CHAT_SEND_DOCS_FORBIDDEN/i.test(normalized)) {
+    return '这个群不让发文件。'
+  }
+  if (normalized.includes('这个群不允许发语音') || /CHAT_SEND_VOICES_FORBIDDEN/i.test(normalized)) {
+    return '这个群不让发语音。'
+  }
+  if (normalized.includes('这个群不允许发音频') || /CHAT_SEND_AUDIOS_FORBIDDEN|CHAT_SEND_MUSIC_FORBIDDEN/i.test(normalized)) {
+    return '这个群不让发音频。'
+  }
+  if (normalized.includes('这个群不允许发表情贴纸') || /CHAT_SEND_STICKERS_FORBIDDEN/i.test(normalized)) {
+    return '这个群不让发表情贴纸。'
+  }
+  if (normalized.includes('这个群不允许发圆视频') || /CHAT_SEND_ROUNDVIDEOS_FORBIDDEN/i.test(normalized)) {
+    return '这个群不让发圆视频。'
+  }
   if (normalized.includes('这个群不允许发图片或媒体') || /CHAT_SEND_MEDIA_FORBIDDEN/i.test(normalized)) {
     return '这个群不让发图片或媒体。先改成纯文字，或者去 Telegram 里确认群权限。'
   }
