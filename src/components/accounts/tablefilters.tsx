@@ -71,7 +71,7 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
       <button
         onClick={props.onRefresh}
         disabled={props.busy}
-        className="ml-auto flex h-11 items-center gap-2 rounded-[12px] bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-11 items-center gap-2 rounded-[12px] bg-neon/10 px-4 text-sm font-medium text-neonSoft transition hover:bg-neon/14 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {props.loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
         刷新
