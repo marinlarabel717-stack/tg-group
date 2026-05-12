@@ -18,8 +18,7 @@ import { useAccountStore } from '../../stores/accountstore'
 import {
   useDirectMessageStore,
   type DirectMessageCollectorMode,
-  type DirectMessageTabKey,
-  type DirectMessageTargetRecord
+  type DirectMessageTabKey
 } from '../../stores/directmessagestore'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
 
@@ -53,12 +52,6 @@ function readCollectorModeLabel(mode: DirectMessageCollectorMode) {
   if (mode === 'comment_users') return '评论用户'
   if (mode === 'react_users') return '反应用户'
   return '手工名单'
-}
-
-function getTargetTone(target: DirectMessageTargetRecord) {
-  if (!target.valid) return 'bg-rose-400/10 text-rose-200'
-  if (target.duplicate) return 'bg-amber-300/10 text-amber-100'
-  return 'bg-emerald-400/10 text-emerald-200'
 }
 
 function getAccountStatusTone(status?: string) {
@@ -124,7 +117,6 @@ const SendWorkbench = memo(function SendWorkbench() {
   const targetSummary = useDirectMessageStore((state) => state.targetSummary)
   const targets = useDirectMessageStore((state) => state.targets)
   const importTargets = useDirectMessageStore((state) => state.importTargets)
-  const removeTarget = useDirectMessageStore((state) => state.removeTarget)
   const clearTargets = useDirectMessageStore((state) => state.clearTargets)
   const messageType = useDirectMessageStore((state) => state.messageType)
   const setMessageType = useDirectMessageStore((state) => state.setMessageType)
@@ -276,19 +268,6 @@ const SendWorkbench = memo(function SendWorkbench() {
               </div>
             </div>
 
-            <div className="mt-4 max-h-[260px] space-y-2 overflow-y-auto pr-1">
-              {targets.length === 0 ? (
-                <div className="rounded-[16px] bg-panel/70 px-4 py-10 text-center text-sm text-textMuted">还没有发送目标</div>
-              ) : targets.map((target) => (
-                <div key={target.id} className="flex items-center justify-between gap-3 rounded-[14px] bg-panel/70 px-4 py-3">
-                  <div className="min-w-0 truncate text-sm text-white">{target.value}</div>
-                  <div className="flex items-center gap-2">
-                    <div className={`rounded-full px-2.5 py-1 text-[11px] ${getTargetTone(target)}`}>{!target.valid ? '格式不对' : target.duplicate ? '重复' : '可发送'}</div>
-                    <button type="button" onClick={() => removeTarget(target.id)} className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/[0.05] hover:text-white"><X size={14} /></button>
-                  </div>
-                </div>
-              ))}
-            </div>
           </GlassPanel>
 
           <GlassPanel className="bg-card">
