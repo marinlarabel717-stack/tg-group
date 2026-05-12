@@ -1216,13 +1216,38 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const selectedTaskId = useBroadcastStore((state) => state.selectedTaskId)
   const lastActionMessage = useBroadcastStore((state) => state.lastActionMessage)
   const errorMessage = useBroadcastStore((state) => state.errorMessage)
+  const [accountFilter, setAccountFilter] = useState<'all' | string>('all')
 
   const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? tasks[0] ?? null, [selectedTaskId, tasks])
   const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTask?.id), [previewItems, selectedTask])
-  const previewSummary = useMemo(() => {
-    const successCount = selectedPreview.filter((item) => item.status === 'scheduled').length
-    const failedItems = selectedPreview.filter((item) => item.status === 'failed')
-    const pendingCount = selectedPreview.length - successCount - failedItems.length
+  const accountFilterOptions = useMemo(() => {
+    const ids = Array.from(new Set(selectedPreview.map((item) => item.accountId).filter((item): item is number => typeof item === 'number')))
+    return ids.map((accountId) => {
+      const account = accounts.find((item) => item.id === accountId)
+      return {
+        id: String(accountId),
+        label: account?.username || account?.phone || `账号#${accountId}`
+      }
+    })
+  }, [accounts, selectedPreview])
+
+  useEffect(() => {
+    if (accountFilter === 'all') return
+    if (!accountFilterOptions.some((item) => item.id === accountFilter)) {
+      setAccountFilter('all')
+    }
+  }, [accountFilter, accountFilterOptions])
+
+  const filteredPreview = useMemo(() => (
+    accountFilter === 'all'
+      ? selectedPreview
+      : selectedPreview.filter((item) => String(item.accountId ?? '') === accountFilter)
+  ), [accountFilter, selectedPreview])
+
+  const buildSummary = (items: BroadcastPreviewItem[]) => {
+    const successCount = items.filter((item) => item.status === 'scheduled').length
+    const failedItems = items.filter((item) => item.status === 'failed')
+    const pendingCount = items.length - successCount - failedItems.length
     const expiredCount = failedItems.filter((item) => item.errorMessage.includes('排程时间太近') || item.errorMessage.includes('已过期')).length
     const unboundGroupNames = Array.from(new Set(failedItems
       .filter((item) => item.errorMessage.includes('目标群内没有已加入且可发送的账号'))
@@ -1231,7 +1256,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       .filter((item) => item.errorMessage.includes('缺少可用的 @username') || item.errorMessage.includes('缺少可用的 @username、私密链接或群链接') || item.errorMessage.includes('无法识别这个群'))
       .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
     return {
-      total: selectedPreview.length,
+      total: items.length,
       successCount,
       failedCount: failedItems.length,
       pendingCount,
@@ -1239,7 +1264,10 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       unboundGroupNames,
       invalidRefGroupNames
     }
-  }, [groups, selectedPreview])
+  }
+
+  const previewSummary = useMemo(() => buildSummary(selectedPreview), [groups, selectedPreview])
+  const filteredSummary = useMemo(() => buildSummary(filteredPreview), [groups, filteredPreview])
 
   return (
     <GlassPanel className="bg-card min-h-[720px]">
@@ -1251,6 +1279,17 @@ const LogsWorkbench = memo(function LogsWorkbench() {
         <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{selectedPreview.length} 条</div>
       </div>
 
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button type="button" onClick={() => setAccountFilter('all')} className={`rounded-[12px] px-4 py-2.5 text-sm transition ${accountFilter === 'all' ? 'bg-violet-400/14 text-violet-200' : 'bg-white/[0.04] text-textMuted hover:bg-white/[0.08] hover:text-white'}`}>
+          全部
+        </button>
+        {accountFilterOptions.map((option) => (
+          <button key={option.id} type="button" onClick={() => setAccountFilter(option.id)} className={`rounded-[12px] px-4 py-2.5 text-sm transition ${accountFilter === option.id ? 'bg-violet-400/14 text-violet-200' : 'bg-white/[0.04] text-textMuted hover:bg-white/[0.08] hover:text-white'}`}>
+            {option.label}
+          </button>
+        ))}
+      </div>
+
       {lastActionMessage ? <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage}</div> : null}
       {errorMessage ? <div className="mt-3 rounded-[14px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
 
@@ -1258,30 +1297,31 @@ const LogsWorkbench = memo(function LogsWorkbench() {
         <div className="mt-4 space-y-3">
           <div className="rounded-[18px] border border-violet-400/15 bg-violet-400/8 p-4">
             <div className="text-sm font-semibold text-white">结果先看这里</div>
+            <div className="mt-2 text-xs text-textMuted">当前查看：{accountFilter === 'all' ? '全部账号' : (accountFilterOptions.find((item) => item.id === accountFilter)?.label || '当前账号')}</div>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               <div className="rounded-[14px] bg-panel px-4 py-3">
                 <div className="text-xs text-textMuted">已写入</div>
-                <div className="mt-1 text-xl font-semibold text-emerald-300">{previewSummary.successCount} 条</div>
+                <div className="mt-1 text-xl font-semibold text-emerald-300">{filteredSummary.successCount} 条</div>
               </div>
               <div className="rounded-[14px] bg-panel px-4 py-3">
                 <div className="text-xs text-textMuted">失败</div>
-                <div className="mt-1 text-xl font-semibold text-rose-300">{previewSummary.failedCount} 条</div>
+                <div className="mt-1 text-xl font-semibold text-rose-300">{filteredSummary.failedCount} 条</div>
               </div>
               <div className="rounded-[14px] bg-panel px-4 py-3">
                 <div className="text-xs text-textMuted">待写入</div>
-                <div className="mt-1 text-xl font-semibold text-slate-200">{previewSummary.pendingCount} 条</div>
+                <div className="mt-1 text-xl font-semibold text-slate-200">{filteredSummary.pendingCount} 条</div>
               </div>
             </div>
           </div>
 
-          {previewSummary.failedCount > 0 ? (
+          {filteredSummary.failedCount > 0 ? (
             <div className="rounded-[18px] border border-rose-400/15 bg-rose-400/8 p-4">
               <div className="text-sm font-semibold text-white">先处理这几个问题</div>
               <div className="mt-3 space-y-2 text-sm text-rose-100">
-                {previewSummary.expiredCount > 0 ? <div>1）有 {previewSummary.expiredCount} 条已经过期：先重新点“预览发送”，再马上点“开始发送”。</div> : null}
-                {previewSummary.unboundGroupNames.length > 0 ? <div>2）这些群还没绑好发送账号：{previewSummary.unboundGroupNames.join('、')}</div> : null}
-                {previewSummary.invalidRefGroupNames.length > 0 ? <div>3）这些群的群链接 / 私密链接还不对：{previewSummary.invalidRefGroupNames.join('、')}</div> : null}
-                {previewSummary.expiredCount === 0 && previewSummary.unboundGroupNames.length === 0 && previewSummary.invalidRefGroupNames.length === 0 ? <div>有失败项，但不是上面这两类常见问题，往下看单条报错就行。</div> : null}
+                {filteredSummary.expiredCount > 0 ? <div>1）有 {filteredSummary.expiredCount} 条已经过期：先重新点“预览发送”，再马上点“开始发送”。</div> : null}
+                {filteredSummary.unboundGroupNames.length > 0 ? <div>2）这些群还没绑好发送账号：{filteredSummary.unboundGroupNames.join('、')}</div> : null}
+                {filteredSummary.invalidRefGroupNames.length > 0 ? <div>3）这些群的群链接 / 私密链接还不对：{filteredSummary.invalidRefGroupNames.join('、')}</div> : null}
+                {filteredSummary.expiredCount === 0 && filteredSummary.unboundGroupNames.length === 0 && filteredSummary.invalidRefGroupNames.length === 0 ? <div>有失败项，但不是上面这两类常见问题，往下看单条报错就行。</div> : null}
               </div>
             </div>
           ) : null}
@@ -1289,9 +1329,9 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       ) : null}
 
       <div className="mt-4 max-h-[820px] space-y-3 overflow-y-auto pr-1">
-        {selectedPreview.length === 0 ? (
+        {filteredPreview.length === 0 ? (
           <div className="flex min-h-[260px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">还没有发送日志，先去“定时群发”页预览或开始发送。</div>
-        ) : selectedPreview.map((item) => {
+        ) : filteredPreview.map((item) => {
           const creative = creatives.find((entry) => entry.id === item.creativeId)
           const group = groups.find((entry) => entry.id === item.groupId)
           const account = accounts.find((entry) => entry.id === item.accountId)
