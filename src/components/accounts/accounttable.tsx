@@ -21,7 +21,7 @@ import {
   useReactTable
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, HeartPulse, KeyRound, Loader2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
+import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, HeartPulse, KeyRound, Loader2, Settings2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
 import type { AccountRecord, CheckAction } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
@@ -1165,79 +1165,78 @@ export const AccountTable = memo(function AccountTable() {
         }}
       />
 
-      <div className="grid grid-cols-5 gap-3">
-        {shortcutCards.map((shortcut, index) => {
-          const active = activeShortcutId === shortcut.id
-          return (
-            <div
-              key={shortcut.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => handleApplyShortcut(shortcut)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  handleApplyShortcut(shortcut)
-                }
-              }}
-              className={`group relative rounded-[16px] border px-5 py-4 text-left transition ${active
-                ? 'border-sky-400/45 bg-sky-400/10 shadow-[0_0_0_1px_rgba(56,189,248,0.16)]'
-                : 'border-white/8 bg-card hover:bg-hover'}`}
-            >
-              <div className="absolute right-3 top-3 flex items-center gap-1">
-                <button
-                  type="button"
-                  title="左移"
-                  disabled={index === 0}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    handleMoveShortcut(shortcut.id, 'left')
-                  }}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-textMuted transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <button
-                  type="button"
-                  title="右移"
-                  disabled={index === shortcutCards.length - 1}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    handleMoveShortcut(shortcut.id, 'right')
-                  }}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-textMuted transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-                >
-                  <ChevronRight size={14} />
-                </button>
-                <button
-                  type="button"
-                  title="删除这个顶部筛选"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    handleRemoveShortcut(shortcut.id)
-                  }}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-textMuted transition hover:bg-white/10 hover:text-white"
-                >
-                  <X size={14} />
-                </button>
+      <div className="relative pb-14">
+        <div className="grid grid-cols-5 gap-3">
+          {shortcutCards.map((shortcut, index) => {
+            const active = activeShortcutId === shortcut.id
+            return (
+              <div
+                key={shortcut.id}
+                role="button"
+                tabIndex={0}
+                title={shortcut.summary}
+                onClick={() => handleApplyShortcut(shortcut)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    handleApplyShortcut(shortcut)
+                  }
+                }}
+                className={`group relative rounded-[16px] border px-5 py-4 text-left transition ${active
+                  ? 'border-sky-400/45 bg-sky-400/10 shadow-[0_0_0_1px_rgba(56,189,248,0.16)]'
+                  : 'border-white/8 bg-card hover:bg-hover'}`}
+              >
+                <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+                  <button
+                    type="button"
+                    title="左移"
+                    disabled={index === 0}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleMoveShortcut(shortcut.id, 'left')
+                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/45 text-textMuted transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    <ChevronLeft size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    title="右移"
+                    disabled={index === shortcutCards.length - 1}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleMoveShortcut(shortcut.id, 'right')
+                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/45 text-textMuted transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    <ChevronRight size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    title="删除这个顶部筛选"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleRemoveShortcut(shortcut.id)
+                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/45 text-textMuted transition hover:bg-white/10 hover:text-white"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                <div className={`text-3xl font-semibold ${active ? 'text-sky-300' : 'text-white'}`}>{shortcut.count}</div>
+                <div className={`mt-2 text-sm ${active ? 'text-sky-200' : 'text-textMuted'}`}>{shortcut.name}</div>
               </div>
-              <div className={`pr-24 text-base font-semibold ${active ? 'text-sky-200' : 'text-white'}`}>{shortcut.name}</div>
-              <div className={`mt-2 text-xs ${active ? 'text-sky-100/90' : 'text-textMuted'}`}>{shortcut.summary}</div>
-              <div className={`mt-3 text-2xl font-semibold ${active ? 'text-sky-300' : 'text-white'}`}>{shortcut.count}</div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
 
         <button
           type="button"
+          title="新建顶部筛选"
           onClick={handleOpenShortcutDialog}
-          className="rounded-[16px] border border-dashed border-violet-400/28 bg-violet-400/6 px-5 py-4 text-left transition hover:bg-violet-400/10"
+          className="absolute bottom-0 right-0 flex h-10 w-10 items-center justify-center rounded-full border border-violet-400/28 bg-violet-400/10 text-violet-200 shadow-[0_10px_28px_rgba(0,0,0,0.28)] transition hover:bg-violet-400/16"
         >
-          <div className="flex items-center gap-2 text-base font-semibold text-violet-200">
-            <Sparkles size={16} />
-            新建顶部筛选
-          </div>
-          <div className="mt-2 text-sm text-violet-100/80">自己选国家、状态、代理、会员条件，再自定义名字固定到顶部。</div>
+          <Settings2 size={18} />
         </button>
       </div>
 
