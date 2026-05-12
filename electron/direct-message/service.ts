@@ -31,6 +31,7 @@ function formatDirectMessageError(error: unknown) {
   if (/USERNAME_INVALID/i.test(normalized)) return '这个用户名不对，请检查 @username 是否填错。'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '这个用户名不存在，请确认目标用户写对了。'
   if (/ALLOW_PAYMENT_REQUIRED/i.test(normalized)) return '对方开启了付费私信，当前账号不能直接发送。'
+  if (/INPUT_USER_DEACTIVATED/i.test(normalized)) return '对方账号已注销、被封，或者已经不存在。'
   if (/PHONE_NUMBER_INVALID/i.test(normalized)) return '这个手机号格式不对，请检查手机号。'
   if (/USER_PRIVACY_RESTRICTED/i.test(normalized)) return '对方隐私限制了私信，当前账号发不过去。'
   if (/USER_IS_BLOCKED/i.test(normalized)) return '对方已经把当前账号拉黑了。'
