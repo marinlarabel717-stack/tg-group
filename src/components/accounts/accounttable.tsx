@@ -911,8 +911,6 @@ export const AccountTable = memo(function AccountTable() {
   return (
     <div className="space-y-4 min-w-0">
       <TableToolbar
-        search={search}
-        onSearchChange={handleSearchChange}
         selectedCount={selectedCount}
         totalCount={totalCount}
         loading={tableLoading}
@@ -928,15 +926,18 @@ export const AccountTable = memo(function AccountTable() {
       />
 
       <TableFilters
+        search={search}
         countryFilter={countryFilter}
         statusFilter={statusFilter === 'all' ? '' : statusFilter}
         proxyFilter={proxyFilter}
         countries={countries}
         statuses={statuses}
         proxies={proxies}
+        onSearchChange={handleSearchChange}
         onCountryChange={setCountryFilter}
         onStatusChange={(value) => setStatusFilter((value || 'all') as AccountStatusFilter)}
         onProxyChange={setProxyFilter}
+        onRefresh={handleRefresh}
       />
 
       <div ref={tableCardRef}>
