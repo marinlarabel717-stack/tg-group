@@ -1830,62 +1830,56 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
 
   return (
     <GlassPanel className="bg-card min-h-[720px]">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="text-lg font-semibold text-white">查看定时内容</div>
-          <div className="mt-1 text-sm text-textMuted">选账号、选群，就能直接看这个群已经定时好的内容，也能删掉不要的。</div>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={openAccountPicker}
-            className="min-w-[220px] rounded-[16px] bg-panel px-4 py-3 text-left transition hover:bg-white/[0.05]"
+      <div className="flex flex-wrap items-end gap-3">
+        <button
+          type="button"
+          onClick={openAccountPicker}
+          className="min-w-[220px] rounded-[16px] bg-panel px-4 py-3 text-left transition hover:bg-white/[0.05]"
+        >
+          <div className="text-xs text-textMuted">选择账号</div>
+          <div className="mt-2 text-sm font-medium text-white">{selectedAccount ? readAccountNickname(selectedAccount) : '点击选择账号'}</div>
+          <div className="mt-1 text-xs text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '—'} · ${formatAccountStatus(selectedAccount.status)}` : '点开弹窗选择账号'}</div>
+        </button>
+        <label className="min-w-[260px] rounded-[16px] bg-panel px-4 py-3">
+          <div className="text-xs text-textMuted">选择群</div>
+          <select
+            value={selectedGroupRef}
+            onChange={(event) => setSelectedGroupRef(event.target.value)}
+            disabled={typeof selectedAccountId !== 'number' || loadingGroups || groups.length === 0}
+            className="mt-2 w-full bg-transparent text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <div className="text-xs text-textMuted">选择账号</div>
-            <div className="mt-2 text-sm font-medium text-white">{selectedAccount ? readAccountNickname(selectedAccount) : '点击选择账号'}</div>
-            <div className="mt-1 text-xs text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '—'} · ${formatAccountStatus(selectedAccount.status)}` : '和前面一样，点开弹窗选择'}</div>
-          </button>
-          <label className="min-w-[260px] rounded-[16px] bg-panel px-4 py-3">
-            <div className="text-xs text-textMuted">选择群</div>
-            <select
-              value={selectedGroupRef}
-              onChange={(event) => setSelectedGroupRef(event.target.value)}
-              disabled={typeof selectedAccountId !== 'number' || loadingGroups || groups.length === 0}
-              className="mt-2 w-full bg-transparent text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {typeof selectedAccountId !== 'number' ? (
-                <option value="" className="bg-slate-900 text-white">请先选择账号</option>
-              ) : groups.length === 0 ? (
-                <option value="" className="bg-slate-900 text-white">{loadingGroups ? '正在读取群...' : '这个账号暂无可选群'}</option>
-              ) : groups.map((group) => (
-                <option key={`${group.targetRef}-${group.peerId}`} value={group.targetRef} className="bg-slate-900 text-white">
-                  {group.title}{group.username ? ` (${group.username})` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={() => setRefreshNonce((value) => value + 1)}
-            disabled={typeof selectedAccountId !== 'number'}
-            className="flex items-center gap-2 rounded-[14px] bg-white/[0.06] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]"
-          >
-            <RefreshCw size={16} />
-            刷新当前内容
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleDelete(selectedMessageIds)}
-            disabled={deleting || selectedMessageIds.length === 0}
-            className="flex items-center gap-2 rounded-[14px] bg-rose-400/14 px-4 py-3 text-sm font-semibold text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Trash2 size={16} />
-            删除已选（{selectedMessageIds.length}）
-          </button>
-        </div>
+            {typeof selectedAccountId !== 'number' ? (
+              <option value="" className="bg-slate-900 text-white">请先选择账号</option>
+            ) : groups.length === 0 ? (
+              <option value="" className="bg-slate-900 text-white">{loadingGroups ? '正在读取群...' : '这个账号暂无可选群'}</option>
+            ) : groups.map((group) => (
+              <option key={`${group.targetRef}-${group.peerId}`} value={group.targetRef} className="bg-slate-900 text-white">
+                {group.title}{group.username ? ` (${group.username})` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => setRefreshNonce((value) => value + 1)}
+          disabled={typeof selectedAccountId !== 'number'}
+          className="flex h-[52px] items-center gap-2 rounded-[14px] bg-white/[0.06] px-5 text-sm font-medium text-white transition hover:bg-white/[0.1]"
+        >
+          <RefreshCw size={16} />
+          刷新当前内容
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleDelete(selectedMessageIds)}
+          disabled={deleting || selectedMessageIds.length === 0}
+          className="flex h-[52px] items-center gap-2 rounded-[14px] bg-rose-400/14 px-5 text-sm font-semibold text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Trash2 size={16} />
+          删除已选（{selectedMessageIds.length}）
+        </button>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <div className="rounded-[18px] bg-panel p-4">
           <div className="text-xs text-textMuted">当前账号</div>
           <div className="mt-2 text-sm font-semibold text-white">{selectedAccount ? readAccountNickname(selectedAccount) : '未选择账号'}</div>
