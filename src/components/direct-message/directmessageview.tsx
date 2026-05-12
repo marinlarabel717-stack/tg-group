@@ -69,6 +69,13 @@ function getAccountStatusTone(status?: string) {
   return 'bg-white/10 text-slate-200'
 }
 
+function readMessageTypeLabel(messageType: 'text' | 'channel_forward' | 'hidden_channel_forward' | 'postbot_code') {
+  if (messageType === 'channel_forward') return '频道转发'
+  if (messageType === 'hidden_channel_forward') return '隐藏频道来源转发'
+  if (messageType === 'postbot_code') return 'post图文+按钮'
+  return '文本直发'
+}
+
 const TabBar = memo(function TabBar() {
   const activeTab = useDirectMessageStore((state) => state.activeTab)
   const setActiveTab = useDirectMessageStore((state) => state.setActiveTab)
@@ -428,24 +435,25 @@ const SendWorkbench = memo(function SendWorkbench() {
 
 const LogsWorkbench = memo(function LogsWorkbench() {
   const runs = useDirectMessageStore((state) => state.runs)
+  const detailedItems = useMemo(
+    () => runs.flatMap((run) => run.items.map((item) => ({ ...item, fallbackAt: run.createdAt }))),
+    [runs]
+  )
 
   return (
     <GlassPanel className="bg-card">
       <div className="text-base font-semibold text-white">私信日志</div>
       <div className="mt-4 space-y-3">
-        {runs.length === 0 ? (
+        {detailedItems.length === 0 ? (
           <div className="rounded-[16px] bg-panel/70 px-4 py-10 text-center text-sm text-textMuted">还没有发送记录</div>
-        ) : runs.map((run) => (
-          <div key={run.id} className="rounded-[16px] bg-panel/75 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-sm font-semibold text-white">{run.summary}</div>
-              <div className="text-xs text-textMuted">{formatDateTimeFull(run.createdAt)}</div>
+        ) : detailedItems.map((item) => (
+          <div key={item.id} className={`rounded-[14px] px-4 py-3 ${item.status === 'sent' ? 'bg-emerald-400/8' : 'bg-rose-400/8'}`}>
+            <div className={`text-sm font-medium ${item.status === 'sent' ? 'text-emerald-300' : 'text-rose-300'}`}>
+              【{formatDateTimeFull(item.sentAt || item.fallbackAt)}】【{item.accountPhone}】 - 通过{readMessageTypeLabel(item.messageType)} - 向{item.targetValue} - {item.status === 'sent' ? '发送成功' : '发送失败'} -- {item.sequence}
             </div>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <div className="rounded-[12px] bg-black/10 px-3 py-3 text-sm text-white">总数 {run.total}</div>
-              <div className="rounded-[12px] bg-black/10 px-3 py-3 text-sm text-white">成功 {run.sent}</div>
-              <div className="rounded-[12px] bg-black/10 px-3 py-3 text-sm text-white">失败 {run.failed}</div>
-            </div>
+            {item.status === 'failed' ? (
+              <div className="mt-1 text-xs text-rose-200">{item.message}</div>
+            ) : null}
           </div>
         ))}
       </div>

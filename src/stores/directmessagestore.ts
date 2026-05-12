@@ -39,6 +39,7 @@ export interface DirectMessagePreviewItem {
   targetValue: string
   accountId: number | null
   accountLabel: string
+  accountPhone: string
   status: DirectMessagePreviewStatus
   waitSeconds: number
   batchIndex: number
@@ -51,6 +52,9 @@ export interface DirectMessageRunItem {
   id: string
   targetValue: string
   accountLabel: string
+  accountPhone: string
+  messageType: DirectMessageMessageType
+  sequence: number
   status: 'sent' | 'failed'
   message: string
   remoteMessageId?: number | null
@@ -256,7 +260,14 @@ function mapCollectedUsers(items: DirectMessageCollectedUserPayload[]) {
   }))
 }
 
-function buildRunFromResult(result: DirectMessageSendResult, state: Pick<DirectMessageState, 'selectedAccountIds' | 'previewItems'>): DirectMessageRun {
+function readMessageTypeLabel(messageType: DirectMessageMessageType) {
+  if (messageType === 'channel_forward') return '频道转发'
+  if (messageType === 'hidden_channel_forward') return '隐藏频道来源转发'
+  if (messageType === 'postbot_code') return 'post图文+按钮'
+  return '文本直发'
+}
+
+function buildRunFromResult(result: DirectMessageSendResult, state: Pick<DirectMessageState, 'selectedAccountIds' | 'previewItems' | 'messageType'>): DirectMessageRun {
   const previewById = new Map(state.previewItems.map((item) => [item.id, item]))
   return {
     id: createId('dm_run'),
@@ -265,11 +276,14 @@ function buildRunFromResult(result: DirectMessageSendResult, state: Pick<DirectM
     sent: result.successCount,
     failed: result.failedCount,
     accountCount: state.selectedAccountIds.length,
-    summary: result.message,
-    items: result.items.map((item) => ({
+    summary: `${readMessageTypeLabel(state.messageType)} · ${result.message}`,
+    items: result.items.map((item, index) => ({
       id: createId('dm_run_item'),
       targetValue: item.targetValue,
       accountLabel: previewById.get(item.previewItemId)?.accountLabel || '未知账号',
+      accountPhone: previewById.get(item.previewItemId)?.accountPhone || '未知手机号',
+      messageType: state.messageType,
+      sequence: index + 1,
       status: item.status,
       message: item.errorMessage || (item.status === 'sent' ? '已成功发出私信。' : '发送失败。'),
       remoteMessageId: item.remoteMessageId,
@@ -483,6 +497,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
             targetValue: target.value,
             accountId: account?.id ?? null,
             accountLabel: account ? readAccountLabel(account) : '未分配账号',
+            accountPhone: account?.phone?.trim() || '未识别手机号',
             status: 'queued' as const,
             waitSeconds: batchIndex * state.intervalSeconds,
             batchIndex,
@@ -652,6 +667,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           autoReplyEnabled: typeof state?.autoReplyEnabled === 'boolean' ? state.autoReplyEnabled : false,
           previewItems: (state?.previewItems || []).map((item) => ({
             ...item,
+            accountPhone: item.accountPhone || '未识别手机号',
             status: item.status === 'failed' ? 'failed' : item.status === 'sent' ? 'sent' : 'queued',
             errorMessage: item.errorMessage || '',
             remoteMessageId: item.remoteMessageId ?? null,
