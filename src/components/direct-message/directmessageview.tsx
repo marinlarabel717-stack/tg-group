@@ -130,14 +130,10 @@ const SendWorkbench = memo(function SendWorkbench() {
   const setGroupConcurrency = useDirectMessageStore((state) => state.setGroupConcurrency)
   const intervalSeconds = useDirectMessageStore((state) => state.intervalSeconds)
   const setIntervalSeconds = useDirectMessageStore((state) => state.setIntervalSeconds)
-  const previewItems = useDirectMessageStore((state) => state.previewItems)
-  const generatePreview = useDirectMessageStore((state) => state.generatePreview)
   const startSend = useDirectMessageStore((state) => state.startSend)
   const stopSend = useDirectMessageStore((state) => state.stopSend)
   const sending = useDirectMessageStore((state) => state.sending)
   const stopping = useDirectMessageStore((state) => state.stopping)
-  const clearPreview = useDirectMessageStore((state) => state.clearPreview)
-  const runs = useDirectMessageStore((state) => state.runs)
   const lastActionMessage = useDirectMessageStore((state) => state.lastActionMessage)
 
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
@@ -163,9 +159,6 @@ const SendWorkbench = memo(function SendWorkbench() {
   const invalidTargets = targetSummary.invalid
   const duplicateTargets = targetSummary.duplicate
   const effectiveTargets = targets
-  const successCount = useMemo(() => previewItems.filter((item) => item.status === 'sent').length, [previewItems])
-  const failedCount = useMemo(() => previewItems.filter((item) => item.status === 'failed').length, [previewItems])
-  const latestRun = runs[0] ?? null
 
   const exportTargetsAsTxt = () => {
     const content = effectiveTargets.map((item) => item.value).join('\n')
@@ -200,10 +193,10 @@ const SendWorkbench = memo(function SendWorkbench() {
 
   return (
     <>
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-3">
               <button type="button" onClick={() => setAccountPickerOpen(true)} className="rounded-[16px] bg-panel/80 px-4 py-4 text-left transition hover:bg-white/[0.03]">
                 <div className="text-xs tracking-[0.18em] text-textMuted">账号数量</div>
                 <div className="mt-2 text-2xl font-semibold text-white">{selectedAccountIds.length}</div>
@@ -219,15 +212,6 @@ const SendWorkbench = memo(function SendWorkbench() {
                 <div className="text-xs tracking-[0.18em] text-textMuted">并发线程</div>
                 <input type="number" min={1} max={20} value={groupConcurrency} onChange={(event) => setGroupConcurrency(Number(event.target.value) || 1)} className="mt-3 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 py-3 text-white outline-none focus:border-violet-400/30" />
               </label>
-
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4">
-                <div className="text-xs tracking-[0.18em] text-textMuted">发送操作</div>
-                <div className="mt-3 flex gap-2">
-                  <button type="button" onClick={() => generatePreview(accounts)} className="flex-1 rounded-[12px] bg-violet-400/12 px-3 py-3 text-sm text-violet-300 transition hover:bg-violet-400/18">预览</button>
-                  <button type="button" disabled={sending} onClick={() => void startSend(accounts)} className="flex-1 rounded-[12px] bg-violet-400 px-3 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{sending ? '发送中' : '开始发送'}</button>
-                  <button type="button" disabled={!sending || stopping} onClick={() => void stopSend()} className="flex-1 rounded-[12px] bg-rose-400/12 px-3 py-3 text-sm font-medium text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50">{stopping ? '停止中' : '停止发送'}</button>
-                </div>
-              </div>
             </div>
           </GlassPanel>
 
@@ -245,26 +229,23 @@ const SendWorkbench = memo(function SendWorkbench() {
               </div>
             </div>
 
-            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
-              <div>
-                <textarea
-                  rows={11}
-                  value={targetInput}
-                  onChange={(event) => setTargetInput(event.target.value)}
-                  placeholder="一行一个，支持 @username / t.me/xxx / +8613xxxxxxx"
-                  className="w-full rounded-[16px] border border-white/8 bg-panel px-4 py-4 text-white outline-none focus:border-violet-400/30"
-                />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300">复制进来会自动清理重复和格式错误</div>
-                  <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.08]">清空预览</button>
-                </div>
-              </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">总数量</div><div className="mt-2 text-xl font-semibold text-white">{targetSummary.total}</div></div>
+              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">可发送</div><div className="mt-2 text-xl font-semibold text-white">{effectiveTargets.length}</div></div>
+              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">重复</div><div className="mt-2 text-xl font-semibold text-white">{duplicateTargets}</div></div>
+              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">格式不对</div><div className="mt-2 text-xl font-semibold text-white">{invalidTargets}</div></div>
+            </div>
 
-              <div className="grid gap-3">
-                <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">总数量</div><div className="mt-2 text-2xl font-semibold text-white">{targetSummary.total}</div></div>
-                <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">可发送</div><div className="mt-2 text-2xl font-semibold text-white">{effectiveTargets.length}</div></div>
-                <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">重复</div><div className="mt-2 text-2xl font-semibold text-white">{duplicateTargets}</div></div>
-                <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">格式不对</div><div className="mt-2 text-2xl font-semibold text-white">{invalidTargets}</div></div>
+            <div className="mt-4">
+              <textarea
+                rows={11}
+                value={targetInput}
+                onChange={(event) => setTargetInput(event.target.value)}
+                placeholder="一行一个，支持 @username / t.me/xxx / +8613xxxxxxx"
+                className="w-full rounded-[16px] border border-white/8 bg-panel px-4 py-4 text-white outline-none focus:border-violet-400/30"
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300">复制进来会自动清理重复和格式错误</div>
               </div>
             </div>
 
@@ -329,32 +310,12 @@ const SendWorkbench = memo(function SendWorkbench() {
 
         <div className="space-y-5">
           <GlassPanel className="bg-card sticky top-4">
-            <div className="text-base font-semibold text-white">运行结果</div>
-            <div className="mt-3 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '准备开始发送'}</div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">待发送</div><div className="mt-2 text-2xl font-semibold text-white">{previewItems.length - successCount - failedCount}</div></div>
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">成功</div><div className="mt-2 text-2xl font-semibold text-white">{successCount}</div></div>
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">失败</div><div className="mt-2 text-2xl font-semibold text-white">{failedCount}</div></div>
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">自动删除</div><div className="mt-2 text-sm font-semibold text-white">成功后自动移出名单</div></div>
+            <div className="text-base font-semibold text-white">发送操作</div>
+            <div className="mt-3 space-y-3">
+              <button type="button" disabled={sending} onClick={() => void startSend(accounts)} className="w-full rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{sending ? '发送中' : '开始发送'}</button>
+              <button type="button" disabled={!sending || stopping} onClick={() => void stopSend()} className="w-full rounded-[12px] bg-rose-400/12 px-4 py-3 text-sm font-medium text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50">{stopping ? '停止中' : '停止发送'}</button>
             </div>
-
-            <div className="mt-4 max-h-[520px] space-y-3 overflow-y-auto pr-1">
-              {previewItems.length === 0 ? (
-                <div className="rounded-[16px] bg-panel/70 px-4 py-10 text-center text-sm text-textMuted">还没有发送预览</div>
-              ) : previewItems.map((item) => (
-                <div key={item.id} className="rounded-[14px] bg-panel/70 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="truncate text-sm font-medium text-white">{item.targetValue}</div>
-                    <div className={`rounded-full px-2.5 py-1 text-[11px] ${item.status === 'sent' ? 'bg-emerald-400/10 text-emerald-200' : item.status === 'failed' ? 'bg-rose-400/10 text-rose-200' : 'bg-sky-400/10 text-sky-300'}`}>{item.status === 'sent' ? '成功' : item.status === 'failed' ? '失败' : '等待中'}</div>
-                  </div>
-                  <div className="mt-2 text-xs text-textMuted">等待 {item.waitSeconds} 秒</div>
-                  {item.errorMessage ? <div className="mt-2 text-xs text-rose-200">{item.errorMessage}</div> : null}
-                </div>
-              ))}
-            </div>
-
-            {latestRun ? <div className="mt-4 text-xs text-textMuted">最近一轮：{formatDateTimeFull(latestRun.createdAt)}</div> : null}
+            <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '准备开始发送'}</div>
           </GlassPanel>
         </div>
       </div>
