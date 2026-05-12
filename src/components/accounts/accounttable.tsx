@@ -926,6 +926,7 @@ export const AccountTable = memo(function AccountTable() {
     const aliveCount = summaryScopedData.filter((account) => account.status === 'alive').length
     const limitedCount = summaryScopedData.filter((account) => account.status === 'limited' || account.status === 'temporary_limited').length
     const frozenCount = summaryScopedData.filter((account) => account.status === 'frozen').length
+    const bannedCount = summaryScopedData.filter((account) => account.status === 'banned').length
     const timeoutCount = summaryScopedData.filter((account) => account.status === 'timeout' || account.status === 'unknown' || account.status === 'checking').length
 
     return [
@@ -933,6 +934,7 @@ export const AccountTable = memo(function AccountTable() {
       { key: 'alive' as AccountStatusFilter, label: '无限制', count: aliveCount },
       { key: 'limited-group' as AccountStatusFilter, label: '双向', count: limitedCount },
       { key: 'frozen' as AccountStatusFilter, label: '冻结', count: frozenCount },
+      { key: 'banned' as AccountStatusFilter, label: '封禁', count: bannedCount },
       { key: 'timeout-group' as AccountStatusFilter, label: '超时/未检测', count: timeoutCount }
     ]
   }, [summaryScopedData])
