@@ -64,6 +64,12 @@ function formatPreviewSummaryTime(value: string) {
   return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
+function formatDateInputLabel(value: string) {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return '未设置'
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 function readRepeatLabel(repeatPeriodSeconds?: number | null) {
   if ((repeatPeriodSeconds ?? 0) === 24 * 60 * 60) return '每天'
   return '绝不'
@@ -756,6 +762,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const selectedAccountId = selectedTargetAccountId ?? selectedTask?.accountIds[0] ?? null
   const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedAccountId) ?? null, [accounts, selectedAccountId])
   const currentAccountIsPremium = Boolean(selectedAccount?.profile?.is_premium)
+  const showDateRangeInputs = !currentAccountIsPremium || selectedTask?.scheduleMode !== 'daily_repeat'
   const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTask?.id), [previewItems, selectedTask])
   const previewSummary = useMemo(() => {
     const successCount = selectedPreview.filter((item) => item.status === 'scheduled').length
@@ -1095,20 +1102,26 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
             <GlassPanel className="bg-card">
               <div className="text-lg font-semibold text-white">发送时间配置</div>
-              <div className="mt-1 text-sm text-textMuted">默认从今天开始排。只要开始时间、间隔和条数，系统就会自动跨天接着往后排。</div>
+              <div className="mt-1 text-sm text-textMuted">普通号可以直接选日期；会员号勾了重复后，才走 Telegram 官方每天重复。</div>
               <div className="mt-4 rounded-[16px] bg-panel p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <div className="text-sm font-semibold text-white">会员快捷模式</div>
-                    <div className="mt-1 text-xs text-textMuted">会员号勾了“每天重复”后，会直接写 Telegram 官方的每天重复；普通号还是自动跨天，单群最多 100 条。</div>
+                    <div className="mt-1 text-xs text-textMuted">普通号不能选重复，只走按日期排程；会员号勾了“每天重复”后，才会直接写 Telegram 官方每天重复。</div>
                   </div>
                   <label className={`inline-flex items-center gap-2 text-sm ${currentAccountIsPremium ? 'text-white' : 'text-textMuted'}`}>
                     <input type="checkbox" checked={selectedTask.scheduleMode === 'daily_repeat'} disabled={!currentAccountIsPremium} onChange={(event) => updateTask(selectedTask.id, { scheduleMode: event.target.checked ? 'daily_repeat' : 'date_range' })} />
                     每天重复
                   </label>
                 </div>
-                {!currentAccountIsPremium ? <div className="mt-3 text-xs text-amber-200">当前账号不是会员号：继续走普通自动跨天模式，单群最多 100 条。</div> : null}
+                {!currentAccountIsPremium ? <div className="mt-3 text-xs text-amber-200">当前账号不是会员号：这里只能选日期，不能开启重复；单群最多 100 条。</div> : null}
               </div>
+              {showDateRangeInputs ? (
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">开始日期</span><input type="date" value={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { startDate: event.target.value || selectedTask.startDate })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">结束日期</span><input type="date" value={selectedTask.endDate} min={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { endDate: event.target.value || selectedTask.startDate })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                </div>
+              ) : null}
               <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
                 <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
@@ -1116,12 +1129,12 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               </div>
               {previewSummary.total > 0 ? (
                 <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
-                  <div>• 从今天开始</div>
+                  <div>• {showDateRangeInputs ? `${formatDateInputLabel(selectedTask.startDate)} 开始${selectedTask.endDate && selectedTask.endDate !== selectedTask.startDate ? `，到 ${formatDateInputLabel(selectedTask.endDate)}` : ''}` : '从今天开始'}</div>
                   <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
                   <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
                   <div className="mt-1">• 共 {previewSummary.total} 条</div>
                   {currentAccountIsPremium && selectedTask.scheduleMode === 'daily_repeat' ? <div className="mt-1 text-emerald-200">• 当前会按 Telegram 官方“每天重复”写入</div> : null}
-                  {!currentAccountIsPremium ? <div className="mt-1 text-amber-200">• 普通号单群最多 100 条，超过会自动压到 100 条</div> : null}
+                  {!currentAccountIsPremium ? <div className="mt-1 text-amber-200">• 普通号只能选日期，不能开启重复；单群最多 100 条</div> : null}
                 </div>
               ) : null}
             </GlassPanel>

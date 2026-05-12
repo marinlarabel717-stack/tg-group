@@ -154,6 +154,22 @@ function startOfLocalDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
+function describeDateRange(startDate: string, endDate: string) {
+  const start = parseDateInputValue(startDate)
+  const end = parseDateInputValue(endDate)
+  if (!start && !end) return '从今天开始'
+
+  const normalizedStart = start ?? new Date()
+  const normalizedEnd = end ?? normalizedStart
+  const format = (date: Date) => `${date.getMonth() + 1}月${date.getDate()}日`
+
+  if (start && end && formatDateInputValue(normalizedStart) !== formatDateInputValue(normalizedEnd)) {
+    return `${format(normalizedStart)} 到 ${format(normalizedEnd)}`
+  }
+
+  return `${format(normalizedStart)}`
+}
+
 function rotateCreatives(task: BroadcastTask, creatives: BroadcastCreative[]) {
   const selected = creatives.filter((item) => task.creativeIds.includes(item.id) && item.enabled)
   const bucket: string[] = []
@@ -345,13 +361,19 @@ function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget,
 
 function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[], groups: BroadcastGroupTarget[], accounts: Array<{ id: number; status?: string; profile?: { is_premium?: boolean } }>) {
   const today = startOfLocalDay(new Date())
+  const selectedStartDate = startOfLocalDay(parseDateInputValue(task.startDate) ?? today)
+  const selectedEndDate = startOfLocalDay(parseDateInputValue(task.endDate) ?? selectedStartDate)
+  const normalizedEndDate = selectedEndDate.getTime() >= selectedStartDate.getTime() ? selectedEndDate : selectedStartDate
+  const rangeDays = Math.max(1, Math.floor((normalizedEndDate.getTime() - selectedStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1)
+  const scheduleBaseDate = task.scheduleMode === 'daily_repeat' ? today : selectedStartDate
   const startMinutes = toMinutes(task.startTime)
   const interval = Math.max(5, Number(task.intervalMinutes) || 10)
   const jitter = 0
   const hasPremiumAccount = task.accountIds.some((accountId) => accounts.some((account) => account.id === accountId && account.profile?.is_premium))
   const useDailyRepeat = hasPremiumAccount && task.scheduleMode === 'daily_repeat'
   const requestedLimitPerGroup = Math.max(1, Number(task.dailyLimitPerGroup) || 1)
-  const limitPerGroup = Math.min(hasPremiumAccount ? requestedLimitPerGroup : Math.min(requestedLimitPerGroup, 100), 100)
+  const dailyLimitPerGroup = Math.min(hasPremiumAccount ? requestedLimitPerGroup : Math.min(requestedLimitPerGroup, 100), 100)
+  const limitPerGroup = useDailyRepeat ? dailyLimitPerGroup : dailyLimitPerGroup * rangeDays
   const creativeRotation = rotateCreatives(task, creatives)
   const selectedGroupIds = dedupeTaskGroupIds(task.groupIds, groups)
   const selectedGroups = groups.filter((group) => selectedGroupIds.includes(group.id) && group.enabled)
@@ -365,7 +387,7 @@ function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[
       const minute = startMinutes + slotIndex * interval
       const jitterOffset = jitter === 0 ? 0 : (globalIndex % (jitter * 2 + 1)) - jitter
       const scheduledMinute = minute + jitterOffset
-      const scheduledAt = setMinutes(today, scheduledMinute)
+      const scheduledAt = setMinutes(scheduleBaseDate, scheduledMinute)
       const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
       const creative = creativeId ? creatives.find((item) => item.id === creativeId) ?? null : null
       const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[slotIndex % compatibleAccounts.length] : null
@@ -662,7 +684,7 @@ export const useBroadcastStore = create<BroadcastState>()(
               ? `已生成 ${previewItems.length} 个首发时间点，写入时会按“每天重复”发送。`
               : !hasPremiumAccount && requestedLimitPerGroup > 100
                 ? `普通号单群最多先按 100 条处理，已自动从 ${requestedLimitPerGroup} 条压到 100 条。`
-                : `已生成 ${previewItems.length} 条排程预览，会从今天开始自动跨天往后排。`)
+                : `已生成 ${previewItems.length} 条排程预览，会从 ${describeDateRange(task.startDate, task.endDate)} 开始自动往后排。`)
             : '当前配置还生成不出任何排程，请检查账号、群或文案。'
         })
       },
