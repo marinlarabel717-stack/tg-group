@@ -77,12 +77,9 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-transparent text-white">
-      <div className="pointer-events-none absolute -left-10 top-[-18px] h-32 w-32 rounded-full bg-cyan-400/10 blur-3xl" />
-      <div className="pointer-events-none absolute right-[-12px] top-16 h-28 w-28 rounded-full bg-sky-500/8 blur-3xl" />
-
-      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-cyan-200/12 bg-[linear-gradient(180deg,rgba(10,16,30,0.84)_0%,rgba(7,12,24,0.92)_100%)] px-6 py-4 shadow-[0_18px_48px_rgba(4,10,24,0.42),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-[24px]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.12),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_45%)]" />
-        <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(103,232,249,0.55),transparent)]" />
+      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,16,30,0.86)_0%,rgba(7,12,24,0.94)_100%)] px-6 py-4 shadow-[0_14px_32px_rgba(3,8,20,0.34),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[24px]">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),transparent_24%)]" />
+        <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(186,230,253,0.22),transparent)]" />
 
         <button
           type="button"

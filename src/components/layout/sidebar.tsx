@@ -28,13 +28,13 @@ const SidebarBrand = memo(function SidebarBrand({ collapsed }: { collapsed: bool
       className={`group flex items-center rounded-[14px] bg-white/[0.025] transition hover:bg-hover ${collapsed ? 'justify-center px-0 py-3.5' : 'justify-center px-3 py-4'}`}
     >
       <BrandLogo
-        size={64}
+        size={86}
         showText={!collapsed}
-        roundedClassName="rounded-[16px]"
-        className={collapsed ? 'justify-center' : 'flex-col gap-3 text-center'}
+        roundedClassName="rounded-[20px]"
+        className={collapsed ? 'justify-center' : 'flex-col gap-4 text-center'}
         textClassName={collapsed ? '' : 'text-center'}
         title="TG-Matrix"
-        titleClassName="text-[19px] font-semibold text-white"
+        titleClassName="text-[23px] font-semibold text-white"
       />
     </button>
   )
@@ -68,7 +68,7 @@ export const Sidebar = memo(function Sidebar() {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar)
 
   return (
-    <aside className={`relative flex flex-col rounded-[16px] bg-panel/95 contain-layout transition-[width,padding] duration-200 ${sidebarCollapsed ? 'w-[84px] p-3' : 'w-[212px] p-3'}`}>
+    <aside className={`relative flex flex-col rounded-[16px] bg-panel/95 contain-layout transition-[width,padding] duration-200 ${sidebarCollapsed ? 'w-[84px] p-3' : 'w-[228px] p-3'}`}>
       <div className={`mb-3 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between gap-2'}`}>
         <SidebarBrand collapsed={sidebarCollapsed} />
         {!sidebarCollapsed ? (
