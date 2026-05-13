@@ -73,6 +73,11 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     emitCheckState()
     return state
   })
+  ipcMain.handle('accounts:stop-check', () => {
+    const state = checkQueue.stop()
+    emitCheckState()
+    return state
+  })
 
   ipcMain.handle('accounts:pick-import-files', async () => {
     const result = await showOpenDialog({
@@ -146,7 +151,10 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
     const targetDirectory = result.filePaths[0]
     const accounts = accountRepository.getByIds(ids)
-    const exportedCount = await accountImportService.exportManagedAccounts(accounts, targetDirectory)
+    const emitExportProgress = (payload: ImportProgressPayload) => {
+      emitImportProgress({ ...payload, mode: 'export' })
+    }
+    const exportedCount = await accountImportService.exportManagedAccounts(accounts, targetDirectory, emitExportProgress)
     accountRepository.deleteByIds(ids)
     return { exportedCount, targetDirectory }
   })

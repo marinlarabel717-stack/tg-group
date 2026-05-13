@@ -151,6 +151,7 @@ interface AccountStoreState {
   deleteAll: () => Promise<void>
   deleteByStatusGroup: (group: DeleteStatusGroup) => Promise<void>
   startSelectedCheck: (actions: CheckAction[]) => Promise<void>
+  stopCheck: () => Promise<void>
   clearCheckLogs: () => Promise<void>
   revealPath: (targetPath: string) => Promise<void>
 }
@@ -494,6 +495,24 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           timeout: 0
         },
         lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务，当前按 ${checkState.concurrency} 个并发执行，检测过程中账号列表先不刷新，完成后统一更新。`
+      })
+    })
+  },
+  stopCheck: async () => {
+    await runBusyAction(set, async () => {
+      const currentState = get().checkState
+      if (!currentState.running) {
+        set({ errorMessage: '当前没有正在执行的账号检测任务。' })
+        return
+      }
+
+      const checkState = await getDesktopAccountsApi()?.stopCheck()
+      if (!checkState) return
+      set({
+        checkState,
+        lastActionMessage: checkState.activeCount > 0
+          ? '已停止继续检测，正在收尾当前检测中的账号。'
+          : '账号检测任务已停止。'
       })
     })
   },

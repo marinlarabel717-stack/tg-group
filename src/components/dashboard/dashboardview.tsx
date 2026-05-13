@@ -1,101 +1,188 @@
-import { memo, useEffect } from 'react'
-import { Activity, Globe2, RadioTower, ShieldAlert } from 'lucide-react'
+import { memo, useMemo } from 'react'
+import { FileClock, MessageCircleMore, Radio, UserPlus2 } from 'lucide-react'
+import type { ModuleKey } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
-import { KpiCard } from './kpicard'
-import { AccountsTable } from '../accounts/accountstable'
-import { useDashboardStore } from '../../stores/dashboardstore'
-import { useSessionStore } from '../../stores/sessionstore'
 import { useAccountStore } from '../../stores/accountstore'
+import { useBroadcastStore, type BroadcastTabKey } from '../../stores/broadcaststore'
+import { useDirectMessageStore, type DirectMessageTabKey } from '../../stores/directmessagestore'
+import { useAutoJoinStore, type AutoJoinTabKey } from '../../stores/autojoinstore'
+import { useUIStore } from '../../stores/uistore'
 
-const DashboardNetworkPanel = memo(function DashboardNetworkPanel() {
-  return (
-    <GlassPanel>
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <div className="text-lg font-semibold text-textMain">本地账号网络</div>
-          <div className="text-sm text-textMuted">第一阶段只展示本地管理视角，不接自动化与代理池</div>
-        </div>
-        <div className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs tracking-[0.2em] text-cyan-300">阶段一</div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-[16px] bg-panel p-6">
-          <div className="flex items-center gap-3 text-neonSoft"><Activity size={18} /> 数据吞吐</div>
-          <div className="mt-4 text-3xl font-semibold text-white">SQLite</div>
-          <div className="mt-2 text-sm text-textMuted">Session / JSON / 状态数据统一入库</div>
-        </div>
-        <div className="rounded-[16px] bg-panel p-6">
-          <div className="flex items-center gap-3 text-emerald-300"><Globe2 size={18} /> 文件扫描</div>
-          <div className="mt-4 text-3xl font-semibold text-white">递归</div>
-          <div className="mt-2 text-sm text-textMuted">支持拖拽、文件夹扫描、同名 JSON 自动匹配</div>
-        </div>
-        <div className="rounded-[16px] bg-panel p-6">
-          <div className="flex items-center gap-3 text-warning"><ShieldAlert size={18} /> 状态维护</div>
-          <div className="mt-4 text-3xl font-semibold text-white">Check Engine</div>
-          <div className="mt-2 text-sm text-textMuted">登录检测已接入，但不主动改动已确认界面结构</div>
-        </div>
-      </div>
-    </GlassPanel>
-  )
-})
-
-const DashboardSessionPanel = memo(function DashboardSessionPanel() {
-  const stream = useSessionStore((state) => state.stream)
-
-  return (
-    <GlassPanel>
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-lg font-semibold text-textMain">Session 流</div>
-          <div className="text-sm text-textMuted">当前桌面框架预留区</div>
-        </div>
-        <RadioTower className="text-neonSoft" size={18} />
-      </div>
-
-      <div className="mt-6 space-y-4">
-        {stream.map((item) => (
-          <div key={item.id} className="flex items-center justify-between rounded-[14px] bg-panel px-4 py-4">
-            <div>
-              <div className="font-medium text-white">{item.title}</div>
-              <div className="text-xs text-textMuted">{item.meta}</div>
-            </div>
-            <div className="rounded-full bg-cyan-300/10 px-3 py-1 text-xs font-medium text-cyan-200">{item.status}</div>
-          </div>
-        ))}
-      </div>
-    </GlassPanel>
-  )
-})
-
-const DashboardPreviewTable = memo(function DashboardPreviewTable() {
-  const init = useAccountStore((state) => state.init)
-  const accounts = useAccountStore((state) => state.accounts)
-
-  useEffect(() => {
-    void init()
-  }, [init])
-
-  return <AccountsTable accounts={accounts.slice(0, 8)} />
-})
+type DashboardTaskCard = {
+  id: string
+  title: string
+  subtitle: string
+  progress: string
+  accentClass: string
+  moduleKey: ModuleKey
+  broadcastTabKey?: BroadcastTabKey
+  directMessageTabKey?: DirectMessageTabKey
+  autoJoinTabKey?: AutoJoinTabKey
+  logsContext?: 'accounts' | 'proxy-pool'
+  icon: typeof FileClock
+}
 
 export function DashboardView() {
-  const stats = useDashboardStore((state) => state.stats)
+  const setActiveModule = useUIStore((state) => state.setActiveModule)
+  const setLogsContext = useUIStore((state) => state.setLogsContext)
+
+  const accountCheckState = useAccountStore((state) => state.checkState)
+
+  const broadcastTasks = useBroadcastStore((state) => state.tasks)
+  const broadcastPreviewItems = useBroadcastStore((state) => state.previewItems)
+  const broadcastSelectedTaskId = useBroadcastStore((state) => state.selectedTaskId)
+  const broadcastLastActionMessage = useBroadcastStore((state) => state.lastActionMessage)
+  const broadcastSyncing = useBroadcastStore((state) => state.syncing)
+  const setBroadcastTab = useBroadcastStore((state) => state.setActiveTab)
+
+  const directPreviewItems = useDirectMessageStore((state) => state.previewItems)
+  const directLastActionMessage = useDirectMessageStore((state) => state.lastActionMessage)
+  const directSending = useDirectMessageStore((state) => state.sending)
+  const setDirectTab = useDirectMessageStore((state) => state.setActiveTab)
+
+  const autoJoinTasks = useAutoJoinStore((state) => state.tasks)
+  const autoJoinLastActionMessage = useAutoJoinStore((state) => state.lastActionMessage)
+  const autoJoinRunning = useAutoJoinStore((state) => state.running)
+  const setAutoJoinTab = useAutoJoinStore((state) => state.setActiveTab)
+
+  const activeTasks = useMemo(() => {
+    const items: DashboardTaskCard[] = []
+
+    if (accountCheckState.running) {
+      const latestMessage = accountCheckState.logs[accountCheckState.logs.length - 1]?.message || '账号检测任务进行中'
+      items.push({
+        id: 'accounts-check',
+        title: '账号检测',
+        subtitle: latestMessage,
+        progress: `${accountCheckState.completedCount} / ${accountCheckState.totalCount}`,
+        accentClass: 'border-violet-300/18 bg-violet-400/8 text-violet-200',
+        moduleKey: 'logs',
+        logsContext: 'accounts',
+        icon: FileClock
+      })
+    }
+
+    if (broadcastSyncing) {
+      const activeBroadcastTask = broadcastTasks.find((task) => task.id === broadcastSelectedTaskId) ?? broadcastTasks[0] ?? null
+      const taskItems = activeBroadcastTask
+        ? broadcastPreviewItems.filter((item) => item.taskId === activeBroadcastTask.id)
+        : broadcastPreviewItems
+      const completedCount = taskItems.filter((item) => item.status === 'scheduled' || item.status === 'failed').length
+      items.push({
+        id: 'broadcast-sync',
+        title: '定时群发',
+        subtitle: broadcastLastActionMessage || '正在把定时群发写入 Telegram',
+        progress: `${completedCount} / ${taskItems.length || 0}`,
+        accentClass: 'border-emerald-300/18 bg-emerald-400/8 text-emerald-200',
+        moduleKey: 'automation',
+        broadcastTabKey: 'calendar',
+        icon: Radio
+      })
+    }
+
+    if (directSending) {
+      const completedCount = directPreviewItems.filter((item) => item.status === 'sent' || item.status === 'failed').length
+      items.push({
+        id: 'direct-message-send',
+        title: '私信群发',
+        subtitle: directLastActionMessage || '私信发送进行中',
+        progress: `${completedCount} / ${directPreviewItems.length || 0}`,
+        accentClass: 'border-sky-300/18 bg-sky-400/8 text-sky-100',
+        moduleKey: 'direct-message',
+        directMessageTabKey: 'logs',
+        icon: MessageCircleMore
+      })
+    }
+
+    if (autoJoinRunning) {
+      const activeAutoJoinTask = autoJoinTasks[0] ?? null
+      items.push({
+        id: 'auto-join',
+        title: '自动加群',
+        subtitle: autoJoinLastActionMessage || '自动加群任务进行中',
+        progress: activeAutoJoinTask ? `${activeAutoJoinTask.completed} / ${activeAutoJoinTask.total}` : '运行中',
+        accentClass: 'border-amber-300/18 bg-amber-300/8 text-amber-100',
+        moduleKey: 'auto-join',
+        autoJoinTabKey: 'logs',
+        icon: UserPlus2
+      })
+    }
+
+    return items
+  }, [
+    accountCheckState.completedCount,
+    accountCheckState.logs,
+    accountCheckState.running,
+    accountCheckState.totalCount,
+    autoJoinLastActionMessage,
+    autoJoinRunning,
+    autoJoinTasks,
+    broadcastLastActionMessage,
+    broadcastPreviewItems,
+    broadcastSelectedTaskId,
+    broadcastSyncing,
+    broadcastTasks,
+    directLastActionMessage,
+    directPreviewItems,
+    directSending
+  ])
+
+  const openTask = (task: DashboardTaskCard) => {
+    if (task.logsContext) {
+      setLogsContext(task.logsContext)
+    }
+
+    if (task.broadcastTabKey) {
+      setBroadcastTab(task.broadcastTabKey)
+    }
+    if (task.directMessageTabKey) {
+      setDirectTab(task.directMessageTabKey)
+    }
+    if (task.autoJoinTabKey) {
+      setAutoJoinTab(task.autoJoinTabKey)
+    }
+
+    setActiveModule(task.moduleKey)
+  }
 
   return (
-    <div className="space-y-6 contain-layout">
-      <div className="grid grid-cols-4 gap-5">
-        {stats.map((item) => (
-          <KpiCard key={item.id} {...item} />
-        ))}
+    <GlassPanel className="bg-card min-h-[720px]">
+      <div>
+        <div className="text-lg font-semibold text-white">任务进度</div>
+        <div className="mt-1 text-sm text-textMuted">这里只看正在跑的任务，点一下就直接跳到对应日志页。</div>
       </div>
 
-      <div className="grid grid-cols-[1.35fr_0.9fr] gap-6">
-        <DashboardNetworkPanel />
-        <DashboardSessionPanel />
+      <div className="mt-5 space-y-3">
+        {activeTasks.length === 0 ? (
+          <div className="flex min-h-[360px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">
+            当前没有正在执行中的任务。
+          </div>
+        ) : activeTasks.map((task) => {
+          const Icon = task.icon
+          return (
+            <button
+              key={task.id}
+              type="button"
+              onClick={() => openTask(task)}
+              className="w-full rounded-[18px] bg-panel p-4 text-left transition hover:bg-white/[0.05]"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <Icon size={16} />
+                    {task.title}
+                  </div>
+                  <div className="mt-2 text-sm text-textMuted break-all">{task.subtitle}</div>
+                </div>
+                <div className={`shrink-0 rounded-full border px-3 py-1 text-xs ${task.accentClass}`}>
+                  {task.progress}
+                </div>
+              </div>
+            </button>
+          )
+        })}
       </div>
-
-      <DashboardPreviewTable />
-    </div>
+    </GlassPanel>
   )
 }
 

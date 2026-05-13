@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
   applySpamBotReply: (payload: { ids: number[]; replyText: string }) => ipcRenderer.invoke('accounts:apply-spambot-reply', payload),
   applyCheckResults: (items: CheckResultInput[]) => ipcRenderer.invoke('accounts:apply-check-results', items),
   startCheck: (payload: { ids: number[]; actions: CheckAction[] }) => ipcRenderer.invoke('accounts:start-check', payload),
+  stopCheck: () => ipcRenderer.invoke('accounts:stop-check'),
   getCheckState: () => ipcRenderer.invoke('accounts:get-check-state'),
   clearCheckLogs: () => ipcRenderer.invoke('accounts:clear-check-logs'),
   onCheckState: (callback: (state: CheckQueueState) => void) => {

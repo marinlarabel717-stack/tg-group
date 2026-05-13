@@ -126,6 +126,8 @@ const ProxySummary = memo(function ProxySummary() {
 
 export default memo(function LogsView() {
   const initAccounts = useAccountStore((state) => state.init)
+  const stopCheck = useAccountStore((state) => state.stopCheck)
+  const clearCheckLogs = useAccountStore((state) => state.clearCheckLogs)
   const initProxyPool = useProxyPoolStore((state) => state.init)
   const checkState = useAccountStore((state) => state.checkState)
   const logsContext = useUIStore((state) => state.logsContext)
@@ -150,7 +152,26 @@ export default memo(function LogsView() {
       ) : (
         <GlassPanel className="min-h-[520px] bg-card p-0">
           <div className="border-b border-white/5 px-5 py-4">
-            <div className="text-sm font-medium text-white">账号运行日志</div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-medium text-white">账号运行日志</div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!checkState.running}
+                  onClick={() => void stopCheck()}
+                  className="rounded-[12px] bg-rose-400/12 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  停止任务
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void clearCheckLogs()}
+                  className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]"
+                >
+                  清空日志
+                </button>
+              </div>
+            </div>
           </div>
 
           <div ref={scrollContainerRef} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">

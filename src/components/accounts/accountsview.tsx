@@ -37,6 +37,18 @@ export function AccountsView() {
   const showExportResultDialog = exportResultDialog.open
   const showDeleteResultDialog = deleteResultDialog.open
   const showCheckResultDialog = checkResultDialog.open
+  const progressMode = importProgress?.mode === 'export' ? 'export' : 'import'
+  const progressTitle = progressMode === 'export' ? '正在导出账号' : '正在导入账号'
+  const progressSubtitle = progressMode === 'export' ? '请稍等，正在整理并移动你选中的账号文件' : '请稍等，正在处理你刚导入的账号文件'
+  const progressHeroLabel = progressMode === 'export' ? '导出进度' : '当前进度'
+  const progressHeroTone = progressMode === 'export' ? 'info' : 'violet'
+  const progressPrimaryCountLabel = progressMode === 'export' ? '已导出' : '已导入'
+  const progressSecondaryCountLabel = progressMode === 'export' ? '剩余' : '补 JSON'
+  const progressSecondaryCount = progressMode === 'export'
+    ? Math.max((importProgress?.total ?? 0) - (importProgress?.current ?? 0), 0)
+    : (importProgress?.generatedJsonCount ?? 0)
+  const progressThirdCountLabel = progressMode === 'export' ? '总数量' : '跳过'
+  const progressThirdCount = progressMode === 'export' ? (importProgress?.total ?? 0) : (importProgress?.skippedCount ?? 0)
 
   return (
     <div className="space-y-5 contain-layout">
@@ -52,40 +64,40 @@ export function AccountsView() {
       <ResultDialogShell
         open={showImportProgressDialog && Boolean(importProgress)}
         onClose={() => {}}
-        title="正在导入账号"
-        subtitle="请稍等，正在处理你刚导入的账号文件"
-        icon={<Upload size={18} />}
-        tone="violet"
+        title={progressTitle}
+        subtitle={progressSubtitle}
+        icon={progressMode === 'export' ? <Download size={18} /> : <Upload size={18} />}
+        tone={progressHeroTone}
         maxWidth="max-w-[420px]"
         closable={false}
       >
         <ResultHero
-          label="当前进度"
+          label={progressHeroLabel}
           value={importProgress ? `${importProgress.current} / ${importProgress.total}` : '0 / 0'}
-          tone="violet"
+          tone={progressHeroTone}
         />
 
         <div className="flex items-center justify-between rounded-[14px] bg-panel px-4 py-3 text-sm">
           <div className="flex items-center gap-2 text-white">
-            <Loader2 size={16} className="animate-spin text-violet-300" />
+            <Loader2 size={16} className={`animate-spin ${progressMode === 'export' ? 'text-sky-300' : 'text-violet-300'}`} />
             <span>{importProgress?.message || '正在处理...'}</span>
           </div>
-          <div className="font-medium text-violet-300">
+          <div className={`font-medium ${progressMode === 'export' ? 'text-sky-300' : 'text-violet-300'}`}>
             {importProgress ? `${importProgress.current} / ${importProgress.total}` : '0 / 0'}
           </div>
         </div>
 
         <div className="h-2 overflow-hidden rounded-full bg-panel">
           <div
-            className="h-full rounded-full bg-violet-300 transition-all duration-300"
+            className={`h-full rounded-full transition-all duration-300 ${progressMode === 'export' ? 'bg-sky-300' : 'bg-violet-300'}`}
             style={{ width: `${importProgress && importProgress.total > 0 ? Math.min((importProgress.current / importProgress.total) * 100, 100) : 0}%` }}
           />
         </div>
 
         <div className="grid grid-cols-3 gap-3 text-center text-sm">
-          <ResultStatCard label="已导入" value={importProgress?.importedCount ?? 0} tone="success" />
-          <ResultStatCard label="补 JSON" value={importProgress?.generatedJsonCount ?? 0} tone="violet" />
-          <ResultStatCard label="跳过" value={importProgress?.skippedCount ?? 0} tone="warning" />
+          <ResultStatCard label={progressPrimaryCountLabel} value={importProgress?.importedCount ?? 0} tone={progressMode === 'export' ? 'info' : 'success'} />
+          <ResultStatCard label={progressSecondaryCountLabel} value={progressSecondaryCount} tone={progressMode === 'export' ? 'warning' : 'violet'} />
+          <ResultStatCard label={progressThirdCountLabel} value={progressThirdCount} tone={progressMode === 'export' ? 'neutral' : 'warning'} />
         </div>
       </ResultDialogShell>
 

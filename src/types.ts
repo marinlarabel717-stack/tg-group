@@ -120,6 +120,7 @@ export interface ImportAccountsResult {
 }
 
 export interface ImportProgressPayload {
+  mode?: 'import' | 'export'
   phase: 'start' | 'progress' | 'completed'
   total: number
   current: number
@@ -261,6 +262,7 @@ export interface DesktopAccountsApi {
   applySpamBotReply: (payload: { ids: number[]; replyText: string }) => Promise<StatusUpdateResult>
   applyCheckResults: (items: CheckResultInput[]) => Promise<StatusUpdateResult>
   startCheck: (payload: { ids: number[]; actions: CheckAction[] }) => Promise<CheckQueueState>
+  stopCheck: () => Promise<CheckQueueState>
   getCheckState: () => Promise<CheckQueueState>
   clearCheckLogs: () => Promise<CheckQueueState>
   onCheckState: (callback: (state: CheckQueueState) => void) => () => void

@@ -468,8 +468,10 @@ const SendWorkbench = memo(function SendWorkbench() {
 const LogsWorkbench = memo(function LogsWorkbench() {
   const runs = useDirectMessageStore((state) => state.runs)
   const clearRuns = useDirectMessageStore((state) => state.clearRuns)
+  const stopSend = useDirectMessageStore((state) => state.stopSend)
   const previewItems = useDirectMessageStore((state) => state.previewItems)
   const sending = useDirectMessageStore((state) => state.sending)
+  const stopping = useDirectMessageStore((state) => state.stopping)
   const lastActionMessage = useDirectMessageStore((state) => state.lastActionMessage)
   const messageType = useDirectMessageStore((state) => state.messageType)
   const latestRun = runs[0] ?? null
@@ -550,6 +552,14 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       <div className="flex items-center justify-between gap-3">
         <div className="text-base font-semibold text-white">私信日志</div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={!sending || stopping}
+            onClick={() => void stopSend()}
+            className="rounded-[12px] bg-rose-400/12 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {stopping ? '停止中' : '停止任务'}
+          </button>
           <button type="button" onClick={exportLogs} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">导出日志</button>
           <button type="button" onClick={clearRuns} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
         </div>

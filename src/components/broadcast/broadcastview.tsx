@@ -813,7 +813,6 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const setSelectedTargetAccountId = useBroadcastStore((state) => state.setSelectedTargetAccountId)
   const loadJoinedGroupsForAccount = useBroadcastStore((state) => state.loadJoinedGroupsForAccount)
   const attachJoinedGroupToAccount = useBroadcastStore((state) => state.attachJoinedGroupToAccount)
-  const generatePreview = useBroadcastStore((state) => state.generatePreview)
   const pushScheduleToTelegram = useBroadcastStore((state) => state.pushScheduleToTelegram)
   const stopPushScheduleToTelegram = useBroadcastStore((state) => state.stopPushScheduleToTelegram)
   const clearPreview = useBroadcastStore((state) => state.clearPreview)
@@ -1077,9 +1076,6 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               <div className="mt-1 text-sm text-textMuted">先选账号，再看群组，往下继续配发送时间和文案。</div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button type="button" disabled={occupiedSelectedAccounts.length > 0} onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-60">
-                <RefreshCw size={16} /> 预览发送
-              </button>
               <button type="button" disabled={syncing || occupiedSelectedAccounts.length > 0} onClick={() => {
                 setActiveTab('calendar')
                 void pushScheduleToTelegram(accounts)
@@ -1089,7 +1085,6 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               <button type="button" disabled={!syncing || stopping} onClick={() => void stopPushScheduleToTelegram()} className="flex items-center gap-2 rounded-[12px] bg-rose-400/12 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50">
                 <X size={16} /> {stopping ? '正在取消...' : '取消定时任务'}
               </button>
-              <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.09]">清空日志</button>
             </div>
           </div>
         </GlassPanel>
@@ -1468,6 +1463,10 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const selectedTaskId = useBroadcastStore((state) => state.selectedTaskId)
   const lastActionMessage = useBroadcastStore((state) => state.lastActionMessage)
   const errorMessage = useBroadcastStore((state) => state.errorMessage)
+  const clearPreview = useBroadcastStore((state) => state.clearPreview)
+  const stopPushScheduleToTelegram = useBroadcastStore((state) => state.stopPushScheduleToTelegram)
+  const syncing = useBroadcastStore((state) => state.syncing)
+  const stopping = useBroadcastStore((state) => state.stopping)
   const [accountFilter, setAccountFilter] = useState<'all' | string>('all')
 
   const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? tasks[0] ?? null, [selectedTaskId, tasks])
@@ -1541,7 +1540,18 @@ const LogsWorkbench = memo(function LogsWorkbench() {
           <div className="text-lg font-semibold text-white">发送日志</div>
           <div className="mt-1 text-sm text-textMuted">这里专门看预览结果、写入结果和失败原因。</div>
         </div>
-        <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{selectedPreview.length} 条</div>
+        <div className="flex items-center gap-2">
+          <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{selectedPreview.length} 条</div>
+          <button
+            type="button"
+            disabled={!syncing || stopping}
+            onClick={() => void stopPushScheduleToTelegram()}
+            className="rounded-[12px] bg-rose-400/12 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {stopping ? '停止中' : '停止任务'}
+          </button>
+          <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3">

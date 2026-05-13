@@ -108,6 +108,7 @@ export interface ImportAccountsResult {
 }
 
 export interface ImportProgressPayload {
+  mode?: 'import' | 'export'
   phase: 'start' | 'progress' | 'completed'
   total: number
   current: number

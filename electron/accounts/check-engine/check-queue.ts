@@ -119,6 +119,7 @@ export class CheckQueue extends EventEmitter {
   private readonly state: CheckQueueState
   private logSerial = 0
   private currentRunMode: 'account-status' | 'account-survival' = 'account-status'
+  private stopRequested = false
 
   constructor(private readonly engine: AccountCheckEngine, options: CheckQueueOptions = {}) {
     super()
@@ -183,6 +184,7 @@ export class CheckQueue extends EventEmitter {
     let addedCount = 0
 
     if (!this.state.running && this.pending.length === 0 && this.active.size === 0) {
+      this.stopRequested = false
       this.currentRunMode = mode
       this.state.runMode = mode
       this.state.completedCount = 0
@@ -219,6 +221,30 @@ export class CheckQueue extends EventEmitter {
     this.state.totalCount += addedCount
     this.syncCounters()
     void this.drain()
+    return this.getState()
+  }
+
+  stop() {
+    if (!this.state.running && this.pending.length === 0 && this.active.size === 0) {
+      return this.getState()
+    }
+
+    this.stopRequested = true
+    const removedCount = this.pending.length
+    this.pending.length = 0
+
+    if (this.active.size > 0) {
+      this.appendLog('warning', null, removedCount > 0
+        ? `已停止继续检测，剩余 ${removedCount} 个排队账号已取消，正在收尾当前检测中的账号。`
+        : '已停止继续检测，正在收尾当前检测中的账号。')
+    } else {
+      this.appendLog('warning', null, removedCount > 0
+        ? `检测任务已停止，剩余 ${removedCount} 个排队账号已取消。`
+        : '检测任务已停止。')
+    }
+
+    this.syncCounters()
+    this.bump()
     return this.getState()
   }
 

@@ -169,10 +169,27 @@ export class AccountImportService {
     }
   }
 
-  async exportManagedAccounts(accounts: AccountRecord[], targetDirectory: string) {
+  async exportManagedAccounts(accounts: AccountRecord[], targetDirectory: string, onProgress?: (payload: ImportProgressPayload) => void) {
     await fs.mkdir(targetDirectory, { recursive: true })
 
     let exportedCount = 0
+    const total = accounts.length
+
+    const emitProgress = (phase: ImportProgressPayload['phase'], current: number, message: string) => {
+      onProgress?.({
+        mode: 'export',
+        phase,
+        total,
+        current,
+        importedCount: exportedCount,
+        generatedJsonCount: 0,
+        skippedCount: Math.max(total - exportedCount, 0),
+        message
+      })
+    }
+
+    emitProgress('start', 0, total > 0 ? `正在导出账号，准备处理 0 / ${total}` : '正在导出账号')
+
     for (const account of accounts) {
       if (account.sessionPath && await pathExists(account.sessionPath)) {
         const sessionTargetPath = path.join(targetDirectory, path.basename(account.sessionPath))
@@ -185,7 +202,10 @@ export class AccountImportService {
       }
 
       exportedCount += 1
+      emitProgress('progress', exportedCount, `正在导出账号 ${exportedCount} / ${total}`)
     }
+
+    emitProgress('completed', total, `本次成功导出 ${exportedCount} 个账号`)
 
     return exportedCount
   }
@@ -198,10 +218,10 @@ export class AccountImportService {
 
     await Promise.all([
       path.resolve(candidate.sessionPath) !== path.resolve(targetSessionPath)
-        ? fs.copyFile(candidate.sessionPath, targetSessionPath)
+        ? moveFile(candidate.sessionPath, targetSessionPath)
         : Promise.resolve(),
       candidate.jsonPath && path.resolve(candidate.jsonPath) !== path.resolve(targetJsonPath)
-        ? fs.copyFile(candidate.jsonPath, targetJsonPath)
+        ? moveFile(candidate.jsonPath, targetJsonPath)
         : Promise.resolve()
     ])
 
@@ -227,6 +247,7 @@ export class AccountImportService {
 
     const emitProgress = (phase: ImportProgressPayload['phase'], current: number, message: string) => {
       options.onProgress?.({
+        mode: 'import',
         phase,
         total: candidates.length,
         current,
