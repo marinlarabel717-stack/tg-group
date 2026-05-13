@@ -23,6 +23,7 @@ import { TelegramWebService } from './accounts/telegram-web-service'
 import { TelegramDesktopPremiumService } from './accounts/telegram-desktop-premium-service'
 import { AppSettingsStore } from './app-settings-store'
 import { ProxyPoolService } from './proxy-pool/service'
+import { ensureDataDirectories, resolveDataPath } from './data-paths'
 import { resolveRuntimeAssetPath } from './runtime-paths'
 import { LicenseStore } from './license/license-store'
 import { LicenseService } from './license/license-service'
@@ -178,16 +179,17 @@ function bindWindowControls() {
 async function bootstrap() {
   nativeTheme.themeSource = 'dark'
 
-  const accountsRootPath = path.join(app.getPath('userData'), 'accounts')
-  const databasePath = path.join(accountsRootPath, 'accounts.db')
-  const managedSessionsDirectory = path.join(accountsRootPath, 'sessions')
-  const settingsPath = path.join(app.getPath('userData'), 'settings.json')
-  const licensePath = path.join(app.getPath('userData'), 'license.json')
+  const { dataRoot, sessionsDirectory } = ensureDataDirectories()
+  const accountsRootPath = dataRoot
+  const databasePath = resolveDataPath('accounts.db')
+  const managedSessionsDirectory = sessionsDirectory
+  const settingsPath = resolveDataPath('settings.json')
+  const licensePath = resolveDataPath('license.json')
   const database = await createAccountsDatabase(databasePath)
   const appSettingsStore = new AppSettingsStore(settingsPath)
   const licenseStore = new LicenseStore(licensePath)
   const licenseService = new LicenseService(licenseStore, appSettingsStore)
-  const proxyPoolStoragePath = path.join(app.getPath('userData'), 'proxy-pool.json')
+  const proxyPoolStoragePath = resolveDataPath('proxy-pool.json')
   const appSettings = appSettingsStore.get()
   const repository = new AccountRepository(database)
   const proxyPoolService = new ProxyPoolService(proxyPoolStoragePath)

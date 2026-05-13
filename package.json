@@ -15,6 +15,7 @@
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
     "pack:dir": "npm run build && electron-builder --dir --publish never",
     "dist:win": "npm run build && electron-builder --win nsis --publish never",
+    "dist:exe": "npm run build && electron-builder --win nsis --x64 --publish never",
     "dist:portable": "npm run build && electron-builder --win portable --publish never",
     "license:server": "node license-server/server.mjs",
     "license:create-card": "node license-server/create-card.mjs",
@@ -63,11 +64,12 @@
       "artifactName": "${productName}-${version}-Portable.${ext}"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "runAfterFinish": false
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     },
     "publish": [
       {
