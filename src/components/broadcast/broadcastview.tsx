@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CopyPlus, Eye, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Search, Send, Trash2, Users, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
-import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
+import { generatePreviewItems, useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useAccountStore } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
@@ -851,10 +851,14 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     return groups.filter((group) => selectedTask.groupIds.includes(group.id) && group.accountIds.includes(selectedAccount.id)).length
   }, [groups, selectedAccount, selectedTask])
   const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTask?.id), [previewItems, selectedTask])
+  const livePreviewEstimate = useMemo(
+    () => selectedTask ? generatePreviewItems(selectedTask, creatives, groups, accounts) : [],
+    [accounts, creatives, groups, selectedTask]
+  )
   const previewSummary = useMemo(() => {
     const successCount = selectedPreview.filter((item) => item.status === 'scheduled').length
-    const failedItems = selectedPreview.filter((item) => item.status === 'failed')
-    const pendingCount = selectedPreview.length - successCount - failedItems.length
+    const failedItems = livePreviewEstimate.filter((item) => item.status === 'failed')
+    const pendingCount = livePreviewEstimate.length - successCount - failedItems.length
     const expiredCount = failedItems.filter((item) => item.errorMessage.includes('排程时间太近') || item.errorMessage.includes('已过期')).length
     const unboundGroupNames = Array.from(new Set(failedItems
       .filter((item) => item.errorMessage.includes('目标群内没有已加入且可发送的账号'))
@@ -862,10 +866,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     const invalidRefGroupNames = Array.from(new Set(failedItems
       .filter((item) => item.errorMessage.includes('缺少可用的 @username') || item.errorMessage.includes('缺少可用的 @username、私密链接或群链接') || item.errorMessage.includes('无法识别这个群'))
       .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
-    const firstItem = selectedPreview[0] ?? null
-    const lastItem = selectedPreview[selectedPreview.length - 1] ?? null
+    const firstItem = livePreviewEstimate[0] ?? null
+    const lastItem = livePreviewEstimate[livePreviewEstimate.length - 1] ?? null
     return {
-      total: selectedPreview.length,
+      total: livePreviewEstimate.length,
       successCount,
       failedCount: failedItems.length,
       pendingCount,
@@ -875,7 +879,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       firstScheduledAt: firstItem?.scheduledAt ?? '',
       lastScheduledAt: lastItem?.scheduledAt ?? ''
     }
-  }, [groups, selectedPreview])
+  }, [groups, livePreviewEstimate, selectedPreview])
   const filteredJoinedGroups = useMemo(() => {
     const keyword = groupSearch.trim().toLowerCase()
     return joinedGroups.filter((group) => {

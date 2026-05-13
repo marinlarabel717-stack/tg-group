@@ -369,7 +369,7 @@ function areAllSelectedAccountsPremium(task: BroadcastTask, accounts: Array<{ id
   return task.accountIds.every((accountId) => accounts.some((account) => account.id === accountId && account.profile?.is_premium))
 }
 
-function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[], groups: BroadcastGroupTarget[], accounts: Array<{ id: number; status?: string; profile?: { is_premium?: boolean } }>) {
+export function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[], groups: BroadcastGroupTarget[], accounts: Array<{ id: number; status?: string; profile?: { is_premium?: boolean } }>) {
   const today = startOfLocalDay(new Date())
   const selectedStartDate = startOfLocalDay(parseDateInputValue(task.startDate) ?? today)
   const selectedEndDate = startOfLocalDay(parseDateInputValue(task.endDate) ?? selectedStartDate)
