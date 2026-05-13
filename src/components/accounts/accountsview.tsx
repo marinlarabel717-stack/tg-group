@@ -6,6 +6,20 @@ import { CheckResultDialog } from './checkresultdialog'
 import { useAccountStore } from '../../stores/accountstore'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from './resultdialog'
 
+function readDeleteDialogSubtitle(mode: 'selected' | 'all' | 'flagged' | 'banned' | 'frozen' | 'multi_ip') {
+  if (mode === 'all') return '当前账号已全部清空'
+  if (mode === 'selected') return '已删除所选账号'
+  if (mode === 'flagged') return '已删除封禁 / 冻结 / 多 IP / 失效账号'
+  if (mode === 'banned') return '已删除封禁账号'
+  if (mode === 'frozen') return '已删除冻结账号'
+  return '已删除多 IP 账号'
+}
+
+function readDeleteHeroValue(mode: 'selected' | 'all' | 'flagged' | 'banned' | 'frozen' | 'multi_ip', deletedCount: number) {
+  if (mode === 'all') return '本次已全部删除'
+  return `本次成功删除 ${deletedCount} 个`
+}
+
 export function AccountsView() {
   const importProgress = useAccountStore((state) => state.importProgress)
   const importResultDialog = useAccountStore((state) => state.importResultDialog)
@@ -128,14 +142,14 @@ export function AccountsView() {
         open={showDeleteResultDialog}
         onClose={closeDeleteResultDialog}
         title="删除完成"
-        subtitle={deleteResultDialog.mode === 'all' ? '当前账号已全部清空' : '已删除所选账号'}
+        subtitle={readDeleteDialogSubtitle(deleteResultDialog.mode)}
         icon={<Trash2 size={18} />}
         tone="danger"
         maxWidth="max-w-[420px]"
       >
         <ResultHero
           label="删除结果"
-          value={deleteResultDialog.mode === 'all' ? '本次已全部删除' : `本次成功删除 ${deleteResultDialog.deletedCount} 个`}
+          value={readDeleteHeroValue(deleteResultDialog.mode, deleteResultDialog.deletedCount)}
           tone="danger"
         />
 

@@ -203,7 +203,7 @@ export class CheckQueue extends EventEmitter {
       }
       if (uniqueIds.length > 0) {
         const taskLabel = mode === 'account-survival' ? '账号存活检测' : '账号状态检测'
-        this.appendLog('info', null, `已选择 ${uniqueIds.length} 个账号，${taskLabel}任务进行中，请稍等`)
+        this.appendLog('info', null, `已选择 ${uniqueIds.length} 个账号，${taskLabel}任务进行中，请稍等（当前并发 ${this.state.concurrency}）`)
       }
     }
 

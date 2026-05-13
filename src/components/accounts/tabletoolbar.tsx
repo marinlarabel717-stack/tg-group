@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from 'react'
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   CheckSquare,
   ChevronDown,
@@ -12,6 +12,12 @@ import {
 interface TableToolbarProps {
   selectedCount: number
   totalCount: number
+  deletePresetCounts: {
+    flagged: number
+    banned: number
+    frozen: number
+    multiIp: number
+  }
   loading: boolean
   busy: boolean
   onImportFiles: () => void
@@ -19,6 +25,10 @@ interface TableToolbarProps {
   onExportSelected: () => void
   onDeleteSelected: () => void
   onDeleteAll: () => void
+  onDeleteFlagged: () => void
+  onDeleteBanned: () => void
+  onDeleteFrozen: () => void
+  onDeleteMultiIp: () => void
   onSelectAll: () => void
   onClearSelection: () => void
   onSelectRange: (start: number, end: number) => void
@@ -54,6 +64,7 @@ function ActionButton({
 export const TableToolbar = memo(function TableToolbar({
   selectedCount,
   totalCount,
+  deletePresetCounts,
   loading,
   busy,
   onImportFiles,
@@ -61,6 +72,10 @@ export const TableToolbar = memo(function TableToolbar({
   onExportSelected,
   onDeleteSelected,
   onDeleteAll,
+  onDeleteFlagged,
+  onDeleteBanned,
+  onDeleteFrozen,
+  onDeleteMultiIp,
   onSelectAll,
   onClearSelection,
   onSelectRange
@@ -69,6 +84,22 @@ export const TableToolbar = memo(function TableToolbar({
   const [rangeStart, setRangeStart] = useState('1')
   const [rangeEnd, setRangeEnd] = useState('20')
   const [rangeMenuOpen, setRangeMenuOpen] = useState(false)
+  const [deleteMenuOpen, setDeleteMenuOpen] = useState(false)
+  const deleteMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!deleteMenuOpen) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (deleteMenuRef.current?.contains(target)) return
+      setDeleteMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [deleteMenuOpen])
 
   const handleRangeSelect = () => {
     const start = Number(rangeStart)
@@ -131,7 +162,42 @@ export const TableToolbar = memo(function TableToolbar({
           ) : null}
         </div>
 
-        <ActionButton label="全部删除" icon={<Trash2 size={16} />} onClick={onDeleteAll} disabled={blocked || totalCount === 0} />
+        <div className="relative shrink-0" ref={deleteMenuRef}>
+          <button
+            onClick={() => setDeleteMenuOpen((value) => !value)}
+            disabled={blocked || totalCount === 0}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2.5 rounded-[12px] bg-panel px-4 text-sm font-medium whitespace-nowrap text-textMain transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Trash2 size={16} className="shrink-0" />
+            全部删除
+            <ChevronDown size={15} className={`transition ${deleteMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {deleteMenuOpen ? (
+            <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[260px] rounded-[14px] border border-white/8 bg-card p-2 shadow-2xl">
+              {[
+                { label: '全部删除 /封禁/冻结/多ip/失效的', onClick: onDeleteFlagged, disabled: deletePresetCounts.flagged === 0 },
+                { label: '全部删除封禁', onClick: onDeleteBanned, disabled: deletePresetCounts.banned === 0 },
+                { label: '全部删除冻结', onClick: onDeleteFrozen, disabled: deletePresetCounts.frozen === 0 },
+                { label: '全部删除多ip', onClick: onDeleteMultiIp, disabled: deletePresetCounts.multiIp === 0 },
+                { label: '全部删除', onClick: onDeleteAll, disabled: totalCount === 0 }
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => {
+                    item.onClick()
+                    setDeleteMenuOpen(false)
+                  }}
+                  disabled={blocked || item.disabled}
+                  className="flex w-full items-center justify-between rounded-[10px] px-3 py-2.5 text-left text-sm text-textMain transition hover:bg-white/6 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )

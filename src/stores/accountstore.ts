@@ -22,7 +22,7 @@ interface ExportResultDialogState {
 interface DeleteResultDialogState {
   open: boolean
   deletedCount: number
-  mode: 'selected' | 'all'
+  mode: 'selected' | 'all' | 'flagged' | 'banned' | 'frozen' | 'multi_ip'
 }
 
 interface CheckResultDialogState {
@@ -41,6 +41,22 @@ interface CheckResultDialogState {
 
 function getDesktopAccountsApi() {
   return window.desktopAccounts
+}
+
+const DELETE_STATUS_GROUPS = {
+  flagged: ['banned', 'frozen', 'multi_ip', 'session_expired', 'not_logged_in'],
+  banned: ['banned'],
+  frozen: ['frozen'],
+  multi_ip: ['multi_ip']
+} as const satisfies Record<'flagged' | 'banned' | 'frozen' | 'multi_ip', AccountStatus[]>
+
+type DeleteStatusGroup = keyof typeof DELETE_STATUS_GROUPS
+
+const DELETE_GROUP_LABELS: Record<DeleteStatusGroup, string> = {
+  flagged: '封禁 / 冻结 / 多 IP / 失效',
+  banned: '封禁',
+  frozen: '冻结',
+  multi_ip: '多 IP'
 }
 
 function createEmptyCheckState(): CheckQueueState {
@@ -133,6 +149,7 @@ interface AccountStoreState {
   exportSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
   deleteAll: () => Promise<void>
+  deleteByStatusGroup: (group: DeleteStatusGroup) => Promise<void>
   startSelectedCheck: (actions: CheckAction[]) => Promise<void>
   clearCheckLogs: () => Promise<void>
   revealPath: (targetPath: string) => Promise<void>
@@ -424,6 +441,31 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       })
     })
   },
+  deleteByStatusGroup: async (group) => {
+    await runBusyAction(set, async () => {
+      const statuses = new Set<AccountStatus>(DELETE_STATUS_GROUPS[group])
+      const ids = get().accounts
+        .filter((account) => statuses.has(account.status))
+        .map((account) => account.id)
+
+      if (ids.length === 0) {
+        set({ errorMessage: `当前没有可删除的${DELETE_GROUP_LABELS[group]}账号。` })
+        return
+      }
+
+      await getDesktopAccountsApi()?.deleteByIds(ids)
+      await syncAccounts(set, get)
+      set({
+        selectedIds: get().selectedIds.filter((id) => !ids.includes(id)),
+        deleteResultDialog: {
+          open: true,
+          deletedCount: ids.length,
+          mode: group
+        },
+        lastActionMessage: `已删除 ${ids.length} 个${DELETE_GROUP_LABELS[group]}账号。`
+      })
+    })
+  },
   startSelectedCheck: async (actions) => {
     await runBusyAction(set, async () => {
       const ids = get().selectedIds
@@ -451,7 +493,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           multiIp: 0,
           timeout: 0
         },
-        lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务，检测过程中账号列表先不刷新，完成后统一更新。`
+        lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务，当前按 ${checkState.concurrency} 个并发执行，检测过程中账号列表先不刷新，完成后统一更新。`
       })
     })
   },

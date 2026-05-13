@@ -578,6 +578,7 @@ export const AccountTable = memo(function AccountTable() {
   const exportSelected = useAccountStore((state) => state.exportSelected)
   const deleteSelected = useAccountStore((state) => state.deleteSelected)
   const deleteAll = useAccountStore((state) => state.deleteAll)
+  const deleteByStatusGroup = useAccountStore((state) => state.deleteByStatusGroup)
   const startSelectedCheck = useAccountStore((state) => state.startSelectedCheck)
   const setActiveModule = useUIStore((state) => state.setActiveModule)
   const setLogsContext = useUIStore((state) => state.setLogsContext)
@@ -949,6 +950,12 @@ export const AccountTable = memo(function AccountTable() {
 
   const selectedCount = selectedIds.length
   const totalCount = data.length
+  const deletePresetCounts = useMemo(() => ({
+    flagged: accounts.filter((account) => ['banned', 'frozen', 'multi_ip', 'session_expired', 'not_logged_in'].includes(account.status)).length,
+    banned: accounts.filter((account) => account.status === 'banned').length,
+    frozen: accounts.filter((account) => account.status === 'frozen').length,
+    multiIp: accounts.filter((account) => account.status === 'multi_ip').length
+  }), [accounts])
   const summaryCards = useMemo(() => {
     const aliveCount = summaryScopedData.filter((account) => account.status === 'alive' || account.status === 'geo_restricted').length
     const limitedCount = summaryScopedData.filter((account) => account.status === 'limited' || account.status === 'temporary_limited').length
@@ -1277,6 +1284,7 @@ export const AccountTable = memo(function AccountTable() {
       <TableToolbar
         selectedCount={selectedCount}
         totalCount={totalCount}
+        deletePresetCounts={deletePresetCounts}
         loading={tableLoading}
         busy={busy}
         onImportFiles={() => void importFiles()}
@@ -1284,6 +1292,10 @@ export const AccountTable = memo(function AccountTable() {
         onExportSelected={() => void exportSelected()}
         onDeleteSelected={() => void deleteSelected()}
         onDeleteAll={() => void deleteAll()}
+        onDeleteFlagged={() => void deleteByStatusGroup('flagged')}
+        onDeleteBanned={() => void deleteByStatusGroup('banned')}
+        onDeleteFrozen={() => void deleteByStatusGroup('frozen')}
+        onDeleteMultiIp={() => void deleteByStatusGroup('multi_ip')}
         onSelectAll={handleSelectAll}
         onClearSelection={handleClearSelection}
         onSelectRange={handleSelectRange}
