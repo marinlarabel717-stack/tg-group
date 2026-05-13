@@ -23,6 +23,24 @@ function buildMachineId() {
   return createHash('sha256').update(raw).digest('hex').slice(0, 32)
 }
 
+function normalizeLicenseApiBaseUrl(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+
+  try {
+    const parsed = new URL(trimmed)
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return ''
+    }
+    if (parsed.port === '0') {
+      return ''
+    }
+    return parsed.toString().replace(/\/$/, '')
+  } catch {
+    return ''
+  }
+}
+
 async function postJson<T>(url: string, body: unknown) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000)
@@ -57,7 +75,22 @@ export class LicenseService {
   ) {}
 
   private getLicenseApiBaseUrl() {
-    return this.appSettingsStore.get().licenseApiBaseUrl.trim()
+    const settings = this.appSettingsStore.get()
+    const normalized = normalizeLicenseApiBaseUrl(settings.licenseApiBaseUrl)
+
+    if (normalized && normalized !== settings.licenseApiBaseUrl) {
+      this.appSettingsStore.update({ licenseApiBaseUrl: normalized })
+    }
+
+    if (normalized) {
+      return normalized
+    }
+
+    const fallback = normalizeLicenseApiBaseUrl('http://127.0.0.1:8787')
+    if (fallback && settings.licenseApiBaseUrl !== fallback) {
+      this.appSettingsStore.update({ licenseApiBaseUrl: fallback })
+    }
+    return fallback
   }
 
   private getOfflineGraceDays() {

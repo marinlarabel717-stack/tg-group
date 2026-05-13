@@ -7,9 +7,11 @@ export interface AppSettings {
   licenseOfflineGraceDays: number
 }
 
+const DEFAULT_LICENSE_API_BASE_URL = 'http://127.0.0.1:8787'
+
 const DEFAULT_APP_SETTINGS: AppSettings = {
   checkConcurrency: 3,
-  licenseApiBaseUrl: process.env.LICENSE_API_BASE_URL?.trim() || 'http://127.0.0.1:8787',
+  licenseApiBaseUrl: process.env.LICENSE_API_BASE_URL?.trim() || DEFAULT_LICENSE_API_BASE_URL,
   licenseOfflineGraceDays: 3
 }
 
@@ -20,7 +22,21 @@ function normalizeConcurrency(value: unknown) {
 }
 
 function normalizeApiBaseUrl(value: unknown) {
-  return typeof value === 'string' ? value.trim() : DEFAULT_APP_SETTINGS.licenseApiBaseUrl
+  const raw = typeof value === 'string' ? value.trim() : ''
+  const candidate = raw || DEFAULT_APP_SETTINGS.licenseApiBaseUrl
+
+  try {
+    const parsed = new URL(candidate)
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return DEFAULT_LICENSE_API_BASE_URL
+    }
+    if (parsed.port === '0') {
+      return DEFAULT_LICENSE_API_BASE_URL
+    }
+    return parsed.toString().replace(/\/$/, '')
+  } catch {
+    return DEFAULT_LICENSE_API_BASE_URL
+  }
 }
 
 function normalizeOfflineGraceDays(value: unknown) {
