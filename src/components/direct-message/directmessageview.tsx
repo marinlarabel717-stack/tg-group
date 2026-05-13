@@ -179,6 +179,13 @@ const SendWorkbench = memo(function SendWorkbench() {
   }, [accountPickerOpen, selectedAccountIds])
 
   useEffect(() => {
+    const validIds = selectedAccountIds.filter((id) => accounts.some((account) => account.id === id))
+    if (validIds.length !== selectedAccountIds.length) {
+      setSelectedAccounts(validIds)
+    }
+  }, [accounts, selectedAccountIds, setSelectedAccounts])
+
+  useEffect(() => {
     if (!accountPickerOpen) return
     setRangeStart('1')
     setRangeEnd(String(Math.min(10, Math.max(accounts.length, 1))))
