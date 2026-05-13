@@ -5,20 +5,24 @@ import { useLicenseStore } from '../../stores/licensestore'
 export const LicenseGate = memo(function LicenseGate({ children }: { children: React.ReactNode }) {
   const init = useLicenseStore((state) => state.init)
   const activate = useLicenseStore((state) => state.activate)
+  const validate = useLicenseStore((state) => state.validate)
   const state = useLicenseStore((store) => store.state)
   const loading = useLicenseStore((store) => store.loading)
   const activating = useLicenseStore((store) => store.activating)
+  const validating = useLicenseStore((store) => store.validating)
   const initialized = useLicenseStore((store) => store.initialized)
   const errorMessage = useLicenseStore((store) => store.errorMessage)
   const lastActionMessage = useLicenseStore((store) => store.lastActionMessage)
   const devBypass = useLicenseStore((store) => store.devBypass)
   const [cardKey, setCardKey] = useState('')
+  const [sessionUnlocked, setSessionUnlocked] = useState(false)
 
   useEffect(() => {
+    setSessionUnlocked(false)
     void init()
   }, [init])
 
-  const canEnter = state.canEnter || devBypass
+  const canEnter = sessionUnlocked && (state.canEnter || devBypass)
   const version = state.appVersion || '0.0.0'
 
   const statusMessage = useMemo(() => {
@@ -28,8 +32,31 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
     if (activating) {
       return '正在验证卡密，请稍候...'
     }
+    if (validating) {
+      return '正在校验本机授权，请稍候...'
+    }
     return ''
-  }, [activating, initialized, loading])
+  }, [activating, initialized, loading, validating])
+
+  const submitLicense = async () => {
+    if (activating || validating || (loading && !initialized)) {
+      return
+    }
+
+    const normalized = cardKey.trim()
+    if (!normalized && state.cardKeyMasked) {
+      const result = await validate()
+      if (result?.ok) {
+        setSessionUnlocked(true)
+      }
+      return
+    }
+
+    const result = await activate(cardKey)
+    if (result?.ok) {
+      setSessionUnlocked(true)
+    }
+  }
 
   if (canEnter) {
     return <>{children}</>
@@ -56,9 +83,9 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
             value={cardKey}
             onChange={(event) => setCardKey(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && !activating && initialized) {
+              if (event.key === 'Enter' && !activating && !validating && initialized) {
                 event.preventDefault()
-                void activate(cardKey)
+                void submitLicense()
               }
             }}
             placeholder="请输入卡密"
@@ -70,17 +97,18 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
           <div className="mt-4">
             <button
               type="button"
-              disabled={activating || (loading && !initialized)}
-              onClick={() => void activate(cardKey)}
+              disabled={activating || validating || (loading && !initialized)}
+              onClick={() => void submitLicense()}
               className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-sky-500 px-5 text-sm font-medium text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {activating || (loading && !initialized) ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+              {activating || validating || (loading && !initialized) ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
               激活卡密
             </button>
           </div>
         </div>
 
         {statusMessage ? <div className="mt-4 rounded-[12px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-200">{statusMessage}</div> : null}
+        {!statusMessage && state.cardKeyMasked ? <div className="mt-4 rounded-[12px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">当前设备已有授权记录；每次启动都需要先过这里，再进入软件。</div> : null}
         {lastActionMessage ? <div className="mt-4 rounded-[12px] border border-emerald-400/15 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{lastActionMessage}</div> : null}
         {errorMessage ? <div className="mt-4 rounded-[12px] border border-rose-400/15 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
         {!state.apiConfigured ? <div className="mt-4 rounded-[12px] border border-amber-400/15 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">授权服务地址还没配好，当前默认会先连本机 127.0.0.1:8787。</div> : null}
