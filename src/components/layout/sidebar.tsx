@@ -25,16 +25,16 @@ const SidebarBrand = memo(function SidebarBrand({ collapsed }: { collapsed: bool
     <button
       title={collapsed ? 'TG-Matrix' : undefined}
       onClick={() => setActiveModule('dashboard')}
-      className={`group flex items-center rounded-[14px] bg-white/[0.025] transition hover:bg-hover ${collapsed ? 'justify-center px-0 py-3.5' : 'justify-center px-3 py-4'}`}
+      className={`group flex items-center rounded-[18px] transition hover:bg-white/[0.03] ${collapsed ? 'justify-center p-0' : 'justify-start px-3 py-2'}`}
     >
       <BrandLogo
-        size={86}
+        size={collapsed ? 48 : 56}
         showText={!collapsed}
-        roundedClassName="rounded-[20px]"
-        className={collapsed ? 'justify-center' : 'flex-col gap-4 text-center'}
-        textClassName={collapsed ? '' : 'text-center'}
+        roundedClassName={collapsed ? 'rounded-[16px]' : 'rounded-[18px]'}
+        className={collapsed ? 'justify-center' : 'gap-3.5'}
+        textClassName={collapsed ? '' : 'text-left'}
         title="TG-Matrix"
-        titleClassName="text-[23px] font-semibold text-white"
+        titleClassName={collapsed ? '' : 'text-[26px] font-extrabold tracking-[0.01em] text-white'}
       />
     </button>
   )
@@ -68,31 +68,20 @@ export const Sidebar = memo(function Sidebar() {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar)
 
   return (
-    <aside className={`relative flex flex-col rounded-[16px] bg-panel/95 contain-layout transition-[width,padding] duration-200 ${sidebarCollapsed ? 'w-[84px] p-3' : 'w-[228px] p-3'}`}>
-      <div className={`mb-3 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between gap-2'}`}>
+    <aside className={`relative flex flex-col rounded-[16px] bg-panel/95 contain-layout transition-[width,padding] duration-200 ${sidebarCollapsed ? 'w-[86px] p-3' : 'w-[252px] px-3 pb-3 pt-2'}`}>
+      <div className={`relative mb-3 ${sidebarCollapsed ? 'flex flex-col items-center gap-3 pt-10' : 'pt-9'}`}>
+        <button
+          title={sidebarCollapsed ? '展开导航栏' : '收起导航栏'}
+          onClick={toggleSidebar}
+          className={`absolute top-0 z-10 flex items-center justify-center rounded-full bg-white/[0.05] text-slate-300 transition hover:bg-white/[0.08] hover:text-white ${sidebarCollapsed ? 'left-1/2 h-7 w-7 -translate-x-1/2' : 'right-0 h-7 w-7'}`}
+        >
+          {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+
         <SidebarBrand collapsed={sidebarCollapsed} />
-        {!sidebarCollapsed ? (
-          <button
-            title="收起导航栏"
-            onClick={toggleSidebar}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-white/[0.025] text-slate-300 transition hover:bg-hover hover:text-white"
-          >
-            <ChevronLeft size={18} />
-          </button>
-        ) : null}
       </div>
 
-      {sidebarCollapsed ? (
-        <button
-          title="展开导航栏"
-          onClick={toggleSidebar}
-          className="mb-3 flex h-10 w-full items-center justify-center rounded-[12px] bg-white/[0.025] text-slate-300 transition hover:bg-hover hover:text-white"
-        >
-          <ChevronRight size={18} />
-        </button>
-      ) : null}
-
-      <div className={`space-y-2 ${sidebarCollapsed ? 'mt-2' : 'mt-4'}`}>
+      <div className={`space-y-2 ${sidebarCollapsed ? 'mt-2' : 'mt-3'}`}>
         {items.map((item) => (
           <SidebarNavItem key={item.key} moduleKey={item.key} label={item.label} icon={item.icon} collapsed={sidebarCollapsed} />
         ))}

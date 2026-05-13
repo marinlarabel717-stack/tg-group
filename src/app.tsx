@@ -9,7 +9,7 @@ function App() {
   return (
     <LicenseGate>
       <AppFrame>
-        <div className={`relative grid h-full min-h-0 gap-5 overflow-hidden px-5 py-5 ${sidebarCollapsed ? 'grid-cols-[84px_1fr]' : 'grid-cols-[228px_1fr]'}`}>
+        <div className={`relative grid h-full min-h-0 gap-5 overflow-hidden px-5 py-5 ${sidebarCollapsed ? 'grid-cols-[86px_1fr]' : 'grid-cols-[252px_1fr]'}`}>
           <Sidebar />
 
           <main className="flex min-h-0 min-w-0 flex-col gap-5 overflow-hidden rounded-[16px] bg-panel/95 p-5 contain-layout">
