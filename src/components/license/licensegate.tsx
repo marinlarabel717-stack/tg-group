@@ -27,6 +27,16 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
 
   useEffect(() => {
     void window.desktopWindow?.setMode(canEnter ? 'app' : 'license')
+
+    const nextBackground = canEnter ? '#08111f' : 'transparent'
+    document.body.style.background = nextBackground
+    const root = document.getElementById('root')
+    if (root) root.style.background = nextBackground
+
+    return () => {
+      document.body.style.background = '#08111f'
+      if (root) root.style.background = '#08111f'
+    }
   }, [canEnter])
   const statusMessage = useMemo(() => {
     if (loading && !initialized) {
@@ -66,8 +76,8 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-[#0f1726] p-4 text-white">
-      <div className="relative w-full max-w-[420px] rounded-[28px] border border-white/10 bg-[#121c2d] px-6 py-7 shadow-[0_28px_80px_rgba(0,0,0,0.38)]">
+    <div className="h-screen w-screen bg-transparent text-white">
+      <div className="relative flex h-full w-full flex-col rounded-[32px] border border-white/10 bg-[#121c2d] px-6 py-7 shadow-[0_28px_80px_rgba(0,0,0,0.38)]">
         <button
           type="button"
           onClick={() => void window.desktopWindow?.close()}
@@ -77,7 +87,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
           ×
         </button>
 
-        <div className="flex flex-col items-center text-center">
+        <div className="mt-2 flex flex-col items-center text-center">
           <BrandLogo
             size={92}
             title="TG-Matrix"
@@ -87,7 +97,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
           />
         </div>
 
-        <div className="mt-8">
+        <div className="mt-10">
           <input
             value={cardKey}
             onChange={(event) => setCardKey(event.target.value)}
