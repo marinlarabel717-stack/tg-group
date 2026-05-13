@@ -96,7 +96,7 @@ export class DesktopAppUpdater {
       this.clearAutoInstallTimer()
       this.autoInstallTimer = setTimeout(() => {
         try {
-          autoUpdater.quitAndInstall(false, true)
+          autoUpdater.quitAndInstall(true, true)
         } catch (error) {
           this.updateState({
             status: 'error',
@@ -228,7 +228,7 @@ export class DesktopAppUpdater {
       return false
     }
 
-    autoUpdater.quitAndInstall(false, true)
+    autoUpdater.quitAndInstall(true, true)
     return true
   }
 
