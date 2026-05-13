@@ -1198,8 +1198,8 @@ export const AccountTable = memo(function AccountTable() {
                   }
                 }}
                 className={`group relative rounded-[16px] border px-5 py-4 text-left transition ${active
-                  ? 'border-sky-400/45 bg-sky-400/10 shadow-[0_0_0_1px_rgba(56,189,248,0.16)]'
-                  : 'border-white/8 bg-card hover:bg-hover'}`}
+                  ? 'border-white/[0.12] bg-sky-400/10 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]'
+                  : 'border-white/[0.06] bg-card hover:border-white/[0.09] hover:bg-hover'}`}
               >
                 <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
                   <button
