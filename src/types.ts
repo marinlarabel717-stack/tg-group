@@ -151,6 +151,7 @@ export interface StatusUpdateResult {
 export interface ExportAccountsResult {
   exportedCount: number
   targetDirectory: string
+  accounts: AccountRecord[]
 }
 
 export interface ProxyRecord {

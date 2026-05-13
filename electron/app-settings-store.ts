@@ -16,7 +16,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
 function normalizeConcurrency(value: unknown) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return DEFAULT_APP_SETTINGS.checkConcurrency
-  return Math.min(20, Math.max(1, Math.trunc(parsed)))
+  return Math.max(1, Math.trunc(parsed))
 }
 
 function normalizeApiBaseUrl(value: unknown) {

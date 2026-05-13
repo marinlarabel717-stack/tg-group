@@ -258,7 +258,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       })
       window.desktopAccounts?.onAccountsUpdated((accounts) => {
         const isChecking = get().checkState.running
-        if (isChecking) {
+        const isTransferringAccounts = Boolean(get().importProgress)
+        if (isChecking || isTransferringAccounts) {
           return
         }
         applyAccountSnapshot(accounts, set, get, { lastActionMessage: 'sessions 目录检测到变更，列表已自动同步。' })
@@ -294,7 +295,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     await runBusyAction(set, async () => {
       const result = await getDesktopAccountsApi()?.pickImportFiles()
       if (!result) return
-      await syncAccounts(set, get)
+      applyAccountSnapshot(result.accounts, set, get)
       set({
         importProgress: null,
         importResultDialog: {
@@ -314,7 +315,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     await runBusyAction(set, async () => {
       const result = await getDesktopAccountsApi()?.pickImportFolder()
       if (!result) return
-      await syncAccounts(set, get)
+      applyAccountSnapshot(result.accounts, set, get)
       set({
         importProgress: null,
         importResultDialog: {
@@ -335,7 +336,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       if (paths.length === 0) return
       const result = await getDesktopAccountsApi()?.importDroppedPaths(paths)
       if (!result) return
-      await syncAccounts(set, get)
+      applyAccountSnapshot(result.accounts, set, get)
       set({
         importProgress: null,
         importResultDialog: {
@@ -393,7 +394,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
 
       const result = await getDesktopAccountsApi()?.exportByIds(ids)
       if (!result || !result.targetDirectory) return
-      await syncAccounts(set, get)
+      applyAccountSnapshot(result.accounts, set, get)
       set({
         selectedIds: [],
         exportResultDialog: {
@@ -413,8 +414,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      await getDesktopAccountsApi()?.deleteByIds(ids)
-      await syncAccounts(set, get)
+      const accounts = await getDesktopAccountsApi()?.deleteByIds(ids)
+      if (!accounts) return
+      applyAccountSnapshot(accounts, set, get)
       set({
         selectedIds: [],
         deleteResultDialog: {
@@ -429,8 +431,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   deleteAll: async () => {
     await runBusyAction(set, async () => {
       const deletedCount = get().accounts.length
-      await getDesktopAccountsApi()?.deleteAll()
-      await syncAccounts(set, get)
+      const accounts = await getDesktopAccountsApi()?.deleteAll()
+      if (!accounts) return
+      applyAccountSnapshot(accounts, set, get)
       set({
         selectedIds: [],
         deleteResultDialog: {
@@ -454,8 +457,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      await getDesktopAccountsApi()?.deleteByIds(ids)
-      await syncAccounts(set, get)
+      const accounts = await getDesktopAccountsApi()?.deleteByIds(ids)
+      if (!accounts) return
+      applyAccountSnapshot(accounts, set, get)
       set({
         selectedIds: get().selectedIds.filter((id) => !ids.includes(id)),
         deleteResultDialog: {

@@ -10,7 +10,7 @@ import { formatDateTimeFull } from '../../lib/ui-text'
 function normalizeConcurrency(value: string) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 3
-  return Math.min(20, Math.max(1, Math.trunc(parsed)))
+  return Math.max(1, Math.trunc(parsed))
 }
 
 function normalizeGraceDays(value: string) {
@@ -79,7 +79,7 @@ export default memo(function SettingsView() {
                 <div className="mt-2 text-sm leading-6 text-textMuted">
                   当前默认是 <span className="font-semibold text-white">{runtimeConcurrency}</span> 线程。
                   <br />
-                  建议先控制在 1 - 10 之间；改完后，新任务会按新的并发数继续调度。
+                  这里不再设上限，能开多少取决于你的本地性能；改完后，新任务会按新的并发数继续调度。
                 </div>
               </div>
               {loading ? <Loader2 className="mt-1 animate-spin text-textMuted" size={18} /> : null}
@@ -91,7 +91,6 @@ export default memo(function SettingsView() {
                 <input
                   type="number"
                   min={1}
-                  max={20}
                   step={1}
                   value={concurrencyInput}
                   onChange={(event) => setConcurrencyInput(event.target.value)}

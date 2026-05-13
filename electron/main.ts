@@ -39,6 +39,7 @@ const __dirname = path.dirname(__filename)
 let mainWindow: BrowserWindow | null = null
 let managedSessionsWatcher: fs.FSWatcher | null = null
 let managedSessionsSyncTimer: NodeJS.Timeout | null = null
+let managedSessionsWatcherSuspendCount = 0
 
 function createWindow() {
   const appTitle = app.getName()
@@ -91,14 +92,27 @@ function emitAccountsUpdated(accounts: AccountRecord[]) {
   mainWindow.webContents.send('accounts:updated', accounts)
 }
 
+async function withManagedSessionsWatcherSuspended<T>(action: () => Promise<T>) {
+  managedSessionsWatcherSuspendCount += 1
+  try {
+    return await action()
+  } finally {
+    managedSessionsWatcherSuspendCount = Math.max(0, managedSessionsWatcherSuspendCount - 1)
+  }
+}
+
 function bindManagedSessionsWatcher(importService: AccountImportService, repository: AccountRepository, managedSessionsDirectory: string) {
   managedSessionsWatcher?.close()
   managedSessionsWatcher = fs.watch(managedSessionsDirectory, { persistent: false }, () => {
+    if (managedSessionsWatcherSuspendCount > 0) return
+
     if (managedSessionsSyncTimer) {
       clearTimeout(managedSessionsSyncTimer)
     }
 
     managedSessionsSyncTimer = setTimeout(() => {
+      if (managedSessionsWatcherSuspendCount > 0) return
+
       void importService.syncManagedSessions()
         .then(() => emitAccountsUpdated(repository.list()))
         .catch((error) => {
@@ -223,7 +237,8 @@ async function bootstrap() {
     appSettingsStore,
     telegramWebService,
     telegramDesktopPremiumService,
-    emitAccountsUpdated
+    emitAccountsUpdated,
+    withManagedSessionsWatcherSuspended
   })
   registerBroadcastIpc({
     broadcastService

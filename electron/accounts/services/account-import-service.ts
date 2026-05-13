@@ -1,3 +1,4 @@
+import os from 'node:os'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { inferCountryDisplay, inferPhoneFromText } from '../../../src/lib/phone-country'
@@ -6,8 +7,9 @@ import type { AccountRepository } from './account-repository'
 import { FileScanner } from './file-scanner'
 import { JsonTemplateService } from './json-template-service'
 
-const IMPORT_CONCURRENCY = 24
-const IMPORT_PROGRESS_CHUNK = 100
+const FILE_IO_CONCURRENCY = Math.max(8, (typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length || 4) * 4)
+const IMPORT_PROGRESS_CHUNK = 200
+const EXPORT_PROGRESS_CHUNK = 25
 
 function readStringField(profile: AccountJsonProfile, ...keys: string[]) {
   for (const key of keys) {
@@ -190,7 +192,7 @@ export class AccountImportService {
 
     emitProgress('start', 0, total > 0 ? `正在导出账号，准备处理 0 / ${total}` : '正在导出账号')
 
-    for (const account of accounts) {
+    const moveAccountFiles = async (account: AccountRecord) => {
       if (account.sessionPath && await pathExists(account.sessionPath)) {
         const sessionTargetPath = path.join(targetDirectory, path.basename(account.sessionPath))
         await moveFile(account.sessionPath, sessionTargetPath)
@@ -200,9 +202,16 @@ export class AccountImportService {
         const jsonTargetPath = path.join(targetDirectory, path.basename(account.jsonPath))
         await moveFile(account.jsonPath, jsonTargetPath)
       }
+    }
 
-      exportedCount += 1
-      emitProgress('progress', exportedCount, `正在导出账号 ${exportedCount} / ${total}`)
+    for (let startIndex = 0; startIndex < accounts.length; startIndex += FILE_IO_CONCURRENCY) {
+      const batch = accounts.slice(startIndex, startIndex + FILE_IO_CONCURRENCY)
+      await Promise.all(batch.map((account) => moveAccountFiles(account)))
+      exportedCount += batch.length
+
+      if (exportedCount === total || exportedCount === batch.length || exportedCount % EXPORT_PROGRESS_CHUNK === 0) {
+        emitProgress('progress', exportedCount, `正在导出账号 ${exportedCount} / ${total}`)
+      }
     }
 
     emitProgress('completed', total, `本次成功导出 ${exportedCount} 个账号`)
@@ -292,8 +301,8 @@ export class AccountImportService {
       }
     }
 
-    for (let startIndex = 0; startIndex < candidates.length; startIndex += IMPORT_CONCURRENCY) {
-      const batch = candidates.slice(startIndex, startIndex + IMPORT_CONCURRENCY)
+    for (let startIndex = 0; startIndex < candidates.length; startIndex += FILE_IO_CONCURRENCY) {
+      const batch = candidates.slice(startIndex, startIndex + FILE_IO_CONCURRENCY)
       const batchResults = await Promise.all(batch.map((candidate) => processCandidate(candidate)))
 
       for (const result of batchResults) {
