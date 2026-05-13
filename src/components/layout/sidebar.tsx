@@ -25,15 +25,16 @@ const SidebarBrand = memo(function SidebarBrand({ collapsed }: { collapsed: bool
     <button
       title={collapsed ? 'TG-Matrix' : undefined}
       onClick={() => setActiveModule('dashboard')}
-      className={`group flex items-center rounded-[14px] bg-white/[0.025] transition hover:bg-hover ${collapsed ? 'justify-center px-0 py-3.5' : 'gap-3 px-3 py-3.5'}`}
+      className={`group flex items-center rounded-[14px] bg-white/[0.025] transition hover:bg-hover ${collapsed ? 'justify-center px-0 py-3.5' : 'justify-center px-3 py-4'}`}
     >
       <BrandLogo
-        size={50}
+        size={64}
         showText={!collapsed}
-        roundedClassName="rounded-[14px]"
-        className={collapsed ? 'justify-center' : ''}
+        roundedClassName="rounded-[16px]"
+        className={collapsed ? 'justify-center' : 'flex-col gap-3 text-center'}
+        textClassName={collapsed ? '' : 'text-center'}
         title="TG-Matrix"
-        titleClassName="text-[20px] font-semibold text-white"
+        titleClassName="text-[19px] font-semibold text-white"
       />
     </button>
   )
