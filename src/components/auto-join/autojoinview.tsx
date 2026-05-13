@@ -212,6 +212,13 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   }, [accountPickerOpen, selectedAccountIds])
 
   useEffect(() => {
+    const validIds = selectedAccountIds.filter((id) => accounts.some((account) => account.id === id))
+    if (validIds.length !== selectedAccountIds.length) {
+      setSelectedAccountIds(validIds)
+    }
+  }, [accounts, selectedAccountIds, setSelectedAccountIds])
+
+  useEffect(() => {
     if (!accountPickerOpen) return
     setRangeStart('1')
     setRangeEnd(String(Math.min(10, Math.max(accounts.length, 1))))

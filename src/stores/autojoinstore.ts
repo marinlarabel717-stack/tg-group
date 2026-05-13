@@ -534,10 +534,17 @@ export const useAutoJoinStore = create<AutoJoinState>()(
     }),
     {
       name: 'tg-group-auto-join-store',
+      version: 2,
       storage: createJSONStorage(() => window.localStorage),
+      migrate: (persistedState) => {
+        const state = persistedState as Partial<AutoJoinState> | undefined
+        return {
+          ...state,
+          selectedAccountIds: []
+        }
+      },
       partialize: (state) => ({
         activeTab: state.activeTab,
-        selectedAccountIds: state.selectedAccountIds,
         taskName: state.taskName,
         linkInput: state.linkInput,
         concurrency: state.concurrency,

@@ -815,6 +815,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const lastActionMessage = useBroadcastStore((state) => state.lastActionMessage)
   const selectTask = useBroadcastStore((state) => state.selectTask)
   const updateTask = useBroadcastStore((state) => state.updateTask)
+  const updateGroup = useBroadcastStore((state) => state.updateGroup)
   const setSelectedTargetAccountId = useBroadcastStore((state) => state.setSelectedTargetAccountId)
   const loadJoinedGroupsForAccount = useBroadcastStore((state) => state.loadJoinedGroupsForAccount)
   const attachJoinedGroupToAccount = useBroadcastStore((state) => state.attachJoinedGroupToAccount)
@@ -840,6 +841,28 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       selectTask(tasks[0].id)
     }
   }, [selectedTaskId, selectTask, tasks])
+
+  useEffect(() => {
+    const validAccountIds = new Set(accounts.map((account) => account.id))
+
+    tasks.forEach((task) => {
+      const nextAccountIds = task.accountIds.filter((id) => validAccountIds.has(id))
+      if (nextAccountIds.length !== task.accountIds.length) {
+        updateTask(task.id, { accountIds: nextAccountIds })
+      }
+    })
+
+    groups.forEach((group) => {
+      const nextAccountIds = group.accountIds.filter((id) => validAccountIds.has(id))
+      if (nextAccountIds.length !== group.accountIds.length) {
+        updateGroup(group.id, { accountIds: nextAccountIds })
+      }
+    })
+
+    if (selectedTargetAccountId && !validAccountIds.has(selectedTargetAccountId)) {
+      setSelectedTargetAccountId(null)
+    }
+  }, [accounts, groups, selectedTargetAccountId, setSelectedTargetAccountId, tasks, updateGroup, updateTask])
 
   const selectedAccountIds = selectedTask?.accountIds ?? []
   const selectedAccounts = useMemo(() => accounts.filter((item) => selectedAccountIds.includes(item.id)), [accounts, selectedAccountIds])
