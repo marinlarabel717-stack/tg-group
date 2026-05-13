@@ -28,13 +28,12 @@ const SidebarBrand = memo(function SidebarBrand({ collapsed }: { collapsed: bool
       className={`group flex items-center rounded-[14px] bg-white/[0.025] transition hover:bg-hover ${collapsed ? 'justify-center px-0 py-3.5' : 'gap-3 px-3 py-3.5'}`}
     >
       <BrandLogo
-        size={40}
+        size={50}
         showText={!collapsed}
-        roundedClassName="rounded-[12px]"
+        roundedClassName="rounded-[14px]"
         className={collapsed ? 'justify-center' : ''}
-        subtitle="DESKTOP"
         title="TG-Matrix"
-        taglineClassName="text-[13px] text-textMuted"
+        titleClassName="text-[20px] font-semibold text-white"
       />
     </button>
   )

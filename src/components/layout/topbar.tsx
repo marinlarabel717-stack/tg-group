@@ -8,13 +8,10 @@ const TopbarBrand = memo(function TopbarBrand() {
   return (
     <div className="flex min-w-[280px] items-center rounded-[14px] bg-card px-4 py-2.5 text-cyan-200">
       <BrandLogo
-        size={42}
-        subtitle="桌面工作台"
+        size={52}
         title="TG-Matrix"
-        roundedClassName="rounded-[12px]"
-        subtitleClassName="text-[10px] tracking-[0.26em] text-textMuted"
-        titleClassName="text-sm font-medium text-textMain"
-        taglineClassName="text-[12px] text-textMuted"
+        roundedClassName="rounded-[14px]"
+        titleClassName="text-[22px] font-semibold text-white"
       />
     </div>
   )
