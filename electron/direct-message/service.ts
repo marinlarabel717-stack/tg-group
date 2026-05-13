@@ -28,6 +28,10 @@ function formatDirectMessageError(error: unknown) {
   const waitMatched = normalized.match(/A wait of (\d+) seconds is required/i)
   if (waitMatched?.[1]) return `操作太快了，Telegram 要求先等 ${waitMatched[1]} 秒再继续。`
   if (/PEER_FLOOD/i.test(normalized)) return '这个账号触发 Telegram 私信风控了，先暂停一会再发。'
+  if (/FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(normalized)) return '这个账号已经冻结了，当前私信功能用不了，系统会自动停掉这个账号。'
+  if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(normalized)) return '这个账号已经被封了，不能继续私信，系统会自动停掉这个账号。'
+  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号登录已经失效了，需要重新登录，系统会自动停掉这个账号。'
+  if (/ACCOUNT_RESTRICTED/i.test(normalized)) return '这个账号当前被 Telegram 限制了，不能继续私信，系统会自动停掉这个账号。'
   if (/USERNAME_INVALID/i.test(normalized)) return '这个用户名不对，请检查 @username 是否填错。'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '这个用户名不存在，请确认目标用户写对了。'
   if (/ALLOW_PAYMENT_REQUIRED/i.test(normalized)) return '对方开启了付费私信，当前账号不能直接发送。'
@@ -44,7 +48,6 @@ function formatDirectMessageError(error: unknown) {
   if (/CHAT_SEND_STICKERS_FORBIDDEN/i.test(normalized)) return '当前会话不允许发表情贴纸。'
   if (/CHAT_SEND_ROUNDVIDEOS_FORBIDDEN/i.test(normalized)) return '当前会话不允许发圆视频。'
   if (/CHAT_WRITE_FORBIDDEN|USER_BANNED_IN_CHANNEL|CHAT_RESTRICTED/i.test(normalized)) return '当前账号没有发送权限，或者被限制了。'
-  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号登录状态失效了，需要重新登录。'
   if (/MESSAGE_TOO_LONG|MEDIA_CAPTION_TOO_LONG/i.test(normalized)) return '私信文案太长了，缩短一点再试。'
   if (/PHOTO_INVALID|MEDIA_INVALID|IMAGE_PROCESS_FAILED/i.test(normalized)) return '图片有问题，Telegram 不认这张图。'
   if (/SOURCE_MESSAGE_LINK_INVALID/i.test(normalized)) return '频道消息链接不对，请检查链接。'
@@ -84,11 +87,20 @@ function readRiskPauseSeconds(error: unknown) {
 
 function isUnavailableAccountError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
-  return /AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED|INPUT_USER_DEACTIVATED|PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN|ACCOUNT_RESTRICTED/i.test(message)
+  return /AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED|PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN|ACCOUNT_RESTRICTED|FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(message)
 }
 
 function createId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function stopReasonForAccountError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(message)) return '冻结'
+  if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(message)) return '封禁'
+  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(message)) return '失效'
+  if (/ACCOUNT_RESTRICTED/i.test(message)) return '限制'
+  return '异常'
 }
 
 function sleep(ms: number) {
@@ -585,11 +597,30 @@ export class DirectMessageService {
         this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
         if (typeof item.accountId === 'number' && isUnavailableAccountError(error)) {
           unavailableAccountIds.add(item.accountId)
+          accountCooldownUntil.delete(item.accountId)
+          const skippedCount = pendingItems.reduce((count, entry) => count + (entry.item.accountId === item.accountId ? 1 : 0), 0)
+          for (let index = pendingItems.length - 1; index >= 0; index -= 1) {
+            if (pendingItems[index]?.item.accountId === item.accountId) {
+              pendingItems.splice(index, 1)
+            }
+          }
           const currentClient = clients.get(item.accountId)
           if (currentClient) {
             await this.clientManager.destroyClient(currentClient).catch(() => undefined)
             clients.delete(item.accountId)
           }
+
+          const reason = stopReasonForAccountError(error)
+          this.emitSendNotice(
+            results,
+            payload.items.length,
+            skippedCount > 0
+              ? `[${account.phone || readAccountLabel(account)}] 这个账号已判定为${reason}，已停止继续私信，后面剩余 ${skippedCount} 个目标不再发送。`
+              : `[${account.phone || readAccountLabel(account)}] 这个账号已判定为${reason}，已停止继续私信。`,
+            onProgress,
+            null
+          )
+
           if (unavailableAccountIds.size >= accountIds.length) {
             stopReason = '无可用账号发送，本次任务已停止。'
             this.emitSendNotice(results, payload.items.length, stopReason, onProgress, null)
