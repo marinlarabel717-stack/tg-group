@@ -2,6 +2,7 @@ import { AppFrame } from './components/window/appframe'
 import { Sidebar } from './components/layout/sidebar'
 import { LicenseGate } from './components/license/licensegate'
 import { ModuleViewport } from './modules/moduleviewport'
+import { UpdateDialog } from './components/window/updatedialog'
 import { useUIStore } from './stores/uistore'
 
 function App() {
@@ -18,6 +19,8 @@ function App() {
             </div>
           </main>
         </div>
+
+        <UpdateDialog />
       </AppFrame>
     </LicenseGate>
   )

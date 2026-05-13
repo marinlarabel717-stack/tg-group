@@ -658,6 +658,28 @@ export interface DesktopAutoJoinApi {
   onProgress: (callback: (payload: AutoJoinProgress) => void) => () => void
 }
 
+export type AppUpdaterStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'unsupported'
+
+export interface AppUpdaterState {
+  status: AppUpdaterStatus
+  currentVersion: string
+  availableVersion: string | null
+  progressPercent: number
+  transferredBytes: number
+  totalBytes: number
+  bytesPerSecond: number
+  message: string
+  releaseDate: string | null
+}
+
+export interface DesktopUpdaterApi {
+  getState: () => Promise<AppUpdaterState>
+  checkForUpdates: () => Promise<AppUpdaterState>
+  downloadUpdate: () => Promise<AppUpdaterState>
+  quitAndInstall: () => Promise<boolean>
+  onState: (callback: (state: AppUpdaterState) => void) => () => void
+}
+
 export interface DesktopWindowApi {
   minimize: () => Promise<void>
   toggleMaximize: () => Promise<boolean>
@@ -675,6 +697,7 @@ declare global {
     desktopBroadcast?: DesktopBroadcastApi
     desktopDirectMessage?: DesktopDirectMessageApi
     desktopAutoJoin?: DesktopAutoJoinApi
+    desktopUpdater?: DesktopUpdaterApi
     desktopWindow?: DesktopWindowApi
     desktopInfo?: {
       appName: string

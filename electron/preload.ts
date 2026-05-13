@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
+import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'TG-Matrix',
@@ -13,6 +13,18 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   close: () => ipcRenderer.invoke('window:close'),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
   setMode: (mode: 'license' | 'app') => ipcRenderer.invoke('window:set-mode', mode)
+})
+
+contextBridge.exposeInMainWorld('desktopUpdater', {
+  getState: () => ipcRenderer.invoke('app-updater:get-state') as Promise<AppUpdaterState>,
+  checkForUpdates: () => ipcRenderer.invoke('app-updater:check') as Promise<AppUpdaterState>,
+  downloadUpdate: () => ipcRenderer.invoke('app-updater:download') as Promise<AppUpdaterState>,
+  quitAndInstall: () => ipcRenderer.invoke('app-updater:quit-and-install') as Promise<boolean>,
+  onState: (callback: (state: AppUpdaterState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: AppUpdaterState) => callback(state)
+    ipcRenderer.on('app-updater:state', listener)
+    return () => ipcRenderer.removeListener('app-updater:state', listener)
+  }
 })
 
 contextBridge.exposeInMainWorld('desktopAccounts', {

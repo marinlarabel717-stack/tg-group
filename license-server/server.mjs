@@ -11,8 +11,11 @@ const HOST = process.env.LICENSE_SERVER_HOST || '127.0.0.1'
 const ADMIN_USERNAME = (process.env.LICENSE_ADMIN_USERNAME || 'adminTG').trim()
 const ADMIN_PASSWORD = process.env.LICENSE_ADMIN_PASSWORD || '968574..'
 const ADMIN_PAGE_PATH = path.resolve(process.cwd(), 'license-server', 'admin.html')
+const RELEASES_ROOT_PATH = path.resolve(process.cwd(), 'license-server', 'releases')
 const ADMIN_COOKIE_NAME = 'tgmatrix_admin_session'
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+fs.mkdirSync(RELEASES_ROOT_PATH, { recursive: true })
 
 const service = new LicenseServerService()
 const sessions = new Map()
@@ -89,6 +92,38 @@ function sendHtml(res, filePath) {
   res.end(content)
 }
 
+function readMimeType(filePath) {
+  const ext = path.extname(filePath).toLowerCase()
+  if (ext === '.yml' || ext === '.yaml') return 'text/yaml; charset=utf-8'
+  if (ext === '.json') return 'application/json; charset=utf-8'
+  if (ext === '.exe') return 'application/vnd.microsoft.portable-executable'
+  if (ext === '.blockmap') return 'application/octet-stream'
+  return 'application/octet-stream'
+}
+
+function sendReleaseFile(res, pathname) {
+  const relativePath = pathname.replace(/^\/releases\//, '')
+  if (!relativePath) {
+    return json(res, 404, { ok: false, message: 'release file not found' })
+  }
+
+  const resolvedPath = path.resolve(RELEASES_ROOT_PATH, relativePath)
+  if (!resolvedPath.startsWith(RELEASES_ROOT_PATH)) {
+    return json(res, 403, { ok: false, message: 'forbidden' })
+  }
+
+  if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
+    return json(res, 404, { ok: false, message: 'release file not found' })
+  }
+
+  res.writeHead(200, {
+    'content-type': readMimeType(resolvedPath),
+    'content-length': String(fs.statSync(resolvedPath).size),
+    'cache-control': 'no-cache'
+  })
+  fs.createReadStream(resolvedPath).pipe(res)
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url || '/', `http://${HOST}:${PORT}`)
@@ -105,6 +140,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && (pathname === '/' || pathname === '/admin')) {
       return sendHtml(res, ADMIN_PAGE_PATH)
+    }
+
+    if (req.method === 'GET' && pathname.startsWith('/releases/')) {
+      return sendReleaseFile(res, pathname)
     }
 
     if (req.method === 'POST' && pathname === '/api/license/activate') {

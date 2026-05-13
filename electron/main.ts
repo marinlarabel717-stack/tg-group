@@ -33,6 +33,7 @@ import { DirectMessageService } from './direct-message/service'
 import { registerDirectMessageIpc } from './direct-message/ipc'
 import { AutoJoinService } from './auto-join/service'
 import { registerAutoJoinIpc } from './auto-join/ipc'
+import { DesktopAppUpdater } from './app-updater'
 
 const BRAND_NAME = 'TG-Matrix'
 
@@ -43,6 +44,7 @@ let mainWindow: BrowserWindow | null = null
 let managedSessionsWatcher: fs.FSWatcher | null = null
 let managedSessionsSyncTimer: NodeJS.Timeout | null = null
 let managedSessionsWatcherSuspendCount = 0
+let desktopAppUpdater: DesktopAppUpdater | null = null
 
 const APP_WINDOW_BOUNDS = {
   width: 1600,
@@ -302,6 +304,8 @@ async function bootstrap() {
 
   bindManagedSessionsWatcher(importService, repository, managedSessionsDirectory)
   bindWindowControls()
+  desktopAppUpdater = new DesktopAppUpdater(() => mainWindow)
+  desktopAppUpdater.registerIpc()
   registerAccountIpc({
     getMainWindow: () => mainWindow,
     accountRepository: repository,
@@ -325,6 +329,7 @@ async function bootstrap() {
     autoJoinService
   })
   createWindow()
+  desktopAppUpdater.scheduleStartupCheck()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -346,4 +351,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   managedSessionsWatcher?.close()
+  desktopAppUpdater?.dispose()
 })
