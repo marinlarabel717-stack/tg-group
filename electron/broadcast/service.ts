@@ -257,6 +257,24 @@ function extractResponseMessageId(result: unknown) {
   return null
 }
 
+function extractResponseRepeatPeriod(result: unknown) {
+  const direct = readScheduledRepeatPeriod(result as any)
+  if (typeof direct === 'number') return direct
+
+  const updates = Array.isArray((result as { updates?: unknown[] } | null)?.updates)
+    ? (result as { updates: Array<{ message?: unknown }> }).updates
+    : []
+
+  for (const update of updates) {
+    const repeatPeriod = readScheduledRepeatPeriod((update as { message?: unknown })?.message as any)
+    if (typeof repeatPeriod === 'number') {
+      return repeatPeriod
+    }
+  }
+
+  return null
+}
+
 async function loadSourceMessage(client: TelegramClient, sourceLink: string) {
   const parsed = parseTelegramMessageLink(sourceLink)
   if (!parsed || !Number.isFinite(parsed.messageId) || parsed.messageId <= 0) {
@@ -670,26 +688,19 @@ export class BroadcastService {
                 messageId = extractResponseMessageId(firstResult)
               } else {
                 const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
-                let message: { id?: number } | unknown
-                if ((item.repeatPeriodSeconds ?? 0) > 0 && !media) {
-                  message = await client.invoke(new (Api.messages.SendMessage as any)({
-                    peer: entity as never,
-                    message: buildCreativeMessage(creative) || '',
-                    scheduleDate: Math.floor(scheduledAt.getTime() / 1000),
-                    scheduleRepeatPeriod: item.repeatPeriodSeconds
-                  }))
-                } else {
-                  message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
-                    message: buildCreativeMessage(creative),
-                    file: media,
-                    schedule: Math.floor(scheduledAt.getTime() / 1000),
-                    scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
-                  })
-                }
+                const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
+                  message: buildCreativeMessage(creative),
+                  file: media,
+                  schedule: Math.floor(scheduledAt.getTime() / 1000),
+                  scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
+                })
                 messageId = extractResponseMessageId(message)
 
                 if ((item.repeatPeriodSeconds ?? 0) > 0 && messageId) {
-                  const verified = await verifyScheduledRepeatPeriod(client, entity, messageId, item.repeatPeriodSeconds ?? 0)
+                  const responseRepeatPeriod = extractResponseRepeatPeriod(message)
+                  const verified = responseRepeatPeriod === (item.repeatPeriodSeconds ?? 0)
+                    ? true
+                    : await verifyScheduledRepeatPeriod(client, entity, messageId, item.repeatPeriodSeconds ?? 0)
                   if (!verified) {
                     await client.invoke(new Api.messages.DeleteScheduledMessages({
                       peer: entity as never,
