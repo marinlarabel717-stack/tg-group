@@ -31,12 +31,13 @@ import { TableFilters } from './tablefilters'
 import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
 import { filterAccounts, useAccountStore, type AccountStatusFilter } from '../../stores/accountstore'
+import { getAccountTaskMeta, useAccountTaskStatusMap, type AccountTaskKind } from '../../lib/account-task-status'
 import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTimeFull, formatProfileSource } from '../../lib/ui-text'
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '46px 68px 176px 120px 124px 96px 184px 132px 228px'
-const ACCOUNT_GRID_WIDTH = 1174
+const ACCOUNT_GRID_TEMPLATE = '46px 68px 176px 120px 124px 96px 184px 132px 132px 228px'
+const ACCOUNT_GRID_WIDTH = 1306
 const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
@@ -183,7 +184,7 @@ function CountryCell({ country, phone }: { country: string; phone: string }) {
 }
 
 function isCenteredColumn(columnId: string) {
-  return columnId === 'index' || columnId === 'status' || columnId === 'avatar' || columnId === 'actions'
+  return columnId === 'index' || columnId === 'status' || columnId === 'avatar' || columnId === 'task' || columnId === 'actions'
 }
 
 function cellShellClass(columnId: string, isHeader = false) {
@@ -216,6 +217,15 @@ function readProxy(account: AccountRecord) {
   }
 
   return '直连'
+}
+
+function TaskBadge({ accountId, taskMap }: { accountId: number; taskMap: Map<number, AccountTaskKind> }) {
+  const taskMeta = getAccountTaskMeta(taskMap, accountId)
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs ${taskMeta.tone}`}>
+      {taskMeta.label}
+    </span>
+  )
 }
 
 function matchesPremiumFilter(account: AccountRecord, premiumFilter: PremiumFilter) {
@@ -569,6 +579,7 @@ export const AccountTable = memo(function AccountTable() {
   const startSelectedCheck = useAccountStore((state) => state.startSelectedCheck)
   const setActiveModule = useUIStore((state) => state.setActiveModule)
   const setLogsContext = useUIStore((state) => state.setLogsContext)
+  const accountTaskStatusMap = useAccountTaskStatusMap()
 
   const [sourceFilter, setSourceFilter] = useState('')
   const [proxyFilter, setProxyFilter] = useState('')
@@ -657,6 +668,13 @@ export const AccountTable = memo(function AccountTable() {
       scrollbarRef.current.scrollLeft = scrollLeft
     }
   }, [scrollLeft])
+
+  useEffect(() => {
+    const nextSelectedIds = selectedIds.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied)
+    if (nextSelectedIds.length !== selectedIds.length) {
+      setSelectedIds(nextSelectedIds)
+    }
+  }, [accountTaskStatusMap, selectedIds, setSelectedIds])
 
   useEffect(() => {
     if (!copiedPhone) return
@@ -820,6 +838,13 @@ export const AccountTable = memo(function AccountTable() {
         }
       },
       {
+        id: 'task',
+        header: '任务',
+        size: 132,
+        enableSorting: false,
+        cell: ({ row }) => <TaskBadge accountId={row.original.id} taskMap={accountTaskStatusMap} />
+      },
+      {
         id: 'proxy',
         header: '代理',
         size: 132,
@@ -836,14 +861,14 @@ export const AccountTable = memo(function AccountTable() {
           cell: ({ row }) => <TableRowActions account={row.original} onOpenPremium={handleOpenPremiumDialog} />
         }
     ],
-    []
+    [accountTaskStatusMap, copiedPhone, handlePhoneCopy, setFrozenDialogAccount]
   )
 
   const table = useReactTable({
     data,
     columns,
     state: { sorting, pagination, rowSelection },
-    enableRowSelection: true,
+    enableRowSelection: (row) => !getAccountTaskMeta(accountTaskStatusMap, row.original.id).occupied,
     onSortingChange: setSorting,
     onPaginationChange: setPagination,
     onRowSelectionChange: (updater) => {
@@ -1328,7 +1353,7 @@ export const AccountTable = memo(function AccountTable() {
                           className="absolute left-0 top-0 px-3 py-[3px]"
                           style={{ transform: `translateY(${index * 52}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
                         >
-                          <SkeletonRow columns={9} />
+                          <SkeletonRow columns={10} />
                         </div>
                       ))
                     : virtualRows.map((virtualRow) => {

@@ -71,6 +71,7 @@ interface AutoJoinState {
   dispatchMode: 'random' | 'sequential'
   running: boolean
   stopping: boolean
+  runningAccountIds: number[]
   runtimeReady: boolean
   currentTaskId: string | null
   lastActionMessage: string
@@ -380,6 +381,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       dispatchMode: 'random',
       running: false,
       stopping: false,
+      runningAccountIds: [],
       runtimeReady: Boolean(window.desktopAutoJoin),
       currentTaskId: null,
       lastActionMessage: '',
@@ -463,6 +465,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           activeTab: 'logs',
           running: true,
           stopping: false,
+          runningAccountIds: state.selectedAccountIds,
           currentTaskId: taskId,
           completionDialogTaskId: null,
           logs: [],
@@ -494,6 +497,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           set((state) => ({
             running: false,
             stopping: false,
+            runningAccountIds: [],
             currentTaskId: state.currentTaskId === result.taskId ? null : state.currentTaskId,
             tasks: applyResult(state.tasks, result),
             linkInput: removeTargetsFromInput(
@@ -520,6 +524,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           set((state) => ({
             running: false,
             stopping: false,
+            runningAccountIds: [],
             currentTaskId: state.currentTaskId === taskId ? null : state.currentTaskId,
             tasks: upsertTask(state.tasks, {
               ...(state.tasks.find((item) => item.id === taskId) ?? createTaskRecord({ id: taskId, name: taskName, total: items.length })),
@@ -548,6 +553,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           set((state) => ({
             running: false,
             stopping: false,
+            runningAccountIds: [],
             currentTaskId: null,
             tasks: state.currentTaskId
               ? upsertTask(state.tasks, {

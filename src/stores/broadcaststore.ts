@@ -78,6 +78,7 @@ interface BroadcastState {
   lastActionMessage: string
   syncing: boolean
   stopping: boolean
+  syncingAccountIds: number[]
   loadingJoinedGroups: boolean
   errorMessage: string
   setActiveTab: (tab: BroadcastTabKey) => void
@@ -469,6 +470,7 @@ export const useBroadcastStore = create<BroadcastState>()(
       lastActionMessage: '先完成任务配置，再写入 Telegram 官方定时消息。',
       syncing: false,
       stopping: false,
+      syncingAccountIds: [],
       loadingJoinedGroups: false,
       errorMessage: '',
       setActiveTab: (tab) => set({ activeTab: tab }),
@@ -823,6 +825,7 @@ export const useBroadcastStore = create<BroadcastState>()(
 
         set((current) => ({
           syncing: true,
+          syncingAccountIds: workingTask.accountIds,
           errorMessage: '',
           lastActionMessage: `正在写入 0/${sanitizedItems.length}，请稍候...`,
           previewItems: current.previewItems.map((item) => {
@@ -836,6 +839,7 @@ export const useBroadcastStore = create<BroadcastState>()(
           const now = new Date().toISOString()
           set((current) => ({
             syncing: false,
+            syncingAccountIds: [],
             previewItems: current.previewItems.map((item) => {
               const matched = resultMap.get(item.id)
               if (!matched) return item
@@ -861,6 +865,7 @@ export const useBroadcastStore = create<BroadcastState>()(
           set({
             syncing: false,
             stopping: false,
+            syncingAccountIds: [],
             errorMessage: error instanceof Error ? error.message : '写入 Telegram 定时消息失败。',
             lastActionMessage: '写入 Telegram 官方定时消息失败。'
           })
@@ -871,7 +876,7 @@ export const useBroadcastStore = create<BroadcastState>()(
           }
           flushProgress()
           disposeProgress?.()
-          set({ syncing: false, stopping: false })
+          set({ syncing: false, stopping: false, syncingAccountIds: [] })
         }
       },
       stopPushScheduleToTelegram: async () => {
@@ -980,6 +985,7 @@ export const useBroadcastStore = create<BroadcastState>()(
           selectedTargetAccountId: null,
           joinedGroups: [],
           syncing: false,
+          syncingAccountIds: [],
           loadingJoinedGroups: false,
           errorMessage: ''
         }

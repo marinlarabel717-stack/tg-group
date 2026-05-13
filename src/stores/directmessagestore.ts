@@ -133,6 +133,7 @@ interface DirectMessageState {
   autoReplyEvents: DirectMessageAutoReplyEvent[]
   sending: boolean
   stopping: boolean
+  runningAccountIds: number[]
   collecting: boolean
   autoReplySyncing: boolean
   runtimeReady: boolean
@@ -363,6 +364,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       autoReplyEvents: [],
       sending: false,
       stopping: false,
+      runningAccountIds: [],
       collecting: false,
       autoReplySyncing: false,
       runtimeReady: false,
@@ -580,7 +582,13 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           set({ lastActionMessage: '当前还不能直接发送，请先把账号、目标和文案填完整。' })
           return
         }
-        set({ sending: true, stopping: false, activeTab: 'logs', lastActionMessage: '正在把私信发到 Telegram，请稍候...' })
+        set({
+          sending: true,
+          stopping: false,
+          runningAccountIds: Array.from(new Set(state.previewItems.map((item) => item.accountId).filter((item): item is number => typeof item === 'number'))),
+          activeTab: 'logs',
+          lastActionMessage: '正在把私信发到 Telegram，请稍候...'
+        })
         try {
           const result = await window.desktopDirectMessage.sendMessages({
             items: state.previewItems.map((item) => ({
@@ -606,6 +614,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           set((current) => ({
             sending: false,
             stopping: false,
+            runningAccountIds: [],
             ...(result.items.some((item) => item.status === 'sent')
               ? (() => {
                   const next = rebuildTargetRecords(current.targets
@@ -632,6 +641,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           set({
             sending: false,
             stopping: false,
+            runningAccountIds: [],
             lastActionMessage: error instanceof Error ? error.message : String(error)
           })
         }
@@ -652,6 +662,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           set({
             sending: false,
             stopping: false,
+            runningAccountIds: [],
             lastActionMessage: result.message
           })
         } catch (error) {
@@ -780,6 +791,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           autoReplyEvents: [],
           sending: false,
           stopping: false,
+          runningAccountIds: [],
           collecting: false,
           autoReplySyncing: false,
           runtimeReady: false,

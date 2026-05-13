@@ -3,6 +3,7 @@ import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3
 import { GlassPanel } from '../common/glasspanel'
 import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useAccountStore } from '../../stores/accountstore'
+import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
 import type { BroadcastJoinedGroup, BroadcastScheduledMessageItem } from '../../types'
 
@@ -786,6 +787,7 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
 
 const BroadcastConsole = memo(function BroadcastConsole() {
   const accounts = useAccountStore((state) => state.accounts)
+  const accountTaskStatusMap = useAccountTaskStatusMap()
   const tasks = useBroadcastStore((state) => state.tasks)
   const groups = useBroadcastStore((state) => state.groups)
   const creatives = useBroadcastStore((state) => state.creatives)
@@ -829,6 +831,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
   const selectedAccountIds = selectedTask?.accountIds ?? []
   const selectedAccounts = useMemo(() => accounts.filter((item) => selectedAccountIds.includes(item.id)), [accounts, selectedAccountIds])
+  const occupiedSelectedAccounts = useMemo(
+    () => selectedAccounts.filter((account) => getAccountTaskMeta(accountTaskStatusMap, account.id).occupied),
+    [accountTaskStatusMap, selectedAccounts]
+  )
   const selectedAccountId = selectedTargetAccountId ?? selectedTask?.accountIds[0] ?? null
   const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedAccountId) ?? null, [accounts, selectedAccountId])
   const currentAccountIsPremium = Boolean(selectedAccount?.profile?.is_premium)
@@ -891,6 +897,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
         || String(account.userId || '').toLowerCase().includes(keyword)
     })
   }, [accountSearch, accounts])
+  const selectableFilteredAccounts = useMemo(
+    () => filteredAccounts.filter((account) => !getAccountTaskMeta(accountTaskStatusMap, account.id).occupied),
+    [accountTaskStatusMap, filteredAccounts]
+  )
 
   useEffect(() => {
     if (selectedTask?.accountIds[0] && selectedTargetAccountId == null) {
@@ -939,12 +949,13 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       return
     }
 
-    const nextActive = draftAccountIds.includes(selectedAccountId ?? -1) ? selectedAccountId : (draftAccountIds[0] ?? null)
+    const nextAccountIds = draftAccountIds.filter((accountId) => !getAccountTaskMeta(accountTaskStatusMap, accountId).occupied)
+    const nextActive = nextAccountIds.includes(selectedAccountId ?? -1) ? selectedAccountId : (nextAccountIds[0] ?? null)
     const nextGroupIds = nextActive == null
       ? []
       : selectedTask.groupIds.filter((groupId) => groups.some((group) => group.id === groupId && group.accountIds.includes(nextActive)))
 
-    updateTask(selectedTask.id, { accountIds: draftAccountIds, groupIds: nextGroupIds })
+    updateTask(selectedTask.id, { accountIds: nextAccountIds, groupIds: nextGroupIds })
     setSelectedTargetAccountId(nextActive ?? null)
     setAccountPickerOpen(false)
     clearPreview()
@@ -1053,10 +1064,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               <div className="mt-1 text-sm text-textMuted">先选账号，再看群组，往下继续配发送时间和文案。</div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button type="button" onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
+              <button type="button" disabled={occupiedSelectedAccounts.length > 0} onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-60">
                 <RefreshCw size={16} /> 预览发送
               </button>
-              <button type="button" disabled={syncing} onClick={() => {
+              <button type="button" disabled={syncing || occupiedSelectedAccounts.length > 0} onClick={() => {
                 setActiveTab('calendar')
                 void pushScheduleToTelegram(accounts)
               }} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/14 px-4 py-3 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-60">
@@ -1099,10 +1110,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               </div>
 
               <div className="mt-4 grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-                <button type="button" onClick={openAccountPicker} className="rounded-[18px] bg-panel p-4 text-left transition hover:bg-white/[0.05]">
+                <button type="button" disabled={syncing || stopping} onClick={openAccountPicker} className="rounded-[18px] bg-panel p-4 text-left transition hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-60">
                   <div className="text-xs tracking-[0.18em] text-textMuted">当前操作账号</div>
                   <div className="mt-2 text-base font-semibold text-white">{selectedAccount ? (selectedAccount.username || selectedAccount.phone || `账号#${selectedAccount.id}`) : '还没选择账号'}</div>
-                  <div className="mt-2 text-sm text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '未识别'} · ${formatAccountStatus(selectedAccount.status)}` : '点这里选择账号。'}</div>
+                  <div className="mt-2 text-sm text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '未识别'} · ${formatAccountStatus(selectedAccount.status)}` : occupiedSelectedAccounts.length > 0 ? `有 ${occupiedSelectedAccounts.length} 个账号正在忙，先换掉再群发。` : '点这里选择账号。'}</div>
                 </button>
 
                 <div className="rounded-[18px] bg-panel p-4">
@@ -1112,9 +1123,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                       <div className="text-sm text-textMuted">还没选择发送账号。</div>
                     ) : selectedAccounts.map((account) => {
                       const active = account.id === selectedAccountId
+                      const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
                       return (
                         <button key={account.id} type="button" onClick={() => void handleSwitchAccount(account.id)} className={`rounded-full px-3 py-2 text-sm transition ${active ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.05] text-textMuted hover:bg-white/[0.1] hover:text-white'}`}>
-                          {account.username || account.phone || `账号#${account.id}`}
+                          {account.username || account.phone || `账号#${account.id}`}{taskMeta.occupied ? ` · ${taskMeta.label}` : ''}
                         </button>
                       )
                     })}
@@ -1318,7 +1330,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-white outline-none focus:border-white/[0.12] lg:max-w-[360px]"
                 />
                 <div className="flex flex-wrap gap-3">
-                  <button type="button" onClick={() => setDraftAccountIds(filteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
+                  <button type="button" onClick={() => setDraftAccountIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
                   <button type="button" onClick={() => setDraftAccountIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
                   <div className="rounded-full bg-white/[0.04] px-3 py-2 text-sm text-textMuted">已选 {draftAccountIds.length} / {accounts.length}</div>
                 </div>
@@ -1345,7 +1357,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <button
                     type="button"
                     onClick={() => {
-                      const rangeIds = readCustomRangeIds(filteredAccounts, rangeStart, rangeEnd)
+                      const rangeIds = readCustomRangeIds(selectableFilteredAccounts, rangeStart, rangeEnd)
                       if (rangeIds.length === 0) return
                       setDraftAccountIds((current) => toggleAccountRange(current, rangeIds))
                     }}
@@ -1361,8 +1373,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div className="flex items-center justify-center">
                     <input
                       type="checkbox"
-                      checked={filteredAccounts.length > 0 && filteredAccounts.every((account) => draftAccountIds.includes(account.id))}
-                      onChange={(event) => setDraftAccountIds(event.target.checked ? filteredAccounts.map((item) => item.id) : [])}
+                      checked={selectableFilteredAccounts.length > 0 && selectableFilteredAccounts.every((account) => draftAccountIds.includes(account.id))}
+                      onChange={(event) => setDraftAccountIds(event.target.checked ? selectableFilteredAccounts.map((item) => item.id) : [])}
                     />
                   </div>
                   <div>手机号</div>
@@ -1376,19 +1388,21 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号。</div>
                   ) : filteredAccounts.map((account) => {
                     const checked = draftAccountIds.includes(account.id)
+                    const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
                     return (
-                      <label key={account.id} className={`grid cursor-pointer grid-cols-[64px_180px_1.2fr_140px_120px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.04]'}`}>
+                      <label key={account.id} className={`grid grid-cols-[64px_180px_1.2fr_140px_120px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${taskMeta.occupied ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${checked ? 'bg-violet-400/10' : taskMeta.occupied ? '' : 'hover:bg-white/[0.04]'}`}>
                         <div className="flex items-center justify-center">
                           <input
                             type="checkbox"
                             checked={checked}
+                            disabled={taskMeta.occupied}
                             onChange={() => setDraftAccountIds((current) => current.includes(account.id) ? current.filter((item) => item !== account.id) : [...current, account.id])}
                           />
                         </div>
                         <div className="truncate text-white">{account.phone || '—'}</div>
                         <div className="min-w-0">
                           <div className="truncate font-medium text-white">{readAccountNickname(account)}</div>
-                          <div className="mt-1 truncate text-xs text-textMuted">@{account.username || '无用户名'}</div>
+                          <div className="mt-1 truncate text-xs text-textMuted">{taskMeta.occupied ? `任务：${taskMeta.label}` : `@${account.username || '无用户名'}`}</div>
                         </div>
                         <div>
                           <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200">{formatAccountStatus(account.status)}</span>

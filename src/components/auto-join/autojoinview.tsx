@@ -3,6 +3,7 @@ import { CheckCircle2, ChevronDown, ChevronRight, Clock3, Copy, Download, Play, 
 import { GlassPanel } from '../common/glasspanel'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
 import { useAccountStore } from '../../stores/accountstore'
+import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
 import { parseAutoJoinTargets, useAutoJoinStore, type AutoJoinLogEntry, type AutoJoinTabKey, type AutoJoinTaskSnapshot } from '../../stores/autojoinstore'
 
@@ -153,6 +154,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const initAccounts = useAccountStore((state) => state.init)
   const accounts = useAccountStore((state) => state.accounts)
   const loading = useAccountStore((state) => state.loading)
+  const accountTaskStatusMap = useAccountTaskStatusMap()
 
   const init = useAutoJoinStore((state) => state.init)
   const selectedAccountIds = useAutoJoinStore((state) => state.selectedAccountIds)
@@ -219,7 +221,15 @@ const TasksWorkbench = memo(function TasksWorkbench() {
       return [nickname, account.username || '', account.phone || '', account.userId || ''].some((value) => value.toLowerCase().includes(keyword))
     })
   }, [accountSearch, accounts])
+  const selectableFilteredAccounts = useMemo(
+    () => filteredAccounts.filter((account) => !getAccountTaskMeta(accountTaskStatusMap, account.id).occupied),
+    [accountTaskStatusMap, filteredAccounts]
+  )
   const selectedAccounts = useMemo(() => accounts.filter((item) => selectedAccountIds.includes(item.id)), [accounts, selectedAccountIds])
+  const occupiedSelectedAccounts = useMemo(
+    () => selectedAccounts.filter((account) => getAccountTaskMeta(accountTaskStatusMap, account.id).occupied),
+    [accountTaskStatusMap, selectedAccounts]
+  )
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -242,7 +252,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   }
 
   const applyAccountSelection = () => {
-    setSelectedAccountIds(draftAccountIds)
+    setSelectedAccountIds(draftAccountIds.filter((accountId) => !getAccountTaskMeta(accountTaskStatusMap, accountId).occupied))
     setAccountPickerOpen(false)
   }
 
@@ -252,10 +262,10 @@ const TasksWorkbench = memo(function TasksWorkbench() {
         <div className="space-y-5">
           <GlassPanel className="bg-card">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <button type="button" onClick={() => setAccountPickerOpen(true)} className="rounded-[16px] bg-panel/80 px-4 py-4 text-left transition hover:bg-white/[0.03]">
+              <button type="button" disabled={running || stopping} onClick={() => setAccountPickerOpen(true)} className="rounded-[16px] bg-panel/80 px-4 py-4 text-left transition hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60">
                 <div className="text-xs tracking-[0.18em] text-textMuted">账号数量</div>
                 <div className="mt-2 text-2xl font-semibold text-white">{selectedAccountIds.length}</div>
-                <div className="mt-1 text-xs text-textMuted">点这里选择账号</div>
+                <div className="mt-1 text-xs text-textMuted">{occupiedSelectedAccounts.length > 0 ? `有 ${occupiedSelectedAccounts.length} 个账号正在忙，先别拿来加群。` : '点这里选择账号'}</div>
               </button>
 
               <NumberRangeField label="每号间隔" minValue={accountIntervalMin} maxValue={accountIntervalMax} onMinChange={setAccountIntervalMin} onMaxChange={setAccountIntervalMax} min={0} max={600} />
@@ -323,7 +333,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
           <GlassPanel className="bg-card sticky top-4">
             <div className="text-base font-semibold text-white">任务操作</div>
             <div className="mt-3 space-y-3">
-              <button type="button" disabled={running || !runtimeReady} onClick={() => void startTask()} className="w-full rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{running ? '执行中' : '开始加群'}</button>
+              <button type="button" disabled={running || !runtimeReady || occupiedSelectedAccounts.length > 0} onClick={() => void startTask()} className="w-full rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{running ? '执行中' : '开始加群'}</button>
               <button type="button" disabled={!running || stopping} onClick={() => void stopTask()} className="w-full rounded-[12px] bg-rose-400/12 px-4 py-3 text-sm font-medium text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50">{stopping ? '停止中' : '停止任务'}</button>
             </div>
             <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '点击开始后会自动跳到日志页。'}</div>
@@ -361,7 +371,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                   <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名" className={`h-11 w-full rounded-[12px] pl-11 pr-4 text-sm ${SOFT_PANEL_INPUT_CLASS}`} />
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  <button type="button" onClick={() => setDraftAccountIds(filteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
+                  <button type="button" onClick={() => setDraftAccountIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
                   <button type="button" onClick={() => setDraftAccountIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
                 </div>
               </div>
@@ -375,7 +385,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                   <button
                     type="button"
                     onClick={() => {
-                      const rangeIds = readCustomRangeIds(filteredAccounts, rangeStart, rangeEnd)
+                      const rangeIds = readCustomRangeIds(selectableFilteredAccounts, rangeStart, rangeEnd)
                       if (rangeIds.length === 0) return
                       setDraftAccountIds((current) => toggleAccountRange(current, rangeIds))
                     }}
@@ -401,11 +411,15 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                     <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号</div>
                   ) : filteredAccounts.map((account) => {
                     const checked = draftAccountIds.includes(account.id)
+                    const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
                     return (
-                      <label key={account.id} className={`grid cursor-pointer grid-cols-[64px_220px_1.4fr_160px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.04]'}`}>
-                        <div className="flex items-center justify-center"><input type="checkbox" checked={checked} onChange={(event) => setDraftAccountIds((current) => event.target.checked ? [...current, account.id] : current.filter((item) => item !== account.id))} /></div>
+                      <label key={account.id} className={`grid grid-cols-[64px_220px_1.4fr_160px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${taskMeta.occupied ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${checked ? 'bg-violet-400/10' : taskMeta.occupied ? '' : 'hover:bg-white/[0.04]'}`}>
+                        <div className="flex items-center justify-center"><input type="checkbox" checked={checked} disabled={taskMeta.occupied} onChange={(event) => setDraftAccountIds((current) => event.target.checked ? [...current, account.id] : current.filter((item) => item !== account.id))} /></div>
                         <div className="truncate text-white">{account.phone || '—'}</div>
-                        <div className="truncate text-white">{readAccountLabel(account)}</div>
+                        <div className="min-w-0">
+                          <div className="truncate text-white">{readAccountLabel(account)}</div>
+                          {taskMeta.occupied ? <div className="mt-1 text-xs text-textMuted">任务：{taskMeta.label}</div> : null}
+                        </div>
                         <div>
                           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>
                             {formatAccountStatus(account.status)}
