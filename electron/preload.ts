@@ -11,7 +11,8 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),
   close: () => ipcRenderer.invoke('window:close'),
-  isMaximized: () => ipcRenderer.invoke('window:is-maximized')
+  isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+  setMode: (mode: 'license' | 'app') => ipcRenderer.invoke('window:set-mode', mode)
 })
 
 contextBridge.exposeInMainWorld('desktopAccounts', {

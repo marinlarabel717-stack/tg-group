@@ -662,6 +662,7 @@ export interface DesktopWindowApi {
   toggleMaximize: () => Promise<boolean>
   close: () => Promise<void>
   isMaximized: () => Promise<boolean>
+  setMode: (mode: 'license' | 'app') => Promise<boolean>
 }
 
 declare global {

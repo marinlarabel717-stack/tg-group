@@ -44,6 +44,37 @@ let managedSessionsWatcher: fs.FSWatcher | null = null
 let managedSessionsSyncTimer: NodeJS.Timeout | null = null
 let managedSessionsWatcherSuspendCount = 0
 
+const APP_WINDOW_BOUNDS = {
+  width: 1600,
+  height: 1000,
+  minWidth: 1320,
+  minHeight: 860,
+  resizable: true
+} as const
+
+const LICENSE_WINDOW_BOUNDS = {
+  width: 460,
+  height: 520,
+  minWidth: 460,
+  minHeight: 520,
+  resizable: false
+} as const
+
+function applyWindowMode(mode: 'license' | 'app') {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+
+  const target = mode === 'license' ? LICENSE_WINDOW_BOUNDS : APP_WINDOW_BOUNDS
+
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize()
+  }
+
+  mainWindow.setResizable(target.resizable)
+  mainWindow.setMinimumSize(target.minWidth, target.minHeight)
+  mainWindow.setSize(target.width, target.height, true)
+  mainWindow.center()
+}
+
 function createWindow() {
   const appTitle = BRAND_NAME
   const appIconPath = app.isPackaged
@@ -51,10 +82,10 @@ function createWindow() {
     : path.join(process.cwd(), 'build', 'icon.png')
 
   mainWindow = new BrowserWindow({
-    width: 1600,
-    height: 1000,
-    minWidth: 1320,
-    minHeight: 860,
+    width: LICENSE_WINDOW_BOUNDS.width,
+    height: LICENSE_WINDOW_BOUNDS.height,
+    minWidth: LICENSE_WINDOW_BOUNDS.minWidth,
+    minHeight: LICENSE_WINDOW_BOUNDS.minHeight,
     frame: false,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     titleBarOverlay: false,
@@ -65,7 +96,8 @@ function createWindow() {
     transparent: false,
     hasShadow: true,
     roundedCorners: true,
-    backgroundColor: '#08101d',
+    resizable: LICENSE_WINDOW_BOUNDS.resizable,
+    backgroundColor: '#0f1726',
     autoHideMenuBar: true,
     title: appTitle,
     icon: process.platform === 'darwin' ? undefined : appIconPath,
@@ -179,6 +211,11 @@ function bindWindowControls() {
 
   ipcMain.handle('window:is-maximized', () => {
     return mainWindow?.isMaximized() ?? false
+  })
+
+  ipcMain.handle('window:set-mode', (_event, mode: 'license' | 'app') => {
+    applyWindowMode(mode)
+    return true
   })
 }
 

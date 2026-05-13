@@ -20,10 +20,15 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
 
   useEffect(() => {
     setSessionUnlocked(false)
+    void window.desktopWindow?.setMode('license')
     void init()
   }, [init])
 
   const canEnter = sessionUnlocked && (state.canEnter || devBypass)
+
+  useEffect(() => {
+    void window.desktopWindow?.setMode(canEnter ? 'app' : 'license')
+  }, [canEnter])
   const version = state.appVersion || '0.0.0'
 
   const statusMessage = useMemo(() => {
@@ -64,8 +69,8 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#08101d] px-5 py-10 text-white">
-      <div className="relative w-full max-w-[420px] rounded-[24px] border border-white/10 bg-[#121c2d] p-8 shadow-[0_28px_80px_rgba(0,0,0,0.38)]">
+    <div className="flex h-screen items-stretch justify-center bg-[#0f1726] p-3 text-white">
+      <div className="relative flex h-full w-full flex-col rounded-[24px] border border-white/10 bg-[#121c2d] p-8 shadow-[0_28px_80px_rgba(0,0,0,0.38)]">
         <button
           type="button"
           onClick={() => void window.desktopWindow?.close()}
@@ -119,7 +124,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
         {lastActionMessage ? <div className="mt-4 rounded-[12px] border border-emerald-400/15 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{lastActionMessage}</div> : null}
         {errorMessage ? <div className="mt-4 rounded-[12px] border border-rose-400/15 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
         {!state.apiConfigured ? <div className="mt-4 rounded-[12px] border border-amber-400/15 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">授权服务地址还没配好，当前默认会先连本机 127.0.0.1:8787。</div> : null}
-        <div className="mt-8 text-center text-xs text-textMuted">v{version}</div>
+        <div className="mt-auto pt-6 text-center text-xs text-textMuted">v{version}</div>
       </div>
     </div>
   )
