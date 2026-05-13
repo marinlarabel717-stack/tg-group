@@ -37,6 +37,7 @@ function formatBroadcastError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '写入 Telegram 定时消息失败'
+  if (/SCHEDULE_REPEAT_NOT_APPLIED/i.test(normalized)) return 'Telegram 没把这条写成官方每天重复，这条我已经按失败处理了。'
   if (/SOURCE_MESSAGE_LINK_INVALID/i.test(normalized)) return '频道消息链接不对，请填完整的频道消息链接。'
   if (/USERNAME_INVALID/i.test(normalized)) return '这个群的 @username 不对，请检查群用户名。'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '这个群的 @username 不存在，请确认群链接填对了。'
@@ -192,6 +193,27 @@ function serializeScheduledMessage(message: any): BroadcastScheduledMessageItem 
     forwardLabel,
     repeatPeriodSeconds: readScheduledRepeatPeriod(message)
   }
+}
+
+async function verifyScheduledRepeatApplied(client: TelegramClient, entity: unknown, messageId: number, expectedRepeatPeriodSeconds: number) {
+  const result = await client.invoke(new Api.messages.GetScheduledHistory({
+    peer: entity as never,
+    hash: bigInt.zero
+  })) as { messages?: any[] }
+
+  const messages = Array.isArray(result?.messages) ? result.messages : []
+  const matched = messages.find((message) => Number(message?.id) === messageId)
+  if (!matched) return false
+  const repeatPeriodSeconds = readScheduledRepeatPeriod(matched)
+  return Number.isFinite(repeatPeriodSeconds) && Number(repeatPeriodSeconds) === expectedRepeatPeriodSeconds
+}
+
+async function cleanupScheduledMessage(client: TelegramClient, entity: unknown, messageId: number) {
+  if (!Number.isFinite(messageId) || messageId <= 0) return
+  await client.invoke(new Api.messages.DeleteScheduledMessages({
+    peer: entity as never,
+    id: [messageId]
+  }))
 }
 
 function extractResponseMessageId(result: unknown) {
@@ -601,6 +623,14 @@ export class BroadcastService {
                   scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
                 })
                 messageId = extractResponseMessageId(message)
+              }
+
+              if ((item.repeatPeriodSeconds ?? 0) > 0 && messageId) {
+                const verified = await verifyScheduledRepeatApplied(client, entity, messageId, item.repeatPeriodSeconds ?? 0)
+                if (!verified) {
+                  await cleanupScheduledMessage(client, entity, messageId).catch(() => undefined)
+                  throw new Error('SCHEDULE_REPEAT_NOT_APPLIED')
+                }
               }
 
               const resultItem: BroadcastPushScheduleResultItem = {
