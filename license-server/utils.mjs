@@ -20,6 +20,15 @@ export function randomCardKeyChunk(size = 3) {
   return randomBytes(size).toString('hex').toUpperCase()
 }
 
+export function randomNumericCardKey(length = 24) {
+  const size = Math.max(1, Number(length) || 24)
+  let output = ''
+  while (output.length < size) {
+    output += String(randomBytes(1)[0] % 10)
+  }
+  return output.slice(0, size)
+}
+
 export function maskCardKey(value) {
   const trimmed = String(value || '').trim()
   if (!trimmed) return ''

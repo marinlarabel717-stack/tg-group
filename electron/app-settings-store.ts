@@ -9,7 +9,7 @@ export interface AppSettings {
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   checkConcurrency: 3,
-  licenseApiBaseUrl: process.env.LICENSE_API_BASE_URL?.trim() || '',
+  licenseApiBaseUrl: process.env.LICENSE_API_BASE_URL?.trim() || 'http://127.0.0.1:8787',
   licenseOfflineGraceDays: 3
 }
 

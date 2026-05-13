@@ -182,35 +182,25 @@
               <input id="createNote" placeholder="例如：张三 / 月卡 / 代理版" />
             </div>
           </div>
-          <div class="row" style="margin-top:12px;">
-            <div class="field">
-              <label>手动指定卡密（选填）</label>
-              <input id="createKey" placeholder="不填就用下面的批量生成功能" />
-            </div>
-          </div>
           <div class="actions" style="margin-top:14px;">
-            <button id="createBtn">创建 1 张卡密</button>
+            <button id="createBtn">生成 1 张随机 24 位卡密</button>
           </div>
 
           <div style="height:1px;background:var(--line);margin:18px 0"></div>
 
           <div class="row">
             <div class="field small">
-              <label>卡密前缀</label>
-              <input id="batchPrefix" value="TG" placeholder="例如 TG" />
-            </div>
-            <div class="field small">
               <label>生成数量</label>
               <input id="batchCount" type="number" min="1" max="500" value="10" />
             </div>
             <div class="actions" style="align-self:end;">
-              <button id="batchCreateBtn" class="warn">批量生成</button>
+              <button id="batchCreateBtn" class="warn">批量生成随机 24 位卡密</button>
             </div>
           </div>
 
           <div class="field" style="margin-top:14px;">
-            <label>本次生成结果（直接复制发给客户）</label>
-            <textarea id="batchResult" readonly placeholder="生成后的卡密会显示在这里"></textarea>
+            <label>本次生成结果（24 位纯数字，直接复制发给客户）</label>
+            <textarea id="batchResult" readonly placeholder="生成后的 24 位随机卡密会显示在这里"></textarea>
           </div>
           <div id="actionMessage"></div>
         </div>
@@ -293,12 +283,10 @@
         saveTokenBtn: document.getElementById('saveTokenBtn'),
         checkTokenBtn: document.getElementById('checkTokenBtn'),
         authMessage: document.getElementById('authMessage'),
-        createKey: document.getElementById('createKey'),
         createDays: document.getElementById('createDays'),
         createDevices: document.getElementById('createDevices'),
         createNote: document.getElementById('createNote'),
         createBtn: document.getElementById('createBtn'),
-        batchPrefix: document.getElementById('batchPrefix'),
         batchCount: document.getElementById('batchCount'),
         batchCreateBtn: document.getElementById('batchCreateBtn'),
         batchResult: document.getElementById('batchResult'),
@@ -507,14 +495,12 @@
           const data = await api('/api/admin/cards/create', {
             method: 'POST',
             body: JSON.stringify({
-              cardKey: els.createKey.value.trim(),
               days: Number(els.createDays.value || 30),
               maxDevices: Number(els.createDevices.value || 1),
               note: els.createNote.value.trim()
             })
           })
           setMessage(els.actionMessage, data.message || '卡密创建成功。')
-          els.createKey.value = ''
           els.batchResult.value = data.item?.cardKey || ''
           await loadCards(true)
         } catch (error) {
@@ -527,7 +513,6 @@
           const data = await api('/api/admin/cards/batch-create', {
             method: 'POST',
             body: JSON.stringify({
-              prefix: els.batchPrefix.value.trim(),
               count: Number(els.batchCount.value || 10),
               days: Number(els.createDays.value || 30),
               maxDevices: Number(els.createDevices.value || 1),

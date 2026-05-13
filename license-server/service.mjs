@@ -1,5 +1,5 @@
 import { openLicenseDatabase } from './db.mjs'
-import { addDaysIso, maskCardKey, normalizeCardKey, nowIso, randomCardKeyChunk, randomToken, sha256 } from './utils.mjs'
+import { addDaysIso, maskCardKey, normalizeCardKey, nowIso, randomNumericCardKey, randomToken, sha256 } from './utils.mjs'
 
 function toTimestamp(value) {
   if (!value) return null
@@ -13,14 +13,8 @@ function nextExpiryIso(currentExpireAt, days) {
   return addDaysIso(days, base)
 }
 
-function sanitizeBatchPrefix(value) {
-  const normalized = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-')
-  return normalized.replace(/^-+|-+$/g, '') || 'TG'
-}
-
-function buildBatchCardKey(prefix) {
-  const date = new Date().toISOString().slice(2, 10).replace(/-/g, '')
-  return `${sanitizeBatchPrefix(prefix)}-${date}-${randomCardKeyChunk(3)}`
+function buildRandomCardKey() {
+  return randomNumericCardKey(24)
 }
 
 export class LicenseServerService {
@@ -199,9 +193,16 @@ export class LicenseServerService {
 
   createCard({ cardKey, days = 30, maxDevices = 1, note = '' }) {
     return this.db.transaction((data) => {
-      const normalizedCardKey = normalizeCardKey(cardKey)
-      if (data.licenseKeys.some((item) => item.card_key === normalizedCardKey)) {
-        throw new Error('卡密已存在。')
+      let normalizedCardKey = normalizeCardKey(cardKey)
+      if (!normalizedCardKey) {
+        let attempts = 0
+        do {
+          attempts += 1
+          normalizedCardKey = buildRandomCardKey()
+        } while (data.licenseKeys.some((item) => item.card_key === normalizedCardKey) && attempts < 20)
+      }
+      if (!normalizedCardKey || data.licenseKeys.some((item) => item.card_key === normalizedCardKey)) {
+        throw new Error('卡密已存在，请重试。')
       }
       data.counters.licenseId += 1
       const card = {
@@ -222,7 +223,7 @@ export class LicenseServerService {
     })
   }
 
-  createCardsBatch({ prefix = 'TG', count = 10, days = 30, maxDevices = 1, note = '' }) {
+  createCardsBatch({ count = 10, days = 30, maxDevices = 1, note = '' }) {
     return this.db.transaction((data) => {
       const total = Math.max(1, Math.min(500, Number(count) || 0))
       const items = []
@@ -232,7 +233,7 @@ export class LicenseServerService {
         let attempts = 0
         do {
           attempts += 1
-          normalizedCardKey = normalizeCardKey(buildBatchCardKey(prefix))
+          normalizedCardKey = normalizeCardKey(buildRandomCardKey())
         } while (existing.has(normalizedCardKey) && attempts < 20)
         if (!normalizedCardKey || existing.has(normalizedCardKey)) {
           throw new Error('批量生成卡密时出现重复冲突，请重试。')
