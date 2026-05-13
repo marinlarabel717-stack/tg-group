@@ -1,9 +1,11 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Loader2, ShieldCheck } from 'lucide-react'
 import { BrandLogo } from '../common/brandlogo'
 import { useLicenseStore } from '../../stores/licensestore'
 
 export const LicenseGate = memo(function LicenseGate({ children }: { children: React.ReactNode }) {
+  const dragRegionStyle = { WebkitAppRegion: 'drag' } as CSSProperties
+  const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties
   const init = useLicenseStore((state) => state.init)
   const activate = useLicenseStore((state) => state.activate)
   const state = useLicenseStore((store) => store.state)
@@ -80,7 +82,10 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-transparent text-white">
-      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,16,30,0.82)_0%,rgba(7,12,24,0.92)_100%)] px-6 py-4 backdrop-blur-[24px]">
+      <div
+        className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,16,30,0.82)_0%,rgba(7,12,24,0.92)_100%)] px-6 py-4 backdrop-blur-[24px]"
+        style={dragRegionStyle}
+      >
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),transparent_24%)]" />
         <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(186,230,253,0.22),transparent)]" />
 
@@ -88,7 +93,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
           type="button"
           onClick={() => void window.desktopWindow?.close()}
           className="absolute right-6 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-slate-950/34 text-lg leading-none text-white/80 transition hover:border-cyan-300/28 hover:bg-cyan-300/10 hover:text-white active:scale-[0.97]"
-          style={{ pointerEvents: 'auto' }}
+          style={{ ...noDragRegionStyle, pointerEvents: 'auto' }}
           aria-label="关闭"
         >
           ×
@@ -108,6 +113,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
           <input
             value={cardKey}
             onChange={(event) => setCardKey(event.target.value)}
+            style={noDragRegionStyle}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !activating && !validating && initialized) {
                 event.preventDefault()
@@ -124,6 +130,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
             type="button"
             disabled={activating || validating || (loading && !initialized)}
             onClick={() => void submitLicense()}
+            style={noDragRegionStyle}
             className="mt-3.5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-cyan-300/16 bg-[linear-gradient(180deg,rgba(19,31,55,0.98)_0%,rgba(9,17,34,1)_100%)] px-6 text-sm font-medium text-cyan-50 transition hover:border-cyan-300/28 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {activating || validating || (loading && !initialized) ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} className="text-cyan-300" />}
