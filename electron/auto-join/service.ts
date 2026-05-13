@@ -127,6 +127,23 @@ function parseJoinTarget(target: AutoJoinPayloadItem) {
   return { kind: 'username' as const, value: target.normalized.startsWith('@') ? target.normalized : `@${target.normalized.replace(/^@+/, '')}` }
 }
 
+async function resolveJoinEntity(client: TelegramClient, value: string) {
+  try {
+    return await client.getEntity(value as never)
+  } catch (error) {
+    if (!isMissingTargetError(error)) throw error
+
+    const username = value.replace(/^@+/, '').trim()
+    if (!username) throw error
+
+    try {
+      return await client.getEntity(`https://t.me/${username}` as never)
+    } catch {
+      throw error
+    }
+  }
+}
+
 function readGroupTitle(source: unknown, fallback: string) {
   if (Array.isArray((source as { chats?: unknown[] } | null)?.chats)) {
     const chats = (source as { chats: Array<{ title?: unknown; username?: unknown }> }).chats
@@ -192,7 +209,7 @@ async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadIte
     }
   }
 
-  const entity = await client.getEntity(parsed.value as never)
+  const entity = await resolveJoinEntity(client, parsed.value)
   try {
     await client.invoke(new Api.channels.JoinChannel({ channel: entity as never }))
     return {
