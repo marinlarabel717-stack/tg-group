@@ -267,6 +267,23 @@ async function resolveGroupEntity(client: TelegramClient, groupRef: ReturnType<t
     }
     throw new Error('USER_NOT_PARTICIPANT')
   }
+
+  if (groupRef.kind === 'peer') {
+    try {
+      return await client.getEntity(groupRef.value as never)
+    } catch (error) {
+      const dialogs = await client.getDialogs({ limit: 300 }).catch(() => []) as Array<{ id?: { toString?: () => string }; entity?: unknown }>
+      const matchedDialog = dialogs.find((dialog) => {
+        const dialogId = typeof dialog?.id?.toString === 'function' ? dialog.id.toString() : ''
+        return dialogId === String(groupRef.value)
+      })
+      if (matchedDialog?.entity) {
+        return matchedDialog.entity
+      }
+      throw error
+    }
+  }
+
   return client.getEntity(groupRef.value as never)
 }
 
