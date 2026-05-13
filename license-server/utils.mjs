@@ -20,11 +20,12 @@ export function randomCardKeyChunk(size = 3) {
   return randomBytes(size).toString('hex').toUpperCase()
 }
 
-export function randomNumericCardKey(length = 24) {
+export function randomAlphaNumericCardKey(length = 24) {
   const size = Math.max(1, Number(length) || 24)
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   let output = ''
   while (output.length < size) {
-    output += String(randomBytes(1)[0] % 10)
+    output += alphabet[randomBytes(1)[0] % alphabet.length]
   }
   return output.slice(0, size)
 }

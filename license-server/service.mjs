@@ -1,5 +1,5 @@
 import { openLicenseDatabase } from './db.mjs'
-import { addDaysIso, maskCardKey, normalizeCardKey, nowIso, randomNumericCardKey, randomToken, sha256 } from './utils.mjs'
+import { addDaysIso, maskCardKey, normalizeCardKey, nowIso, randomAlphaNumericCardKey, randomToken, sha256 } from './utils.mjs'
 
 function toTimestamp(value) {
   if (!value) return null
@@ -14,7 +14,7 @@ function nextExpiryIso(currentExpireAt, days) {
 }
 
 function buildRandomCardKey() {
-  return randomNumericCardKey(24)
+  return randomAlphaNumericCardKey(24)
 }
 
 export class LicenseServerService {
