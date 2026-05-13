@@ -94,7 +94,7 @@ function readScheduledContentLabel(item: BroadcastScheduledMessageItem) {
 
 function readRepeatLabel(repeatPeriodSeconds?: number | null) {
   if ((repeatPeriodSeconds ?? 0) === 24 * 60 * 60) return '每天'
-  return '绝不'
+  return '未知'
 }
 
 const MAX_VISIBLE_LOG_ITEMS = 200
@@ -1746,7 +1746,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
     return {
       ...item,
       text: item.text || fallbackText,
-      repeatPeriodSeconds: item.repeatPeriodSeconds ?? null
+      repeatPeriodSeconds: item.repeatPeriodSeconds ?? matchedPreview?.repeatPeriodSeconds ?? null
     }
   }), [creatives, items, matchedPreviewByMessageId])
 

@@ -38,10 +38,6 @@ function formatBroadcastError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '写入 Telegram 定时消息失败'
-  if (/SCHEDULE_REPEAT_NOT_APPLIED/i.test(normalized)) {
-    const detail = normalized.split('SCHEDULE_REPEAT_NOT_APPLIED:')[1]?.trim()
-    return detail ? `Telegram 没把这条写成官方每天重复（${detail}），这条我已经按失败处理了。` : 'Telegram 没把这条写成官方每天重复，这条我已经按失败处理了。'
-  }
   if (/SOURCE_MESSAGE_LINK_INVALID/i.test(normalized)) return '频道消息链接不对，请填完整的频道消息链接。'
   if (/USERNAME_INVALID/i.test(normalized)) return '这个群的 @username 不对，请检查群用户名。'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '这个群的 @username 不存在，请确认群链接填对了。'
@@ -204,47 +200,6 @@ function serializeScheduledMessage(message: any): BroadcastScheduledMessageItem 
     forwardLabel,
     repeatPeriodSeconds: readScheduledRepeatPeriod(message)
   }
-}
-
-async function verifyScheduledRepeatApplied(client: TelegramClient, entity: unknown, messageId: number, expectedRepeatPeriodSeconds: number) {
-  let lastReason = '未读取到核验结果'
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const result = await client.invoke(new Api.messages.GetScheduledHistory({
-      peer: entity as never,
-      hash: bigInt.zero
-    })) as { messages?: any[] }
-
-    const messages = Array.isArray(result?.messages) ? result.messages : []
-    const matched = messages.find((message) => Number(message?.id) === messageId)
-
-    if (!matched) {
-      lastReason = '回读时没找到这条刚写入的定时消息'
-    } else {
-      const repeatPeriodSeconds = readScheduledRepeatPeriod(matched)
-      if (Number.isFinite(repeatPeriodSeconds) && Number(repeatPeriodSeconds) === expectedRepeatPeriodSeconds) {
-        return { ok: true as const, reason: '' }
-      }
-
-      lastReason = Number.isFinite(repeatPeriodSeconds)
-        ? `回读到了这条定时消息，但 repeat_period=${repeatPeriodSeconds}，不是期望的 ${expectedRepeatPeriodSeconds}`
-        : '回读到了这条定时消息，但 repeat_period 还是空的'
-    }
-
-    if (attempt < 3) {
-      await new Promise((resolve) => setTimeout(resolve, 1200))
-    }
-  }
-
-  return { ok: false as const, reason: lastReason }
-}
-
-async function cleanupScheduledMessage(client: TelegramClient, entity: unknown, messageId: number) {
-  if (!Number.isFinite(messageId) || messageId <= 0) return
-  await client.invoke(new Api.messages.DeleteScheduledMessages({
-    peer: entity as never,
-    id: [messageId]
-  }))
 }
 
 async function getScheduledMessageCount(client: TelegramClient, entity: unknown) {
@@ -673,14 +628,6 @@ export class BroadcastService {
                   scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
                 })
                 messageId = extractResponseMessageId(message)
-              }
-
-              if ((item.repeatPeriodSeconds ?? 0) > 0 && messageId) {
-                const verified = await verifyScheduledRepeatApplied(client, entity, messageId, item.repeatPeriodSeconds ?? 0)
-                if (!verified.ok) {
-                  await cleanupScheduledMessage(client, entity, messageId).catch(() => undefined)
-                  throw new Error(`SCHEDULE_REPEAT_NOT_APPLIED: ${verified.reason}`)
-                }
               }
 
               const resultItem: BroadcastPushScheduleResultItem = {
