@@ -222,6 +222,15 @@ function removeTargetsFromInput(input: string, targets: string[]) {
   return nextInput
 }
 
+function isMissingTargetFailureMessage(message: string) {
+  const normalized = message.trim()
+  if (!normalized) return false
+  return normalized.includes('找不到这个群')
+    || normalized.includes('@群用户名写错了')
+    || normalized.includes('@群用户名不存在')
+    || normalized.includes('邀请链接失效了')
+}
+
 function collectRemovableTargets(
   items: AutoJoinResultItem[],
   repeatJoinEnabled: boolean,
@@ -242,17 +251,26 @@ function collectRemovableTargets(
   if (requiredAccountIds.length === 0) return [] as string[]
 
   const successMap = new Map<string, Set<number>>()
+  const missingTargetFailures = new Set<string>()
   items.forEach((item) => {
     const target = (item.normalized || item.raw || '').trim()
-    if (!target || (item.status !== 'joined' && item.status !== 'already') || typeof item.accountId !== 'number') return
+    if (!target) return
+    if (item.status === 'failed' && isMissingTargetFailureMessage(item.errorMessage || '')) {
+      missingTargetFailures.add(target)
+      return
+    }
+    if ((item.status !== 'joined' && item.status !== 'already') || typeof item.accountId !== 'number') return
     const current = successMap.get(target) ?? new Set<number>()
     current.add(item.accountId)
     successMap.set(target, current)
   })
 
-  return Array.from(successMap.entries())
-    .filter(([, accountIds]) => requiredAccountIds.every((accountId) => accountIds.has(accountId)))
-    .map(([target]) => target)
+  return Array.from(new Set([
+    ...Array.from(missingTargetFailures),
+    ...Array.from(successMap.entries())
+      .filter(([, accountIds]) => requiredAccountIds.every((accountId) => accountIds.has(accountId)))
+      .map(([target]) => target)
+  ]))
 }
 
 function formatLogMessage(item: AutoJoinResultItem, fallbackMessage: string) {
@@ -407,9 +425,12 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             currentTaskId: payload.running ? payload.taskId : state.currentTaskId === payload.taskId ? null : state.currentTaskId,
             tasks: applyProgress(state.tasks, payload),
             logs: nextLogs ? appendLog(state.logs, nextLogs) : state.logs,
-            linkInput: !state.repeatJoinEnabled && payload.item?.status === 'joined'
-              ? removeTargetFromInput(state.linkInput, payload.item.normalized || payload.item.raw)
-              : state.linkInput,
+            linkInput:
+              !state.repeatJoinEnabled && payload.item?.status === 'joined'
+                ? removeTargetFromInput(state.linkInput, payload.item.normalized || payload.item.raw)
+                : state.repeatJoinEnabled && payload.item?.status === 'failed' && isMissingTargetFailureMessage(payload.item.errorMessage || '')
+                  ? removeTargetFromInput(state.linkInput, payload.item.normalized || payload.item.raw)
+                  : state.linkInput,
             lastActionMessage: payload.message
           }))
         })

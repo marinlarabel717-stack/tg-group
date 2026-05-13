@@ -88,10 +88,21 @@ function isJoinRequestSent(error: unknown) {
   return /INVITE_REQUEST_SENT/i.test(message)
 }
 
+function isMissingTargetError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  const normalized = message.trim()
+  if (!normalized) return false
+  return /Cannot find any entity corresponding to/i.test(normalized)
+    || /USERNAME_INVALID|USERNAME_NOT_OCCUPIED/i.test(normalized)
+    || /CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)
+    || /INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)
+}
+
 function formatAutoJoinError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '原因没拿到'
+  if (/Cannot find any entity corresponding to/i.test(normalized)) return '找不到这个群，可能是用户名写错了、群不存在，或者这是私有群'
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '邀请链接失效了，或者已经不能用了'
   if (/CHANNEL_PRIVATE/i.test(normalized)) return '这个群进不去，可能是私密群，或者当前账号没权限'
   if (/CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号加的群太多了，先换号或者退一些群再试'
@@ -238,7 +249,7 @@ export class AutoJoinService {
     const requestedAccounts = this.accountRepository.getByIds(accountIds)
     const accounts = requestedAccounts.filter((account) => account.status !== 'banned' && account.status !== 'session_expired' && account.status !== 'not_logged_in')
     const workerLimit = Math.max(1, Math.min(payload.concurrency || accounts.length, accounts.length))
-    const total = payload.repeatJoinEnabled ? payload.items.length * accounts.length : payload.items.length
+    let total = payload.repeatJoinEnabled ? payload.items.length * accounts.length : payload.items.length
     if (accounts.length === 0) {
       throw new Error('一个可用账号都没选上，先选能登录的账号再开始。')
     }
@@ -335,6 +346,34 @@ export class AutoJoinService {
       return hasPendingItems()
     }
 
+    const dropTargetFromQueues = (targetNormalized: string, excludeAccountId?: number | null) => {
+      if (!targetNormalized) return 0
+      let removed = 0
+      if (payload.repeatJoinEnabled) {
+        for (const [accountId, queue] of perAccountQueue.entries()) {
+          if (typeof excludeAccountId === 'number' && accountId === excludeAccountId) continue
+          const nextQueue = queue.filter((item) => {
+            const matched = item.normalized === targetNormalized
+            if (matched) removed += 1
+            return !matched
+          })
+          perAccountQueue.set(accountId, nextQueue)
+        }
+      } else if (sharedQueue) {
+        const nextQueue = sharedQueue.filter((item) => {
+          const matched = item.normalized === targetNormalized
+          if (matched) removed += 1
+          return !matched
+        })
+        sharedQueue.length = 0
+        sharedQueue.push(...nextQueue)
+      }
+      if (removed > 0) {
+        total = Math.max(completed, total - removed)
+      }
+      return removed
+    }
+
     try {
       const runAccount = async (account: AccountRecord) => {
         let client: TelegramClient | null = null
@@ -405,6 +444,14 @@ export class AutoJoinService {
               pushBackItem(account.id, { ...next, attempts: attempt })
               emit(`${accountLabel} 触发限流，先休息 ${Math.ceil(finalWaitMs / 1000)} 秒后继续。`, null, Math.ceil(finalWaitMs / 1000), true)
               continue
+            }
+
+            const missingTarget = isMissingTargetError(error)
+            if (payload.repeatJoinEnabled && missingTarget) {
+              const removed = dropTargetFromQueues(next.normalized, account.id)
+              if (removed > 0) {
+                emit(`${next.normalized || next.raw} 找不到，已自动跳过剩余账号。`, null, null, true)
+              }
             }
 
             finalizeResult({
