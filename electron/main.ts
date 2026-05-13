@@ -34,7 +34,7 @@ import { registerDirectMessageIpc } from './direct-message/ipc'
 import { AutoJoinService } from './auto-join/service'
 import { registerAutoJoinIpc } from './auto-join/ipc'
 
-const BRAND_NAME = '海棠矩阵'
+const BRAND_NAME = 'TG-Matrix'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)

@@ -10,7 +10,7 @@ const TopbarBrand = memo(function TopbarBrand() {
       <BrandLogo
         size={42}
         subtitle="桌面工作台"
-        title="海棠矩阵"
+        title="TG-Matrix"
         roundedClassName="rounded-[12px]"
         subtitleClassName="text-[10px] tracking-[0.26em] text-textMuted"
         titleClassName="text-sm font-medium text-textMain"

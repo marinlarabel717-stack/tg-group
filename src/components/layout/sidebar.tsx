@@ -23,7 +23,7 @@ const SidebarBrand = memo(function SidebarBrand({ collapsed }: { collapsed: bool
 
   return (
     <button
-      title={collapsed ? '海棠矩阵' : undefined}
+      title={collapsed ? 'TG-Matrix' : undefined}
       onClick={() => setActiveModule('dashboard')}
       className={`group flex items-center rounded-[14px] bg-white/[0.025] transition hover:bg-hover ${collapsed ? 'justify-center px-0 py-3.5' : 'gap-3 px-3 py-3.5'}`}
     >
@@ -33,7 +33,7 @@ const SidebarBrand = memo(function SidebarBrand({ collapsed }: { collapsed: bool
         roundedClassName="rounded-[12px]"
         className={collapsed ? 'justify-center' : ''}
         subtitle="DESKTOP"
-        title="海棠矩阵"
+        title="TG-Matrix"
         taglineClassName="text-[13px] text-textMuted"
       />
     </button>

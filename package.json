@@ -2,8 +2,8 @@
   "name": "telegram-multi-account-manager",
   "version": "0.0.1",
   "private": true,
-  "description": "海棠矩阵桌面管理端",
-  "author": "海棠矩阵",
+  "description": "TG-Matrix desktop manager",
+  "author": "TG-Matrix",
   "license": "UNLICENSED",
   "main": "dist-electron/main.js",
   "type": "module",
@@ -27,8 +27,8 @@
     "license:list-logs": "node license-server/list-logs.mjs"
   },
   "build": {
-    "appId": "ai.haitang.matrix",
-    "productName": "海棠矩阵",
+    "appId": "ai.tgmatrix.desktop",
+    "productName": "TG-Matrix",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -64,7 +64,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "executableName": "海棠矩阵",
+      "executableName": "TG-Matrix",
       "artifactName": "${productName}-${version}-Setup.${ext}"
     },
     "portable": {
@@ -84,7 +84,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://example.com/haitang-matrix/releases"
+        "url": "https://example.com/tg-matrix/releases"
       }
     ]
   },
