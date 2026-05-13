@@ -102,7 +102,7 @@ function formatAutoJoinError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '原因没拿到'
-  if (/Cannot find any entity corresponding to/i.test(normalized)) return '找不到这个群，可能是用户名写错了、群不存在，或者这是私有群'
+  if (/Cannot find any entity corresponding to/i.test(normalized)) return '当前账号没法直接识别这个@群用户名，群可能存在，建议改用完整链接或邀请链接'
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '邀请链接失效了，或者已经不能用了'
   if (/CHANNEL_PRIVATE/i.test(normalized)) return '这个群进不去，可能是私密群，或者当前账号没权限'
   if (/CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号加的群太多了，先换号或者退一些群再试'
