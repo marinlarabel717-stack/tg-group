@@ -49,6 +49,18 @@ function toGroupKey(directory: string, baseName: string) {
   return `${directory}::${baseName}`
 }
 
+function isIgnorableAccountSidecar(filePath: string) {
+  const normalizedName = path.basename(filePath).toLowerCase()
+  return (
+    normalizedName.endsWith('.session-journal')
+    || normalizedName.endsWith('.session-wal')
+    || normalizedName.endsWith('.session-shm')
+    || normalizedName.endsWith('.json-journal')
+    || normalizedName.endsWith('.json-wal')
+    || normalizedName.endsWith('.json-shm')
+  )
+}
+
 export class FileScanner {
   async scanPaths(inputPaths: string[]): Promise<ScanResult> {
     const files = await collectCandidateFiles(inputPaths)
@@ -56,6 +68,10 @@ export class FileScanner {
     const ignoredPaths: string[] = []
 
     for (const filePath of files) {
+      if (isIgnorableAccountSidecar(filePath)) {
+        continue
+      }
+
       const extension = path.extname(filePath).toLowerCase()
       const directory = path.dirname(filePath)
       const baseName = path.basename(filePath, extension)
