@@ -93,8 +93,13 @@ function readScheduledContentLabel(item: BroadcastScheduledMessageItem) {
 }
 
 function readRepeatLabel(repeatPeriodSeconds?: number | null) {
-  if ((repeatPeriodSeconds ?? 0) === 24 * 60 * 60) return '每天'
-  return '未知'
+  const value = repeatPeriodSeconds ?? 0
+  if (value <= 0) return '不重复'
+  if (value === 24 * 60 * 60) return '每天'
+  if (value % (24 * 60 * 60) === 0) return `每 ${value / (24 * 60 * 60)} 天`
+  if (value % (60 * 60) === 0) return `每 ${value / (60 * 60)} 小时`
+  if (value % 60 === 0) return `每 ${value / 60} 分钟`
+  return `每 ${value} 秒`
 }
 
 const MAX_VISIBLE_LOG_ITEMS = 200
@@ -1756,7 +1761,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
     return {
       ...item,
       text: item.text || fallbackText,
-      repeatPeriodSeconds: item.repeatPeriodSeconds ?? matchedPreview?.repeatPeriodSeconds ?? null
+      repeatPeriodSeconds: item.repeatPeriodSeconds ?? null
     }
   }), [creatives, items, matchedPreviewByMessageId])
 

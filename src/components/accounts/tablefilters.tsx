@@ -73,7 +73,7 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
 
       <FilterSelect label="国家" value={props.countryFilter} options={props.countries} onChange={props.onCountryChange} />
       <FilterSelect label="状态" value={props.statusFilter} options={props.statuses} onChange={props.onStatusChange} />
-      <FilterSelect label="代理" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
+      <FilterSelect label="网络" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
 
       <button
         type="button"

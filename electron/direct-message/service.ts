@@ -6,7 +6,8 @@ import bigInt from 'big-integer'
 import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
-import { TelegramClientManager } from '../accounts/check-engine/telegram-client-manager'
+import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
+import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
 import type {
   DirectMessageAutoReplyEvent,
   DirectMessageAutoReplyPayload,
@@ -28,6 +29,7 @@ function formatDirectMessageError(error: unknown) {
   const waitMatched = normalized.match(/A wait of (\d+) seconds is required/i)
   if (waitMatched?.[1]) return `操作太快了，Telegram 要求先等 ${waitMatched[1]} 秒再继续。`
   if (/PEER_FLOOD/i.test(normalized)) return '这个账号触发 Telegram 私信风控了，先暂停一会再发。'
+  if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '全局代理已开启，但当前没有可用代理，所以这次没有继续走本地直连。先把可用代理补上再试。'
   if (/FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(normalized)) return '这个账号已经冻结了，当前私信功能用不了，系统会自动停掉这个账号。'
   if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(normalized)) return '这个账号已经被封了，不能继续私信，系统会自动停掉这个账号。'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号登录已经失效了，需要重新登录，系统会自动停掉这个账号。'
@@ -265,9 +267,28 @@ function readAccountLabel(account: AccountRecord) {
   return `账号#${account.id}`
 }
 
-async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: SessionLoader, clientManager: TelegramClientManager) {
+function toClientProxy(proxy: AccountCheckProxy | null): AccountClientProxyOptions | null {
+  if (!proxy) return null
+  return {
+    type: proxy.type,
+    ip: proxy.host,
+    port: proxy.port,
+    username: proxy.username,
+    password: proxy.password,
+    ipVersion: proxy.ipVersion
+  }
+}
+
+async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: SessionLoader, clientManager: TelegramClientManager, proxyPoolService: ProxyPoolService) {
   const session = await sessionLoader.load(account.sessionPath)
-  const client = clientManager.createClient(session)
+  const proxy = proxyPoolService.isEnabled() ? proxyPoolService.getAccountCheckProxy() : null
+  if (proxyPoolService.isEnabled() && !proxy) {
+    throw new Error('GLOBAL_PROXY_REQUIRED')
+  }
+
+  const client = clientManager.createClient(session, {
+    proxy: toClientProxy(proxy)
+  })
   await client.connect()
   const authorized = await client.isUserAuthorized()
   if (!authorized) {
@@ -347,7 +368,8 @@ export class DirectMessageService {
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
-    private readonly clientManager: TelegramClientManager
+    private readonly clientManager: TelegramClientManager,
+    private readonly proxyPoolService: ProxyPoolService
   ) {}
 
   setAutoReplyEventSink(sink?: (payload: DirectMessageAutoReplyEvent) => void) {
@@ -471,7 +493,7 @@ export class DirectMessageService {
         if (task.cancelled) return
         let client = clients.get(account.id)
         if (!client) {
-          client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+          client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
           clients.set(account.id, client)
         }
 
@@ -676,7 +698,7 @@ export class DirectMessageService {
     const account = this.accountRepository.getByIds([payload.accountId])[0]
     if (!account) throw new Error('账号不存在')
 
-    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
 
     try {
       let rawUsers: Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null }> = []
@@ -792,7 +814,7 @@ export class DirectMessageService {
 
     for (const account of accounts) {
       try {
-        const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+        const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
         const handler = async (event: any) => {
           try {
             const message = event?.message

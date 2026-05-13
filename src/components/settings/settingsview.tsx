@@ -187,9 +187,9 @@ export default memo(function SettingsView() {
               <div>
                 <div className="text-sm font-semibold text-white">全局代理开关</div>
                 <div className="mt-2 text-sm leading-6 text-textMuted">
-                  关闭后，整个软件都走 <span className="font-semibold text-white">直连本地</span>。
+                  关闭后，整个软件所有功能模块都走 <span className="font-semibold text-white">直连本地</span>。
                   <br />
-                  打开后，账号检测和 WEB 都会按代理池规则全局走代理。
+                  打开后，整个软件所有功能模块都会按代理池规则全局走代理，不再回落到本地直连。
                 </div>
               </div>
               {proxyPoolLoading ? <Loader2 className="mt-1 animate-spin text-textMuted" size={18} /> : null}
@@ -198,7 +198,7 @@ export default memo(function SettingsView() {
             <div className="mt-5 flex items-center justify-between rounded-[14px] border border-white/6 bg-slate-950/35 px-4 py-4">
               <div>
                 <div className="text-sm font-medium text-white">当前状态</div>
-                <div className="mt-1 text-xs text-textMuted">{proxyPoolState.settings.enabled ? '已开启全局代理池' : '当前全局直连'}</div>
+                <div className="mt-1 text-xs text-textMuted">{proxyPoolState.settings.enabled ? '当前全局走代理' : '当前全局直连本地'}</div>
               </div>
               <button
                 type="button"

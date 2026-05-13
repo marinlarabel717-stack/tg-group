@@ -168,9 +168,9 @@ async function bootstrap() {
   const spamBotChecker = new SpamBotChecker()
   const statusResolver = new StatusResolver()
   const updateService = new AccountUpdateService(accountsRootPath)
-  const broadcastService = new BroadcastService(repository, sessionLoader, clientManager)
-  const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager)
-  const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager)
+  const broadcastService = new BroadcastService(repository, sessionLoader, clientManager, proxyPoolService)
+  const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager, proxyPoolService)
+  const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager, proxyPoolService)
   const resultWriter = new CheckResultWriter(repository, {
     onWrite: (accounts) => emitAccountsUpdated(accounts)
   })

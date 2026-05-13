@@ -3,7 +3,8 @@ import type { TelegramClient } from 'telegram'
 import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
-import { TelegramClientManager } from '../accounts/check-engine/telegram-client-manager'
+import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
+import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
 import type { AutoJoinPayload, AutoJoinPayloadItem, AutoJoinProgress, AutoJoinResultItem, AutoJoinStopResult, AutoJoinTaskResult } from '../../src/types'
 
 interface ActiveAutoJoinTask {
@@ -29,6 +30,18 @@ function randomInt(min: number, max: number) {
 
 function pickDelayMs(minSeconds: number, maxSeconds: number) {
   return randomInt(minSeconds, maxSeconds) * 1000
+}
+
+function toClientProxy(proxy: AccountCheckProxy | null): AccountClientProxyOptions | null {
+  if (!proxy) return null
+  return {
+    type: proxy.type,
+    ip: proxy.host,
+    port: proxy.port,
+    username: proxy.username,
+    password: proxy.password,
+    ipVersion: proxy.ipVersion
+  }
 }
 
 function shuffleItems<T>(items: T[]) {
@@ -113,6 +126,7 @@ function formatAutoJoinError(error: unknown) {
   if (/USER_BANNED_IN_CHANNEL/i.test(normalized)) return '这个账号在目标群里被限制了'
   if (/USER_ALREADY_PARTICIPANT/i.test(normalized)) return '这个账号本来就在群里'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号登录状态失效了，需要重新登录'
+  if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '全局代理已开启，但当前没有可用代理，所以这次没有继续走本地直连。先把可用代理补上再试。'
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '这个群限制加入，当前账号没法直接进'
   if (/INVITE_REQUEST_SENT/i.test(normalized)) return '这个群需要审核，已经提交申请了'
   if (/PEER_FLOOD/i.test(normalized)) return '这个账号操作太频繁了，被 Telegram 限流了'
@@ -181,9 +195,16 @@ function readGroupTitle(source: unknown, fallback: string) {
   return fallback
 }
 
-async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: SessionLoader, clientManager: TelegramClientManager) {
+async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: SessionLoader, clientManager: TelegramClientManager, proxyPoolService: ProxyPoolService) {
   const session = await sessionLoader.load(account.sessionPath)
-  const client = clientManager.createClient(session)
+  const proxy = proxyPoolService.isEnabled() ? proxyPoolService.getAccountCheckProxy() : null
+  if (proxyPoolService.isEnabled() && !proxy) {
+    throw new Error('GLOBAL_PROXY_REQUIRED')
+  }
+
+  const client = clientManager.createClient(session, {
+    proxy: toClientProxy(proxy)
+  })
   await client.connect()
   const authorized = await client.isUserAuthorized()
   if (!authorized) {
@@ -268,7 +289,8 @@ export class AutoJoinService {
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
-    private readonly clientManager: TelegramClientManager
+    private readonly clientManager: TelegramClientManager,
+    private readonly proxyPoolService: ProxyPoolService
   ) {}
 
   async stopCurrentTask(): Promise<AutoJoinStopResult> {
@@ -426,7 +448,7 @@ export class AutoJoinService {
         const accountLabel = accountLabelById.get(account.id) || `账号#${account.id}`
 
         try {
-          client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+          client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
           clients.set(account.id, client)
         } catch (error) {
           emit(`${accountLabel} 登录状态不可用，已跳过这个账号。`, {

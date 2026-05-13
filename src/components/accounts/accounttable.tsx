@@ -35,6 +35,7 @@ import { getAccountTaskMeta, useAccountTaskStatusMap, type AccountTaskKind } fro
 import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTimeFull, formatProfileSource } from '../../lib/ui-text'
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
+import { useProxyPoolStore } from '../../stores/proxypoolstore'
 
 const ACCOUNT_GRID_TEMPLATE = '38px 52px minmax(148px,1.35fr) minmax(96px,0.9fr) minmax(108px,1fr) 74px minmax(140px,1.15fr) minmax(88px,0.85fr) minmax(96px,0.9fr) minmax(176px,1.4fr)'
 const ACCOUNT_GRID_MIN_WIDTH = 1016
@@ -211,12 +212,8 @@ function cellShellClass(columnId: string, isHeader = false) {
   return 'flex h-full w-full min-w-0 items-center justify-start px-1'
 }
 
-function readProxy(account: AccountRecord) {
-  if (account.profile?.proxy === true) {
-    return '已连接代理'
-  }
-
-  return '直连'
+function readProxy(globalProxyEnabled: boolean) {
+  return globalProxyEnabled ? '代理' : '直连'
 }
 
 function TaskBadge({ accountId, taskMap }: { accountId: number; taskMap: Map<number, AccountTaskKind> }) {
@@ -583,6 +580,7 @@ export const AccountTable = memo(function AccountTable() {
   const setActiveModule = useUIStore((state) => state.setActiveModule)
   const setLogsContext = useUIStore((state) => state.setLogsContext)
   const accountTaskStatusMap = useAccountTaskStatusMap()
+  const globalProxyEnabled = useProxyPoolStore((state) => state.state.settings.enabled)
 
   const [sourceFilter, setSourceFilter] = useState('')
   const [proxyFilter, setProxyFilter] = useState('')
@@ -620,10 +618,10 @@ export const AccountTable = memo(function AccountTable() {
     () =>
       baseData.filter((account) => {
         if (sourceFilter && account.profileSource !== sourceFilter) return false
-        if (proxyFilter && readProxy(account) !== proxyFilter) return false
+        if (proxyFilter && readProxy(globalProxyEnabled) !== proxyFilter) return false
         return true
       }),
-    [baseData, sourceFilter, proxyFilter]
+    [baseData, sourceFilter, proxyFilter, globalProxyEnabled]
   )
   const scopedData = useMemo(
     () => summaryScopedData.filter((account) => matchesPremiumFilter(account, premiumFilter)),
@@ -849,10 +847,10 @@ export const AccountTable = memo(function AccountTable() {
       },
       {
         id: 'proxy',
-        header: '代理',
+        header: '网络',
         size: 88,
         cell: ({ row }) => {
-          const value = readProxy(row.original)
+          const value = readProxy(globalProxyEnabled)
           return <div className={cellTextClass()} title={value}>{value}</div>
         }
       },
@@ -944,8 +942,8 @@ export const AccountTable = memo(function AccountTable() {
     []
   )
   const proxies = useMemo(
-    () => Array.from(new Set(accounts.map((item) => readProxy(item)))).filter(Boolean).map((value) => ({ label: value, value })),
-    [accounts]
+    () => Array.from(new Set(accounts.map(() => readProxy(globalProxyEnabled)))).filter(Boolean).map((value) => ({ label: value, value })),
+    [accounts, globalProxyEnabled]
   )
 
   const selectedCount = selectedIds.length
@@ -990,7 +988,7 @@ export const AccountTable = memo(function AccountTable() {
             return false
           }
         }
-        if (shortcut.proxyFilter && readProxy(account) !== shortcut.proxyFilter) return false
+        if (shortcut.proxyFilter && readProxy(globalProxyEnabled) !== shortcut.proxyFilter) return false
         if (!matchesPremiumFilter(account, shortcut.premiumFilter)) return false
         return true
       }).length
@@ -1580,7 +1578,7 @@ export const AccountTable = memo(function AccountTable() {
                 </select>
 
                 <select value={shortcutProxyFilter} onChange={(event) => setShortcutProxyFilter(event.target.value)} className="h-11 rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-textMain outline-none transition focus:border-white/[0.12] focus:bg-hover">
-                  <option value="">代理（不限）</option>
+                  <option value="">网络（不限）</option>
                   {proxies.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
 

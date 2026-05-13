@@ -5,7 +5,8 @@ import bigInt from 'big-integer'
 import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
-import { TelegramClientManager } from '../accounts/check-engine/telegram-client-manager'
+import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
+import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
 import type { BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastScheduledMessageItem, BroadcastScheduledMessageListResult, BroadcastStopResult } from '../../src/types'
 
 const MIN_SCHEDULE_AHEAD_MS = 60_000
@@ -72,6 +73,8 @@ function formatBroadcastError(error: unknown) {
   if (/SCHEDULE_TOO_MUCH/i.test(normalized)) return '这个群的官方定时消息已经堆满了，先去 Telegram 里删掉一部分再发。'
   if (/SCHEDULE_DATE_TOO_LATE/i.test(normalized)) return '定时时间设得太远了，Telegram 不接受这么远的时间。'
   if (/SCHEDULE_DATE_INVALID|MSG_ID_INVALID/i.test(normalized)) return '定时时间不对，请改成未来时间再试。'
+  if (/TELEGRAM_REPEAT_NOT_APPLIED/i.test(normalized)) return 'Telegram 没有真正写成“每天重复”，这条我已经按失败处理了。先去官方客户端确认账号确实支持每天重复，再重新发一次。'
+  if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '全局代理已开启，但当前没有可用代理，所以这次没有继续走本地直连。先把可用代理补上再试。'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号的登录状态失效了，需要重新登录。'
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '私密链接失效了、过期了，或者当前账号用不了这个链接。'
   if (/SLOWMODE_WAIT_(\d+)/i.test(normalized)) {
@@ -209,6 +212,32 @@ async function getScheduledMessageCount(client: TelegramClient, entity: unknown)
   })) as { messages?: any[] }
 
   return Array.isArray(result?.messages) ? result.messages.length : 0
+}
+
+async function getScheduledMessageById(client: TelegramClient, entity: unknown, messageId: number) {
+  const result = await client.invoke(new Api.messages.GetScheduledHistory({
+    peer: entity as never,
+    hash: bigInt.zero
+  })) as { messages?: any[] }
+
+  if (!Array.isArray(result?.messages)) return null
+  return result.messages.find((message) => typeof message?.id === 'number' && message.id === messageId) ?? null
+}
+
+async function verifyScheduledRepeatPeriod(client: TelegramClient, entity: unknown, messageId: number, expectedRepeatPeriodSeconds: number) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const matched = await getScheduledMessageById(client, entity, messageId)
+    const remoteRepeatPeriod = readScheduledRepeatPeriod(matched)
+    if (remoteRepeatPeriod === expectedRepeatPeriodSeconds) {
+      return true
+    }
+
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 800))
+    }
+  }
+
+  return false
 }
 
 function extractResponseMessageId(result: unknown) {
@@ -385,9 +414,28 @@ function buildCreativeMessage(creative: { text: string; kind?: string; buttonTex
   return [text, buttonLine].filter(Boolean).join('\n\n') || undefined
 }
 
-async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: SessionLoader, clientManager: TelegramClientManager) {
+function toClientProxy(proxy: AccountCheckProxy | null): AccountClientProxyOptions | null {
+  if (!proxy) return null
+  return {
+    type: proxy.type,
+    ip: proxy.host,
+    port: proxy.port,
+    username: proxy.username,
+    password: proxy.password,
+    ipVersion: proxy.ipVersion
+  }
+}
+
+async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: SessionLoader, clientManager: TelegramClientManager, proxyPoolService: ProxyPoolService) {
   const session = await sessionLoader.load(account.sessionPath)
-  const client = clientManager.createClient(session)
+  const proxy = proxyPoolService.isEnabled() ? proxyPoolService.getAccountCheckProxy() : null
+  if (proxyPoolService.isEnabled() && !proxy) {
+    throw new Error('GLOBAL_PROXY_REQUIRED')
+  }
+
+  const client = clientManager.createClient(session, {
+    proxy: toClientProxy(proxy)
+  })
   await client.connect()
   const authorized = await client.isUserAuthorized()
   if (!authorized) {
@@ -403,7 +451,8 @@ export class BroadcastService {
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
-    private readonly clientManager: TelegramClientManager
+    private readonly clientManager: TelegramClientManager,
+    private readonly proxyPoolService: ProxyPoolService
   ) {}
 
   async stopCurrentPush(): Promise<BroadcastStopResult> {
@@ -576,7 +625,7 @@ export class BroadcastService {
             try {
               let client = clients.get(account.id)
               if (!client) {
-                client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+                client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
                 if (task.cancelled) {
                   await this.clientManager.destroyClient(client).catch(() => undefined)
                   break
@@ -621,13 +670,34 @@ export class BroadcastService {
                 messageId = extractResponseMessageId(firstResult)
               } else {
                 const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
-                const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
-                  message: buildCreativeMessage(creative),
-                  file: media,
-                  schedule: Math.floor(scheduledAt.getTime() / 1000),
-                  scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
-                })
+                let message: { id?: number } | unknown
+                if ((item.repeatPeriodSeconds ?? 0) > 0 && !media) {
+                  message = await client.invoke(new (Api.messages.SendMessage as any)({
+                    peer: entity as never,
+                    message: buildCreativeMessage(creative) || '',
+                    scheduleDate: Math.floor(scheduledAt.getTime() / 1000),
+                    scheduleRepeatPeriod: item.repeatPeriodSeconds
+                  }))
+                } else {
+                  message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
+                    message: buildCreativeMessage(creative),
+                    file: media,
+                    schedule: Math.floor(scheduledAt.getTime() / 1000),
+                    scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
+                  })
+                }
                 messageId = extractResponseMessageId(message)
+
+                if ((item.repeatPeriodSeconds ?? 0) > 0 && messageId) {
+                  const verified = await verifyScheduledRepeatPeriod(client, entity, messageId, item.repeatPeriodSeconds ?? 0)
+                  if (!verified) {
+                    await client.invoke(new Api.messages.DeleteScheduledMessages({
+                      peer: entity as never,
+                      id: [messageId]
+                    })).catch(() => undefined)
+                    throw new Error('TELEGRAM_REPEAT_NOT_APPLIED')
+                  }
+                }
               }
 
               const resultItem: BroadcastPushScheduleResultItem = {
@@ -700,7 +770,7 @@ export class BroadcastService {
       throw new Error('账号不存在')
     }
 
-    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
 
     try {
       const dialogs = await client.getDialogs({ limit: 200 })
@@ -748,7 +818,7 @@ export class BroadcastService {
       throw new Error('群组引用不对，请重新选一个群。')
     }
 
-    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
     try {
       const entity = await resolveGroupEntity(client, groupRef)
       const result = await client.invoke(new Api.messages.GetScheduledHistory({
@@ -795,7 +865,7 @@ export class BroadcastService {
       throw new Error('群组引用不对，请重新选一个群。')
     }
 
-    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager)
+    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
     try {
       const entity = await resolveGroupEntity(client, groupRef)
       await client.invoke(new Api.messages.DeleteScheduledMessages({
