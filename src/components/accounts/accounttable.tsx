@@ -1507,8 +1507,8 @@ export const AccountTable = memo(function AccountTable() {
       ) : null}
       {shortcutDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={() => setShortcutDialogOpen(false)}>
-          <div className="w-full max-w-[540px] rounded-[18px] border border-violet-400/20 bg-card shadow-[0_16px_48px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+          <div className="w-full max-w-[540px] rounded-[18px] border border-white/[0.06] bg-card shadow-[0_16px_48px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
               <div>
                 <div className="text-base font-semibold text-white">新建顶部筛选</div>
                 <div className="mt-1 text-sm text-textMuted">比如：美国 + 无限制 + 会员，然后自己命名。</div>
@@ -1523,27 +1523,27 @@ export const AccountTable = memo(function AccountTable() {
                   value={shortcutName}
                   onChange={(event) => setShortcutName(event.target.value)}
                   placeholder="比如：美国会员精品号"
-                  className="h-11 w-full rounded-[12px] bg-panel px-4 text-sm text-white outline-none transition focus:bg-hover"
+                  className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-white outline-none transition focus:border-white/[0.12] focus:bg-hover"
                 />
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <select value={shortcutCountryFilter} onChange={(event) => setShortcutCountryFilter(event.target.value)} className="h-11 rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover">
+                <select value={shortcutCountryFilter} onChange={(event) => setShortcutCountryFilter(event.target.value)} className="h-11 rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-textMain outline-none transition focus:border-white/[0.12] focus:bg-hover">
                   <option value="">国家（不限）</option>
                   {countries.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
 
-                <select value={shortcutStatusFilter} onChange={(event) => setShortcutStatusFilter(event.target.value as AccountStatusFilter)} className="h-11 rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover">
+                <select value={shortcutStatusFilter} onChange={(event) => setShortcutStatusFilter(event.target.value as AccountStatusFilter)} className="h-11 rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-textMain outline-none transition focus:border-white/[0.12] focus:bg-hover">
                   <option value="all">状态（不限）</option>
                   {statuses.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
 
-                <select value={shortcutProxyFilter} onChange={(event) => setShortcutProxyFilter(event.target.value)} className="h-11 rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover">
+                <select value={shortcutProxyFilter} onChange={(event) => setShortcutProxyFilter(event.target.value)} className="h-11 rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-textMain outline-none transition focus:border-white/[0.12] focus:bg-hover">
                   <option value="">代理（不限）</option>
                   {proxies.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
 
-                <select value={shortcutPremiumFilter} onChange={(event) => setShortcutPremiumFilter(event.target.value as PremiumFilter)} className="h-11 rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover">
+                <select value={shortcutPremiumFilter} onChange={(event) => setShortcutPremiumFilter(event.target.value as PremiumFilter)} className="h-11 rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-textMain outline-none transition focus:border-white/[0.12] focus:bg-hover">
                   <option value="all">会员（不限）</option>
                   <option value="premium">只看会员</option>
                   <option value="non-premium">只看非会员</option>
@@ -1555,7 +1555,7 @@ export const AccountTable = memo(function AccountTable() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-white/8 px-5 py-4">
+            <div className="flex items-center justify-end gap-3 border-t border-white/[0.06] px-5 py-4">
               <button type="button" onClick={() => setShortcutDialogOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
               <button type="button" onClick={handleSaveShortcut} className="rounded-[12px] bg-violet-400 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-violet-300">保存到顶部</button>
             </div>
