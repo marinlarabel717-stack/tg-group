@@ -96,6 +96,26 @@
         color: #c6ebff;
         font-size: 12px;
       }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        letter-spacing: .03em;
+        word-break: break-all;
+      }
+      .copy-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .copy-btn {
+        border-radius: 10px;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        background: rgba(255,255,255,.05);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 700;
+      }
       .main {
         margin-top: 18px;
         display: grid;
@@ -327,6 +347,7 @@
             </div>
 
             <div class="actions section-gap">
+              <button id="copyCardBtn" class="secondary">复制当前卡密</button>
               <button id="extendBtn" class="warn">延期</button>
               <button id="resetDevicesBtn" class="secondary">重置设备</button>
               <button id="disableBtn" class="danger">禁用卡密</button>
@@ -386,6 +407,7 @@
         enableBtn: document.getElementById('enableBtn'),
         refreshBtn: document.getElementById('refreshBtn'),
         loadCardsBtn: document.getElementById('loadCardsBtn'),
+        copyCardBtn: document.getElementById('copyCardBtn'),
         cardsList: document.getElementById('cardsList'),
         summaryCardKey: document.getElementById('summaryCardKey'),
         summaryStatus: document.getElementById('summaryStatus'),
@@ -448,7 +470,7 @@
         els.cardsList.innerHTML = state.cards.map((card) => `
           <div class="item ${card.cardKey === state.selectedCardKey ? 'active' : ''}" data-card-key="${card.cardKey}">
             <div class="item-head">
-              <div class="item-title">${card.cardKeyMasked}</div>
+              <div class="item-title mono">${card.cardKey}</div>
               <div class="item-status ${card.status}">${card.status}</div>
             </div>
             <div class="item-meta">
@@ -464,14 +486,24 @@
         }
       }
 
+      async function copyText(value, successText = '已复制。') {
+        try {
+          await navigator.clipboard.writeText(value)
+          setMessage(els.actionMessage, successText)
+        } catch (error) {
+          setMessage(els.actionMessage, error.message || '复制失败。', 'error')
+        }
+      }
+
       function renderCardDetail(item) {
-        els.summaryCardKey.textContent = item?.cardKeyMasked || '未选择'
+        els.summaryCardKey.textContent = item?.cardKey || '未选择'
+        els.summaryCardKey.className = 'summary-value mono'
         els.summaryStatus.textContent = item?.status || '—'
         els.summaryExpireAt.textContent = formatDate(item?.expireAt)
         els.summaryDevices.textContent = item ? `${item.activeDeviceCount} / ${item.maxDevices}` : '—'
 
         els.detailBox.innerHTML = item ? `
-          <div class="muted">卡密</div><div>${item.cardKeyMasked}</div>
+          <div class="muted">卡密</div><div class="copy-inline"><span class="mono">${item.cardKey}</span><button type="button" class="copy-btn" data-copy-card="${item.cardKey}">复制</button></div>
           <div class="muted">状态</div><div>${item.status}</div>
           <div class="muted">到期时间</div><div>${formatDate(item.expireAt)}</div>
           <div class="muted">设备数量</div><div>${item.activeDeviceCount} / ${item.maxDevices}</div>
@@ -480,6 +512,10 @@
           <div class="muted">最近校验</div><div>${formatDate(item.lastValidatedAt)}</div>
           <div class="muted">备注</div><div>${item.note || '—'}</div>
         ` : '<div class="empty" style="grid-column:1/-1">未选择卡密</div>'
+
+        for (const button of els.detailBox.querySelectorAll('[data-copy-card]')) {
+          button.addEventListener('click', () => copyText(button.dataset.copyCard || '', '卡密已复制。'))
+        }
 
         els.deviceList.innerHTML = item?.devices?.length ? item.devices.map((device) => `
           <div class="log-item">
@@ -622,6 +658,13 @@
       els.loadCardsBtn.addEventListener('click', () => loadCards())
       els.loadLogsBtn.addEventListener('click', loadLogs)
       els.refreshBtn.addEventListener('click', () => selectCard(state.selectedCardKey))
+      els.copyCardBtn.addEventListener('click', () => {
+        if (!state.selectedCardKey) {
+          setMessage(els.actionMessage, '请先选择一张卡密。', 'error')
+          return
+        }
+        void copyText(state.selectedCardKey, '当前卡密已复制。')
+      })
 
       els.createBtn.addEventListener('click', async () => {
         try {
