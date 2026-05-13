@@ -1078,12 +1078,9 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="text-lg font-semibold text-white">选择账号</div>
-                  <div className="mt-1 text-sm text-textMuted">点击选择账号，会弹出账号列表。选完后，下面直接显示这个账号的群组信息。</div>
+                  <div className="mt-1 text-sm text-textMuted">直接点击“当前操作账号”就能选账号。选完后，下面直接显示这个账号的群组信息。</div>
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  <button type="button" onClick={openAccountPicker} className="flex items-center justify-center gap-2 rounded-[14px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
-                    <Users size={16} /> 选择账号
-                  </button>
                   <button
                     type="button"
                     disabled={!selectedAccountId || loadingJoinedGroups}
@@ -1102,11 +1099,11 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               </div>
 
               <div className="mt-4 grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-                <div className="rounded-[18px] bg-panel p-4">
+                <button type="button" onClick={openAccountPicker} className="rounded-[18px] bg-panel p-4 text-left transition hover:bg-white/[0.05]">
                   <div className="text-xs tracking-[0.18em] text-textMuted">当前操作账号</div>
                   <div className="mt-2 text-base font-semibold text-white">{selectedAccount ? (selectedAccount.username || selectedAccount.phone || `账号#${selectedAccount.id}`) : '还没选择账号'}</div>
-                  <div className="mt-2 text-sm text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '未识别'} · ${formatAccountStatus(selectedAccount.status)}` : '先点上面的“选择账号”。'}</div>
-                </div>
+                  <div className="mt-2 text-sm text-textMuted">{selectedAccount ? `${selectedAccount.phone || selectedAccount.userId || '未识别'} · ${formatAccountStatus(selectedAccount.status)}` : '点这里选择账号。'}</div>
+                </button>
 
                 <div className="rounded-[18px] bg-panel p-4">
                   <div className="text-sm font-semibold text-white">已选账号</div>
