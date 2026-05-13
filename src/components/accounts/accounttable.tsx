@@ -950,7 +950,7 @@ export const AccountTable = memo(function AccountTable() {
   const selectedCount = selectedIds.length
   const totalCount = data.length
   const summaryCards = useMemo(() => {
-    const aliveCount = summaryScopedData.filter((account) => account.status === 'alive').length
+    const aliveCount = summaryScopedData.filter((account) => account.status === 'alive' || account.status === 'geo_restricted').length
     const limitedCount = summaryScopedData.filter((account) => account.status === 'limited' || account.status === 'temporary_limited').length
     const frozenCount = summaryScopedData.filter((account) => account.status === 'frozen').length
     const bannedCount = summaryScopedData.filter((account) => account.status === 'banned').length
@@ -973,6 +973,8 @@ export const AccountTable = memo(function AccountTable() {
         if (shortcut.statusFilter !== 'all') {
           if (shortcut.statusFilter === 'premium') {
             if (!isPremiumAccount(account)) return false
+          } else if (shortcut.statusFilter === 'alive') {
+            if (account.status !== 'alive' && account.status !== 'geo_restricted') return false
           } else if (shortcut.statusFilter === 'limited-group') {
             if (account.status !== 'limited' && account.status !== 'temporary_limited') return false
           } else if (shortcut.statusFilter === 'timeout-group') {

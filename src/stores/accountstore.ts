@@ -482,6 +482,8 @@ export function filterAccounts(accounts: AccountRecord[], filters: {
     if (filters.statusFilter !== 'all') {
       if (filters.statusFilter === 'premium') {
         if (!account.profile?.is_premium) return false
+      } else if (filters.statusFilter === 'alive') {
+        if (account.status !== 'alive' && account.status !== 'geo_restricted') return false
       } else if (filters.statusFilter === 'limited-group') {
         if (account.status !== 'limited' && account.status !== 'temporary_limited') return false
       } else if (filters.statusFilter === 'timeout-group') {
