@@ -432,6 +432,9 @@ const TasksWorkbench = memo(function TasksWorkbench() {
 const LogsWorkbench = memo(function LogsWorkbench() {
   const logs = useAutoJoinStore((state) => state.logs)
   const clearLogs = useAutoJoinStore((state) => state.clearLogs)
+  const stopTask = useAutoJoinStore((state) => state.stopTask)
+  const running = useAutoJoinStore((state) => state.running)
+  const stopping = useAutoJoinStore((state) => state.stopping)
   const lastActionMessage = useAutoJoinStore((state) => state.lastActionMessage)
   const tasks = useAutoJoinStore((state) => state.tasks)
   const taskSnapshots = useAutoJoinStore((state) => state.taskSnapshots)
@@ -452,7 +455,17 @@ const LogsWorkbench = memo(function LogsWorkbench() {
     <GlassPanel className="bg-card">
       <div className="flex items-center justify-between gap-3">
         <div className="text-base font-semibold text-white">加群日志</div>
-        <button type="button" onClick={clearLogs} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={!running || stopping}
+            onClick={() => void stopTask()}
+            className="rounded-[12px] bg-rose-400/12 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {stopping ? '停止中' : '停止任务'}
+          </button>
+          <button type="button" onClick={clearLogs} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
+        </div>
       </div>
 
       <div className="mt-4 rounded-[16px] bg-panel/70 px-4 py-4">
