@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { Loader2, ShieldCheck } from 'lucide-react'
+import { BrandLogo } from '../common/brandlogo'
 import { useLicenseStore } from '../../stores/licensestore'
 
 export const LicenseGate = memo(function LicenseGate({ children }: { children: React.ReactNode }) {
@@ -75,7 +76,14 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
         </button>
 
         <div className="text-center">
-          <div className="text-[22px] font-semibold tracking-[0.02em] text-white">TGMatrix</div>
+          <BrandLogo
+            size={72}
+            className="justify-center"
+            textClassName="text-center"
+            subtitleClassName="text-white/45"
+            titleClassName="text-[24px] text-white"
+            taglineClassName="text-white/55"
+          />
         </div>
 
         <div className="mt-8">

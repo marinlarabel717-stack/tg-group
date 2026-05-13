@@ -1,17 +1,21 @@
 import { memo } from 'react'
-import { Sparkles } from 'lucide-react'
 import { TopbarSearch } from './topbarsearch'
 import { TopbarActions } from './topbaractions'
+import { BrandLogo } from '../common/brandlogo'
 import { useUIStore } from '../../stores/uistore'
 
 const TopbarBrand = memo(function TopbarBrand() {
   return (
-    <div className="flex min-w-[240px] items-center gap-3 rounded-[14px] bg-card px-4 py-3 text-cyan-200">
-      <Sparkles size={18} />
-      <div>
-        <div className="text-xs tracking-[0.22em] text-textMuted">实时中枢</div>
-        <div className="text-sm font-medium text-textMain">控制中心</div>
-      </div>
+    <div className="flex min-w-[280px] items-center rounded-[14px] bg-card px-4 py-2.5 text-cyan-200">
+      <BrandLogo
+        size={42}
+        subtitle="桌面工作台"
+        title="海棠矩阵"
+        roundedClassName="rounded-[12px]"
+        subtitleClassName="text-[10px] tracking-[0.26em] text-textMuted"
+        titleClassName="text-sm font-medium text-textMain"
+        taglineClassName="text-[12px] text-textMuted"
+      />
     </div>
   )
 })

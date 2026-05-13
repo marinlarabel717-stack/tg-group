@@ -34,6 +34,8 @@ import { registerDirectMessageIpc } from './direct-message/ipc'
 import { AutoJoinService } from './auto-join/service'
 import { registerAutoJoinIpc } from './auto-join/ipc'
 
+const BRAND_NAME = '海棠矩阵'
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -43,7 +45,7 @@ let managedSessionsSyncTimer: NodeJS.Timeout | null = null
 let managedSessionsWatcherSuspendCount = 0
 
 function createWindow() {
-  const appTitle = app.getName()
+  const appTitle = BRAND_NAME
   const appIconPath = app.isPackaged
     ? resolveRuntimeAssetPath('app', 'icon.png')
     : path.join(process.cwd(), 'build', 'icon.png')
@@ -182,6 +184,7 @@ function bindWindowControls() {
 
 async function bootstrap() {
   nativeTheme.themeSource = 'dark'
+  app.setName(BRAND_NAME)
 
   const { dataRoot, sessionsDirectory } = ensureDataDirectories()
   const accountsRootPath = dataRoot

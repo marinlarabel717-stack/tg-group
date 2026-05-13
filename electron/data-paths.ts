@@ -14,13 +14,17 @@ export function resolveDataRootPath() {
   return path.join(resolveBaseDirectory(), 'data')
 }
 
+export function resolveSessionsRootPath() {
+  return path.join(resolveBaseDirectory(), 'sessions')
+}
+
 export function resolveDataPath(...segments: string[]) {
   return path.join(resolveDataRootPath(), ...segments)
 }
 
 export function ensureDataDirectories() {
   const dataRoot = resolveDataRootPath()
-  const sessionsDirectory = resolveDataPath('sessions')
+  const sessionsDirectory = resolveSessionsRootPath()
 
   fs.mkdirSync(dataRoot, { recursive: true })
   fs.mkdirSync(sessionsDirectory, { recursive: true })

@@ -3,6 +3,7 @@ import { memo } from 'react'
 import type { ModuleKey } from '../../types'
 import { moduleLabelMap } from '../../lib/ui-text'
 import { useUIStore } from '../../stores/uistore'
+import { BrandLogo } from '../common/brandlogo'
 import { SidebarNavItem } from './sidebarnavitem'
 
 const items: { key: ModuleKey; label: string; icon: typeof ChartColumnBig }[] = [
@@ -22,19 +23,19 @@ const SidebarBrand = memo(function SidebarBrand({ collapsed }: { collapsed: bool
 
   return (
     <button
-      title={collapsed ? 'Telegram 多账号管理' : undefined}
+      title={collapsed ? '海棠矩阵' : undefined}
       onClick={() => setActiveModule('dashboard')}
       className={`group flex items-center rounded-[14px] bg-white/[0.025] transition hover:bg-hover ${collapsed ? 'justify-center px-0 py-3.5' : 'gap-3 px-3 py-3.5'}`}
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-hover text-sm font-black text-cyan-200">
-        TM
-      </div>
-      {!collapsed ? (
-        <div className="min-w-0 text-left">
-          <div className="truncate text-[18px] font-semibold text-textMain">Telegram</div>
-          <div className="truncate text-[13px] text-textMuted">多账号管理</div>
-        </div>
-      ) : null}
+      <BrandLogo
+        size={40}
+        showText={!collapsed}
+        roundedClassName="rounded-[12px]"
+        className={collapsed ? 'justify-center' : ''}
+        subtitle="DESKTOP"
+        title="海棠矩阵"
+        taglineClassName="text-[13px] text-textMuted"
+      />
     </button>
   )
 })
