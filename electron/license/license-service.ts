@@ -86,7 +86,7 @@ export class LicenseService {
       return normalized
     }
 
-    const fallback = normalizeLicenseApiBaseUrl('http://127.0.0.1:8787')
+    const fallback = normalizeLicenseApiBaseUrl('http://tgmatrix.duckdns.org')
     if (fallback && settings.licenseApiBaseUrl !== fallback) {
       this.appSettingsStore.update({ licenseApiBaseUrl: fallback })
     }

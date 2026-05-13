@@ -7,7 +7,7 @@ export interface AppSettings {
   licenseOfflineGraceDays: number
 }
 
-const DEFAULT_LICENSE_API_BASE_URL = 'http://127.0.0.1:8787'
+const DEFAULT_LICENSE_API_BASE_URL = 'http://tgmatrix.duckdns.org'
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   checkConcurrency: 3,

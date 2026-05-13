@@ -87,7 +87,8 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
         <button
           type="button"
           onClick={() => void window.desktopWindow?.close()}
-          className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg leading-none text-white/70 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white"
+          className="absolute right-6 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/12 bg-slate-950/40 text-lg leading-none text-white/80 shadow-[0_8px_20px_rgba(3,8,20,0.24)] transition hover:border-cyan-300/35 hover:bg-cyan-300/12 hover:text-white active:scale-[0.97]"
+          style={{ pointerEvents: 'auto' }}
           aria-label="关闭"
         >
           ×
@@ -132,7 +133,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
 
         {statusMessage ? <div className="relative z-10 mt-3 rounded-[14px] border border-white/8 bg-white/[0.05] px-4 py-2.5 text-sm text-slate-100 backdrop-blur-xl">{statusMessage}</div> : null}
         {errorMessage ? <div className="relative z-10 mt-3 rounded-[14px] border border-rose-300/16 bg-rose-400/10 px-4 py-2.5 text-sm text-rose-100 backdrop-blur-xl">{errorMessage}</div> : null}
-        {!state.apiConfigured ? <div className="relative z-10 mt-3 rounded-[14px] border border-amber-300/18 bg-amber-300/10 px-4 py-2.5 text-sm text-amber-50 backdrop-blur-xl">授权服务地址还没配好，当前默认会先连本机 127.0.0.1:8787。</div> : null}
+        {!state.apiConfigured ? <div className="relative z-10 mt-3 rounded-[14px] border border-amber-300/18 bg-amber-300/10 px-4 py-2.5 text-sm text-amber-50 backdrop-blur-xl">授权服务地址还没配好，当前默认会先连 http://tgmatrix.duckdns.org。</div> : null}
       </div>
     </div>
   )
