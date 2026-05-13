@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -77,6 +77,33 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
+
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const hasSelection = Boolean(params.selectionText?.trim())
+    const isEditable = params.isEditable
+
+    if (!isEditable && !hasSelection) {
+      return
+    }
+
+    const menu = Menu.buildFromTemplate([
+      ...(isEditable ? [
+        { role: 'undo' as const, label: '撤销' },
+        { role: 'redo' as const, label: '重做' },
+        { type: 'separator' as const },
+        { role: 'cut' as const, label: '剪切' },
+        { role: 'copy' as const, label: '复制' },
+        { role: 'paste' as const, label: '粘贴' },
+        { role: 'selectAll' as const, label: '全选' }
+      ] : [
+        { role: 'copy' as const, label: '复制' },
+        { role: 'selectAll' as const, label: '全选' }
+      ])
+    ])
+
+    event.preventDefault()
+    menu.popup({ window: mainWindow ?? undefined })
+  })
 
   mainWindow.on('closed', () => {
     mainWindow = null
