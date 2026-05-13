@@ -187,7 +187,7 @@ async function bootstrap() {
   )
   const checkQueue = new CheckQueue(checkEngine, {
     concurrency: appSettings.checkConcurrency,
-    timeoutMs: 25000,
+    timeoutMs: 60000,
     retryLimit: 2
   })
 

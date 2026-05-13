@@ -52,6 +52,23 @@ interface CheckQueueOptions {
   retryLimit?: number
 }
 
+function createQueueTimeoutResult(task: QueueTask, timeoutMs: number): AccountCheckResult {
+  return {
+    accountId: task.accountId,
+    status: 'timeout',
+    profile: {},
+    phone: '',
+    username: '',
+    userId: '',
+    country: '',
+    lastCheckTime: new Date().toISOString(),
+    lastOnlineTime: null,
+    durationMs: timeoutMs,
+    retryable: false,
+    errorMessage: `单个账号检测超过 ${Math.ceil(timeoutMs / 1000)} 秒，已自动判定超时并继续下一个账号`
+  }
+}
+
 function formatFrozenSince(value: unknown) {
   if (typeof value !== 'string' && typeof value !== 'number') return ''
 
@@ -104,7 +121,7 @@ export class CheckQueue extends EventEmitter {
     super()
     this.options = {
       concurrency: options.concurrency ?? 3,
-      timeoutMs: options.timeoutMs ?? 25000,
+      timeoutMs: options.timeoutMs ?? 60000,
       retryLimit: options.retryLimit ?? 2
     }
     this.state = createInitialState(this.options)
@@ -215,23 +232,31 @@ export class CheckQueue extends EventEmitter {
   }
 
   private async runTask(task: QueueTask) {
+    let settled = false
     try {
-      const result = await this.engine.run(task.accountId, (payload) => {
-        if (payload.type === 'login_success') {
-          return
-        }
+      const result = await Promise.race<AccountCheckResult>([
+        this.engine.run(task.accountId, (payload) => {
+          if (settled || payload.type === 'login_success') {
+            return
+          }
 
-        if ((payload.reason || '').includes('Session 未登录')) {
-          return
-        }
+          if ((payload.reason || '').includes('Session 未登录')) {
+            return
+          }
 
-        this.appendLog('warning', task.accountId, `${payload.phone} ---- 登录失败（${payload.reason}）`, task.attempt + 1, {
-          phone: payload.phone,
-          status: null
+          this.appendLog('warning', task.accountId, `${payload.phone} ---- 登录失败（${payload.reason}）`, task.attempt + 1, {
+            phone: payload.phone,
+            status: null
+          })
+        }, task.mode),
+        new Promise<AccountCheckResult>((resolve) => {
+          setTimeout(() => resolve(createQueueTimeoutResult(task, this.options.timeoutMs)), this.options.timeoutMs)
         })
-      }, task.mode)
+      ])
+      settled = true
       this.handleResult(task, result)
     } catch (error) {
+      settled = true
       const message = error instanceof Error ? error.message : String(error)
       const fallbackResult: AccountCheckResult = {
         accountId: task.accountId,
@@ -249,6 +274,7 @@ export class CheckQueue extends EventEmitter {
       }
       this.handleResult(task, fallbackResult)
     } finally {
+      settled = true
       this.active.delete(task.accountId)
       this.syncCounters()
       await this.drain()

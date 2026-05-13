@@ -45,7 +45,7 @@ function createEmptyCheckState(): CheckQueueState {
     running: false,
     runMode: 'account-status',
     concurrency: 3,
-    timeoutMs: 25000,
+    timeoutMs: 60000,
     retryLimit: 2,
     pendingCount: 0,
     activeCount: 0,
