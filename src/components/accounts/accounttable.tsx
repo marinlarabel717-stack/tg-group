@@ -36,9 +36,9 @@ import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTi
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '46px 68px 176px 120px 124px 96px 184px 132px 132px 228px'
-const ACCOUNT_GRID_WIDTH = 1306
-const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 24
+const ACCOUNT_GRID_TEMPLATE = '38px 52px 144px 88px 98px 72px 128px 76px 88px 144px'
+const ACCOUNT_GRID_WIDTH = 928
+const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 12
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
   width: `${ACCOUNT_GRID_WIDTH}px`,
@@ -126,7 +126,7 @@ function checkboxClass() {
 }
 
 function actionButtonClass(active = true) {
-  return `flex h-7 min-w-7 shrink-0 items-center justify-center rounded-[8px] border text-[12px] font-semibold transition ${active
+  return `flex h-5 min-w-5 shrink-0 items-center justify-center rounded-[6px] border text-[10px] font-semibold transition ${active
     ? 'border-white/10 bg-panel text-slate-200 hover:bg-hover hover:text-neonSoft'
     : 'border-white/5 bg-slate-950/35 text-slate-500'}`
 }
@@ -193,22 +193,22 @@ function cellShellClass(columnId: string, isHeader = false) {
   }
 
   if (isCenteredColumn(columnId)) {
-    return 'flex h-full w-full items-center justify-center px-2'
+    return 'flex h-full w-full items-center justify-center px-1'
   }
 
   if (columnId === 'nickname') {
-    return 'flex h-full w-full min-w-0 items-center justify-start pr-2 pl-4'
+    return 'flex h-full w-full min-w-0 items-center justify-start pr-1 pl-1.5'
   }
 
   if (columnId === 'proxy') {
-    return 'flex h-full w-full min-w-0 items-center justify-start pr-2 pl-2'
+    return 'flex h-full w-full min-w-0 items-center justify-start px-1'
   }
 
   if (columnId === 'actions') {
-    return 'flex h-full w-full items-center justify-center px-2'
+    return 'flex h-full w-full items-center justify-center px-0.5'
   }
 
-  return 'flex h-full w-full min-w-0 items-center justify-start px-2'
+  return 'flex h-full w-full min-w-0 items-center justify-start px-1'
 }
 
 function readProxy(account: AccountRecord) {
@@ -222,7 +222,7 @@ function readProxy(account: AccountRecord) {
 function TaskBadge({ accountId, taskMap }: { accountId: number; taskMap: Map<number, AccountTaskKind> }) {
   const taskMeta = getAccountTaskMeta(taskMap, accountId)
   return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs ${taskMeta.tone}`}>
+    <span className={`inline-flex rounded-full border px-1.5 py-[3px] text-[10px] leading-none ${taskMeta.tone}`}>
       {taskMeta.label}
     </span>
   )
@@ -276,7 +276,7 @@ function AvatarCell({ account }: { account: AccountRecord }) {
   const showImage = Boolean(src) && !failed
 
   return (
-    <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-slate-900/70 ring-1 ring-white/8 shadow-[0_0_0_1px_rgba(59,130,246,0.08)]">
+    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-slate-900/70 ring-1 ring-white/8 shadow-[0_0_0_1px_rgba(59,130,246,0.08)]">
       {showImage ? (
         <img src={src} alt={readNickname(account)} className="h-full w-full object-cover" onError={() => setFailed(true)} />
       ) : (
@@ -530,7 +530,7 @@ const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }
   }, [account.id, openingWeb])
 
   return (
-    <div className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap">
+    <div className="flex w-full items-center justify-center gap-0.5 whitespace-nowrap">
       <span title={`用户名：${username}`} className={actionButtonClass(username !== '-')}>@</span>
       <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>🔓</span>
       <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>
@@ -539,7 +539,7 @@ const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }
           type="button"
           title="查看会员详情"
           onClick={() => void onOpenPremium(account)}
-          className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-[8px] border border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300 transition hover:brightness-110"
+          className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-[6px] border border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300 transition hover:brightness-110"
         >
           <Star size={12} className="fill-current" />
         </button>
@@ -549,7 +549,7 @@ const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }
         title={openingWeb ? '正在打开 Telegram 网页版…' : '打开 Telegram 网页版'}
         onClick={() => void handleOpenTelegramWeb()}
         disabled={openingWeb}
-        className={`flex h-7 min-w-[56px] shrink-0 items-center justify-center gap-1 rounded-[8px] border px-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition ${openingWeb
+        className={`flex h-5 min-w-[40px] shrink-0 items-center justify-center gap-0.5 rounded-[6px] border px-1 text-[9px] font-semibold uppercase tracking-[0.04em] transition ${openingWeb
           ? 'cursor-wait border-sky-400/20 bg-sky-400/10 text-sky-300'
           : 'border-white/10 bg-panel text-slate-200 hover:bg-hover hover:text-neonSoft'}`}
       >
@@ -777,7 +777,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'index',
         header: '序号',
-        size: 84,
+        size: 52,
         cell: ({ row, table }) => {
           const pageIndex = table.getState().pagination.pageIndex
           const pageSize = table.getState().pagination.pageSize
@@ -788,7 +788,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'phone',
         header: '手机号',
-        size: 176,
+        size: 144,
         cell: ({ row }) => {
           const value = row.original.phone || '—'
           const copied = copiedPhone === value
@@ -807,13 +807,13 @@ export const AccountTable = memo(function AccountTable() {
       {
         accessorKey: 'country',
         header: '国家',
-        size: 120,
+        size: 88,
         cell: ({ row }) => <CountryCell country={row.original.country} phone={row.original.phone} />
       },
       {
         accessorKey: 'status',
         header: '状态',
-        size: 124,
+        size: 98,
         cell: ({ row }) => (
           <StatusBadge
             status={row.original.status}
@@ -826,14 +826,14 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'avatar',
         header: '头像',
-        size: 96,
+        size: 72,
         enableSorting: false,
         cell: ({ row }) => <AvatarCell account={row.original} />
       },
       {
         id: 'nickname',
         header: '昵称',
-        size: 184,
+        size: 128,
         cell: ({ row }) => {
           const value = readNickname(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -842,14 +842,14 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'task',
         header: '任务',
-        size: 132,
+        size: 76,
         enableSorting: false,
         cell: ({ row }) => <TaskBadge accountId={row.original.id} taskMap={accountTaskStatusMap} />
       },
       {
         id: 'proxy',
         header: '代理',
-        size: 132,
+        size: 88,
         cell: ({ row }) => {
           const value = readProxy(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
@@ -858,7 +858,7 @@ export const AccountTable = memo(function AccountTable() {
       {
         id: 'actions',
         header: '操作',
-        size: 228,
+        size: 144,
         enableSorting: false,
           cell: ({ row }) => <TableRowActions account={row.original} onOpenPremium={handleOpenPremiumDialog} />
         }
@@ -1317,7 +1317,7 @@ export const AccountTable = memo(function AccountTable() {
                 className="absolute left-0 top-0"
                 style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content', transform: `translateX(-${scrollLeft}px)` }}
               >
-                <div className="sticky top-0 z-10 bg-card px-3 pb-[2px] pt-[2px]" style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content' }}>
+                <div className="sticky top-0 z-10 bg-card px-1.5 pb-[2px] pt-[2px]" style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content' }}>
                   {table.getHeaderGroups().map((headerGroup) => (
                     <div key={headerGroup.id} className="grid shrink-0" style={ACCOUNT_GRID_STYLE}>
                       {headerGroup.headers.map((header) => (
@@ -1354,7 +1354,7 @@ export const AccountTable = memo(function AccountTable() {
                     ? Array.from({ length: 8 }).map((_, index) => (
                         <div
                           key={`skeleton-${index}`}
-                          className="absolute left-0 top-0 px-3 py-[3px]"
+                          className="absolute left-0 top-0 px-1.5 py-[3px]"
                           style={{ transform: `translateY(${index * 52}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
                         >
                           <SkeletonRow columns={10} />
@@ -1367,7 +1367,7 @@ export const AccountTable = memo(function AccountTable() {
                             key={row.id}
                             data-index={virtualRow.index}
                             ref={rowVirtualizer.measureElement}
-                            className="absolute left-0 top-0 px-3 py-[3px]"
+                            className="absolute left-0 top-0 px-1.5 py-[3px]"
                             style={{ transform: `translateY(${virtualRow.start}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
                           >
                             <div
@@ -1397,7 +1397,7 @@ export const AccountTable = memo(function AccountTable() {
               <div className="max-w-md text-sm text-textMuted">请尝试调整状态、资料来源、Proxy 或搜索关键词后再查看结果。</div>
             </div>
           ) : (
-            <div className="border-t border-white/5 px-3 pb-2 pt-1.5">
+            <div className="border-t border-white/5 px-1.5 pb-2 pt-1.5">
               <div ref={scrollbarRef} className="account-table-scrollbar h-4 overflow-x-auto overflow-y-hidden" onScroll={handleScrollbarScroll}>
                 <div style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, height: '1px' }} />
               </div>
