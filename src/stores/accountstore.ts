@@ -34,6 +34,8 @@ interface CheckResultDialogState {
   temporaryLimited: number
   frozen: number
   banned: number
+  timeout: number
+  unknown: number
 }
 
 function getDesktopAccountsApi() {
@@ -197,7 +199,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     limited: 0,
     temporaryLimited: 0,
     frozen: 0,
-    banned: 0
+    banned: 0,
+    timeout: 0,
+    unknown: 0
   },
   lastActionMessage: '',
   errorMessage: '',
@@ -222,7 +226,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
               limited: checkState.resultSummary.limited,
               temporaryLimited: checkState.resultSummary.temporary_limited,
               frozen: checkState.resultSummary.frozen,
-              banned: checkState.resultSummary.banned
+              banned: checkState.resultSummary.banned,
+              timeout: checkState.resultSummary.timeout,
+              unknown: checkState.resultSummary.unknown
             },
             lastActionMessage: '批量检测已完成，账号资料已刷新。'
           })
@@ -435,7 +441,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           limited: 0,
           temporaryLimited: 0,
           frozen: 0,
-          banned: 0
+          banned: 0,
+          timeout: 0,
+          unknown: 0
         },
         lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务。`
       })

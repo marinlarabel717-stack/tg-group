@@ -24,10 +24,12 @@ export const CheckResultDialog = memo(function CheckResultDialog() {
       <ResultHero label="检查结果" value={`本次检测 ${checkResultDialog.total}`} tone="violet" />
 
       {checkResultDialog.runMode === 'account-survival' ? (
-        <div className="grid grid-cols-3 gap-3 text-center text-sm">
+        <div className="grid grid-cols-2 gap-3 text-center text-sm sm:grid-cols-3">
           <ResultStatCard label="存活" value={checkResultDialog.alive} tone="success" />
           <ResultStatCard label="封禁" value={checkResultDialog.banned} tone="danger" />
           <ResultStatCard label="冻结" value={checkResultDialog.frozen} tone="info" />
+          <ResultStatCard label="超时" value={checkResultDialog.timeout} tone="violet" />
+          <ResultStatCard label="未知" value={checkResultDialog.unknown} tone="neutral" />
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 text-center text-sm sm:grid-cols-3">
@@ -35,7 +37,9 @@ export const CheckResultDialog = memo(function CheckResultDialog() {
           <ResultStatCard label="双向" value={checkResultDialog.limited} tone="info" />
           <ResultStatCard label="临时双向" value={checkResultDialog.temporaryLimited} tone="warning" />
           <ResultStatCard label="冻结" value={checkResultDialog.frozen} tone="violet" />
-          <ResultStatCard label="封禁" value={checkResultDialog.banned} tone="danger" wide />
+          <ResultStatCard label="封禁" value={checkResultDialog.banned} tone="danger" />
+          <ResultStatCard label="超时" value={checkResultDialog.timeout} tone="violet" />
+          <ResultStatCard label="未知" value={checkResultDialog.unknown} tone="neutral" />
         </div>
       )}
 
