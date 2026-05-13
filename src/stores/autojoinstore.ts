@@ -350,7 +350,14 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       setRepeatJoinEnabled: (value) => set({ repeatJoinEnabled: value }),
       setDispatchMode: (value) => set({ dispatchMode: value }),
       closeCompletionDialog: () => set({ completionDialogTaskId: null }),
-      clearLogs: () => set({ logs: [], lastActionMessage: '加群日志已清空。' }),
+      clearLogs: () => set({
+        logs: [],
+        tasks: [],
+        taskSnapshots: [],
+        completionDialogTaskId: null,
+        currentTaskId: null,
+        lastActionMessage: '加群日志已清空。'
+      }),
       clearLinkInput: () => set({ linkInput: '' }),
       init: () => {
         if (!window.desktopAutoJoin || subscribed) {
