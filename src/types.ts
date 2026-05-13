@@ -291,6 +291,7 @@ export interface DesktopLicenseState {
   apiConfigured: boolean
   apiBaseUrl: string
   cardKeyMasked: string | null
+  rememberedCardKey: string | null
   expireAt: string | null
   activatedAt: string | null
   lastValidatedAt: string | null

@@ -11,6 +11,7 @@ const DEFAULT_STATE: DesktopLicenseState = {
   apiConfigured: false,
   apiBaseUrl: '',
   cardKeyMasked: null,
+  rememberedCardKey: null,
   expireAt: null,
   activatedAt: null,
   lastValidatedAt: null,

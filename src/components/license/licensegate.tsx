@@ -6,7 +6,6 @@ import { useLicenseStore } from '../../stores/licensestore'
 export const LicenseGate = memo(function LicenseGate({ children }: { children: React.ReactNode }) {
   const init = useLicenseStore((state) => state.init)
   const activate = useLicenseStore((state) => state.activate)
-  const validate = useLicenseStore((state) => state.validate)
   const state = useLicenseStore((store) => store.state)
   const loading = useLicenseStore((store) => store.loading)
   const activating = useLicenseStore((store) => store.activating)
@@ -22,6 +21,10 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
     void window.desktopWindow?.setMode('license')
     void init()
   }, [init])
+
+  useEffect(() => {
+    setCardKey(state.rememberedCardKey || '')
+  }, [state.rememberedCardKey])
 
   const canEnter = sessionUnlocked && (state.canEnter || devBypass)
 
@@ -57,15 +60,15 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
     }
 
     const normalized = cardKey.trim()
-    if (!normalized && state.cardKeyMasked) {
-      const result = await validate()
+    if (!normalized) {
+      const result = await activate('')
       if (result?.ok) {
         setSessionUnlocked(true)
       }
       return
     }
 
-    const result = await activate(cardKey)
+    const result = await activate(normalized)
     if (result?.ok) {
       setSessionUnlocked(true)
     }

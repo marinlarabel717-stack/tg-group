@@ -578,9 +578,9 @@ const LogsWorkbench = memo(function LogsWorkbench() {
               <div className="text-xs tracking-[0.16em] text-rose-200/80">发送失败</div>
               <div className="mt-2 text-2xl font-semibold text-rose-300">{summaryFailedCount}</div>
             </div>
-            <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
-              <div className="text-xs tracking-[0.16em] text-textMuted">均号成功</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{averageSuccessPerAccount}</div>
+            <div className="rounded-[14px] bg-amber-400/8 px-4 py-3">
+              <div className="text-xs tracking-[0.16em] text-amber-200/80">均号成功</div>
+              <div className="mt-2 text-2xl font-semibold text-amber-300">{averageSuccessPerAccount}</div>
             </div>
           </div>
           {latestAccountStats.length > 0 ? (

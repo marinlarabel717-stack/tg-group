@@ -21,7 +21,7 @@ import {
   useReactTable
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, HeartPulse, KeyRound, Loader2, Settings2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
+import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, CircleAlert, HeartPulse, KeyRound, Loader2, LockKeyhole, Settings2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
 import type { AccountRecord, CheckAction } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
@@ -529,8 +529,12 @@ const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }
   return (
     <div className="flex w-full items-center justify-center gap-1 whitespace-nowrap">
       <span title={`用户名：${username}`} className={actionButtonClass(username !== '-')}>@</span>
-      <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>🔓</span>
-      <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>
+      <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>
+        <LockKeyhole size={12} strokeWidth={1.9} />
+      </span>
+      <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>
+        <CircleAlert size={12} strokeWidth={1.9} />
+      </span>
       {premium ? (
         <button
           type="button"
