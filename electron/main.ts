@@ -54,9 +54,9 @@ const APP_WINDOW_BOUNDS = {
 
 const LICENSE_WINDOW_BOUNDS = {
   width: 500,
-  height: 450,
+  height: 420,
   minWidth: 500,
-  minHeight: 450,
+  minHeight: 420,
   resizable: false
 } as const
 
@@ -72,6 +72,7 @@ function applyWindowMode(mode: 'license' | 'app') {
   mainWindow.setResizable(target.resizable)
   mainWindow.setMinimumSize(target.minWidth, target.minHeight)
   mainWindow.setSize(target.width, target.height, true)
+  mainWindow.setHasShadow(mode !== 'license')
   mainWindow.center()
 }
 
@@ -94,7 +95,7 @@ function createWindow() {
     vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
     visualEffectState: process.platform === 'darwin' ? 'active' : undefined,
     transparent: true,
-    hasShadow: true,
+    hasShadow: false,
     roundedCorners: true,
     resizable: LICENSE_WINDOW_BOUNDS.resizable,
     backgroundColor: '#00000000',
