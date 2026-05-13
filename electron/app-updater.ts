@@ -1,5 +1,7 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
-import { autoUpdater, type ProgressInfo } from 'electron-updater'
+import updaterPackage, { type ProgressInfo, type UpdateInfo } from 'electron-updater'
+
+const { autoUpdater } = updaterPackage
 
 export type UpdaterStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'unsupported'
 
@@ -50,7 +52,7 @@ export class DesktopAppUpdater {
       })
     })
 
-    autoUpdater.on('update-available', (info) => {
+    autoUpdater.on('update-available', (info: UpdateInfo) => {
       this.clearAutoInstallTimer()
       this.updateState({
         status: 'available',
@@ -78,11 +80,11 @@ export class DesktopAppUpdater {
       })
     })
 
-    autoUpdater.on('download-progress', (progress) => {
+    autoUpdater.on('download-progress', (progress: ProgressInfo) => {
       this.handleDownloadProgress(progress)
     })
 
-    autoUpdater.on('update-downloaded', (info) => {
+    autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
       this.updateState({
         status: 'downloaded',
         availableVersion: info.version || this.state.availableVersion,
@@ -104,7 +106,7 @@ export class DesktopAppUpdater {
       }, 1500)
     })
 
-    autoUpdater.on('error', (error) => {
+    autoUpdater.on('error', (error: Error | null) => {
       this.clearAutoInstallTimer()
       this.updateState({
         status: 'error',
