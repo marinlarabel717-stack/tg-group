@@ -226,7 +226,7 @@ function formatLogMessage(item: AutoJoinResultItem, fallbackMessage: string) {
   const target = item.normalized || item.raw || '这个群'
   if (item.status === 'joined') return `成功加入${target}`
   if (item.status === 'requested') return `${target}需要审核，已申请等待通过`
-  if (item.status === 'already') return `已经在${target}里了`
+  if (item.status === 'already') return `${target}已在群`
   if (item.status === 'failed') return `加入失败（${item.errorMessage || '原因没拿到'}）`
   return fallbackMessage
 }

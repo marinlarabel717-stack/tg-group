@@ -148,6 +148,17 @@ async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadIte
   if (parsed.kind === 'invite') {
     try {
       const result = await client.invoke(new Api.messages.ImportChatInvite({ hash: parsed.value }))
+      const resultName = typeof (result as unknown as { className?: unknown })?.className === 'string'
+        ? (result as unknown as { className: string }).className
+        : typeof (result as unknown as { CLASS_NAME?: unknown })?.CLASS_NAME === 'string'
+          ? (result as unknown as { CLASS_NAME: string }).CLASS_NAME
+          : ''
+      if (/ChatInviteAlready/i.test(resultName)) {
+        return {
+          status: 'already' as const,
+          groupTitle: readGroupTitle(result, item.normalized)
+        }
+      }
       return {
         status: 'joined' as const,
         groupTitle: readGroupTitle(result, item.normalized)

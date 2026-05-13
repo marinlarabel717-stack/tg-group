@@ -457,10 +457,14 @@ const LogsWorkbench = memo(function LogsWorkbench() {
 
         {latestTask ? (
           <>
-            <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <div className="mt-3 grid gap-3 md:grid-cols-5">
               <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
                 <div className="text-xs tracking-[0.16em] text-emerald-200/80">成功</div>
                 <div className="mt-2 text-2xl font-semibold text-emerald-300">{latestTask.successCount ?? 0}</div>
+              </div>
+              <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
+                <div className="text-xs tracking-[0.16em] text-textMuted">已在群</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{latestTask.alreadyCount ?? 0}</div>
               </div>
               <div className="rounded-[14px] bg-amber-400/8 px-4 py-3">
                 <div className="text-xs tracking-[0.16em] text-amber-200/80">审核</div>
@@ -498,6 +502,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
                       <div className="select-text text-white">{item.accountLabel}</div>
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
                         <span className="text-emerald-300">成功 {item.success}</span>
+                        <span className="text-slate-200">已在群 {item.already}</span>
                         <span className="text-amber-200">审核 {item.requested}</span>
                         <span className="text-rose-300">失败 {item.failed}</span>
                       </div>
