@@ -681,11 +681,26 @@ export class BroadcastService {
                   messages: [sourceMessage.messageId],
                   fromPeer: sourceMessage.peerRef as never,
                   schedule: Math.floor(scheduledAt.getTime() / 1000),
+                  scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined,
                   dropAuthor: false
                 })
 
                 const firstResult = Array.isArray(forwardResult) ? forwardResult[0] : forwardResult
                 messageId = extractResponseMessageId(firstResult)
+
+                if ((item.repeatPeriodSeconds ?? 0) > 0 && messageId) {
+                  const responseRepeatPeriod = extractResponseRepeatPeriod(firstResult)
+                  const verified = responseRepeatPeriod === (item.repeatPeriodSeconds ?? 0)
+                    ? true
+                    : await verifyScheduledRepeatPeriod(client, entity, messageId, item.repeatPeriodSeconds ?? 0)
+                  if (!verified) {
+                    await client.invoke(new Api.messages.DeleteScheduledMessages({
+                      peer: entity as never,
+                      id: [messageId]
+                    })).catch(() => undefined)
+                    throw new Error('TELEGRAM_REPEAT_NOT_APPLIED')
+                  }
+                }
               } else {
                 const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
                 const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {

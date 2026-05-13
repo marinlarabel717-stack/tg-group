@@ -1231,7 +1231,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   {!selectedAllPremium ? <div className="mt-2 text-xs text-amber-200">当前选中的账号里混了普通号，暂时不能开这个模式。</div> : null}
                 </button>
               </div>
-              {hasSelectedChannelForwardCreative ? <div className="mt-3 text-xs text-amber-200">当前选中的文案里有频道转发。为了保留转发来源，它不会显示“每天”字样，也不会走官方每天重复。</div> : null}
+              {hasSelectedChannelForwardCreative ? <div className="mt-3 text-xs text-amber-200">当前选中的文案里有频道转发。现在也会尝试走 Telegram 官方每天重复；是否真正生效，以写入后的真实回读结果为准。</div> : null}
               {selectedTask.scheduleMode === 'date_range' ? (
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <label className="space-y-2 text-sm"><span className="text-textMuted">开始日期</span><input type="date" value={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { startDate: event.target.value || selectedTask.startDate })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
@@ -1255,7 +1255,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                       <div className="mt-1">• 每群每天 {Math.min(Number(selectedTask.dailyLimitPerGroup) || 1, 100)} 条</div>
                       <div className="mt-1">• 预计每天共 {checkedGroupCount * Math.min(Number(selectedTask.dailyLimitPerGroup) || 1, 100)} 条</div>
                       {selectedAllPremium && !hasSelectedChannelForwardCreative ? <div className="mt-1 text-emerald-200">• 会员号模式：按 Telegram 官方每天重复写入</div> : null}
-                      {selectedAllPremium && hasSelectedChannelForwardCreative ? <div className="mt-1 text-amber-200">• 当前这条是频道转发：为了保留来源，不会显示“每天”字样，也不会按官方每天重复发送</div> : null}
+                      {selectedAllPremium && hasSelectedChannelForwardCreative ? <div className="mt-1 text-amber-200">• 当前这条是频道转发：也会尝试按 Telegram 官方每天重复写入，最终以真实回读结果为准</div> : null}
                     </>
                   ) : (
                     <>

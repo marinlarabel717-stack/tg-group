@@ -402,7 +402,7 @@ export function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCr
         const creative = creativeId ? creatives.find((item) => item.id === creativeId) ?? null : null
         const accountCursor = dayIndex * dailyLimitPerGroup + slotIndex
         const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[accountCursor % compatibleAccounts.length] : null
-        const repeatPeriodSeconds = useDailyRepeat && creative?.kind !== 'channel_forward' ? 24 * 60 * 60 : null
+        const repeatPeriodSeconds = useDailyRepeat ? 24 * 60 * 60 : null
         let status: BroadcastPreviewStatus = 'queued'
         let errorMessage = ''
 
@@ -695,10 +695,10 @@ export const useBroadcastStore = create<BroadcastState>()(
           errorMessage: '',
           tasks: state.tasks.map((item) => item.id === task.id ? { ...item, dailyLimitPerGroup: effectiveLimitPerGroup } : item),
           lastActionMessage: previewItems.length > 0
-            ? (allPremiumAccounts && task.scheduleMode === 'daily_repeat'
-              ? (containsChannelForward
-                ? `已生成 ${previewItems.length} 个首发时间点。注意：频道转发为了保留来源，不会显示“每天”，也不会走官方每天重复。`
-                : `已生成 ${previewItems.length} 个首发时间点，写入时会按“每天重复”发送。`)
+              ? (allPremiumAccounts && task.scheduleMode === 'daily_repeat'
+                ? (containsChannelForward
+                  ? `已生成 ${previewItems.length} 个首发时间点。频道转发也会按 Telegram 官方“每天重复”写入；如果官方客户端不显示“每天”，以实际回读结果为准。`
+                  : `已生成 ${previewItems.length} 个首发时间点，写入时会按“每天重复”发送。`)
               : !allPremiumAccounts && requestedLimitPerGroup > 100
                 ? `普通号单群最多先按 100 条处理，已自动从 ${requestedLimitPerGroup} 条压到 100 条。`
                 : `已生成 ${previewItems.length} 条排程预览，会从 ${describeDateRange(task.startDate, task.endDate)} 开始自动往后排。`)
@@ -739,7 +739,7 @@ export const useBroadcastStore = create<BroadcastState>()(
             errorMessage: '',
             lastActionMessage: generatedPreviewItems.length > 0
               ? (workingTask.scheduleMode === 'daily_repeat' && containsChannelForward
-                ? `已自动生成 ${generatedPreviewItems.length} 条首发排程。注意：频道转发为了保留来源，不会显示“每天”，也不会走官方每天重复。`
+                ? `已自动生成 ${generatedPreviewItems.length} 条首发排程。频道转发会按 Telegram 官方“每天重复”尝试写入，稍后会按真实回读结果校验。`
                 : `已自动生成 ${generatedPreviewItems.length} 条排程，正在开始写入 Telegram。`)
               : '当前配置还生成不出任何排程，请检查账号、群或文案。'
           }))
@@ -753,11 +753,7 @@ export const useBroadcastStore = create<BroadcastState>()(
 
         const sanitizedItems = candidateItems.map((item) => ({
           ...item,
-          repeatPeriodSeconds: (() => {
-            const creative = item.creativeId ? state.creatives.find((entry) => entry.id === item.creativeId) : null
-            if (creative?.kind === 'channel_forward') return null
-            return workingTask.scheduleMode === 'daily_repeat' ? (item.repeatPeriodSeconds ?? 24 * 60 * 60) : null
-          })()
+          repeatPeriodSeconds: workingTask.scheduleMode === 'daily_repeat' ? (item.repeatPeriodSeconds ?? 24 * 60 * 60) : null
         }))
 
         const payload: BroadcastPushSchedulePayload = {
