@@ -1878,6 +1878,10 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
       : [...current, messageId])
   }
 
+  const selectAllMessages = () => {
+    setSelectedMessageIds(displayItems.map((item) => item.messageId))
+  }
+
   const handleDelete = async (messageIds: number[]) => {
     if (typeof selectedAccountId !== 'number' || !selectedGroupRef || messageIds.length === 0 || !window.desktopBroadcast) return
     setDeleting(true)
@@ -1964,6 +1968,15 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
         >
           <RefreshCw size={16} />
           刷新当前内容
+        </button>
+        <button
+          type="button"
+          onClick={selectAllMessages}
+          disabled={loadingItems || displayItems.length === 0}
+          className="flex h-[76px] min-w-[164px] items-center gap-2 rounded-[16px] bg-panel px-5 text-sm font-medium text-white shadow-none transition hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <CheckCircle2 size={16} />
+          全选消息
         </button>
         <button
           type="button"
