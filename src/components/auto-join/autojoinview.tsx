@@ -14,6 +14,7 @@ const tabs: Array<{ key: AutoJoinTabKey; label: string; icon: typeof Play }> = [
 
 const SOFT_INPUT_CLASS = 'border border-white/[0.06] bg-black/10 text-white outline-none transition focus:border-white/[0.12] focus:bg-black/12'
 const SOFT_PANEL_INPUT_CLASS = 'border border-white/[0.06] bg-panel text-white outline-none transition focus:border-white/[0.12] focus:bg-panel'
+const SOFT_TAB_CLASS = 'border border-white/[0.06] transition'
 
 function readAccountLabel(account: { id: number; username?: string; phone?: string; userId?: string; profile?: Record<string, unknown> }) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
@@ -137,7 +138,7 @@ const TabBar = memo(function TabBar() {
             key={tab.key}
             type="button"
             onClick={() => setActiveTab(tab.key)}
-            className={`inline-flex items-center gap-2 rounded-[14px] border px-4 py-3 text-sm transition ${active ? 'border-violet-400/25 bg-violet-400/10 text-violet-300' : 'border-white/8 bg-card text-slate-200 hover:bg-white/[0.03]'}`}
+            className={`inline-flex items-center gap-2 rounded-[14px] px-4 py-3 text-sm ${SOFT_TAB_CLASS} ${active ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
           >
             <Icon size={15} />
             {tab.label}
