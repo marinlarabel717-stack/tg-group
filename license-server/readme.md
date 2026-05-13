@@ -100,18 +100,43 @@ http://127.0.0.1:8787
 
 ## 管理员鉴权
 
-- 后台管理接口统一要求管理员 token
+- 后台管理接口统一要求管理员账号密码登录，登录后使用 cookie 会话
 - 正式部署建议设置环境变量：
 
 ```bash
-LICENSE_ADMIN_TOKEN=your-secret-token
+LICENSE_ADMIN_USERNAME=admin
+LICENSE_ADMIN_PASSWORD=your-strong-password
 ```
 
-- 如果未设置，当前本地开发默认 token 为：
+- 如果未设置，当前默认值为：
 
 ```bash
-dev-admin-token
+adminTG / 968574..
 ```
+
+## 自动更新文件目录
+
+服务端会额外托管同域名下的更新文件目录：
+
+```bash
+GET /releases/latest.yml
+GET /releases/TG-Matrix-x.y.z-Setup.exe
+GET /releases/*.blockmap
+```
+
+默认读取目录：
+
+```bash
+license-server/releases/
+```
+
+如果你使用 `electron-builder` 打包 NSIS 安装包，把 `release/` 目录里生成的：
+
+- `latest.yml`
+- `TG-Matrix-x.y.z-Setup.exe`
+- `*.blockmap`
+
+手动上传到服务器的 `license-server/releases/`，客户端下次启动时就会自动检查更新。
 
 ## 当前已实现接口
 
