@@ -251,7 +251,7 @@ const TabBar = memo(function TabBar() {
             key={tab.key}
             type="button"
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-2 rounded-[16px] border px-4 py-2.5 text-sm transition ${active ? 'border-violet-300/60 bg-violet-400/12 text-violet-200 shadow-[0_0_0_1px_rgba(167,139,250,0.08)]' : 'border-white/12 bg-white/[0.02] text-textMuted hover:bg-white/[0.05] hover:text-white'}`}
+            className={`flex items-center gap-2 rounded-[16px] border px-4 py-2.5 text-sm transition ${active ? 'border-white/[0.12] bg-violet-400/12 text-violet-200 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]' : 'border-white/[0.06] bg-white/[0.02] text-textMuted hover:border-white/[0.09] hover:bg-white/[0.05] hover:text-white'}`}
           >
             <Icon size={16} />
             {tab.label}
@@ -363,11 +363,11 @@ const TasksWorkbench = memo(function TasksWorkbench() {
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm">
                 <span className="text-textMuted">任务名称</span>
-                <input value={selectedTask.name} onChange={(event) => updateTask(selectedTask.id, { name: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none transition focus:border-violet-400/30" />
+                <input value={selectedTask.name} onChange={(event) => updateTask(selectedTask.id, { name: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none transition focus:border-white/[0.12]" />
               </label>
               <label className="space-y-2 text-sm">
                 <span className="text-textMuted">启用状态</span>
-                <select value={selectedTask.enabled ? 'enabled' : 'disabled'} onChange={(event) => updateTask(selectedTask.id, { enabled: event.target.value === 'enabled' })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none transition focus:border-violet-400/30">
+                <select value={selectedTask.enabled ? 'enabled' : 'disabled'} onChange={(event) => updateTask(selectedTask.id, { enabled: event.target.value === 'enabled' })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none transition focus:border-white/[0.12]">
                   <option value="enabled">启用</option>
                   <option value="disabled">停用</option>
                 </select>
@@ -376,15 +376,15 @@ const TasksWorkbench = memo(function TasksWorkbench() {
 
             <label className="block space-y-2 text-sm">
               <span className="text-textMuted">任务备注</span>
-              <textarea value={selectedTask.note} onChange={(event) => updateTask(selectedTask.id, { note: event.target.value })} rows={3} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none transition focus:border-violet-400/30" />
+              <textarea value={selectedTask.note} onChange={(event) => updateTask(selectedTask.id, { note: event.target.value })} rows={3} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none transition focus:border-white/[0.12]" />
             </label>
 
             <div className="grid gap-4 md:grid-cols-5">
-              <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">结束时间</span><input type="time" value={selectedTask.endTime} onChange={(event) => updateTask(selectedTask.id, { endTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">随机抖动（分钟）</span><input type="number" min={0} max={30} value={selectedTask.jitterMinutes} onChange={(event) => updateTask(selectedTask.id, { jitterMinutes: Number(event.target.value) || 0 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+              <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+              <label className="space-y-2 text-sm"><span className="text-textMuted">结束时间</span><input type="time" value={selectedTask.endTime} onChange={(event) => updateTask(selectedTask.id, { endTime: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+              <label className="space-y-2 text-sm"><span className="text-textMuted">间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+              <label className="space-y-2 text-sm"><span className="text-textMuted">随机抖动（分钟）</span><input type="number" min={0} max={30} value={selectedTask.jitterMinutes} onChange={(event) => updateTask(selectedTask.id, { jitterMinutes: Number(event.target.value) || 0 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+              <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
             </div>
 
             {selectedTask.lastSyncedAt ? <div className="text-xs text-textMuted">最近一次写入 Telegram：{formatDateTimeFull(selectedTask.lastSyncedAt)}</div> : null}
@@ -540,15 +540,15 @@ const CreativesWorkbench = memo(function CreativesWorkbench() {
               <div className="text-lg font-semibold text-white">文案编辑器</div>
               <div className="mt-1 text-sm text-textMuted">第一版先把图、文、每日条数这些核心信息管起来。</div>
             </div>
-            <label className="block space-y-2 text-sm"><span className="text-textMuted">标题</span><input value={selectedCreative.title} onChange={(event) => updateCreative(selectedCreative.id, { title: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-            <label className="block space-y-2 text-sm"><span className="text-textMuted">图片 URL</span><input value={selectedCreative.imageUrl} onChange={(event) => updateCreative(selectedCreative.id, { imageUrl: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-            <label className="block space-y-2 text-sm"><span className="text-textMuted">正文</span><textarea value={selectedCreative.text} rows={8} onChange={(event) => updateCreative(selectedCreative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+            <label className="block space-y-2 text-sm"><span className="text-textMuted">标题</span><input value={selectedCreative.title} onChange={(event) => updateCreative(selectedCreative.id, { title: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+            <label className="block space-y-2 text-sm"><span className="text-textMuted">图片 URL</span><input value={selectedCreative.imageUrl} onChange={(event) => updateCreative(selectedCreative.id, { imageUrl: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+            <label className="block space-y-2 text-sm"><span className="text-textMuted">正文</span><textarea value={selectedCreative.text} rows={8} onChange={(event) => updateCreative(selectedCreative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
             <div className="grid gap-4 md:grid-cols-3">
-              <label className="space-y-2 text-sm"><span className="text-textMuted">每日条数</span><input type="number" min={1} value={selectedCreative.dailyQuota} onChange={(event) => updateCreative(selectedCreative.id, { dailyQuota: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">权重</span><input type="number" min={1} value={selectedCreative.weight} onChange={(event) => updateCreative(selectedCreative.id, { weight: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">状态</span><select value={selectedCreative.enabled ? 'enabled' : 'disabled'} onChange={(event) => updateCreative(selectedCreative.id, { enabled: event.target.value === 'enabled' })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30"><option value="enabled">启用</option><option value="disabled">停用</option></select></label>
+              <label className="space-y-2 text-sm"><span className="text-textMuted">每日条数</span><input type="number" min={1} value={selectedCreative.dailyQuota} onChange={(event) => updateCreative(selectedCreative.id, { dailyQuota: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+              <label className="space-y-2 text-sm"><span className="text-textMuted">权重</span><input type="number" min={1} value={selectedCreative.weight} onChange={(event) => updateCreative(selectedCreative.id, { weight: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+              <label className="space-y-2 text-sm"><span className="text-textMuted">状态</span><select value={selectedCreative.enabled ? 'enabled' : 'disabled'} onChange={(event) => updateCreative(selectedCreative.id, { enabled: event.target.value === 'enabled' })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]"><option value="enabled">启用</option><option value="disabled">停用</option></select></label>
             </div>
-            <label className="block space-y-2 text-sm"><span className="text-textMuted">备注</span><textarea value={selectedCreative.note} rows={3} onChange={(event) => updateCreative(selectedCreative.id, { note: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+            <label className="block space-y-2 text-sm"><span className="text-textMuted">备注</span><textarea value={selectedCreative.note} rows={3} onChange={(event) => updateCreative(selectedCreative.id, { note: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
             <div className="rounded-[16px] bg-panel p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><LayoutTemplate size={16} /> Telegram 预览</div>
               {selectedCreative.imageUrl ? <img src={selectedCreative.imageUrl} alt={readCreativeTitle(selectedCreative)} className="h-40 w-full rounded-[12px] object-cover" /> : <div className="flex h-40 w-full items-center justify-center rounded-[12px] bg-card text-sm text-textMuted">还没设置图片</div>}
@@ -703,7 +703,7 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
                     const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
                     const exists = groups.some((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
                     return (
-                      <div key={`${group.peerId}:${group.username || group.title}`} className={`rounded-[20px] border p-4 transition ${exists ? 'border-emerald-400/25 bg-emerald-400/8' : 'border-white/8 bg-panel'}`}>
+                      <div key={`${group.peerId}:${group.username || group.title}`} className={`rounded-[20px] border p-4 transition ${exists ? 'border-emerald-400/25 bg-emerald-400/8' : 'border-white/[0.06] bg-panel'}`}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate text-base font-semibold text-white">{group.title}</div>
@@ -769,9 +769,9 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
               <div className="text-lg font-semibold text-white">手动补一个群</div>
               <div className="mt-1 text-sm text-textMuted">如果某个群没读出来，再手动补。</div>
               <div className="mt-4 space-y-3">
-                <label className="block space-y-2 text-sm"><span className="text-textMuted">群名称</span><input value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                <label className="block space-y-2 text-sm"><span className="text-textMuted">群目标引用</span><input value={groupUsername} onChange={(event) => setGroupUsername(event.target.value)} placeholder="@username / t.me/... / 私密邀请链接" className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                <label className="block space-y-2 text-sm"><span className="text-textMuted">成员数</span><input type="number" value={groupMembers} onChange={(event) => setGroupMembers(event.target.value)} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <label className="block space-y-2 text-sm"><span className="text-textMuted">群名称</span><input value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                <label className="block space-y-2 text-sm"><span className="text-textMuted">群目标引用</span><input value={groupUsername} onChange={(event) => setGroupUsername(event.target.value)} placeholder="@username / t.me/... / 私密邀请链接" className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                <label className="block space-y-2 text-sm"><span className="text-textMuted">成员数</span><input type="number" value={groupMembers} onChange={(event) => setGroupMembers(event.target.value)} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
                 <button type="button" onClick={() => { createGroup({ title: groupTitle, username: groupUsername, targetRef: groupUsername, memberCount: Number(groupMembers) || 0 }); setGroupTitle(''); setGroupUsername(''); setGroupMembers('0') }} className="flex w-full items-center justify-center gap-2 rounded-[12px] bg-white/[0.06] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.1]">
                   <Plus size={16} /> 手动添加
                 </button>
@@ -1151,7 +1151,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     setGroupListExpanded(false)
                   }}
                   placeholder="搜索群名 / @用户名"
-                  className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-sm text-white outline-none focus:border-violet-400/30 lg:max-w-[320px]"
+                  className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-sm text-white outline-none focus:border-white/[0.12] lg:max-w-[320px]"
                 />
                 <label className="inline-flex items-center gap-2 text-sm text-textMuted">
                   <input type="checkbox" checked={showOnlyCheckedGroups} onChange={(event) => setShowOnlyCheckedGroups(event.target.checked)} />
@@ -1160,7 +1160,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                 <div className="text-sm text-textMuted">当前显示 {filteredJoinedGroups.length} 个群</div>
                 <div className="rounded-full bg-violet-400/12 px-3 py-1 text-sm text-violet-200">已勾选 {checkedGroupCount} 个群</div>
               </div>
-              <div className="mt-4 overflow-hidden rounded-[18px] border border-white/8 bg-panel">
+              <div className="mt-4 overflow-hidden rounded-[18px] border border-white/[0.06] bg-panel">
                 {joinedGroups.length === 0 ? (
                   <div className="px-4 py-12 text-center text-sm text-textMuted">{selectedAccount ? (loadingJoinedGroups ? '正在读取群...' : '还没有群数据，先读取一下。') : '先选账号。'}</div>
                 ) : filteredJoinedGroups.length === 0 ? (
@@ -1204,14 +1204,14 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               </div>
               {showDateRangeInputs ? (
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">开始日期</span><input type="date" value={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { startDate: event.target.value || selectedTask.startDate })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">结束日期</span><input type="date" value={selectedTask.endDate} min={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { endDate: event.target.value || selectedTask.startDate })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">开始日期</span><input type="date" value={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { startDate: event.target.value || selectedTask.startDate })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">结束日期</span><input type="date" value={selectedTask.endDate} min={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { endDate: event.target.value || selectedTask.startDate })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
                 </div>
               ) : null}
               <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} max={currentAccountIsPremium ? undefined : 100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: currentAccountIsPremium ? (Number(event.target.value) || 1) : Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/8 bg-panel px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} max={currentAccountIsPremium ? undefined : 100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: currentAccountIsPremium ? (Number(event.target.value) || 1) : Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
               </div>
               {previewSummary.total > 0 ? (
                 <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
@@ -1240,7 +1240,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                 {creatives.map((creative) => {
                   const checked = selectedTask.creativeIds.includes(creative.id)
                   return (
-                    <div key={creative.id} className={`rounded-[18px] border p-4 ${checked ? 'border-violet-400/25 bg-violet-400/8' : 'border-white/8 bg-panel'}`}>
+                    <div key={creative.id} className={`rounded-[18px] border p-4 ${checked ? 'border-violet-400/25 bg-violet-400/8' : 'border-white/[0.06] bg-panel'}`}>
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex items-center gap-3">
                           <button type="button" onClick={() => toggleCreative(creative.id)} className={`rounded-full px-3 py-2 text-sm transition ${checked ? 'bg-violet-400/14 text-violet-300' : 'bg-white/[0.05] text-textMuted hover:bg-white/[0.1] hover:text-white'}`}>
@@ -1255,7 +1255,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                       </div>
                       <label className="mt-4 block space-y-2 text-sm">
                         <span className="text-textMuted">消息类型</span>
-                        <select value={creative.kind || 'text'} onChange={(event) => handleCreativeKindChange(creative.id, event.target.value as 'text' | 'image' | 'image_text' | 'image_button' | 'channel_forward')} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30">
+                        <select value={creative.kind || 'text'} onChange={(event) => handleCreativeKindChange(creative.id, event.target.value as 'text' | 'image' | 'image_text' | 'image_button' | 'channel_forward')} className="w-full rounded-[12px] border border-white/[0.06] bg-card px-4 py-3 text-white outline-none focus:border-white/[0.12]">
                           <option value="text">文字</option>
                           <option value="image">图片</option>
                           <option value="image_text">图文</option>
@@ -1266,14 +1266,14 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                       {creative.kind === 'channel_forward' ? (
                         <label className="mt-4 block space-y-2 text-sm">
                           <span className="text-textMuted">频道消息链接</span>
-                          <input value={creative.sourceLink || ''} onChange={(event) => updateCreative(creative.id, { sourceLink: event.target.value })} placeholder="https://t.me/频道名/123" className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" />
+                          <input value={creative.sourceLink || ''} onChange={(event) => updateCreative(creative.id, { sourceLink: event.target.value })} placeholder="https://t.me/频道名/123" className="w-full rounded-[12px] border border-white/[0.06] bg-card px-4 py-3 text-white outline-none focus:border-white/[0.12]" />
                           <div className="text-xs text-textMuted">填一条频道消息链接，发送时会按这条消息做 Telegram 官方转发定时发送。</div>
                         </label>
                       ) : null}
-                      {creative.kind !== 'image' && creative.kind !== 'channel_forward' ? <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">文本</span><textarea rows={5} value={creative.text} onChange={(event) => updateCreative(creative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label> : null}
+                      {creative.kind !== 'image' && creative.kind !== 'channel_forward' ? <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">文本</span><textarea rows={5} value={creative.text} onChange={(event) => updateCreative(creative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-card px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label> : null}
                       {creative.kind !== 'text' && creative.kind !== 'channel_forward' ? (
                         <>
-                          <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">上传图片</span><input type="file" accept="image/*" onChange={(event) => handleCreativeImageUpload(creative.id, event)} className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white file:mr-3 file:rounded-[8px] file:border-0 file:bg-violet-400/14 file:px-3 file:py-2 file:text-sm file:text-violet-300" /></label>
+                          <label className="mt-4 block space-y-2 text-sm"><span className="text-textMuted">上传图片</span><input type="file" accept="image/*" onChange={(event) => handleCreativeImageUpload(creative.id, event)} className="w-full rounded-[12px] border border-white/[0.06] bg-card px-4 py-3 text-white file:mr-3 file:rounded-[8px] file:border-0 file:bg-violet-400/14 file:px-3 file:py-2 file:text-sm file:text-violet-300" /></label>
                           <div className="mt-3 flex items-center justify-between rounded-[12px] bg-card px-4 py-3 text-sm text-textMuted">
                             <span>{creative.imageUrl ? '已上传图片' : '还没上传图片'}</span>
                             {creative.imageUrl ? <button type="button" onClick={() => updateCreative(creative.id, { imageUrl: '' })} className="text-white transition hover:text-rose-200">删除图片</button> : null}
@@ -1282,8 +1282,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                       ) : null}
                       {creative.kind === 'image_button' ? (
                         <div className="mt-4 grid gap-4 md:grid-cols-2">
-                          <label className="space-y-2 text-sm"><span className="text-textMuted">按钮文字</span><input value={creative.buttonText || ''} onChange={(event) => updateCreative(creative.id, { buttonText: event.target.value, note: event.target.value })} placeholder="比如：立即查看" className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
-                          <label className="space-y-2 text-sm"><span className="text-textMuted">按钮链接</span><input value={creative.buttonUrl || ''} onChange={(event) => updateCreative(creative.id, { buttonUrl: event.target.value })} placeholder="https://..." className="w-full rounded-[12px] border border-white/8 bg-card px-4 py-3 text-white outline-none focus:border-violet-400/30" /></label>
+                          <label className="space-y-2 text-sm"><span className="text-textMuted">按钮文字</span><input value={creative.buttonText || ''} onChange={(event) => updateCreative(creative.id, { buttonText: event.target.value, note: event.target.value })} placeholder="比如：立即查看" className="w-full rounded-[12px] border border-white/[0.06] bg-card px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                          <label className="space-y-2 text-sm"><span className="text-textMuted">按钮链接</span><input value={creative.buttonUrl || ''} onChange={(event) => updateCreative(creative.id, { buttonUrl: event.target.value })} placeholder="https://..." className="w-full rounded-[12px] border border-white/[0.06] bg-card px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
                         </div>
                       ) : null}
                     </div>
@@ -1298,7 +1298,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       {accountPickerOpen ? (
         <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/60 px-4 py-6" onClick={() => setAccountPickerOpen(false)}>
           <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/8 bg-card px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/[0.06] bg-card px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="text-lg font-semibold text-white">选择账号</div>
                 <div className="mt-1 text-sm text-textMuted">按账号管理的表格方式来选：能搜索、全选、手动勾选。</div>
@@ -1318,7 +1318,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   value={accountSearch}
                   onChange={(event) => setAccountSearch(event.target.value)}
                   placeholder="搜索账号名 / 手机号 / 用户名"
-                  className="h-11 w-full rounded-[12px] border border-white/8 bg-panel px-4 text-sm text-white outline-none focus:border-violet-400/30 lg:max-w-[360px]"
+                  className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-white outline-none focus:border-white/[0.12] lg:max-w-[360px]"
                 />
                 <div className="flex flex-wrap gap-3">
                   <button type="button" onClick={() => setDraftAccountIds(filteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
@@ -1335,7 +1335,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     value={rangeStart}
                     onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
                     placeholder="开始"
-                    className="h-10 w-20 rounded-[12px] border border-white/8 bg-panel px-3 text-sm text-white outline-none focus:border-violet-400/30"
+                    className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
                   />
                   <span className="text-textMuted">-</span>
                   <input
@@ -1343,7 +1343,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     value={rangeEnd}
                     onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
                     placeholder="结束"
-                    className="h-10 w-20 rounded-[12px] border border-white/8 bg-panel px-3 text-sm text-white outline-none focus:border-violet-400/30"
+                    className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
                   />
                   <button
                     type="button"
@@ -1359,8 +1359,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                 </div>
               ) : null}
 
-              <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
-                <div className="grid grid-cols-[64px_180px_1.2fr_140px_120px] border-b border-white/8 bg-white/[0.04] px-4 py-3 text-xs tracking-[0.16em] text-textMuted">
+              <div className="overflow-hidden rounded-[18px] border border-white/[0.06] bg-panel">
+                <div className="grid grid-cols-[64px_180px_1.2fr_140px_120px] border-b border-white/[0.06] bg-white/[0.04] px-4 py-3 text-xs tracking-[0.16em] text-textMuted">
                   <div className="flex items-center justify-center">
                     <input
                       type="checkbox"
@@ -1981,7 +1981,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
       {accountPickerOpen ? (
         <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/60 px-4 py-6" onClick={() => setAccountPickerOpen(false)}>
           <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/8 bg-card px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/[0.06] bg-card px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="text-lg font-semibold text-white">选择账号</div>
                 <div className="mt-1 text-sm text-textMuted">这里和前面一样，点开账号列表后直接选要查看定时内容的账号。</div>
@@ -2004,14 +2004,14 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
                     value={accountSearch}
                     onChange={(event) => setAccountSearch(event.target.value)}
                     placeholder="搜索账号名 / 手机号 / 用户名"
-                    className="h-11 w-full rounded-[12px] border border-white/8 bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-violet-400/30"
+                    className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-white/[0.12]"
                   />
                 </div>
                 <div className="rounded-full bg-white/[0.04] px-3 py-2 text-sm text-textMuted">当前选择 {draftAccountId ? 1 : 0} / 1</div>
               </div>
 
-              <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
-                <div className="grid grid-cols-[64px_180px_1.2fr_140px] border-b border-white/8 bg-white/[0.04] px-4 py-3 text-xs tracking-[0.16em] text-textMuted">
+              <div className="overflow-hidden rounded-[18px] border border-white/[0.06] bg-panel">
+                <div className="grid grid-cols-[64px_180px_1.2fr_140px] border-b border-white/[0.06] bg-white/[0.04] px-4 py-3 text-xs tracking-[0.16em] text-textMuted">
                   <div className="flex items-center justify-center">选择</div>
                   <div>手机号</div>
                   <div>账号名</div>

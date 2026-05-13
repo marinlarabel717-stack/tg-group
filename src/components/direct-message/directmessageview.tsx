@@ -118,7 +118,7 @@ const TabBar = memo(function TabBar() {
             key={tab.key}
             type="button"
             onClick={() => setActiveTab(tab.key)}
-            className={`inline-flex items-center gap-2 rounded-[14px] border px-4 py-3 text-sm transition ${active ? 'border-violet-400/25 bg-violet-400/10 text-violet-300' : 'border-white/8 bg-card text-slate-200 hover:bg-white/[0.03]'}`}
+            className={`inline-flex items-center gap-2 rounded-[14px] border px-4 py-3 text-sm transition ${active ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'border-white/[0.06] bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
           >
             <Icon size={15} />
             {tab.label}
@@ -236,12 +236,12 @@ const SendWorkbench = memo(function SendWorkbench() {
 
               <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
                 <div className="text-xs tracking-[0.18em] text-textMuted">发送间隔</div>
-                <input type="number" min={5} max={600} value={intervalSeconds} onChange={(event) => setIntervalSeconds(Number(event.target.value) || 5)} className="mt-3 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 py-3 text-white outline-none focus:border-violet-400/30" />
+                <input type="number" min={5} max={600} value={intervalSeconds} onChange={(event) => setIntervalSeconds(Number(event.target.value) || 5)} className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]" />
               </label>
 
               <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
                 <div className="text-xs tracking-[0.18em] text-textMuted">并发线程</div>
-                <input type="number" min={1} max={20} value={groupConcurrency} onChange={(event) => setGroupConcurrency(Number(event.target.value) || 1)} className="mt-3 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 py-3 text-white outline-none focus:border-violet-400/30" />
+                <input type="number" min={1} max={20} value={groupConcurrency} onChange={(event) => setGroupConcurrency(Number(event.target.value) || 1)} className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]" />
               </label>
             </div>
           </GlassPanel>
@@ -273,7 +273,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                 value={targetInput}
                 onChange={(event) => setTargetInput(event.target.value)}
                 placeholder="一行一个，支持 @username / t.me/xxx / +8613xxxxxxx"
-                className="w-full rounded-[16px] border border-white/8 bg-panel px-4 py-4 text-white outline-none focus:border-violet-400/30"
+                className="w-full rounded-[16px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none focus:border-white/[0.12]"
               />
               <div className="mt-3 flex flex-wrap gap-2">
                 <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300">复制进来会自动清理重复和格式错误</div>
@@ -304,7 +304,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                   value={messageText}
                   onChange={(event) => setMessageText(event.target.value)}
                   placeholder="文本直发：直接写发送内容"
-                  className="w-full rounded-[14px] border border-white/8 bg-black/10 px-4 py-4 text-white outline-none focus:border-violet-400/30"
+                  className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
                 />
               ) : null}
 
@@ -313,7 +313,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                   value={sourceLink}
                   onChange={(event) => setSourceLink(event.target.value)}
                   placeholder="频道转发：填频道消息链接"
-                  className="w-full rounded-[14px] border border-white/8 bg-black/10 px-4 py-4 text-white outline-none focus:border-violet-400/30"
+                  className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
                 />
               ) : null}
 
@@ -322,7 +322,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                   value={sourceLink}
                   onChange={(event) => setSourceLink(event.target.value)}
                   placeholder="隐藏频道来源转发：填频道消息链接"
-                  className="w-full rounded-[14px] border border-white/8 bg-black/10 px-4 py-4 text-white outline-none focus:border-violet-400/30"
+                  className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
                 />
               ) : null}
 
@@ -332,7 +332,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                   value={postbotCode}
                   onChange={(event) => setPostbotCode(event.target.value)}
                   placeholder="post图文+按钮：贴 postbot 生成代码"
-                  className="w-full rounded-[14px] border border-white/8 bg-black/10 px-4 py-4 text-white outline-none focus:border-violet-400/30"
+                  className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
                 />
               ) : null}
             </div>
@@ -354,7 +354,7 @@ const SendWorkbench = memo(function SendWorkbench() {
       {accountPickerOpen ? (
         <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setAccountPickerOpen(false)}>
           <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-card px-5 py-4">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.06] bg-card px-5 py-4">
               <div className="text-lg font-semibold text-white">选择发送账号</div>
               <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setAccountPickerOpen(false)}><X size={16} /></button>
             </div>
@@ -363,7 +363,7 @@ const SendWorkbench = memo(function SendWorkbench() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="relative w-full lg:max-w-[360px]">
                   <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
-                  <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名" className="h-11 w-full rounded-[12px] border border-white/8 bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-violet-400/30" />
+                  <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名" className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-white/[0.12]" />
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <button type="button" onClick={() => setDraftAccountIds(filteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
@@ -379,7 +379,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                     value={rangeStart}
                     onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
                     placeholder="开始"
-                    className="h-10 w-20 rounded-[12px] border border-white/8 bg-panel px-3 text-sm text-white outline-none focus:border-violet-400/30"
+                    className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
                   />
                   <span className="text-textMuted">-</span>
                   <input
@@ -387,7 +387,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                     value={rangeEnd}
                     onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
                     placeholder="结束"
-                    className="h-10 w-20 rounded-[12px] border border-white/8 bg-panel px-3 text-sm text-white outline-none focus:border-violet-400/30"
+                    className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
                   />
                   <button
                     type="button"
@@ -403,7 +403,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                 </div>
               ) : null}
 
-              <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
+              <div className="overflow-hidden rounded-[18px] border border-white/[0.06] bg-panel">
                 <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/6 px-4 py-3 text-xs uppercase tracking-[0.16em] text-textMuted">
                   <div>选择</div>
                   <div>手机号</div>
@@ -435,7 +435,7 @@ const SendWorkbench = memo(function SendWorkbench() {
               </div>
             </div>
 
-            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/8 bg-card px-5 py-4">
+            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/[0.06] bg-card px-5 py-4">
               <button type="button" onClick={() => setAccountPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
               <button type="button" onClick={applyAccountSelection} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">应用账号选择</button>
             </div>
@@ -628,7 +628,7 @@ const CollectWorkbench = memo(function CollectWorkbench() {
       </div>
       <div className="mt-4 space-y-3">
         {collectorMode !== 'contact' ? (
-          <textarea rows={10} value={collectorInput} onChange={(event) => setCollectorInput(event.target.value)} placeholder={collectorMode === 'manual' ? '手工名单一行一个' : '把群链接或频道消息链接贴这里'} className="w-full rounded-[16px] border border-white/8 bg-panel px-4 py-4 text-white outline-none focus:border-violet-400/30" />
+          <textarea rows={10} value={collectorInput} onChange={(event) => setCollectorInput(event.target.value)} placeholder={collectorMode === 'manual' ? '手工名单一行一个' : '把群链接或频道消息链接贴这里'} className="w-full rounded-[16px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none focus:border-white/[0.12]" />
         ) : null}
         <div className="flex flex-wrap gap-2">
           {collectorMode === 'manual' ? (
@@ -679,11 +679,11 @@ const AutoReplyWorkbench = memo(function AutoReplyWorkbench() {
                 <button type="button" onClick={() => removeAutoReplyRule(rule.id)} className="rounded-[10px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">删除</button>
               </div>
               <div className="mt-3 grid gap-3 md:grid-cols-3">
-                <input value={rule.keyword} onChange={(event) => updateAutoReplyRule(rule.id, { keyword: event.target.value })} placeholder="触发词" className="rounded-[12px] border border-white/8 bg-black/10 px-4 py-3 text-white outline-none focus:border-violet-400/30" />
-                <select value={rule.matchMode} onChange={(event) => updateAutoReplyRule(rule.id, { matchMode: event.target.value as 'contains' | 'exact' })} className="rounded-[12px] border border-white/8 bg-black/10 px-4 py-3 text-white outline-none focus:border-violet-400/30"><option value="contains">包含</option><option value="exact">完全匹配</option></select>
-                <input type="number" min={0} value={rule.cooldownSeconds} onChange={(event) => updateAutoReplyRule(rule.id, { cooldownSeconds: Math.max(0, Number(event.target.value) || 0) })} placeholder="冷却秒数" className="rounded-[12px] border border-white/8 bg-black/10 px-4 py-3 text-white outline-none focus:border-violet-400/30" />
+                <input value={rule.keyword} onChange={(event) => updateAutoReplyRule(rule.id, { keyword: event.target.value })} placeholder="触发词" className="rounded-[12px] border border-white/[0.06] bg-black/10 px-4 py-3 text-white outline-none focus:border-white/[0.12]" />
+                <select value={rule.matchMode} onChange={(event) => updateAutoReplyRule(rule.id, { matchMode: event.target.value as 'contains' | 'exact' })} className="rounded-[12px] border border-white/[0.06] bg-black/10 px-4 py-3 text-white outline-none focus:border-white/[0.12]"><option value="contains">包含</option><option value="exact">完全匹配</option></select>
+                <input type="number" min={0} value={rule.cooldownSeconds} onChange={(event) => updateAutoReplyRule(rule.id, { cooldownSeconds: Math.max(0, Number(event.target.value) || 0) })} placeholder="冷却秒数" className="rounded-[12px] border border-white/[0.06] bg-black/10 px-4 py-3 text-white outline-none focus:border-white/[0.12]" />
               </div>
-              <textarea rows={4} value={rule.replyText} onChange={(event) => updateAutoReplyRule(rule.id, { replyText: event.target.value })} placeholder="自动回复内容" className="mt-3 w-full rounded-[12px] border border-white/8 bg-black/10 px-4 py-3 text-white outline-none focus:border-violet-400/30" />
+              <textarea rows={4} value={rule.replyText} onChange={(event) => updateAutoReplyRule(rule.id, { replyText: event.target.value })} placeholder="自动回复内容" className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-4 py-3 text-white outline-none focus:border-white/[0.12]" />
             </div>
           ))}
         </div>
