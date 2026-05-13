@@ -3,286 +3,373 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TGMatrix 卡密后台</title>
+    <title>TGMatrix 卡密管理后台</title>
     <style>
       :root {
         color-scheme: dark;
         --bg: #08101d;
-        --panel: rgba(15, 23, 42, 0.82);
-        --panel-2: rgba(2, 6, 23, 0.5);
-        --line: rgba(255, 255, 255, 0.08);
-        --text: #e5eefb;
+        --panel: rgba(10, 17, 30, 0.86);
+        --panel-2: rgba(4, 10, 20, 0.68);
+        --line: rgba(255,255,255,.08);
+        --text: #eaf2ff;
         --muted: #8ea0bf;
         --primary: #38bdf8;
-        --danger: #fb7185;
         --warn: #f59e0b;
+        --danger: #fb7185;
         --ok: #34d399;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         min-height: 100vh;
-        background: radial-gradient(circle at top, rgba(56,189,248,.12), transparent 28%), var(--bg);
+        background: radial-gradient(circle at top, rgba(56,189,248,.14), transparent 28%), var(--bg);
         color: var(--text);
-        font: 14px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       }
-      .page { max-width: 1080px; margin: 0 auto; padding: 24px; }
+      .shell { width: 100%; min-height: 100vh; padding: 20px; }
       .panel {
         border: 1px solid var(--line);
         background: var(--panel);
-        border-radius: 18px;
-        backdrop-filter: blur(14px);
-        box-shadow: 0 20px 60px rgba(0,0,0,.24);
+        border-radius: 20px;
+        backdrop-filter: blur(16px);
+        box-shadow: 0 20px 60px rgba(0,0,0,.28);
       }
-      .hero { padding: 22px; }
-      .title { font-size: 28px; font-weight: 700; }
-      .muted { color: var(--muted); }
-      .hero-top, .row, .top-actions, .card-head, .summary { display:flex; gap:12px; flex-wrap:wrap; }
-      .hero-top { justify-content: space-between; align-items: center; }
-      .badge {
-        display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px;
-        background: rgba(56,189,248,.12); color:#bce8ff; font-size: 12px;
+      .hidden { display: none !important; }
+      .login-wrap {
+        min-height: calc(100vh - 40px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
-      .layout { margin-top: 18px; display: grid; gap: 18px; }
-      .card { padding: 18px; }
-      .step {
-        display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px;
-        border-radius:999px; background: rgba(56,189,248,.14); color:#bce8ff; font-weight:700; font-size:12px;
+      .login-card {
+        width: min(100%, 460px);
+        padding: 30px;
       }
-      .card-title { font-size: 18px; font-weight: 700; }
-      .field { display:flex; flex-direction:column; gap:8px; flex:1; min-width: 0; }
-      .field.small { flex: 0 0 160px; }
-      label { color: var(--muted); font-size: 12px; }
+      .brand { font-size: 34px; font-weight: 800; letter-spacing: .03em; }
+      .subtitle { color: var(--muted); margin-top: 8px; }
+      .field { display: flex; flex-direction: column; gap: 8px; }
+      .field label { font-size: 12px; color: var(--muted); }
       input, textarea {
-        width:100%; border:1px solid var(--line); background: rgba(2,6,23,.55); color: var(--text);
-        border-radius: 12px; padding: 11px 12px; outline: none;
+        width: 100%;
+        border: 1px solid var(--line);
+        background: rgba(2,6,23,.62);
+        color: var(--text);
+        border-radius: 14px;
+        padding: 12px 14px;
+        outline: none;
       }
-      textarea { min-height: 84px; resize: vertical; }
+      textarea { min-height: 96px; resize: vertical; }
       button {
-        border:0; border-radius: 12px; padding: 11px 14px; cursor:pointer; color:white;
-        background: var(--primary); font-weight: 600;
+        border: 0;
+        border-radius: 14px;
+        padding: 12px 16px;
+        cursor: pointer;
+        background: var(--primary);
+        color: white;
+        font-weight: 700;
       }
-      button.secondary { background: rgba(255,255,255,.06); border:1px solid var(--line); }
-      button.warn { background: var(--warn); color:#2a1a00; }
+      button.secondary { background: rgba(255,255,255,.06); border: 1px solid var(--line); }
+      button.warn { background: var(--warn); color: #2a1a00; }
       button.danger { background: var(--danger); }
-      button.ok { background: var(--ok); color:#05291f; }
-      button:disabled { opacity:.55; cursor:not-allowed; }
-      .actions { display:flex; gap:10px; flex-wrap:wrap; }
-      .quick-grid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
-      .quick-box {
-        border:1px solid var(--line); border-radius: 14px; background: var(--panel-2);
+      button.ok { background: var(--ok); color: #05291f; }
+      button:disabled { opacity: .6; cursor: not-allowed; }
+      .message { margin-top: 14px; padding: 12px 14px; border-radius: 14px; }
+      .message.ok { border: 1px solid rgba(52,211,153,.16); background: rgba(52,211,153,.1); color: #c7f7e6; }
+      .message.error { border: 1px solid rgba(251,113,133,.18); background: rgba(251,113,133,.1); color: #ffd6dd; }
+      .app { width: 100%; }
+      .topbar {
+        padding: 22px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .topbar-right, .actions, .inline { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(56,189,248,.12);
+        color: #c6ebff;
+        font-size: 12px;
+      }
+      .main {
+        margin-top: 18px;
+        display: grid;
+        gap: 18px;
+        grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+      }
+      .card { padding: 20px; }
+      .card-title { font-size: 20px; font-weight: 800; }
+      .card-desc { color: var(--muted); margin-top: 6px; }
+      .section-gap { margin-top: 16px; }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .summary-box {
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+        border-radius: 16px;
         padding: 14px;
       }
-      .quick-label { color: var(--muted); font-size: 12px; }
-      .quick-value { margin-top: 8px; font-size: 16px; font-weight: 700; word-break: break-all; }
-      .notice, .error { padding:12px 14px; border-radius:12px; margin-top:12px; }
-      .notice { background: rgba(52,211,153,.12); color:#bff7e0; border:1px solid rgba(52,211,153,.18); }
-      .error { background: rgba(251,113,133,.12); color:#ffd3db; border:1px solid rgba(251,113,133,.18); }
+      .summary-label { color: var(--muted); font-size: 12px; }
+      .summary-value { margin-top: 8px; font-size: 18px; font-weight: 800; word-break: break-all; }
       .list {
-        margin-top: 14px; display:flex; flex-direction:column; gap:10px;
-        max-height: 420px; overflow:auto;
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        max-height: calc(100vh - 360px);
+        overflow: auto;
+        padding-right: 4px;
       }
       .item {
-        border:1px solid var(--line); border-radius: 14px; background: var(--panel-2);
-        padding: 14px; cursor:pointer; transition: .15s ease;
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+        border-radius: 16px;
+        padding: 14px;
+        cursor: pointer;
+        transition: .15s ease;
       }
       .item:hover { background: rgba(255,255,255,.04); }
-      .item.active { border-color: rgba(56,189,248,.35); background: rgba(56,189,248,.08); }
+      .item.active { border-color: rgba(56,189,248,.34); background: rgba(56,189,248,.08); }
       .item-head {
-        display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
       }
-      .item-title { font-size: 15px; font-weight: 700; }
-      .status { font-weight:700; }
-      .status.active { color:#c4fce8; }
-      .status.disabled { color:#ffd4dc; }
-      .status.expired { color:#ffe3a5; }
+      .item-title { font-size: 15px; font-weight: 800; }
+      .item-status { font-weight: 800; }
+      .item-status.active { color: #bdf7df; }
+      .item-status.disabled { color: #ffd4dc; }
+      .item-status.expired { color: #ffe7ae; }
       .item-meta {
-        display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:10px; margin-top: 10px;
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
       }
-      .item-meta div {
-        border:1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: rgba(255,255,255,.02);
+      .item-meta-box {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px;
+        background: rgba(255,255,255,.02);
       }
-      .item-meta span { display:block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+      .item-meta-box span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
       .empty {
-        border:1px dashed var(--line); border-radius: 14px; padding: 18px; color: var(--muted); text-align:center;
+        border: 1px dashed var(--line);
+        border-radius: 16px;
+        padding: 18px;
+        text-align: center;
+        color: var(--muted);
       }
       details.more {
-        margin-top: 14px; border:1px solid var(--line); border-radius: 14px; background: var(--panel-2);
-        padding: 12px 14px;
+        margin-top: 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel-2);
+        padding: 14px;
       }
-      details.more summary { cursor:pointer; color:#c7d8f3; font-weight:600; }
-      .kv { display:grid; grid-template-columns: 120px 1fr; gap:8px 12px; margin-top: 14px; }
-      .log-list { margin-top: 14px; display:flex; flex-direction:column; gap:10px; max-height: 280px; overflow:auto; }
-      .log-item { border:1px solid var(--line); border-radius: 12px; padding: 12px; background: rgba(2,6,23,.42); }
-      code { color:#d8edff; }
+      details.more summary { cursor: pointer; font-weight: 700; color: #d8e8ff; }
+      .kv {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 8px 12px;
+      }
+      .log-list {
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-height: 240px;
+        overflow: auto;
+      }
+      .log-item {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(2,6,23,.42);
+        padding: 12px;
+      }
+      .muted { color: var(--muted); }
+      @media (max-width: 1180px) {
+        .main { grid-template-columns: 1fr; }
+      }
       @media (max-width: 860px) {
-        .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .list { grid-template-columns: 1fr; max-height: none; }
         .item-meta { grid-template-columns: 1fr; }
       }
-      @media (max-width: 640px) {
-        .page { padding: 16px; }
-        .quick-grid { grid-template-columns: 1fr; }
+      @media (max-width: 560px) {
+        .shell { padding: 14px; }
+        .summary-grid { grid-template-columns: 1fr; }
       }
     </style>
   </head>
   <body>
-    <div class="page">
-      <div class="panel hero">
-        <div class="hero-top">
-          <div>
-            <div class="muted">TGMatrix</div>
-            <div class="title">卡密管理后台</div>
-            <div class="muted" style="margin-top:8px">按下面 3 步走就行：先登录后台，再创建卡密，最后在下方找到卡密做延期 / 重置设备 / 禁用。</div>
+    <div class="shell">
+      <div id="loginView" class="login-wrap">
+        <div class="panel login-card">
+          <div class="brand">TGMatrix</div>
+          <div class="subtitle">卡密管理后台</div>
+          <div class="subtitle">输入账号密码后直接进入后台。</div>
+          <div class="field section-gap">
+            <label>账号</label>
+            <input id="loginUsername" autocomplete="username" placeholder="请输入账号" />
           </div>
-          <div class="badge" id="healthBadge">正在连接服务</div>
+          <div class="field section-gap">
+            <label>密码</label>
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="请输入密码" />
+          </div>
+          <div class="actions section-gap">
+            <button id="loginBtn" style="width:100%">登录后台</button>
+          </div>
+          <div id="loginMessage"></div>
         </div>
       </div>
 
-      <div class="layout">
-        <div class="panel card">
-          <div class="card-head">
-            <div class="step">1</div>
-            <div>
-              <div class="card-title">先登录后台</div>
-              <div class="muted" style="margin-top:4px">本地默认管理员口令是 <code>dev-admin-token</code>。</div>
-            </div>
+      <div id="appView" class="app hidden">
+        <div class="panel topbar">
+          <div>
+            <div class="muted">TGMatrix</div>
+            <div class="card-title">卡密管理后台</div>
+            <div class="card-desc">页面已经重做成傻瓜版：左边负责生成，右边负责查卡、延期、重置设备、禁用或启用。</div>
           </div>
-          <div class="row" style="margin-top:14px; align-items:end;">
-            <div class="field">
-              <label>管理员 Token</label>
-              <input id="adminToken" placeholder="请输入管理员 token" />
-            </div>
-            <div class="actions">
-              <button id="saveTokenBtn" class="secondary">保存口令</button>
-              <button id="checkTokenBtn">进入后台</button>
-            </div>
+          <div class="topbar-right">
+            <div class="status-badge" id="healthBadge">正在连接服务</div>
+            <div class="status-badge" id="sessionBadge">未登录</div>
+            <button id="logoutBtn" class="secondary">退出登录</button>
           </div>
-          <div id="authMessage"></div>
         </div>
 
-        <div class="panel card">
-          <div class="card-head">
-            <div class="step">2</div>
-            <div>
-              <div class="card-title">创建卡密</div>
-              <div class="muted" style="margin-top:4px">最常用就是：30 天、1 台设备、创建 1 张。</div>
-            </div>
-          </div>
-          <div class="row" style="margin-top:14px;">
-            <div class="field small">
+        <div class="main">
+          <div class="panel card">
+            <div class="card-title">生成卡密</div>
+            <div class="card-desc">默认直接生成 24 位随机大写字母 + 数字混合卡密。旧数据已清空，你现在看到的是新后台。</div>
+
+            <div class="field section-gap">
               <label>有效期（天）</label>
               <input id="createDays" type="number" min="1" value="30" />
             </div>
-            <div class="field small">
+            <div class="field section-gap">
               <label>设备上限</label>
               <input id="createDevices" type="number" min="1" value="1" />
             </div>
-            <div class="field">
+            <div class="field section-gap">
               <label>备注（选填）</label>
               <input id="createNote" placeholder="例如：张三 / 月卡 / 代理版" />
             </div>
-          </div>
-          <div class="actions" style="margin-top:14px;">
-            <button id="createBtn">生成 1 张随机 24 位字母数字卡密</button>
-          </div>
 
-          <div style="height:1px;background:var(--line);margin:18px 0"></div>
+            <div class="actions section-gap">
+              <button id="createBtn">生成 1 张卡密</button>
+            </div>
 
-          <div class="row">
-            <div class="field small">
-              <label>生成数量</label>
+            <div class="field section-gap">
+              <label>批量生成数量</label>
               <input id="batchCount" type="number" min="1" max="500" value="10" />
             </div>
-            <div class="actions" style="align-self:end;">
-              <button id="batchCreateBtn" class="warn">批量生成随机 24 位字母数字卡密</button>
+            <div class="actions section-gap">
+              <button id="batchCreateBtn" class="warn">批量生成</button>
             </div>
+
+            <div class="field section-gap">
+              <label>本次生成结果（直接复制发给客户）</label>
+              <textarea id="batchResult" readonly placeholder="新生成的卡密会显示在这里"></textarea>
+            </div>
+            <div id="actionMessage"></div>
           </div>
 
-          <div class="field" style="margin-top:14px;">
-            <label>本次生成结果（24 位大写字母 + 数字混合，直接复制发给客户）</label>
-            <textarea id="batchResult" readonly placeholder="生成后的 24 位随机字母数字卡密会显示在这里"></textarea>
-          </div>
-          <div id="actionMessage"></div>
-        </div>
+          <div class="panel card">
+            <div class="card-title">管理已有卡密</div>
+            <div class="card-desc">先点下面某一张卡密，再做延期、重置设备、禁用或启用。</div>
 
-        <div class="panel card">
-          <div class="card-head">
-            <div class="step">3</div>
-            <div>
-              <div class="card-title">管理已有卡密</div>
-              <div class="muted" style="margin-top:4px">先点下面某一张卡密，再用右侧按钮做延期、重置设备、禁用或启用。</div>
+            <div class="summary-grid">
+              <div class="summary-box">
+                <div class="summary-label">当前选中卡密</div>
+                <div class="summary-value" id="summaryCardKey">未选择</div>
+              </div>
+              <div class="summary-box">
+                <div class="summary-label">当前状态</div>
+                <div class="summary-value" id="summaryStatus">—</div>
+              </div>
+              <div class="summary-box">
+                <div class="summary-label">到期时间</div>
+                <div class="summary-value" id="summaryExpireAt">—</div>
+              </div>
+              <div class="summary-box">
+                <div class="summary-label">已绑设备</div>
+                <div class="summary-value" id="summaryDevices">—</div>
+              </div>
             </div>
-          </div>
 
-          <div class="quick-grid">
-            <div class="quick-box">
-              <div class="quick-label">当前选中卡密</div>
-              <div class="quick-value" id="summaryCardKey">未选择</div>
+            <div class="inline section-gap">
+              <div class="field" style="min-width:160px; flex:0 0 180px;">
+                <label>延期天数</label>
+                <input id="extendDays" type="number" min="1" value="30" />
+              </div>
+              <div class="field" style="flex:1; min-width:220px;">
+                <label>备注（选填）</label>
+                <input id="actionNote" placeholder="例如：续费 30 天 / 客户换电脑" />
+              </div>
             </div>
-            <div class="quick-box">
-              <div class="quick-label">当前状态</div>
-              <div class="quick-value" id="summaryStatus">—</div>
-            </div>
-            <div class="quick-box">
-              <div class="quick-label">到期时间</div>
-              <div class="quick-value" id="summaryExpireAt">—</div>
-            </div>
-            <div class="quick-box">
-              <div class="quick-label">已绑设备</div>
-              <div class="quick-value" id="summaryDevices">—</div>
-            </div>
-          </div>
 
-          <div class="row" style="margin-top:14px; align-items:end;">
-            <div class="field small">
-              <label>延期天数</label>
-              <input id="extendDays" type="number" min="1" value="30" />
+            <div class="actions section-gap">
+              <button id="extendBtn" class="warn">延期</button>
+              <button id="resetDevicesBtn" class="secondary">重置设备</button>
+              <button id="disableBtn" class="danger">禁用卡密</button>
+              <button id="enableBtn" class="ok">启用卡密</button>
+              <button id="refreshBtn" class="secondary">刷新当前卡密</button>
+              <button id="loadCardsBtn" class="secondary">刷新列表</button>
             </div>
-            <div class="field">
-              <label>备注（选填）</label>
-              <input id="actionNote" placeholder="例如：续费 30 天 / 客户换电脑" />
+
+            <div class="list" id="cardsList">
+              <div class="empty">还没有卡密</div>
             </div>
-          </div>
 
-          <div class="actions" style="margin-top:14px;">
-            <button id="extendBtn" class="warn">延期</button>
-            <button id="resetDevicesBtn" class="secondary">重置设备</button>
-            <button id="disableBtn" class="danger">禁用卡密</button>
-            <button id="enableBtn" class="ok">启用卡密</button>
-            <button id="refreshBtn" class="secondary">刷新当前卡密</button>
-            <button id="loadCardsBtn" class="secondary">刷新列表</button>
+            <details class="more">
+              <summary>更多信息（可选）</summary>
+              <div class="kv" id="detailBox"></div>
+              <div class="log-list" id="deviceList"></div>
+              <div class="actions section-gap">
+                <button id="loadLogsBtn" class="secondary">刷新日志</button>
+              </div>
+              <div class="log-list" id="logList"></div>
+            </details>
           </div>
-
-          <div class="list" id="cardsList">
-            <div class="empty">还没有卡密</div>
-          </div>
-
-          <details class="more">
-            <summary>更多信息（可选）</summary>
-            <div class="kv" id="detailBox"></div>
-            <div class="log-list" id="deviceList"></div>
-            <div class="actions" style="margin-top:14px;">
-              <button id="loadLogsBtn" class="secondary">刷新日志</button>
-            </div>
-            <div class="log-list" id="logList"></div>
-          </details>
         </div>
       </div>
     </div>
 
     <script>
       const state = {
-        token: localStorage.getItem('license_admin_token') || 'dev-admin-token',
         selectedCardKey: '',
-        cards: []
+        cards: [],
+        username: ''
       }
 
       const els = {
+        loginView: document.getElementById('loginView'),
+        appView: document.getElementById('appView'),
+        loginUsername: document.getElementById('loginUsername'),
+        loginPassword: document.getElementById('loginPassword'),
+        loginBtn: document.getElementById('loginBtn'),
+        loginMessage: document.getElementById('loginMessage'),
+        logoutBtn: document.getElementById('logoutBtn'),
         healthBadge: document.getElementById('healthBadge'),
-        adminToken: document.getElementById('adminToken'),
-        saveTokenBtn: document.getElementById('saveTokenBtn'),
-        checkTokenBtn: document.getElementById('checkTokenBtn'),
-        authMessage: document.getElementById('authMessage'),
+        sessionBadge: document.getElementById('sessionBadge'),
         createDays: document.getElementById('createDays'),
         createDevices: document.getElementById('createDevices'),
         createNote: document.getElementById('createNote'),
@@ -290,9 +377,9 @@
         batchCount: document.getElementById('batchCount'),
         batchCreateBtn: document.getElementById('batchCreateBtn'),
         batchResult: document.getElementById('batchResult'),
+        actionMessage: document.getElementById('actionMessage'),
         extendDays: document.getElementById('extendDays'),
         actionNote: document.getElementById('actionNote'),
-        actionMessage: document.getElementById('actionMessage'),
         extendBtn: document.getElementById('extendBtn'),
         resetDevicesBtn: document.getElementById('resetDevicesBtn'),
         disableBtn: document.getElementById('disableBtn'),
@@ -310,8 +397,8 @@
         logList: document.getElementById('logList')
       }
 
-      function setMessage(target, text, type = 'notice') {
-        target.innerHTML = text ? `<div class="${type}">${text}</div>` : ''
+      function setMessage(target, text, type = 'ok') {
+        target.innerHTML = text ? `<div class="message ${type}">${text}</div>` : ''
       }
 
       function formatDate(value) {
@@ -323,10 +410,10 @@
 
       async function api(path, options = {}) {
         const response = await fetch(path, {
+          credentials: 'include',
           ...options,
           headers: {
             ...(options.body ? { 'content-type': 'application/json' } : {}),
-            authorization: `Bearer ${state.token}`,
             ...(options.headers || {})
           }
         })
@@ -335,6 +422,22 @@
           throw new Error(data.message || '请求失败')
         }
         return data
+      }
+
+      function updateSessionBadge(text) {
+        els.sessionBadge.textContent = text
+      }
+
+      function showLogin() {
+        els.loginView.classList.remove('hidden')
+        els.appView.classList.add('hidden')
+        updateSessionBadge('未登录')
+      }
+
+      function showApp() {
+        els.loginView.classList.add('hidden')
+        els.appView.classList.remove('hidden')
+        updateSessionBadge(`已登录：${state.username || 'admin'}`)
       }
 
       function renderCards() {
@@ -346,12 +449,12 @@
           <div class="item ${card.cardKey === state.selectedCardKey ? 'active' : ''}" data-card-key="${card.cardKey}">
             <div class="item-head">
               <div class="item-title">${card.cardKeyMasked}</div>
-              <div class="status ${card.status}">${card.status}</div>
+              <div class="item-status ${card.status}">${card.status}</div>
             </div>
             <div class="item-meta">
-              <div><span>到期时间</span>${formatDate(card.expireAt)}</div>
-              <div><span>设备数</span>${card.activeDeviceCount} / ${card.maxDevices}</div>
-              <div><span>备注</span>${card.note || '—'}</div>
+              <div class="item-meta-box"><span>到期时间</span>${formatDate(card.expireAt)}</div>
+              <div class="item-meta-box"><span>设备数</span>${card.activeDeviceCount} / ${card.maxDevices}</div>
+              <div class="item-meta-box"><span>备注</span>${card.note || '—'}</div>
             </div>
           </div>
         `).join('')
@@ -410,7 +513,7 @@
       async function loadHealth() {
         try {
           const data = await fetch('/health').then((res) => res.json())
-          els.healthBadge.textContent = data.usingDefaultAdminToken ? '服务在线 · 默认开发口令' : '服务在线 · 已配置管理口令'
+          els.healthBadge.textContent = data.ok ? '服务在线' : '服务异常'
         } catch {
           els.healthBadge.textContent = '服务不可用'
         }
@@ -452,16 +555,45 @@
         }
       }
 
-      async function verifyToken() {
-        state.token = els.adminToken.value.trim()
-        localStorage.setItem('license_admin_token', state.token)
+      async function checkSession() {
         try {
-          await api('/api/admin/session')
-          setMessage(els.authMessage, '管理员认证成功，现在可以直接创建和管理卡密了。')
+          const data = await api('/api/admin/session')
+          state.username = data.username || 'admin'
+          showApp()
+          await loadCards(true)
+        } catch {
+          state.username = ''
+          showLogin()
+        }
+      }
+
+      async function login() {
+        try {
+          const data = await api('/api/admin/login', {
+            method: 'POST',
+            body: JSON.stringify({
+              username: els.loginUsername.value.trim(),
+              password: els.loginPassword.value
+            })
+          })
+          setMessage(els.loginMessage, data.message || '登录成功。')
+          els.loginPassword.value = ''
+          state.username = data.username || 'admin'
+          showApp()
           await loadCards(true)
         } catch (error) {
-          setMessage(els.authMessage, error.message, 'error')
+          setMessage(els.loginMessage, error.message, 'error')
         }
+      }
+
+      async function logout() {
+        try {
+          await api('/api/admin/logout', { method: 'POST' })
+        } catch {}
+        state.username = ''
+        state.selectedCardKey = ''
+        state.cards = []
+        showLogin()
       }
 
       async function runAction(path, body, successText) {
@@ -479,13 +611,14 @@
         }
       }
 
-      els.adminToken.value = state.token
-      els.saveTokenBtn.addEventListener('click', () => {
-        state.token = els.adminToken.value.trim()
-        localStorage.setItem('license_admin_token', state.token)
-        setMessage(els.authMessage, '管理员口令已保存。')
+      els.loginBtn.addEventListener('click', login)
+      els.loginPassword.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          void login()
+        }
       })
-      els.checkTokenBtn.addEventListener('click', verifyToken)
+      els.logoutBtn.addEventListener('click', () => void logout())
       els.loadCardsBtn.addEventListener('click', () => loadCards())
       els.loadLogsBtn.addEventListener('click', loadLogs)
       els.refreshBtn.addEventListener('click', () => selectCard(state.selectedCardKey))
@@ -519,8 +652,7 @@
               note: els.createNote.value.trim()
             })
           })
-          const keys = (data.items || []).map((item) => item.cardKey).join('\n')
-          els.batchResult.value = keys
+          els.batchResult.value = (data.items || []).map((item) => item.cardKey).join('\n')
           setMessage(els.actionMessage, data.message || '批量创建成功。')
           await loadCards(true)
         } catch (error) {
@@ -552,7 +684,7 @@
       }, '设备绑定已重置。'))
 
       loadHealth()
-      verifyToken()
+      checkSession()
     </script>
   </body>
 </html>
