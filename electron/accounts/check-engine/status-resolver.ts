@@ -43,6 +43,7 @@ export class StatusResolver {
 
     if (!text) return 'unknown'
     if (text.includes('auth_key_duplicated')) return 'multi_ip'
+    if (text.includes('anti-spam systems') || text.includes('harsh response') || text.includes('some phone numbers may trigger') || text.includes('地理位置限制')) return 'geo_restricted'
     if (text.includes('frozen') || text.includes('freeze_state') || text.includes('freeze')) return 'frozen'
     if (text.includes('frozen_participant_missing')) return 'frozen'
     if (text.includes('phone number banned') || text.includes('user_deactivated_ban') || text.includes('banned')) return 'banned'

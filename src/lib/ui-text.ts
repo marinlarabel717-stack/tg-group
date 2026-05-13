@@ -25,6 +25,7 @@ export const accountStatusLabelMap: Record<AccountStatus, string> = {
   banned: '封禁',
   limited: '双向',
   temporary_limited: '临时双向',
+  geo_restricted: '地理位置限制',
   frozen: '冻结',
   session_expired: 'Session 失效',
   not_logged_in: '未登录',

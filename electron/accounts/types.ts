@@ -3,6 +3,7 @@ export const ACCOUNT_STATUS_VALUES = [
   'banned',
   'limited',
   'temporary_limited',
+  'geo_restricted',
   'frozen',
   'session_expired',
   'not_logged_in',
@@ -188,6 +189,7 @@ export interface CheckQueueState {
     alive: number
     limited: number
     temporary_limited: number
+    geo_restricted: number
     frozen: number
     banned: number
     multi_ip: number

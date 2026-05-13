@@ -353,6 +353,8 @@ function readStatusFilterLabel(value: AccountStatusFilter) {
       return '会员'
     case 'temporary_limited':
       return '临时限制'
+    case 'geo_restricted':
+      return '地理位置限制'
     case 'limited':
       return '限制'
     case 'frozen':

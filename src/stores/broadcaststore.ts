@@ -356,7 +356,7 @@ function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget,
     const account = accounts.find((item) => item.id === accountId)
     if (!account) return false
     if (!account.status) return true
-    return ['alive', 'limited', 'temporary_limited', 'frozen', 'unknown'].includes(account.status)
+    return ['alive', 'limited', 'temporary_limited', 'geo_restricted', 'frozen', 'unknown'].includes(account.status)
   })
 }
 

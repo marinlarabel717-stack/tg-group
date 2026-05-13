@@ -27,9 +27,14 @@ function getTaskStatusTone(status: 'draft' | 'active' | 'paused') {
 
 function getAccountStatusTone(status?: string) {
   if (status === 'alive') return 'bg-emerald-400/12 text-emerald-300'
-  if (status === 'limited' || status === 'temporary_limited') return 'bg-amber-300/12 text-amber-200'
-  if (status === 'frozen' || status === 'banned' || status === 'session_expired' || status === 'not_logged_in') return 'bg-rose-400/12 text-rose-200'
-  if (status === 'checking') return 'bg-sky-400/12 text-sky-300'
+  if (status === 'limited') return 'bg-sky-400/12 text-sky-300'
+  if (status === 'temporary_limited') return 'bg-orange-400/12 text-orange-300'
+  if (status === 'geo_restricted') return 'bg-amber-300/12 text-amber-200'
+  if (status === 'frozen') return 'bg-cyan-400/12 text-cyan-300'
+  if (status === 'multi_ip') return 'bg-indigo-400/12 text-indigo-300'
+  if (status === 'timeout') return 'bg-violet-400/12 text-violet-300'
+  if (status === 'banned' || status === 'session_expired' || status === 'not_logged_in') return 'bg-rose-400/12 text-rose-200'
+  if (status === 'checking') return 'bg-teal-400/12 text-teal-300'
   return 'bg-white/10 text-slate-200'
 }
 

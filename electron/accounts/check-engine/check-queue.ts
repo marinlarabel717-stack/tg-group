@@ -14,6 +14,7 @@ const STATUS_LABELS: Record<AccountCheckResult['status'], string> = {
   banned: '封禁',
   limited: '双向',
   temporary_limited: '临时双向',
+  geo_restricted: '地理位置限制',
   frozen: '冻结',
   session_expired: 'Session 失效',
   not_logged_in: '未登录',
@@ -39,6 +40,7 @@ function readSummaryLabel(status: AccountCheckResult['status'], runMode: 'accoun
   }
   if (status === 'limited') return '双向'
   if (status === 'temporary_limited') return '临时双向'
+  if (status === 'geo_restricted') return '地理位置限制'
   if (status === 'frozen') return '冻结'
   if (status === 'banned') return '封禁'
   if (status === 'multi_ip') return '多 IP 登录'
@@ -99,6 +101,7 @@ function createInitialState(options: Required<CheckQueueOptions>): CheckQueueSta
       alive: 0,
       limited: 0,
       temporary_limited: 0,
+      geo_restricted: 0,
       frozen: 0,
       banned: 0,
       multi_ip: 0,
@@ -164,6 +167,7 @@ export class CheckQueue extends EventEmitter {
       alive: 0,
       limited: 0,
       temporary_limited: 0,
+      geo_restricted: 0,
       frozen: 0,
       banned: 0,
       multi_ip: 0,
@@ -190,6 +194,7 @@ export class CheckQueue extends EventEmitter {
         alive: 0,
         limited: 0,
         temporary_limited: 0,
+        geo_restricted: 0,
         frozen: 0,
         banned: 0,
         multi_ip: 0,
@@ -282,7 +287,7 @@ export class CheckQueue extends EventEmitter {
   }
 
   private normalizeDisplayStatus(status: AccountCheckResult['status']) {
-    if (status === 'alive' || status === 'limited' || status === 'temporary_limited' || status === 'frozen' || status === 'banned' || status === 'multi_ip' || status === 'timeout' || status === 'unknown') {
+    if (status === 'alive' || status === 'limited' || status === 'temporary_limited' || status === 'geo_restricted' || status === 'frozen' || status === 'banned' || status === 'multi_ip' || status === 'timeout' || status === 'unknown') {
       return status
     }
 
@@ -313,6 +318,7 @@ export class CheckQueue extends EventEmitter {
       if (result.status === 'not_logged_in') return 'Session 未登录'
       if (result.status === 'session_expired') return 'Session 已失效'
       if (result.status === 'multi_ip') return '检测到多 IP 登录'
+      if (result.status === 'geo_restricted') return '地理位置限制'
       if (result.status === 'unknown') return '未拿到有效结果'
       return STATUS_LABELS[result.status]
     }
@@ -413,11 +419,11 @@ export class CheckQueue extends EventEmitter {
         { status: 'alive', count: this.state.resultSummary.alive },
         { status: 'limited', count: this.state.resultSummary.limited },
         { status: 'temporary_limited', count: this.state.resultSummary.temporary_limited },
+        { status: 'geo_restricted', count: this.state.resultSummary.geo_restricted },
         { status: 'frozen', count: this.state.resultSummary.frozen },
         { status: 'banned', count: this.state.resultSummary.banned },
         { status: 'multi_ip', count: this.state.resultSummary.multi_ip },
-        { status: 'timeout', count: this.state.resultSummary.timeout },
-        { status: 'unknown', count: this.state.resultSummary.unknown }
+        { status: 'timeout', count: this.state.resultSummary.timeout }
       ]
 
       for (const item of summaryItems) {

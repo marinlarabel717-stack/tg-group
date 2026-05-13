@@ -26,20 +26,22 @@ export const CheckResultDialog = memo(function CheckResultDialog() {
       {checkResultDialog.runMode === 'account-survival' ? (
         <div className="grid grid-cols-2 gap-3 text-center text-sm sm:grid-cols-3">
           <ResultStatCard label="存活" value={checkResultDialog.alive} tone="success" />
+          <ResultStatCard label="冻结" value={checkResultDialog.frozen} tone="cyan" />
           <ResultStatCard label="封禁" value={checkResultDialog.banned} tone="danger" />
-          <ResultStatCard label="冻结" value={checkResultDialog.frozen} tone="info" />
+          <ResultStatCard label="多 IP 登录" value={checkResultDialog.multiIp} tone="indigo" />
           <ResultStatCard label="超时" value={checkResultDialog.timeout} tone="violet" />
-          <ResultStatCard label="未知" value={checkResultDialog.unknown} tone="neutral" />
+          <ResultStatCard label="地理位置限制" value={checkResultDialog.geoRestricted} tone="warning" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 text-center text-sm sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 text-center text-sm sm:grid-cols-3 xl:grid-cols-4">
           <ResultStatCard label="无限制" value={checkResultDialog.alive} tone="success" />
           <ResultStatCard label="双向" value={checkResultDialog.limited} tone="info" />
-          <ResultStatCard label="临时双向" value={checkResultDialog.temporaryLimited} tone="warning" />
-          <ResultStatCard label="冻结" value={checkResultDialog.frozen} tone="violet" />
+          <ResultStatCard label="临时双向" value={checkResultDialog.temporaryLimited} tone="orange" />
+          <ResultStatCard label="地理位置限制" value={checkResultDialog.geoRestricted} tone="warning" />
+          <ResultStatCard label="冻结" value={checkResultDialog.frozen} tone="cyan" />
           <ResultStatCard label="封禁" value={checkResultDialog.banned} tone="danger" />
+          <ResultStatCard label="多 IP 登录" value={checkResultDialog.multiIp} tone="indigo" />
           <ResultStatCard label="超时" value={checkResultDialog.timeout} tone="violet" />
-          <ResultStatCard label="未知" value={checkResultDialog.unknown} tone="neutral" />
         </div>
       )}
 

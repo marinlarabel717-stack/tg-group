@@ -33,6 +33,16 @@ const RULES: Array<{ status: AccountStatus; summary: string; patterns: RegExp[] 
     patterns: [/phone number.*banned/i, /this number is banned/i, /账号已封禁/i, /封禁/i]
   },
   {
+    status: 'geo_restricted',
+    summary: 'SpamBot 判定为地理位置限制',
+    patterns: [
+      /anti-spam systems/i,
+      /harsh response/i,
+      /some phone numbers may trigger/i,
+      /地理位置限制/i
+    ]
+  },
+  {
     status: 'temporary_limited',
     summary: 'SpamBot 判定为临时双向限制',
     patterns: [/temporar(?:y|ily)/i, /for now/i, /暂时.*限制/i, /临时.*双向/i]

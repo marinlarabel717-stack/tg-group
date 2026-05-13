@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 
-export type ResultTone = 'success' | 'info' | 'warning' | 'danger' | 'violet' | 'neutral'
+export type ResultTone = 'success' | 'info' | 'warning' | 'danger' | 'violet' | 'neutral' | 'cyan' | 'indigo' | 'orange'
 
 const toneBoxClass: Record<ResultTone, string> = {
   success: 'border-emerald-400/20 bg-emerald-400/12 text-emerald-100',
@@ -9,7 +9,10 @@ const toneBoxClass: Record<ResultTone, string> = {
   warning: 'border-amber-400/20 bg-amber-400/12 text-amber-100',
   danger: 'border-rose-400/20 bg-rose-400/12 text-rose-100',
   violet: 'border-violet-400/20 bg-violet-400/12 text-violet-100',
-  neutral: 'border-white/10 bg-panel text-slate-100'
+  neutral: 'border-white/10 bg-panel text-slate-100',
+  cyan: 'border-cyan-400/20 bg-cyan-400/12 text-cyan-100',
+  indigo: 'border-indigo-400/20 bg-indigo-400/12 text-indigo-100',
+  orange: 'border-orange-400/20 bg-orange-400/12 text-orange-100'
 }
 
 const toneValueClass: Record<ResultTone, string> = {
@@ -18,7 +21,10 @@ const toneValueClass: Record<ResultTone, string> = {
   warning: 'text-amber-300',
   danger: 'text-rose-300',
   violet: 'text-violet-300',
-  neutral: 'text-white'
+  neutral: 'text-white',
+  cyan: 'text-cyan-300',
+  indigo: 'text-indigo-300',
+  orange: 'text-orange-300'
 }
 
 export function ResultDialogShell({

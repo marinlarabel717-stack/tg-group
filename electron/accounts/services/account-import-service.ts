@@ -55,6 +55,7 @@ function inferStatus(profile: AccountJsonProfile): AccountStatus {
   if (!spamblock || spamblock === 'unknown') return 'unknown'
   if (spamblock === 'free') return 'alive'
   if (spamblock.includes('temporary')) return 'temporary_limited'
+  if (spamblock.includes('geo_restricted') || spamblock.includes('anti-spam systems') || spamblock.includes('harsh response') || spamblock.includes('some phone numbers may trigger') || spamblock.includes('地理位置限制')) return 'geo_restricted'
   if (spamblock.includes('limited') || spamblock.includes('restrict')) return 'limited'
   if (spamblock.includes('ban')) return 'banned'
   if (spamblock.includes('multi') && spamblock.includes('ip')) return 'multi_ip'

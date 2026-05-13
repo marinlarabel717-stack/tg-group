@@ -32,10 +32,11 @@ interface CheckResultDialogState {
   alive: number
   limited: number
   temporaryLimited: number
+  geoRestricted: number
   frozen: number
   banned: number
+  multiIp: number
   timeout: number
-  unknown: number
 }
 
 function getDesktopAccountsApi() {
@@ -62,6 +63,7 @@ function createEmptyCheckState(): CheckQueueState {
       alive: 0,
       limited: 0,
       temporary_limited: 0,
+      geo_restricted: 0,
       frozen: 0,
       banned: 0,
       multi_ip: 0,
@@ -198,10 +200,11 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     alive: 0,
     limited: 0,
     temporaryLimited: 0,
+    geoRestricted: 0,
     frozen: 0,
     banned: 0,
-    timeout: 0,
-    unknown: 0
+    multiIp: 0,
+    timeout: 0
   },
   lastActionMessage: '',
   errorMessage: '',
@@ -225,10 +228,11 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
               alive: checkState.resultSummary.alive,
               limited: checkState.resultSummary.limited,
               temporaryLimited: checkState.resultSummary.temporary_limited,
+              geoRestricted: checkState.resultSummary.geo_restricted,
               frozen: checkState.resultSummary.frozen,
               banned: checkState.resultSummary.banned,
-              timeout: checkState.resultSummary.timeout,
-              unknown: checkState.resultSummary.unknown
+              multiIp: checkState.resultSummary.multi_ip,
+              timeout: checkState.resultSummary.timeout
             },
             lastActionMessage: '批量检测已完成，账号资料已刷新。'
           })
@@ -440,10 +444,11 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           alive: 0,
           limited: 0,
           temporaryLimited: 0,
+          geoRestricted: 0,
           frozen: 0,
           banned: 0,
-          timeout: 0,
-          unknown: 0
+          multiIp: 0,
+          timeout: 0
         },
         lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务。`
       })
