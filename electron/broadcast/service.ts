@@ -9,6 +9,7 @@ import { TelegramClientManager } from '../accounts/check-engine/telegram-client-
 import type { BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastScheduledMessageItem, BroadcastScheduledMessageListResult, BroadcastStopResult } from '../../src/types'
 
 const MIN_SCHEDULE_AHEAD_MS = 60_000
+const TELEGRAM_SCHEDULE_QUEUE_LIMIT = 100
 
 function readRequiredWaitSeconds(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
@@ -65,6 +66,13 @@ function formatBroadcastError(error: unknown) {
   if (/PHOTO_INVALID|MEDIA_INVALID|IMAGE_PROCESS_FAILED/i.test(normalized)) return '图片有问题，可能格式不对、文件坏了，或者 Telegram 不认这张图。'
   if (/BUTTON_URL_INVALID/i.test(normalized)) return '按钮链接格式不对，请填完整的 https:// 链接。'
   if (/MESSAGE_TOO_LONG|MEDIA_CAPTION_TOO_LONG/i.test(normalized)) return '文案太长了，缩短一点再试。'
+  if (/SCHEDULE_QUEUE_FULL_LOCAL/i.test(normalized)) {
+    const matched = normalized.match(/current=(\d+)/i)
+    const current = matched?.[1] ? Number(matched[1]) : null
+    return Number.isFinite(current)
+      ? `这个群当前已经挂着 ${current} 条待发送定时了。Telegram 卡的是“当前总待发送队列”，不是“每天几条”。先删掉一些再发。`
+      : '这个群当前待发送的定时消息已经堆满了。Telegram 卡的是“当前总待发送队列”，不是“每天几条”。先删掉一些再发。'
+  }
   if (/SCHEDULE_TOO_MUCH/i.test(normalized)) return '这个群的官方定时消息已经堆满了，先去 Telegram 里删掉一部分再发。'
   if (/SCHEDULE_DATE_TOO_LATE/i.test(normalized)) return '定时时间设得太远了，Telegram 不接受这么远的时间。'
   if (/SCHEDULE_DATE_INVALID|MSG_ID_INVALID/i.test(normalized)) return '定时时间不对，请改成未来时间再试。'
@@ -237,6 +245,15 @@ async function cleanupScheduledMessage(client: TelegramClient, entity: unknown, 
     peer: entity as never,
     id: [messageId]
   }))
+}
+
+async function getScheduledMessageCount(client: TelegramClient, entity: unknown) {
+  const result = await client.invoke(new Api.messages.GetScheduledHistory({
+    peer: entity as never,
+    hash: bigInt.zero
+  })) as { messages?: any[] }
+
+  return Array.isArray(result?.messages) ? result.messages.length : 0
 }
 
 function extractResponseMessageId(result: unknown) {
@@ -460,6 +477,7 @@ export class BroadcastService {
     const results: BroadcastPushScheduleResultItem[] = []
     const clients = new Map<number, TelegramClient>()
     const entityCache = new Map<string, unknown>()
+    const scheduledCountCache = new Map<string, number>()
     const pendingItemsByAccount = new Map<number, BroadcastPushSchedulePayload['items']>()
     let successCount = 0
     let failedCount = 0
@@ -618,6 +636,15 @@ export class BroadcastService {
                 entityCache.set(entityKey, entity)
               }
 
+              let scheduledCount = scheduledCountCache.get(entityKey)
+              if (typeof scheduledCount !== 'number') {
+                scheduledCount = await getScheduledMessageCount(client, entity)
+                scheduledCountCache.set(entityKey, scheduledCount)
+              }
+              if (scheduledCount >= TELEGRAM_SCHEDULE_QUEUE_LIMIT) {
+                throw new Error(`SCHEDULE_QUEUE_FULL_LOCAL: current=${scheduledCount}`)
+              }
+
               let messageId: number | null = null
 
               if (creative.kind === 'channel_forward') {
@@ -668,6 +695,7 @@ export class BroadcastService {
               }
               results.push(resultItem)
               reportProgress(resultItem)
+              scheduledCountCache.set(entityKey, scheduledCount + 1)
               finished = true
             } catch (error) {
               if (task.cancelled) break

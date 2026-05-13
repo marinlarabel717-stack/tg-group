@@ -172,6 +172,9 @@ function explainPreviewError(errorMessage: string) {
   if (normalized.includes('文案太长了') || /MESSAGE_TOO_LONG|MEDIA_CAPTION_TOO_LONG/i.test(normalized)) {
     return '文案太长了，缩短一点再试。'
   }
+  if (normalized.includes('Telegram 卡的是“当前总待发送队列”') || /SCHEDULE_QUEUE_FULL_LOCAL/i.test(normalized)) {
+    return '这个群当前待发送的定时消息总数已经满了。这里卡的是当前总队列，不是你每天设了几条。先删掉一些再发。'
+  }
   if (normalized.includes('这个群的官方定时消息已经堆满了') || /SCHEDULE_TOO_MUCH/i.test(normalized)) {
     return '这个群的定时消息已经满了，先去 Telegram 里删掉一些再发。'
   }
