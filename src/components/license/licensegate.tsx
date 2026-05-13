@@ -108,7 +108,6 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
         </div>
 
         {statusMessage ? <div className="mt-4 rounded-[12px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-200">{statusMessage}</div> : null}
-        {!statusMessage && state.cardKeyMasked ? <div className="mt-4 rounded-[12px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">当前设备已有授权记录；每次启动都需要先过这里，再进入软件。</div> : null}
         {lastActionMessage ? <div className="mt-4 rounded-[12px] border border-emerald-400/15 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{lastActionMessage}</div> : null}
         {errorMessage ? <div className="mt-4 rounded-[12px] border border-rose-400/15 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{errorMessage}</div> : null}
         {!state.apiConfigured ? <div className="mt-4 rounded-[12px] border border-amber-400/15 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">授权服务地址还没配好，当前默认会先连本机 127.0.0.1:8787。</div> : null}
