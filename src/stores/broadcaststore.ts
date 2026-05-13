@@ -382,7 +382,6 @@ export function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCr
   const useDailyRepeat = allPremiumAccounts && task.scheduleMode === 'daily_repeat'
   const requestedLimitPerGroup = Math.max(1, Number(task.dailyLimitPerGroup) || 1)
   const dailyLimitPerGroup = Math.min(allPremiumAccounts ? requestedLimitPerGroup : Math.min(requestedLimitPerGroup, 100), 100)
-  const limitPerGroup = useDailyRepeat ? dailyLimitPerGroup : dailyLimitPerGroup * rangeDays
   const creativeRotation = rotateCreatives(task, creatives)
   const selectedGroupIds = dedupeTaskGroupIds(task.groupIds, groups)
   const selectedGroups = groups.filter((group) => selectedGroupIds.includes(group.id) && group.enabled)
@@ -391,44 +390,48 @@ export function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCr
 
   for (const group of selectedGroups) {
     const compatibleAccounts = getCompatibleAccounts(task, group, accounts)
+    const dayCount = useDailyRepeat ? 1 : rangeDays
 
-    for (let slotIndex = 0; slotIndex < limitPerGroup; slotIndex += 1) {
-      const minute = startMinutes + slotIndex * interval
-      const jitterOffset = jitter === 0 ? 0 : (globalIndex % (jitter * 2 + 1)) - jitter
-      const scheduledMinute = minute + jitterOffset
-      const scheduledAt = setMinutes(scheduleBaseDate, scheduledMinute)
-      const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
-      const creative = creativeId ? creatives.find((item) => item.id === creativeId) ?? null : null
-      const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[slotIndex % compatibleAccounts.length] : null
-      const repeatPeriodSeconds = useDailyRepeat && creative?.kind !== 'channel_forward' ? 24 * 60 * 60 : null
-      let status: BroadcastPreviewStatus = 'queued'
-      let errorMessage = ''
+    for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
+      for (let slotIndex = 0; slotIndex < dailyLimitPerGroup; slotIndex += 1) {
+        const minute = startMinutes + slotIndex * interval + dayIndex * 24 * 60
+        const jitterOffset = jitter === 0 ? 0 : (globalIndex % (jitter * 2 + 1)) - jitter
+        const scheduledMinute = minute + jitterOffset
+        const scheduledAt = setMinutes(scheduleBaseDate, scheduledMinute)
+        const creativeId = creativeRotation.length > 0 ? creativeRotation[globalIndex % creativeRotation.length] : null
+        const creative = creativeId ? creatives.find((item) => item.id === creativeId) ?? null : null
+        const accountCursor = dayIndex * dailyLimitPerGroup + slotIndex
+        const accountId = compatibleAccounts.length > 0 ? compatibleAccounts[accountCursor % compatibleAccounts.length] : null
+        const repeatPeriodSeconds = useDailyRepeat && creative?.kind !== 'channel_forward' ? 24 * 60 * 60 : null
+        let status: BroadcastPreviewStatus = 'queued'
+        let errorMessage = ''
 
-      if (!creativeId) {
-        status = 'failed'
-        errorMessage = '当前任务还没有启用中的发送内容'
-      } else if (creative?.kind === 'channel_forward' && !creative.sourceLink.trim()) {
-        status = 'failed'
-        errorMessage = '频道消息链接还没填，先把要转发的频道消息链接贴上'
-      } else if (!accountId) {
-        status = 'failed'
-        errorMessage = '目标群内没有已加入且可发送的账号'
+        if (!creativeId) {
+          status = 'failed'
+          errorMessage = '当前任务还没有启用中的发送内容'
+        } else if (creative?.kind === 'channel_forward' && !creative.sourceLink.trim()) {
+          status = 'failed'
+          errorMessage = '频道消息链接还没填，先把要转发的频道消息链接贴上'
+        } else if (!accountId) {
+          status = 'failed'
+          errorMessage = '目标群内没有已加入且可发送的账号'
+        }
+
+        items.push({
+          id: createId('preview'),
+          taskId: task.id,
+          scheduledAt: scheduledAt.toISOString(),
+          accountId,
+          groupId: group.id,
+          creativeId,
+          repeatPeriodSeconds,
+          status,
+          errorMessage,
+          remoteMessageId: null,
+          syncedAt: null
+        })
+        globalIndex += 1
       }
-
-      items.push({
-        id: createId('preview'),
-        taskId: task.id,
-        scheduledAt: scheduledAt.toISOString(),
-        accountId,
-        groupId: group.id,
-        creativeId,
-        repeatPeriodSeconds,
-        status,
-        errorMessage,
-        remoteMessageId: null,
-        syncedAt: null
-      })
-      globalIndex += 1
     }
   }
 
