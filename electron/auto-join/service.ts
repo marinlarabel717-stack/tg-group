@@ -144,6 +144,22 @@ async function resolveJoinEntity(client: TelegramClient, value: string) {
   }
 }
 
+async function isAlreadyInChannel(client: TelegramClient, entity: unknown) {
+  try {
+    await client.invoke(new Api.channels.GetParticipant({
+      channel: entity as never,
+      participant: new Api.InputPeerSelf()
+    }))
+    return true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/USER_NOT_PARTICIPANT|PARTICIPANT_ID_INVALID/i.test(message)) {
+      return false
+    }
+    throw error
+  }
+}
+
 function readGroupTitle(source: unknown, fallback: string) {
   if (Array.isArray((source as { chats?: unknown[] } | null)?.chats)) {
     const chats = (source as { chats: Array<{ title?: unknown; username?: unknown }> }).chats
@@ -210,6 +226,13 @@ async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadIte
   }
 
   const entity = await resolveJoinEntity(client, parsed.value)
+  if (await isAlreadyInChannel(client, entity)) {
+    return {
+      status: 'already' as const,
+      groupTitle: readGroupTitle(entity, item.normalized)
+    }
+  }
+
   try {
     await client.invoke(new Api.channels.JoinChannel({ channel: entity as never }))
     return {
