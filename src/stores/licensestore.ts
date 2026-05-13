@@ -86,7 +86,7 @@ export const useLicenseStore = create<LicenseStoreState>((set, get) => ({
       set({
         validating: false,
         state: result.snapshot,
-        lastActionMessage: result.ok ? result.message : '',
+        lastActionMessage: '',
         errorMessage: result.ok ? '' : result.message
       })
       return result
@@ -107,7 +107,7 @@ export const useLicenseStore = create<LicenseStoreState>((set, get) => ({
       set({
         activating: false,
         state: result.snapshot,
-        lastActionMessage: result.ok ? result.message : '',
+        lastActionMessage: '',
         errorMessage: result.ok ? '' : result.message,
         devBypass: false
       })

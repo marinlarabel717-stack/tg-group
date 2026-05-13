@@ -53,10 +53,10 @@ const APP_WINDOW_BOUNDS = {
 } as const
 
 const LICENSE_WINDOW_BOUNDS = {
-  width: 460,
-  height: 520,
-  minWidth: 460,
-  minHeight: 520,
+  width: 760,
+  height: 340,
+  minWidth: 760,
+  minHeight: 340,
   resizable: false
 } as const
 
