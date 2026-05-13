@@ -628,11 +628,6 @@ export default function AutoJoinView() {
   return (
     <>
       <div className="flex min-h-full flex-col gap-5">
-        <div>
-          <div className="text-[24px] font-semibold text-white">自动加群</div>
-          <div className="mt-2 text-sm text-textMuted">开始后会自动跳到日志页，并按你设的线程数并发跑账号。</div>
-        </div>
-
         <TabBar />
 
         {activeTab === 'tasks' ? <TasksWorkbench /> : null}
