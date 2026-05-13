@@ -360,6 +360,10 @@ function getCompatibleAccounts(task: BroadcastTask, group: BroadcastGroupTarget,
   })
 }
 
+function hasSelectedChannelForwardCreative(task: BroadcastTask, creatives: BroadcastCreative[]) {
+  return task.creativeIds.some((creativeId) => creatives.some((creative) => creative.id === creativeId && creative.kind === 'channel_forward' && creative.enabled))
+}
+
 function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[], groups: BroadcastGroupTarget[], accounts: Array<{ id: number; status?: string; profile?: { is_premium?: boolean } }>) {
   const today = startOfLocalDay(new Date())
   const selectedStartDate = startOfLocalDay(parseDateInputValue(task.startDate) ?? today)
@@ -677,6 +681,7 @@ export const useBroadcastStore = create<BroadcastState>()(
         const requestedLimitPerGroup = Math.max(1, Number(task.dailyLimitPerGroup) || 1)
         const effectiveLimitPerGroup = Math.min(hasPremiumAccount ? requestedLimitPerGroup : Math.min(requestedLimitPerGroup, 100), 100)
         const previewItems = normalizePreviewItems(generatePreviewItems({ ...task, dailyLimitPerGroup: effectiveLimitPerGroup }, state.creatives, state.groups, accounts))
+        const containsChannelForward = hasSelectedChannelForwardCreative(task, state.creatives)
         set({
           previewItems,
           activeTab: 'tasks',
@@ -684,7 +689,9 @@ export const useBroadcastStore = create<BroadcastState>()(
           tasks: state.tasks.map((item) => item.id === task.id ? { ...item, dailyLimitPerGroup: effectiveLimitPerGroup } : item),
           lastActionMessage: previewItems.length > 0
             ? (hasPremiumAccount && task.scheduleMode === 'daily_repeat'
-              ? `已生成 ${previewItems.length} 个首发时间点，写入时会按“每天重复”发送。`
+              ? (containsChannelForward
+                ? `已生成 ${previewItems.length} 个首发时间点。注意：频道转发为了保留来源，不会显示“每天”，也不会走官方每天重复。`
+                : `已生成 ${previewItems.length} 个首发时间点，写入时会按“每天重复”发送。`)
               : !hasPremiumAccount && requestedLimitPerGroup > 100
                 ? `普通号单群最多先按 100 条处理，已自动从 ${requestedLimitPerGroup} 条压到 100 条。`
                 : `已生成 ${previewItems.length} 条排程预览，会从 ${describeDateRange(task.startDate, task.endDate)} 开始自动往后排。`)
@@ -715,6 +722,7 @@ export const useBroadcastStore = create<BroadcastState>()(
             ...generatedPreviewItems
           ]
 
+          const containsChannelForward = hasSelectedChannelForwardCreative(task, state.creatives)
           set((current) => ({
             previewItems: [
               ...current.previewItems.filter((item) => item.taskId !== task.id),
@@ -723,7 +731,9 @@ export const useBroadcastStore = create<BroadcastState>()(
             tasks: current.tasks.map((item) => item.id === task.id ? { ...item, dailyLimitPerGroup: effectiveLimitPerGroup } : item),
             errorMessage: '',
             lastActionMessage: generatedPreviewItems.length > 0
-              ? `已自动生成 ${generatedPreviewItems.length} 条排程，正在开始写入 Telegram。`
+              ? (workingTask.scheduleMode === 'daily_repeat' && containsChannelForward
+                ? `已自动生成 ${generatedPreviewItems.length} 条首发排程。注意：频道转发为了保留来源，不会显示“每天”，也不会走官方每天重复。`
+                : `已自动生成 ${generatedPreviewItems.length} 条排程，正在开始写入 Telegram。`)
               : '当前配置还生成不出任何排程，请检查账号、群或文案。'
           }))
         }

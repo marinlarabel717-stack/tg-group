@@ -843,6 +843,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const selectedAccountId = selectedTargetAccountId ?? selectedTask?.accountIds[0] ?? null
   const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedAccountId) ?? null, [accounts, selectedAccountId])
   const currentAccountIsPremium = Boolean(selectedAccount?.profile?.is_premium)
+  const selectedTaskCreatives = useMemo(() => creatives.filter((item) => selectedTask?.creativeIds.includes(item.id)), [creatives, selectedTask])
+  const hasSelectedChannelForwardCreative = useMemo(() => selectedTaskCreatives.some((item) => item.kind === 'channel_forward' && item.enabled), [selectedTaskCreatives])
   const showDateRangeInputs = !currentAccountIsPremium || selectedTask?.scheduleMode !== 'daily_repeat'
   const checkedGroupCount = useMemo(() => {
     if (!selectedTask || !selectedAccount) return 0
@@ -1208,6 +1210,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div>
                     <div className="text-sm font-semibold text-white">会员快捷模式</div>
                     <div className="mt-1 text-xs text-textMuted">普通号不能选重复，只走按日期排程；会员号勾了“每天重复”后，才会直接写 Telegram 官方每天重复。</div>
+                    {hasSelectedChannelForwardCreative ? <div className="mt-2 text-xs text-amber-200">当前选中的文案里有频道转发。为了保留转发来源，它不会显示“每天”字样，也不会走官方每天重复。</div> : null}
                   </div>
                   <label className={`inline-flex items-center gap-2 text-sm ${currentAccountIsPremium ? 'text-white' : 'text-textMuted'}`}>
                     <input type="checkbox" checked={selectedTask.scheduleMode === 'daily_repeat'} disabled={!currentAccountIsPremium} onChange={(event) => updateTask(selectedTask.id, { scheduleMode: event.target.checked ? 'daily_repeat' : 'date_range' })} />
@@ -1233,7 +1236,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
                   <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
                   <div className="mt-1">• 共 {previewSummary.total} 条</div>
-                  {currentAccountIsPremium && selectedTask.scheduleMode === 'daily_repeat' ? <div className="mt-1 text-emerald-200">• 当前会按 Telegram 官方“每天重复”写入</div> : null}
+                  {currentAccountIsPremium && selectedTask.scheduleMode === 'daily_repeat' && !hasSelectedChannelForwardCreative ? <div className="mt-1 text-emerald-200">• 当前会按 Telegram 官方“每天重复”写入</div> : null}
+                  {currentAccountIsPremium && selectedTask.scheduleMode === 'daily_repeat' && hasSelectedChannelForwardCreative ? <div className="mt-1 text-amber-200">• 当前这条是频道转发：为了保留来源，不会显示“每天”字样，也不会按官方每天重复发送</div> : null}
                   {!currentAccountIsPremium ? <div className="mt-1 text-amber-200">• 普通号只能选日期，不能开启重复；单群最多 100 条</div> : null}
                 </div>
               ) : null}
