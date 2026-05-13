@@ -12,6 +12,9 @@ const tabs: Array<{ key: AutoJoinTabKey; label: string; icon: typeof Play }> = [
   { key: 'links', label: '群链接整理', icon: Wand2 }
 ]
 
+const SOFT_INPUT_CLASS = 'border border-white/[0.06] bg-black/10 text-white outline-none transition focus:border-white/[0.12] focus:bg-black/12'
+const SOFT_PANEL_INPUT_CLASS = 'border border-white/[0.06] bg-panel text-white outline-none transition focus:border-white/[0.12] focus:bg-panel'
+
 function readAccountLabel(account: { id: number; username?: string; phone?: string; userId?: string; profile?: Record<string, unknown> }) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
   const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
@@ -87,7 +90,7 @@ function NumberRangeField(props: {
           max={max}
           value={minValue}
           onChange={(event) => onMinChange(Math.max(min, Number(event.target.value) || min))}
-          className="h-11 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 text-white outline-none focus:border-violet-400/30"
+          className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
         />
         <span className="text-textMuted">-</span>
         <input
@@ -96,7 +99,7 @@ function NumberRangeField(props: {
           max={max}
           value={maxValue}
           onChange={(event) => onMaxChange(Math.max(min, Number(event.target.value) || min))}
-          className="h-11 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 text-white outline-none focus:border-violet-400/30"
+          className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
         />
       </div>
       <div className="mt-2 text-xs text-textMuted">单位：秒</div>
@@ -258,7 +261,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               <NumberRangeField label="加群间隔" minValue={joinIntervalMin} maxValue={joinIntervalMax} onMinChange={setJoinIntervalMin} onMaxChange={setJoinIntervalMax} min={0} max={600} />
               <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
                 <div className="text-xs tracking-[0.18em] text-textMuted">线程数</div>
-                <input type="number" min={1} max={Math.max(1, selectedAccountIds.length || 1)} value={concurrency} onChange={(event) => setConcurrency(Math.max(1, Number(event.target.value) || 1))} className="mt-3 h-11 w-full rounded-[12px] border border-white/8 bg-black/10 px-3 text-white outline-none focus:border-violet-400/30" />
+                <input type="number" min={1} max={Math.max(1, selectedAccountIds.length || 1)} value={concurrency} onChange={(event) => setConcurrency(Math.max(1, Number(event.target.value) || 1))} className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
               </label>
             </div>
 
@@ -305,7 +308,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 value={linkInput}
                 onChange={(event) => setLinkInput(event.target.value)}
                 placeholder="一行一个，支持 @username / t.me/xxx / t.me/+invite"
-                className="w-full rounded-[16px] border border-white/8 bg-panel px-4 py-4 text-white outline-none focus:border-violet-400/30"
+                className={`w-full rounded-[16px] px-4 py-4 ${SOFT_PANEL_INPUT_CLASS}`}
               />
               <div className="mt-3 flex flex-wrap gap-2 text-sm text-textMuted">
                 <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-violet-300">会自动去重和过滤无效格式</div>
@@ -354,7 +357,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="relative w-full lg:max-w-[360px]">
                   <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
-                  <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名" className="h-11 w-full rounded-[12px] border border-white/8 bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-violet-400/30" />
+                  <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名" className={`h-11 w-full rounded-[12px] pl-11 pr-4 text-sm ${SOFT_PANEL_INPUT_CLASS}`} />
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <button type="button" onClick={() => setDraftAccountIds(filteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
@@ -365,9 +368,9 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               {filteredAccounts.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-sm text-textMuted">区间选择</div>
-                  <input inputMode="numeric" value={rangeStart} onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))} placeholder="开始" className="h-10 w-20 rounded-[12px] border border-white/8 bg-panel px-3 text-sm text-white outline-none focus:border-violet-400/30" />
+                  <input inputMode="numeric" value={rangeStart} onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))} placeholder="开始" className={`h-10 w-20 rounded-[12px] px-3 text-sm ${SOFT_PANEL_INPUT_CLASS}`} />
                   <span className="text-textMuted">-</span>
-                  <input inputMode="numeric" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))} placeholder="结束" className="h-10 w-20 rounded-[12px] border border-white/8 bg-panel px-3 text-sm text-white outline-none focus:border-violet-400/30" />
+                  <input inputMode="numeric" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))} placeholder="结束" className={`h-10 w-20 rounded-[12px] px-3 text-sm ${SOFT_PANEL_INPUT_CLASS}`} />
                   <button
                     type="button"
                     onClick={() => {
@@ -545,7 +548,7 @@ const LinksWorkbench = memo(function LinksWorkbench() {
           value={linkInput}
           onChange={(event) => setLinkInput(event.target.value)}
           placeholder="把原始群链接都贴这里，支持空格、逗号、换行混着贴。"
-          className="min-h-[420px] w-full rounded-[16px] border border-white/8 bg-panel px-4 py-4 text-white outline-none focus:border-violet-400/30"
+          className={`min-h-[420px] w-full rounded-[16px] px-4 py-4 ${SOFT_PANEL_INPUT_CLASS}`}
         />
       </GlassPanel>
 
