@@ -167,17 +167,11 @@ export default memo(function SettingsView() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              <div className="rounded-[14px] border border-white/6 bg-slate-950/35 px-4 py-4 text-sm text-textMuted">
-                <div>当前状态：<span className="font-semibold text-white">{licenseState.status === 'valid' ? '授权有效' : licenseState.status === 'grace' ? '离线宽限' : licenseState.status === 'expired' ? '授权过期' : licenseState.status === 'invalid' ? '授权无效' : '未激活'}</span></div>
-                <div className="mt-2">已绑卡密：{licenseState.cardKeyMasked || '—'}</div>
-                <div className="mt-2">到期时间：{formatDateTimeFull(licenseState.expireAt)}</div>
-              </div>
-              <div className="rounded-[14px] border border-white/6 bg-slate-950/35 px-4 py-4 text-sm text-textMuted">
-                <div>最近校验：{formatDateTimeFull(licenseState.lastValidatedAt)}</div>
-                <div className="mt-2">离线宽限：{formatDateTimeFull(licenseState.offlineGraceUntil)}</div>
-                <div className="mt-2">设备指纹：<span className="font-mono text-[12px] text-slate-300">{licenseState.machineId || '—'}</span></div>
-              </div>
+            <div className="mt-5 rounded-[14px] border border-white/6 bg-slate-950/35 px-4 py-4 text-sm text-textMuted">
+              <div>当前状态：<span className="font-semibold text-white">{licenseState.status === 'valid' ? '授权有效' : licenseState.status === 'grace' ? '离线宽限' : licenseState.status === 'expired' ? '授权过期' : licenseState.status === 'invalid' ? '授权无效' : '未激活'}</span></div>
+              <div className="mt-2">已绑卡密：{licenseState.cardKeyMasked || '—'}</div>
+              <div className="mt-2">卡密到期时间：{formatDateTimeFull(licenseState.expireAt)}</div>
+              <div className="mt-2">设备指纹：<span className="break-all font-mono text-[12px] text-slate-300">{licenseState.machineId || '—'}</span></div>
             </div>
           </div>
 
