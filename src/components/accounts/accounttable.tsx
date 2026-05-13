@@ -36,13 +36,13 @@ import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTi
 import { resolveCountryMeta } from '../../lib/phone-country'
 import { useUIStore } from '../../stores/uistore'
 
-const ACCOUNT_GRID_TEMPLATE = '38px 52px 144px 88px 98px 72px 128px 76px 88px 144px'
-const ACCOUNT_GRID_WIDTH = 928
-const ACCOUNT_SHELL_WIDTH = ACCOUNT_GRID_WIDTH + 12
+const ACCOUNT_GRID_TEMPLATE = '38px 52px minmax(148px,1.35fr) minmax(96px,0.9fr) minmax(108px,1fr) 74px minmax(140px,1.15fr) minmax(88px,0.85fr) minmax(96px,0.9fr) minmax(176px,1.4fr)'
+const ACCOUNT_GRID_MIN_WIDTH = 1016
+const ACCOUNT_SHELL_MIN_WIDTH = ACCOUNT_GRID_MIN_WIDTH + 16
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
-  width: `${ACCOUNT_GRID_WIDTH}px`,
-  minWidth: 'max-content'
+  width: '100%',
+  minWidth: `${ACCOUNT_GRID_MIN_WIDTH}px`
 }
 
 interface PremiumDialogState {
@@ -126,7 +126,7 @@ function checkboxClass() {
 }
 
 function actionButtonClass(active = true) {
-  return `flex h-5 min-w-5 shrink-0 items-center justify-center rounded-[6px] border text-[10px] font-semibold transition ${active
+  return `flex h-6 min-w-6 shrink-0 items-center justify-center rounded-[7px] border text-[11px] font-semibold transition ${active
     ? 'border-white/10 bg-panel text-slate-200 hover:bg-hover hover:text-neonSoft'
     : 'border-white/5 bg-slate-950/35 text-slate-500'}`
 }
@@ -222,7 +222,7 @@ function readProxy(account: AccountRecord) {
 function TaskBadge({ accountId, taskMap }: { accountId: number; taskMap: Map<number, AccountTaskKind> }) {
   const taskMeta = getAccountTaskMeta(taskMap, accountId)
   return (
-    <span className={`inline-flex rounded-full border px-1.5 py-[3px] text-[10px] leading-none ${taskMeta.tone}`}>
+    <span className={`inline-flex rounded-full border px-2 py-[3px] text-[11px] leading-none ${taskMeta.tone}`}>
       {taskMeta.label}
     </span>
   )
@@ -276,7 +276,7 @@ function AvatarCell({ account }: { account: AccountRecord }) {
   const showImage = Boolean(src) && !failed
 
   return (
-    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-slate-900/70 ring-1 ring-white/8 shadow-[0_0_0_1px_rgba(59,130,246,0.08)]">
+    <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-slate-900/70 ring-1 ring-white/8 shadow-[0_0_0_1px_rgba(59,130,246,0.08)]">
       {showImage ? (
         <img src={src} alt={readNickname(account)} className="h-full w-full object-cover" onError={() => setFailed(true)} />
       ) : (
@@ -530,7 +530,7 @@ const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }
   }, [account.id, openingWeb])
 
   return (
-    <div className="flex w-full items-center justify-center gap-0.5 whitespace-nowrap">
+    <div className="flex w-full items-center justify-center gap-1 whitespace-nowrap">
       <span title={`用户名：${username}`} className={actionButtonClass(username !== '-')}>@</span>
       <span title={twoFactor ? `2FA：${twoFactor}` : '2FA：未设置'} className={actionButtonClass(Boolean(twoFactor))}>🔓</span>
       <span title={`最后登录：${lastLogin}`} className={actionButtonClass(lastLogin !== '—')}>!</span>
@@ -539,7 +539,7 @@ const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }
           type="button"
           title="查看会员详情"
           onClick={() => void onOpenPremium(account)}
-          className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-[6px] border border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300 transition hover:brightness-110"
+          className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-[7px] border border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-300 transition hover:brightness-110"
         >
           <Star size={12} className="fill-current" />
         </button>
@@ -549,7 +549,7 @@ const TableRowActions = memo(function TableRowActions({ account, onOpenPremium }
         title={openingWeb ? '正在打开 Telegram 网页版…' : '打开 Telegram 网页版'}
         onClick={() => void handleOpenTelegramWeb()}
         disabled={openingWeb}
-        className={`flex h-5 min-w-[40px] shrink-0 items-center justify-center gap-0.5 rounded-[6px] border px-1 text-[9px] font-semibold uppercase tracking-[0.04em] transition ${openingWeb
+        className={`flex h-6 min-w-[48px] shrink-0 items-center justify-center gap-1 rounded-[7px] border px-1.5 text-[10px] font-semibold uppercase tracking-[0.05em] transition ${openingWeb
           ? 'cursor-wait border-sky-400/20 bg-sky-400/10 text-sky-300'
           : 'border-white/10 bg-panel text-slate-200 hover:bg-hover hover:text-neonSoft'}`}
       >
@@ -1314,10 +1314,10 @@ export const AccountTable = memo(function AccountTable() {
           >
             <div className="relative overflow-hidden" style={{ height: `${tableLoading ? 8 * 52 + 56 : totalSize + 56}px` }}>
               <div
-                className="absolute left-0 top-0"
-                style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content', transform: `translateX(-${scrollLeft}px)` }}
+                className="absolute left-0 top-0 w-full"
+                style={{ minWidth: `${ACCOUNT_SHELL_MIN_WIDTH}px`, transform: `translateX(-${scrollLeft}px)` }}
               >
-                <div className="sticky top-0 z-10 bg-card px-1.5 pb-[2px] pt-[2px]" style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, minWidth: 'max-content' }}>
+                <div className="sticky top-0 z-10 bg-card px-2 pb-[2px] pt-[2px]" style={{ width: '100%', minWidth: `${ACCOUNT_SHELL_MIN_WIDTH}px` }}>
                   {table.getHeaderGroups().map((headerGroup) => (
                     <div key={headerGroup.id} className="grid shrink-0" style={ACCOUNT_GRID_STYLE}>
                       {headerGroup.headers.map((header) => (
@@ -1355,7 +1355,7 @@ export const AccountTable = memo(function AccountTable() {
                         <div
                           key={`skeleton-${index}`}
                           className="absolute left-0 top-0 px-1.5 py-[3px]"
-                          style={{ transform: `translateY(${index * 52}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
+                          style={{ transform: `translateY(${index * 52}px)`, width: '100%', minWidth: `${ACCOUNT_SHELL_MIN_WIDTH}px` }}
                         >
                           <SkeletonRow columns={10} />
                         </div>
@@ -1368,7 +1368,7 @@ export const AccountTable = memo(function AccountTable() {
                             data-index={virtualRow.index}
                             ref={rowVirtualizer.measureElement}
                             className="absolute left-0 top-0 px-1.5 py-[3px]"
-                            style={{ transform: `translateY(${virtualRow.start}px)`, width: `${ACCOUNT_SHELL_WIDTH}px` }}
+                            style={{ transform: `translateY(${virtualRow.start}px)`, width: '100%', minWidth: `${ACCOUNT_SHELL_MIN_WIDTH}px` }}
                           >
                             <div
                               className={`grid min-h-[52px] shrink-0 items-center gap-0 rounded-[10px] transition ${
@@ -1399,7 +1399,7 @@ export const AccountTable = memo(function AccountTable() {
           ) : (
             <div className="border-t border-white/5 px-1.5 pb-2 pt-1.5">
               <div ref={scrollbarRef} className="account-table-scrollbar h-4 overflow-x-auto overflow-y-hidden" onScroll={handleScrollbarScroll}>
-                <div style={{ width: `${ACCOUNT_SHELL_WIDTH}px`, height: '1px' }} />
+                <div style={{ width: '100%', minWidth: `${ACCOUNT_SHELL_MIN_WIDTH}px`, height: '1px' }} />
               </div>
             </div>
           )}
