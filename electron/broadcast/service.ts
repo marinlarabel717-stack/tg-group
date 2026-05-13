@@ -73,7 +73,7 @@ function formatBroadcastError(error: unknown) {
   if (/SCHEDULE_TOO_MUCH/i.test(normalized)) return '这个群的官方定时消息已经堆满了，先去 Telegram 里删掉一部分再发。'
   if (/SCHEDULE_DATE_TOO_LATE/i.test(normalized)) return '定时时间设得太远了，Telegram 不接受这么远的时间。'
   if (/SCHEDULE_DATE_INVALID|MSG_ID_INVALID/i.test(normalized)) return '定时时间不对，请改成未来时间再试。'
-  if (/TELEGRAM_REPEAT_NOT_APPLIED/i.test(normalized)) return 'Telegram 没有真正写成“每天重复”，这条我已经按失败处理了。先去官方客户端确认账号确实支持每天重复，再重新发一次。'
+  if (/TELEGRAM_REPEAT_NOT_APPLIED/i.test(normalized)) return 'Telegram 这次没有把“每天重复”真正挂上去，这条我已经按失败处理了。你可以直接重试这一条；如果还不行，我再继续顺着这条日志往下抠。'
   if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '全局代理已开启，但当前没有可用代理，所以这次没有继续走本地直连。先把可用代理补上再试。'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号的登录状态失效了，需要重新登录。'
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '私密链接失效了、过期了，或者当前账号用不了这个链接。'
@@ -225,19 +225,25 @@ async function getScheduledMessageById(client: TelegramClient, entity: unknown, 
 }
 
 async function verifyScheduledRepeatPeriod(client: TelegramClient, entity: unknown, messageId: number, expectedRepeatPeriodSeconds: number) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  let sawScheduledMessage = false
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
     const matched = await getScheduledMessageById(client, entity, messageId)
-    const remoteRepeatPeriod = readScheduledRepeatPeriod(matched)
-    if (remoteRepeatPeriod === expectedRepeatPeriodSeconds) {
-      return true
+    if (matched) {
+      sawScheduledMessage = true
     }
 
-    if (attempt < 2) {
-      await new Promise((resolve) => setTimeout(resolve, 800))
+    const remoteRepeatPeriod = readScheduledRepeatPeriod(matched)
+    if (remoteRepeatPeriod === expectedRepeatPeriodSeconds) {
+      return { verified: true, sawScheduledMessage }
+    }
+
+    if (attempt < 7) {
+      await new Promise((resolve) => setTimeout(resolve, 1_200))
     }
   }
 
-  return false
+  return { verified: false, sawScheduledMessage }
 }
 
 function extractResponseMessageId(result: unknown) {
@@ -690,10 +696,10 @@ export class BroadcastService {
 
                 if ((item.repeatPeriodSeconds ?? 0) > 0 && messageId) {
                   const responseRepeatPeriod = extractResponseRepeatPeriod(firstResult)
-                  const verified = responseRepeatPeriod === (item.repeatPeriodSeconds ?? 0)
-                    ? true
+                  const verification = responseRepeatPeriod === (item.repeatPeriodSeconds ?? 0)
+                    ? { verified: true, sawScheduledMessage: true }
                     : await verifyScheduledRepeatPeriod(client, entity, messageId, item.repeatPeriodSeconds ?? 0)
-                  if (!verified) {
+                  if (!verification.verified && !verification.sawScheduledMessage) {
                     await client.invoke(new Api.messages.DeleteScheduledMessages({
                       peer: entity as never,
                       id: [messageId]
@@ -713,10 +719,10 @@ export class BroadcastService {
 
                 if ((item.repeatPeriodSeconds ?? 0) > 0 && messageId) {
                   const responseRepeatPeriod = extractResponseRepeatPeriod(message)
-                  const verified = responseRepeatPeriod === (item.repeatPeriodSeconds ?? 0)
-                    ? true
+                  const verification = responseRepeatPeriod === (item.repeatPeriodSeconds ?? 0)
+                    ? { verified: true, sawScheduledMessage: true }
                     : await verifyScheduledRepeatPeriod(client, entity, messageId, item.repeatPeriodSeconds ?? 0)
-                  if (!verified) {
+                  if (!verification.verified && !verification.sawScheduledMessage) {
                     await client.invoke(new Api.messages.DeleteScheduledMessages({
                       peer: entity as never,
                       id: [messageId]
