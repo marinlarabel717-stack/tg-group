@@ -241,7 +241,7 @@ function collectRemovableTargets(
   if (!repeatJoinEnabled) {
     return Array.from(new Set(
       items
-        .filter((item) => item.status === 'joined')
+        .filter((item) => item.status === 'joined' || item.status === 'already')
         .map((item) => (item.normalized || item.raw || '').trim())
         .filter(Boolean)
     ))
@@ -426,7 +426,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             tasks: applyProgress(state.tasks, payload),
             logs: nextLogs ? appendLog(state.logs, nextLogs) : state.logs,
             linkInput:
-              !state.repeatJoinEnabled && payload.item?.status === 'joined'
+              !state.repeatJoinEnabled && payload.item && ['joined', 'already'].includes(payload.item.status)
                 ? removeTargetFromInput(state.linkInput, payload.item.normalized || payload.item.raw)
                 : state.repeatJoinEnabled && payload.item?.status === 'failed' && isMissingTargetFailureMessage(payload.item.errorMessage || '')
                   ? removeTargetFromInput(state.linkInput, payload.item.normalized || payload.item.raw)
