@@ -29,10 +29,15 @@ const moduleMap: Record<ModuleKey, LazyExoticComponent<ComponentType>> = {
 export const ModuleViewport = memo(function ModuleViewport() {
   const activeModule = useUIStore((state) => state.activeModule)
   const ActiveComponent = useMemo(() => moduleMap[activeModule], [activeModule])
+  const title = moduleLabelMap[activeModule]
 
   return (
     <div className="min-h-0 h-full overflow-auto">
-      <Suspense fallback={<ModuleLoading title={moduleLabelMap[activeModule]} />}>
+      <div className="mb-5 px-1 pt-1">
+        <h1 className="text-[30px] font-extrabold tracking-[0.01em] text-white">{title}</h1>
+      </div>
+
+      <Suspense fallback={<ModuleLoading title={title} />}>
         <ActiveComponent />
       </Suspense>
     </div>
