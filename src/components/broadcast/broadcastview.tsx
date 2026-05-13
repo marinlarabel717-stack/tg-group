@@ -842,10 +842,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   )
   const selectedAccountId = selectedTargetAccountId ?? selectedTask?.accountIds[0] ?? null
   const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedAccountId) ?? null, [accounts, selectedAccountId])
-  const currentAccountIsPremium = Boolean(selectedAccount?.profile?.is_premium)
+  const selectedAllPremium = selectedAccounts.length > 0 && selectedAccounts.every((account) => Boolean(account.profile?.is_premium))
   const selectedTaskCreatives = useMemo(() => creatives.filter((item) => selectedTask?.creativeIds.includes(item.id)), [creatives, selectedTask])
   const hasSelectedChannelForwardCreative = useMemo(() => selectedTaskCreatives.some((item) => item.kind === 'channel_forward' && item.enabled), [selectedTaskCreatives])
-  const showDateRangeInputs = !currentAccountIsPremium || selectedTask?.scheduleMode !== 'daily_repeat'
+  const showDateRangeInputs = !selectedAllPremium || selectedTask?.scheduleMode !== 'daily_repeat'
   const checkedGroupCount = useMemo(() => {
     if (!selectedTask || !selectedAccount) return 0
     return groups.filter((group) => selectedTask.groupIds.includes(group.id) && group.accountIds.includes(selectedAccount.id)).length
@@ -917,12 +917,12 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
   useEffect(() => {
     if (!selectedTask) return
-    if (currentAccountIsPremium) return
+    if (selectedAllPremium) return
     if (selectedTask.scheduleMode !== 'daily_repeat') return
 
     updateTask(selectedTask.id, { scheduleMode: 'date_range' })
     clearPreview()
-  }, [clearPreview, currentAccountIsPremium, selectedTask, updateTask])
+  }, [clearPreview, selectedAllPremium, selectedTask, updateTask])
 
   const syncTaskGroupsForAccount = (accountId: number | null) => {
     if (!selectedTask) return
@@ -1204,20 +1204,20 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
             <GlassPanel className="bg-card">
               <div className="text-lg font-semibold text-white">发送时间配置</div>
-              <div className="mt-1 text-sm text-textMuted">普通号可以直接选日期；会员号勾了重复后，才走 Telegram 官方每天重复。</div>
+              <div className="mt-1 text-sm text-textMuted">普通号可以直接选日期；只有选中的账号全部都是会员号时，才走 Telegram 官方每天重复。</div>
               <div className="mt-4 rounded-[16px] bg-panel p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <div className="text-sm font-semibold text-white">会员快捷模式</div>
-                    <div className="mt-1 text-xs text-textMuted">普通号不能选重复，只走按日期排程；会员号勾了“每天重复”后，才会直接写 Telegram 官方每天重复。</div>
+                    <div className="mt-1 text-xs text-textMuted">只有选中的账号全部都是会员号，勾了“每天重复”后，才会直接写 Telegram 官方每天重复。</div>
                     {hasSelectedChannelForwardCreative ? <div className="mt-2 text-xs text-amber-200">当前选中的文案里有频道转发。为了保留转发来源，它不会显示“每天”字样，也不会走官方每天重复。</div> : null}
                   </div>
-                  <label className={`inline-flex items-center gap-2 text-sm ${currentAccountIsPremium ? 'text-white' : 'text-textMuted'}`}>
-                    <input type="checkbox" checked={selectedTask.scheduleMode === 'daily_repeat'} disabled={!currentAccountIsPremium} onChange={(event) => updateTask(selectedTask.id, { scheduleMode: event.target.checked ? 'daily_repeat' : 'date_range' })} />
+                  <label className={`inline-flex items-center gap-2 text-sm ${selectedAllPremium ? 'text-white' : 'text-textMuted'}`}>
+                    <input type="checkbox" checked={selectedTask.scheduleMode === 'daily_repeat'} disabled={!selectedAllPremium} onChange={(event) => updateTask(selectedTask.id, { scheduleMode: event.target.checked ? 'daily_repeat' : 'date_range' })} />
                     每天重复
                   </label>
                 </div>
-                {!currentAccountIsPremium ? <div className="mt-3 text-xs text-amber-200">当前账号不是会员号：这里只能选日期，不能开启重复；单群最多 100 条。</div> : null}
+                {!selectedAllPremium ? <div className="mt-3 text-xs text-amber-200">当前选中的账号里只要混了普通号，就不能开启“每天重复”；要全部换成会员号才行。单群最多 100 条。</div> : null}
               </div>
               {showDateRangeInputs ? (
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -1228,7 +1228,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
                 <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-                <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} max={currentAccountIsPremium ? undefined : 100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: currentAccountIsPremium ? (Number(event.target.value) || 1) : Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} max={selectedAllPremium ? undefined : 100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: selectedAllPremium ? (Number(event.target.value) || 1) : Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
               </div>
               {previewSummary.total > 0 ? (
                 <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
@@ -1236,9 +1236,9 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
                   <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
                   <div className="mt-1">• 共 {previewSummary.total} 条</div>
-                  {currentAccountIsPremium && selectedTask.scheduleMode === 'daily_repeat' && !hasSelectedChannelForwardCreative ? <div className="mt-1 text-emerald-200">• 当前会按 Telegram 官方“每天重复”写入</div> : null}
-                  {currentAccountIsPremium && selectedTask.scheduleMode === 'daily_repeat' && hasSelectedChannelForwardCreative ? <div className="mt-1 text-amber-200">• 当前这条是频道转发：为了保留来源，不会显示“每天”字样，也不会按官方每天重复发送</div> : null}
-                  {!currentAccountIsPremium ? <div className="mt-1 text-amber-200">• 普通号只能选日期，不能开启重复；单群最多 100 条</div> : null}
+                  {selectedAllPremium && selectedTask.scheduleMode === 'daily_repeat' && !hasSelectedChannelForwardCreative ? <div className="mt-1 text-emerald-200">• 当前会按 Telegram 官方“每天重复”写入</div> : null}
+                  {selectedAllPremium && selectedTask.scheduleMode === 'daily_repeat' && hasSelectedChannelForwardCreative ? <div className="mt-1 text-amber-200">• 当前这条是频道转发：为了保留来源，不会显示“每天”字样，也不会按官方每天重复发送</div> : null}
+                  {!selectedAllPremium ? <div className="mt-1 text-amber-200">• 只要混了普通号，就只能按日期发，不能开启重复；单群最多 100 条</div> : null}
                 </div>
               ) : null}
             </GlassPanel>
