@@ -585,6 +585,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         set({
           sending: true,
           stopping: false,
+          runs: [],
           runningAccountIds: Array.from(new Set(state.previewItems.map((item) => item.accountId).filter((item): item is number => typeof item === 'number'))),
           activeTab: 'logs',
           lastActionMessage: '正在把私信发到 Telegram，请稍候...'

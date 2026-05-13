@@ -112,6 +112,19 @@ function applyAccountSnapshot(
   })
 }
 
+function createPendingTransferProgress(mode: 'import' | 'export'): ImportProgressPayload {
+  return {
+    mode,
+    phase: 'start',
+    total: 0,
+    current: 0,
+    importedCount: 0,
+    generatedJsonCount: 0,
+    skippedCount: 0,
+    message: mode === 'export' ? '正在准备导出账号...' : '正在准备导入账号...'
+  }
+}
+
 let subscribed = false
 
 interface AccountStoreState {
@@ -293,7 +306,15 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   setSelectedProfileAccountId: (id) => set({ selectedProfileAccountId: id }),
   importFiles: async () => {
     await runBusyAction(set, async () => {
-      const result = await getDesktopAccountsApi()?.pickImportFiles()
+      set({ importProgress: createPendingTransferProgress('import') })
+      let result = null
+      try {
+        result = await getDesktopAccountsApi()?.pickImportFiles()
+      } finally {
+        if (!result) {
+          set({ importProgress: null })
+        }
+      }
       if (!result) return
       applyAccountSnapshot(result.accounts, set, get)
       set({
@@ -313,7 +334,15 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   },
   importFolder: async () => {
     await runBusyAction(set, async () => {
-      const result = await getDesktopAccountsApi()?.pickImportFolder()
+      set({ importProgress: createPendingTransferProgress('import') })
+      let result = null
+      try {
+        result = await getDesktopAccountsApi()?.pickImportFolder()
+      } finally {
+        if (!result) {
+          set({ importProgress: null })
+        }
+      }
       if (!result) return
       applyAccountSnapshot(result.accounts, set, get)
       set({
@@ -334,7 +363,15 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   importDroppedPaths: async (paths) => {
     await runBusyAction(set, async () => {
       if (paths.length === 0) return
-      const result = await getDesktopAccountsApi()?.importDroppedPaths(paths)
+      set({ importProgress: createPendingTransferProgress('import') })
+      let result = null
+      try {
+        result = await getDesktopAccountsApi()?.importDroppedPaths(paths)
+      } finally {
+        if (!result) {
+          set({ importProgress: null })
+        }
+      }
       if (!result) return
       applyAccountSnapshot(result.accounts, set, get)
       set({
@@ -392,10 +429,19 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      const result = await getDesktopAccountsApi()?.exportByIds(ids)
+      set({ importProgress: createPendingTransferProgress('export') })
+      let result = null
+      try {
+        result = await getDesktopAccountsApi()?.exportByIds(ids)
+      } finally {
+        if (!result || !result.targetDirectory) {
+          set({ importProgress: null })
+        }
+      }
       if (!result || !result.targetDirectory) return
       applyAccountSnapshot(result.accounts, set, get)
       set({
+        importProgress: null,
         selectedIds: [],
         exportResultDialog: {
           open: true,

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 
 export type ResultTone = 'success' | 'info' | 'warning' | 'danger' | 'violet' | 'neutral' | 'cyan' | 'indigo' | 'orange'
@@ -48,12 +48,93 @@ export function ResultDialogShell({
   maxWidth?: string
   children: ReactNode
 }) {
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const dragOffsetRef = useRef({ x: 0, y: 0 })
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
+
+  useEffect(() => {
+    if (!open) {
+      setPosition(null)
+      dragCleanupRef.current?.()
+      dragCleanupRef.current = null
+      return
+    }
+
+    setPosition(null)
+    return () => {
+      dragCleanupRef.current?.()
+      dragCleanupRef.current = null
+    }
+  }, [open, title, subtitle])
+
   if (!open) return null
 
+  const clampPosition = (nextLeft: number, nextTop: number) => {
+    const rect = panelRef.current?.getBoundingClientRect()
+    const panelWidth = rect?.width ?? 440
+    const panelHeight = rect?.height ?? 320
+    const maxLeft = Math.max(window.innerWidth - panelWidth - 16, 16)
+    const maxTop = Math.max(window.innerHeight - panelHeight - 16, 16)
+
+    return {
+      left: Math.min(Math.max(16, nextLeft), maxLeft),
+      top: Math.min(Math.max(16, nextTop), maxTop)
+    }
+  }
+
+  const stopDragging = () => {
+    dragCleanupRef.current?.()
+    dragCleanupRef.current = null
+  }
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement
+    if (target.closest('button, a, input, textarea, select, [data-dialog-no-drag="true"]')) {
+      return
+    }
+
+    const rect = panelRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    event.preventDefault()
+    const initialPosition = position ?? { left: rect.left, top: rect.top }
+    dragOffsetRef.current = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    }
+    setPosition(initialPosition)
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setPosition(clampPosition(
+        moveEvent.clientX - dragOffsetRef.current.x,
+        moveEvent.clientY - dragOffsetRef.current.y
+      ))
+    }
+
+    const handlePointerUp = () => {
+      stopDragging()
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp, { once: true })
+    dragCleanupRef.current = () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/58 px-4" onClick={closable ? onClose : undefined}>
-      <div className={`w-full ${maxWidth} rounded-[20px] border bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)] ${toneBoxClass[tone]}`} onClick={(event) => event.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+    <div className="fixed inset-0 z-[70] bg-slate-950/58 px-4 py-6" onClick={closable ? onClose : undefined}>
+      <div
+        ref={panelRef}
+        className={`fixed w-full ${maxWidth} rounded-[20px] border bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)] ${toneBoxClass[tone]}`}
+        style={position
+          ? { left: `${position.left}px`, top: `${position.top}px` }
+          : { left: '50%', top: '50%', transform: 'translate(-50%, -52%)' }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex cursor-grab items-center justify-between border-b border-white/8 px-5 py-4 active:cursor-grabbing" onPointerDown={handlePointerDown}>
           <div className="flex items-center gap-3 text-white">
             <div className={`flex h-11 w-11 items-center justify-center rounded-[14px] ${toneBoxClass[tone]} ${toneValueClass[tone]}`}>
               {icon}
@@ -65,7 +146,7 @@ export function ResultDialogShell({
           </div>
 
           {closable ? (
-            <button type="button" className="flex h-11 w-11 items-center justify-center rounded-[12px] text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}>
+            <button type="button" data-dialog-no-drag="true" className="flex h-11 w-11 items-center justify-center rounded-[12px] text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}>
               <X size={16} />
             </button>
           ) : <div className="h-11 w-11" aria-hidden="true" />}
