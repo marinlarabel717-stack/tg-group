@@ -370,12 +370,11 @@ function areAllSelectedAccountsPremium(task: BroadcastTask, accounts: Array<{ id
 }
 
 export function generatePreviewItems(task: BroadcastTask, creatives: BroadcastCreative[], groups: BroadcastGroupTarget[], accounts: Array<{ id: number; status?: string; profile?: { is_premium?: boolean } }>) {
-  const today = startOfLocalDay(new Date())
-  const selectedStartDate = startOfLocalDay(parseDateInputValue(task.startDate) ?? today)
+  const selectedStartDate = startOfLocalDay(parseDateInputValue(task.startDate) ?? new Date())
   const selectedEndDate = startOfLocalDay(parseDateInputValue(task.endDate) ?? selectedStartDate)
   const normalizedEndDate = selectedEndDate.getTime() >= selectedStartDate.getTime() ? selectedEndDate : selectedStartDate
   const rangeDays = Math.max(1, Math.floor((normalizedEndDate.getTime() - selectedStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1)
-  const scheduleBaseDate = task.scheduleMode === 'daily_repeat' ? today : selectedStartDate
+  const scheduleBaseDate = selectedStartDate
   const startMinutes = toMinutes(task.startTime)
   const interval = Math.max(5, Number(task.intervalMinutes) || 10)
   const jitter = 0

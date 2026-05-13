@@ -1232,17 +1232,20 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
                 <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-                <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} max={selectedAllPremium ? undefined : 100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: selectedAllPremium ? (Number(event.target.value) || 1) : Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">单群当天条数（每日上限 100）</span><input type="number" min={1} max={100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
               </div>
               {previewSummary.total > 0 ? (
                 <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
-                  <div>• {showDateRangeInputs ? `${formatDateInputLabel(selectedTask.startDate)} 开始${selectedTask.endDate && selectedTask.endDate !== selectedTask.startDate ? `，到 ${formatDateInputLabel(selectedTask.endDate)}` : ''}` : '从今天开始'}</div>
+                  <div>• {selectedTask.scheduleMode === 'daily_repeat'
+                    ? `${formatDateInputLabel(selectedTask.startDate)} 开始，按每天重复写入`
+                    : `${formatDateInputLabel(selectedTask.startDate)} 开始${selectedTask.endDate && selectedTask.endDate !== selectedTask.startDate ? `，到 ${formatDateInputLabel(selectedTask.endDate)}` : ''}`}</div>
                   <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
                   <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
                   <div className="mt-1">• 共 {previewSummary.total} 条</div>
+                  <div className="mt-1">• 当前按每群每天 {Math.min(Number(selectedTask.dailyLimitPerGroup) || 1, 100)} 条计算；单个群单天不会超过 100 条</div>
                   {selectedAllPremium && selectedTask.scheduleMode === 'daily_repeat' && !hasSelectedChannelForwardCreative ? <div className="mt-1 text-emerald-200">• 当前会按 Telegram 官方“每天重复”写入</div> : null}
                   {selectedAllPremium && selectedTask.scheduleMode === 'daily_repeat' && hasSelectedChannelForwardCreative ? <div className="mt-1 text-amber-200">• 当前这条是频道转发：为了保留来源，不会显示“每天”字样，也不会按官方每天重复发送</div> : null}
-                  {!selectedAllPremium ? <div className="mt-1 text-amber-200">• 只要混了普通号，就只能按日期发，不能开启重复；单群最多 100 条</div> : null}
+                  {!selectedAllPremium ? <div className="mt-1 text-amber-200">• 只要混了普通号，就只能按日期发，不能开启重复；但 100 条是每天上限，不是整个日期范围总上限</div> : null}
                 </div>
               ) : null}
             </GlassPanel>
@@ -1722,7 +1725,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
     return {
       ...item,
       text: item.text || fallbackText,
-      repeatPeriodSeconds: item.repeatPeriodSeconds ?? matchedPreview?.repeatPeriodSeconds ?? null
+      repeatPeriodSeconds: item.repeatPeriodSeconds ?? null
     }
   }), [creatives, items, matchedPreviewByMessageId])
 
