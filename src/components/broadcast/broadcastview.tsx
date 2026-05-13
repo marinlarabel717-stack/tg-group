@@ -1236,15 +1236,23 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               </div>
               {previewSummary.total > 0 ? (
                 <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
-                  <div>• {selectedTask.scheduleMode === 'daily_repeat'
-                    ? `${formatDateInputLabel(selectedTask.startDate)} 开始，按每天重复写入`
-                    : `${formatDateInputLabel(selectedTask.startDate)} 开始${selectedTask.endDate && selectedTask.endDate !== selectedTask.startDate ? `，到 ${formatDateInputLabel(selectedTask.endDate)}` : ''}`}</div>
-                  <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
-                  <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
-                  <div className="mt-1">• 共 {previewSummary.total} 条</div>
-                  <div className="mt-1">• 当前按每群每天 {Math.min(Number(selectedTask.dailyLimitPerGroup) || 1, 100)} 条计算；单个群单天不会超过 100 条</div>
-                  {selectedAllPremium && selectedTask.scheduleMode === 'daily_repeat' && !hasSelectedChannelForwardCreative ? <div className="mt-1 text-emerald-200">• 当前会按 Telegram 官方“每天重复”写入</div> : null}
-                  {selectedAllPremium && selectedTask.scheduleMode === 'daily_repeat' && hasSelectedChannelForwardCreative ? <div className="mt-1 text-amber-200">• 当前这条是频道转发：为了保留来源，不会显示“每天”字样，也不会按官方每天重复发送</div> : null}
+                  {selectedTask.scheduleMode === 'daily_repeat' ? (
+                    <>
+                      <div>• 当前 {checkedGroupCount} 个群</div>
+                      <div className="mt-1">• 每群每天 {Math.min(Number(selectedTask.dailyLimitPerGroup) || 1, 100)} 条</div>
+                      <div className="mt-1">• 预计每天共 {checkedGroupCount * Math.min(Number(selectedTask.dailyLimitPerGroup) || 1, 100)} 条</div>
+                      {selectedAllPremium && !hasSelectedChannelForwardCreative ? <div className="mt-1 text-emerald-200">• 会员号模式：按 Telegram 官方每天重复写入</div> : null}
+                      {selectedAllPremium && hasSelectedChannelForwardCreative ? <div className="mt-1 text-amber-200">• 当前这条是频道转发：为了保留来源，不会显示“每天”字样，也不会按官方每天重复发送</div> : null}
+                    </>
+                  ) : (
+                    <>
+                      <div>• {`${formatDateInputLabel(selectedTask.startDate)} 开始${selectedTask.endDate && selectedTask.endDate !== selectedTask.startDate ? `，到 ${formatDateInputLabel(selectedTask.endDate)}` : ''}`}</div>
+                      <div className="mt-1">• 首条：{formatPreviewSummaryTime(previewSummary.firstScheduledAt)}</div>
+                      <div className="mt-1">• 末条：{formatPreviewSummaryTime(previewSummary.lastScheduledAt)}</div>
+                      <div className="mt-1">• 共 {previewSummary.total} 条</div>
+                      <div className="mt-1">• 当前按每群每天 {Math.min(Number(selectedTask.dailyLimitPerGroup) || 1, 100)} 条计算；单个群单天不会超过 100 条</div>
+                    </>
+                  )}
                   {!selectedAllPremium ? <div className="mt-1 text-amber-200">• 只要混了普通号，就只能按日期发，不能开启重复；但 100 条是每天上限，不是整个日期范围总上限</div> : null}
                 </div>
               ) : null}
