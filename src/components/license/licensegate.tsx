@@ -77,32 +77,33 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-transparent text-white">
-      <div className="pointer-events-none absolute -left-12 top-[-20px] h-44 w-44 rounded-full bg-fuchsia-500/20 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-[-28px] right-[-18px] h-48 w-48 rounded-full bg-cyan-400/20 blur-3xl" />
+      <div className="pointer-events-none absolute -left-10 top-[-18px] h-36 w-36 rounded-full bg-cyan-400/12 blur-3xl" />
+      <div className="pointer-events-none absolute right-[-12px] top-20 h-32 w-32 rounded-full bg-sky-500/10 blur-3xl" />
 
-      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-white/15 bg-[linear-gradient(180deg,rgba(30,41,82,0.68)_0%,rgba(13,20,42,0.78)_100%)] px-6 py-7 shadow-[0_24px_80px_rgba(6,10,24,0.52),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-[22px]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(129,140,248,0.18),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.15),transparent_32%)]" />
+      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-cyan-200/12 bg-[linear-gradient(180deg,rgba(10,16,30,0.82)_0%,rgba(7,12,24,0.88)_100%)] px-6 py-5 shadow-[0_24px_80px_rgba(4,10,24,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-[24px]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.12),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_45%)]" />
+        <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(103,232,249,0.55),transparent)]" />
 
         <button
           type="button"
           onClick={() => void window.desktopWindow?.close()}
-          className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.06] text-lg leading-none text-white/75 transition hover:bg-white/[0.12] hover:text-white"
+          className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg leading-none text-white/70 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white"
           aria-label="关闭"
         >
           ×
         </button>
 
-        <div className="relative z-10 mt-2 flex flex-col items-center text-center">
+        <div className="relative z-10 mt-1 flex flex-col items-center text-center">
           <BrandLogo
-            size={92}
+            size={84}
             title="TG-Matrix"
-            className="flex-col gap-4"
+            className="flex-col gap-3"
             textClassName="text-center"
-            titleClassName="bg-[linear-gradient(180deg,#ffffff_0%,#dbeafe_100%)] bg-clip-text text-[32px] font-semibold text-transparent"
+            titleClassName="bg-[linear-gradient(180deg,#ffffff_0%,#d7e9ff_100%)] bg-clip-text text-[30px] font-semibold tracking-[0.01em] text-transparent"
           />
         </div>
 
-        <div className="relative z-10 mt-10">
+        <div className="relative z-10 mt-7">
           <input
             value={cardKey}
             onChange={(event) => setCardKey(event.target.value)}
@@ -115,23 +116,23 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
             placeholder="请输入卡密"
             spellCheck={false}
             autoComplete="off"
-            className="h-12 w-full rounded-[16px] border border-white/12 bg-[rgba(10,14,30,0.55)] px-4 text-white placeholder:text-white/34 outline-none backdrop-blur-xl transition focus:border-cyan-300/40 focus:bg-[rgba(10,14,30,0.68)]"
+            className="h-12 w-full rounded-[16px] border border-cyan-200/12 bg-[rgba(5,10,22,0.58)] px-4 text-white placeholder:text-white/28 outline-none backdrop-blur-xl transition focus:border-cyan-300/38 focus:bg-[rgba(7,14,28,0.78)] focus:shadow-[0_0_0_1px_rgba(103,232,249,0.08)]"
           />
 
           <button
             type="button"
             disabled={activating || validating || (loading && !initialized)}
             onClick={() => void submitLicense()}
-            className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-white/10 bg-[linear-gradient(135deg,#7c3aed_0%,#2563eb_48%,#06b6d4_100%)] px-6 text-sm font-medium text-white shadow-[0_12px_32px_rgba(59,130,246,0.35)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(21,32,58,0.96)_0%,rgba(10,18,36,0.98)_100%)] px-6 text-sm font-medium text-cyan-50 shadow-[0_12px_28px_rgba(8,18,38,0.48),inset_0_1px_0_rgba(170,240,255,0.18)] transition hover:border-cyan-300/32 hover:shadow-[0_14px_34px_rgba(14,165,233,0.18)] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {activating || validating || (loading && !initialized) ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+            {activating || validating || (loading && !initialized) ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} className="text-cyan-300" />}
             激活卡密
           </button>
         </div>
 
-        {statusMessage ? <div className="relative z-10 mt-4 rounded-[14px] border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-slate-100 backdrop-blur-xl">{statusMessage}</div> : null}
-        {errorMessage ? <div className="relative z-10 mt-4 rounded-[14px] border border-rose-300/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 backdrop-blur-xl">{errorMessage}</div> : null}
-        {!state.apiConfigured ? <div className="relative z-10 mt-4 rounded-[14px] border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-50 backdrop-blur-xl">授权服务地址还没配好，当前默认会先连本机 127.0.0.1:8787。</div> : null}
+        {statusMessage ? <div className="relative z-10 mt-4 rounded-[14px] border border-white/8 bg-white/[0.05] px-4 py-3 text-sm text-slate-100 backdrop-blur-xl">{statusMessage}</div> : null}
+        {errorMessage ? <div className="relative z-10 mt-4 rounded-[14px] border border-rose-300/16 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 backdrop-blur-xl">{errorMessage}</div> : null}
+        {!state.apiConfigured ? <div className="relative z-10 mt-4 rounded-[14px] border border-amber-300/18 bg-amber-300/10 px-4 py-3 text-sm text-amber-50 backdrop-blur-xl">授权服务地址还没配好，当前默认会先连本机 127.0.0.1:8787。</div> : null}
       </div>
     </div>
   )
