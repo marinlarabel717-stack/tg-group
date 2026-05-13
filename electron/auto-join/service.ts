@@ -552,7 +552,8 @@ export class AutoJoinService {
         requestedCount,
         failedCount,
         items: results,
-        message
+        message,
+        stopped: task.cancelled
       }
     } finally {
       await Promise.all(Array.from(clients.values()).map((client) => this.clientManager.destroyClient(client).catch(() => undefined)))

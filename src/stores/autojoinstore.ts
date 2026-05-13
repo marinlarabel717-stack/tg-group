@@ -51,6 +51,7 @@ export interface AutoJoinTaskSnapshot {
   items: AutoJoinResultItem[]
   finishedAt: string
   message: string
+  stopped?: boolean
 }
 
 interface AutoJoinState {
@@ -352,7 +353,7 @@ function applyResult(tasks: AutoJoinTaskRecord[], result: AutoJoinTaskResult) {
     alreadyCount: result.alreadyCount,
     requestedCount: result.requestedCount,
     failedCount: result.failedCount,
-    status: current.status === 'stopped' ? 'stopped' : 'completed',
+    status: result.stopped || current.status === 'stopped' ? 'stopped' : 'completed',
     finishedAt: new Date().toISOString(),
     lastMessage: result.message
   }
@@ -509,7 +510,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
               failedCount: result.failedCount,
               items: result.items,
               finishedAt: new Date().toISOString(),
-              message: result.message
+              message: result.message,
+              stopped: Boolean(result.stopped)
             }),
             completionDialogTaskId: result.taskId,
             lastActionMessage: result.message

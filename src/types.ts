@@ -583,6 +583,7 @@ export interface AutoJoinTaskResult {
   failedCount: number
   items: AutoJoinResultItem[]
   message: string
+  stopped?: boolean
 }
 
 export interface AutoJoinStopResult {

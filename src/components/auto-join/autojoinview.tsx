@@ -586,9 +586,12 @@ const LinksWorkbench = memo(function LinksWorkbench() {
 export default function AutoJoinView() {
   const activeTab = useAutoJoinStore((state) => state.activeTab)
   const taskSnapshots = useAutoJoinStore((state) => state.taskSnapshots)
+  const tasks = useAutoJoinStore((state) => state.tasks)
   const completionDialogTaskId = useAutoJoinStore((state) => state.completionDialogTaskId)
   const closeCompletionDialog = useAutoJoinStore((state) => state.closeCompletionDialog)
   const completionSnapshot = useMemo(() => taskSnapshots.find((item) => item.taskId === completionDialogTaskId) ?? null, [completionDialogTaskId, taskSnapshots])
+  const completionTask = useMemo(() => tasks.find((item) => item.id === completionDialogTaskId) ?? null, [completionDialogTaskId, tasks])
+  const completionStopped = Boolean(completionSnapshot?.stopped || completionTask?.status === 'stopped')
 
   return (
     <>
@@ -608,13 +611,13 @@ export default function AutoJoinView() {
       <ResultDialogShell
         open={Boolean(completionSnapshot)}
         onClose={closeCompletionDialog}
-        title="自动加群任务完成"
-        subtitle={completionSnapshot?.message || '这轮加群已经跑完了。'}
+        title={completionStopped ? '自动加群任务已停止' : '自动加群任务完成'}
+        subtitle={completionSnapshot?.message || (completionStopped ? '这轮加群已经停止。' : '这轮加群已经跑完了。')}
         icon={<CheckCircle2 size={18} />}
-        tone="success"
+        tone={completionStopped ? 'warning' : 'success'}
         maxWidth="max-w-[560px]"
       >
-        <ResultHero label="本轮已完成" value={`${completionSnapshot?.total || 0} 条`} tone="success" />
+        <ResultHero label={completionStopped ? '本轮已停止' : '本轮已完成'} value={`${completionSnapshot?.total || 0} 条`} tone={completionStopped ? 'warning' : 'success'} />
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <ResultStatCard label="成功" value={completionSnapshot?.successCount || 0} tone="success" />
@@ -623,7 +626,7 @@ export default function AutoJoinView() {
           <ResultStatCard label="已在群" value={completionSnapshot?.alreadyCount || 0} tone="violet" />
         </div>
 
-        <ResultPrimaryButton label="知道了" onClick={closeCompletionDialog} tone="success" />
+        <ResultPrimaryButton label="知道了" onClick={closeCompletionDialog} tone={completionStopped ? 'warning' : 'success'} />
       </ResultDialogShell>
     </>
   )
