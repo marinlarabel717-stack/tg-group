@@ -240,9 +240,10 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       })
       window.desktopAccounts?.onAccountsUpdated((accounts) => {
         const isChecking = get().checkState.running
-        applyAccountSnapshot(accounts, set, get, isChecking
-          ? undefined
-          : { lastActionMessage: 'sessions 目录检测到变更，列表已自动同步。' })
+        if (isChecking) {
+          return
+        }
+        applyAccountSnapshot(accounts, set, get, { lastActionMessage: 'sessions 目录检测到变更，列表已自动同步。' })
       })
       window.desktopAccounts?.onImportProgress((importProgress) => {
         set({
@@ -450,9 +451,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           multiIp: 0,
           timeout: 0
         },
-        lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务。`
+        lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务，检测过程中账号列表先不刷新，完成后统一更新。`
       })
-      await syncAccounts(set, get)
     })
   },
   clearCheckLogs: async () => {

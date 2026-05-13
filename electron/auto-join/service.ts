@@ -105,17 +105,23 @@ function formatAutoJoinError(error: unknown) {
   if (/Cannot find any entity corresponding to/i.test(normalized)) return '当前账号没法直接识别这个@群用户名，群可能存在，建议改用完整链接或邀请链接'
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '邀请链接失效了，或者已经不能用了'
   if (/CHANNEL_PRIVATE/i.test(normalized)) return '这个群进不去，可能是私密群，或者当前账号没权限'
-  if (/CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号加的群太多了，先换号或者退一些群再试'
+  if (/CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号加的群太多了，先退几个群再试'
   if (/USERS_TOO_MUCH/i.test(normalized)) return '这个群人数太多，当前方式进不去'
   if (/USERNAME_INVALID/i.test(normalized)) return '@群用户名写错了'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '@群用户名不存在'
+  if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '这个群链接或群引用不对，Telegram 找不到它'
   if (/USER_BANNED_IN_CHANNEL/i.test(normalized)) return '这个账号在目标群里被限制了'
   if (/USER_ALREADY_PARTICIPANT/i.test(normalized)) return '这个账号本来就在群里'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号登录状态失效了，需要重新登录'
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '这个群限制加入，当前账号没法直接进'
+  if (/INVITE_REQUEST_SENT/i.test(normalized)) return '这个群需要审核，已经提交申请了'
+  if (/PEER_FLOOD/i.test(normalized)) return '这个账号操作太频繁了，被 Telegram 限流了'
+  if (/FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(normalized)) return '这个账号已经冻结了，没法继续加群'
+  if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(normalized)) return '这个账号已经被封了，没法继续加群'
+  if (/ACCOUNT_RESTRICTED/i.test(normalized)) return '这个账号当前被限制了，没法继续加群'
   const wait = readRequiredWaitSeconds(error)
   if (wait) return `Telegram 要求先等 ${wait} 秒`
-  return normalized
+  return `加入时出了点问题：${normalized}`
 }
 
 function parseJoinTarget(target: AutoJoinPayloadItem) {
@@ -473,6 +479,8 @@ export class AutoJoinService {
             if (shouldWaitAfterAttempt(account.id)) {
               const baseDelay = pickDelayMs(payload.accountIntervalMin, payload.accountIntervalMax)
               const joinDelay = pickDelayMs(payload.joinIntervalMin, payload.joinIntervalMax)
+              const totalWaitSeconds = Math.max(1, Math.ceil((baseDelay + joinDelay) / 1000))
+              emit(`${accountLabel} 等待 ${totalWaitSeconds} 秒后，继续加入下一个。`, null, totalWaitSeconds, true)
               await sleep(baseDelay + joinDelay)
             }
           } catch (error) {
@@ -507,7 +515,10 @@ export class AutoJoinService {
               attempt
             })
             if (shouldWaitAfterAttempt(account.id)) {
-              await sleep(pickDelayMs(payload.accountIntervalMin, payload.accountIntervalMax))
+              const waitMs = pickDelayMs(payload.accountIntervalMin, payload.accountIntervalMax)
+              const waitSeconds = Math.max(1, Math.ceil(waitMs / 1000))
+              emit(`${accountLabel} 等待 ${waitSeconds} 秒后，继续加入下一个。`, null, waitSeconds, true)
+              await sleep(waitMs)
             }
           }
         }
