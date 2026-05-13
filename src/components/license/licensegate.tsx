@@ -80,14 +80,14 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-transparent text-white">
-      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,16,30,0.86)_0%,rgba(7,12,24,0.94)_100%)] px-6 py-4 shadow-[0_14px_32px_rgba(3,8,20,0.34),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[24px]">
+      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,16,30,0.82)_0%,rgba(7,12,24,0.92)_100%)] px-6 py-4 backdrop-blur-[24px]">
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),transparent_24%)]" />
         <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(186,230,253,0.22),transparent)]" />
 
         <button
           type="button"
           onClick={() => void window.desktopWindow?.close()}
-          className="absolute right-6 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/12 bg-slate-950/40 text-lg leading-none text-white/80 shadow-[0_8px_20px_rgba(3,8,20,0.24)] transition hover:border-cyan-300/35 hover:bg-cyan-300/12 hover:text-white active:scale-[0.97]"
+          className="absolute right-6 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-slate-950/34 text-lg leading-none text-white/80 transition hover:border-cyan-300/28 hover:bg-cyan-300/10 hover:text-white active:scale-[0.97]"
           style={{ pointerEvents: 'auto' }}
           aria-label="关闭"
         >
@@ -124,7 +124,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
             type="button"
             disabled={activating || validating || (loading && !initialized)}
             onClick={() => void submitLicense()}
-            className="mt-3.5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(19,31,55,0.98)_0%,rgba(9,17,34,1)_100%)] px-6 text-sm font-medium text-cyan-50 shadow-[0_10px_24px_rgba(8,18,38,0.42),inset_0_1px_0_rgba(170,240,255,0.16)] transition hover:border-cyan-300/32 hover:shadow-[0_12px_28px_rgba(14,165,233,0.14)] disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-3.5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-cyan-300/16 bg-[linear-gradient(180deg,rgba(19,31,55,0.98)_0%,rgba(9,17,34,1)_100%)] px-6 text-sm font-medium text-cyan-50 transition hover:border-cyan-300/28 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {activating || validating || (loading && !initialized) ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} className="text-cyan-300" />}
             激活卡密
