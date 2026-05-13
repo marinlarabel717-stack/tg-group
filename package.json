@@ -30,7 +30,8 @@
     "appId": "ai.tggroup.desktop",
     "productName": "TG Group",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**",
@@ -45,6 +46,10 @@
       {
         "from": "electron/accounts/check-engine/telethon_freeze_check.py",
         "to": "runtime/accounts/check-engine/telethon_freeze_check.py"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "runtime/app/icon.png"
       }
     ],
     "asar": true,
@@ -58,6 +63,7 @@
           ]
         }
       ],
+      "icon": "build/icon.ico",
       "artifactName": "${productName}-${version}-Setup.${ext}"
     },
     "portable": {
@@ -69,7 +75,10 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "runAfterFinish": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
     },
     "publish": [
       {

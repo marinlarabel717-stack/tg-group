@@ -44,6 +44,9 @@ let managedSessionsWatcherSuspendCount = 0
 
 function createWindow() {
   const appTitle = app.getName()
+  const appIconPath = app.isPackaged
+    ? resolveRuntimeAssetPath('app', 'icon.png')
+    : path.join(process.cwd(), 'build', 'icon.png')
 
   mainWindow = new BrowserWindow({
     width: 1600,
@@ -63,6 +66,7 @@ function createWindow() {
     backgroundColor: '#08101d',
     autoHideMenuBar: true,
     title: appTitle,
+    icon: process.platform === 'darwin' ? undefined : appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
