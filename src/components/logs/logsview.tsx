@@ -22,14 +22,14 @@ function formatLogTimestamp(value: string) {
 
 function getAccountLogLineClass(log: CheckLogEntry) {
   if (log.status === 'alive') return 'text-emerald-300'
-  if (log.status === 'limited') return 'text-sky-300'
+  if (log.status === 'limited') return 'text-yellow-300'
   if (log.status === 'temporary_limited') return 'text-orange-300'
-  if (log.status === 'geo_restricted') return 'text-amber-200'
-  if (log.status === 'multi_ip') return 'text-indigo-300'
-  if (log.status === 'frozen') return 'text-cyan-300'
+  if (log.status === 'geo_restricted') return 'text-lime-300'
+  if (log.status === 'multi_ip') return 'text-pink-300'
+  if (log.status === 'frozen') return 'text-blue-300'
   if (log.status === 'banned') return 'text-rose-300'
   if (log.status === 'timeout') return 'text-violet-300'
-  if (log.status === 'unknown' && isGeoRestrictedError(log.message)) return 'text-amber-200'
+  if (log.status === 'unknown' && isGeoRestrictedError(log.message)) return 'text-lime-300'
   if (log.status === 'unknown') return 'text-slate-200'
 
   if (log.message.includes('本次检测已完成')) return 'text-emerald-300'

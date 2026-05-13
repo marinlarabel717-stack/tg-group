@@ -6,13 +6,13 @@ import { formatAccountStatus, isGeoRestrictedError } from '../../lib/ui-text'
 const styles: Record<AccountStatus, string> = {
   alive: 'bg-emerald-500/15 text-emerald-300',
   banned: 'bg-rose-500/15 text-rose-300',
-  limited: 'bg-sky-500/15 text-sky-300',
+  limited: 'bg-yellow-500/15 text-yellow-300',
   temporary_limited: 'bg-orange-500/15 text-orange-300',
-  geo_restricted: 'bg-amber-500/15 text-amber-300',
-  frozen: 'bg-cyan-500/15 text-cyan-300',
+  geo_restricted: 'bg-lime-500/15 text-lime-300',
+  frozen: 'bg-blue-500/15 text-blue-300',
   session_expired: 'bg-fuchsia-500/15 text-fuchsia-300',
   not_logged_in: 'bg-red-400/15 text-red-300',
-  multi_ip: 'bg-indigo-500/15 text-indigo-300',
+  multi_ip: 'bg-pink-500/15 text-pink-300',
   timeout: 'bg-violet-500/15 text-violet-300',
   checking: 'bg-teal-500/15 text-teal-300',
   unknown: 'bg-white/10 text-slate-200'
