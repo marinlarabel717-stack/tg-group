@@ -143,6 +143,31 @@ function readForwardLabel(message: any) {
   return ''
 }
 
+function readScheduledRepeatPeriod(message: any) {
+  const candidates = [
+    message?.scheduleRepeatPeriod,
+    message?.schedule_repeat_period,
+    message?.schedulePeriod,
+    message?.schedule_period,
+    message?.repeatPeriodSeconds,
+    message?.repeat_period_seconds
+  ]
+
+  for (const value of candidates) {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value
+    if (typeof value === 'bigint') {
+      const next = Number(value)
+      if (Number.isFinite(next) && next > 0) return next
+    }
+    if (typeof value === 'string' && value.trim()) {
+      const next = Number(value)
+      if (Number.isFinite(next) && next > 0) return next
+    }
+  }
+
+  return null
+}
+
 function serializeScheduledMessage(message: any): BroadcastScheduledMessageItem | null {
   const messageId = typeof message?.id === 'number' ? message.id : null
   if (!messageId) return null
@@ -150,7 +175,9 @@ function serializeScheduledMessage(message: any): BroadcastScheduledMessageItem 
     ? message.message.trim()
     : typeof message?.text === 'string'
       ? message.text.trim()
-      : ''
+      : typeof message?.rawText === 'string'
+        ? message.rawText.trim()
+        : ''
   const hasMedia = Boolean(message?.media)
   const hasButtons = Boolean(message?.replyMarkup)
   const forwardLabel = readForwardLabel(message)
@@ -162,7 +189,8 @@ function serializeScheduledMessage(message: any): BroadcastScheduledMessageItem 
     mediaLabel: readScheduledMediaLabel(message),
     hasButtons,
     isForwarded: Boolean(message?.fwdFrom),
-    forwardLabel
+    forwardLabel,
+    repeatPeriodSeconds: readScheduledRepeatPeriod(message)
   }
 }
 

@@ -1664,6 +1664,9 @@ const CalendarWorkbench = memo(function CalendarWorkbench() {
 
 const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
   const accounts = useAccountStore((state) => state.accounts)
+  const creatives = useBroadcastStore((state) => state.creatives)
+  const previewItems = useBroadcastStore((state) => state.previewItems)
+  const configuredGroups = useBroadcastStore((state) => state.groups)
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [draftAccountId, setDraftAccountId] = useState<number | null>(null)
@@ -1688,6 +1691,36 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
     () => groups.find((item) => item.targetRef === selectedGroupRef) ?? null,
     [groups, selectedGroupRef]
   )
+
+  const matchedPreviewByMessageId = useMemo(() => {
+    if (typeof selectedAccountId !== 'number' || !selectedGroup) return new Map<number, BroadcastPreviewItem>()
+    const targetGroupRef = normalizeGroupRefValue(selectedGroup.targetRef || selectedGroup.username || '')
+    const matchedGroupIds = new Set(
+      configuredGroups
+        .filter((group) => normalizeGroupRefValue(group.targetRef || group.username || '') === targetGroupRef)
+        .map((group) => group.id)
+    )
+
+    const result = new Map<number, BroadcastPreviewItem>()
+    for (const item of previewItems) {
+      if (item.accountId !== selectedAccountId) continue
+      if (!item.remoteMessageId) continue
+      if (!matchedGroupIds.has(item.groupId)) continue
+      result.set(item.remoteMessageId, item)
+    }
+    return result
+  }, [configuredGroups, previewItems, selectedAccountId, selectedGroup])
+
+  const displayItems = useMemo(() => items.map((item) => {
+    const matchedPreview = matchedPreviewByMessageId.get(item.messageId)
+    const matchedCreative = matchedPreview?.creativeId ? creatives.find((creative) => creative.id === matchedPreview.creativeId) ?? null : null
+    const fallbackText = matchedCreative?.text?.trim() || ''
+    return {
+      ...item,
+      text: item.text || fallbackText,
+      repeatPeriodSeconds: item.repeatPeriodSeconds ?? matchedPreview?.repeatPeriodSeconds ?? null
+    }
+  }), [creatives, items, matchedPreviewByMessageId])
 
   useEffect(() => {
     if (!accountPickerOpen) {
@@ -1925,7 +1958,7 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
         </div>
         <div className="rounded-[18px] bg-panel p-4">
           <div className="text-xs text-textMuted">当前群定时条数</div>
-          <div className="mt-2 text-2xl font-semibold text-white">{items.length}</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{displayItems.length}</div>
         </div>
         <div className="rounded-[18px] bg-panel p-4">
           <div className="text-xs text-textMuted">已勾选删除</div>
@@ -1949,10 +1982,10 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
           <div className="flex min-h-[280px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">请先选择账号，再查看这个账号的群定时内容。</div>
         ) : loadingItems ? (
           <div className="flex min-h-[280px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">正在读取定时内容...</div>
-        ) : items.length === 0 ? (
+        ) : displayItems.length === 0 ? (
           <div className="flex min-h-[280px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">这个群现在还没有定时内容。</div>
         ) : (
-          items.map((item) => {
+          displayItems.map((item) => {
             const checked = selectedMessageIds.includes(item.messageId)
             return (
               <div key={item.messageId} className="rounded-[18px] bg-panel p-4">
@@ -1971,8 +2004,11 @@ const ScheduledContentWorkbench = memo(function ScheduledContentWorkbench() {
                         {item.hasButtons ? <span className="rounded-full bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-200">带按钮</span> : null}
                         {item.isForwarded ? <span className="rounded-full bg-violet-400/10 px-2.5 py-1 text-[11px] text-violet-200">频道转发</span> : null}
                       </div>
-                      <div className="mt-2 text-sm text-slate-200">{readScheduledContentLabel(item)}</div>
-                      {item.forwardLabel ? <div className="mt-2 text-xs text-textMuted">来源：{item.forwardLabel}</div> : null}
+                      <div className="mt-2 text-sm text-slate-200 whitespace-pre-wrap break-words">{readScheduledContentLabel(item)}</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-textMuted">
+                        <span>重复：{readRepeatLabel(item.repeatPeriodSeconds)}</span>
+                        {item.forwardLabel ? <span>来源：{item.forwardLabel}</span> : null}
+                      </div>
                     </div>
                   </label>
 

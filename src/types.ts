@@ -385,6 +385,7 @@ export interface BroadcastScheduledMessageItem {
   hasButtons: boolean
   isForwarded: boolean
   forwardLabel: string
+  repeatPeriodSeconds?: number | null
 }
 
 export interface BroadcastScheduledMessageListResult {
