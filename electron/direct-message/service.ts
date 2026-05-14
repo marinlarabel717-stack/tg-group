@@ -9,6 +9,7 @@ import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
 import type {
+  CheckLogLevel,
   DirectMessageAutoReplyEvent,
   DirectMessageAutoReplyPayload,
   DirectMessageAutoReplyState,
@@ -25,6 +26,12 @@ import type {
   GroupCollectorPayload,
   GroupCollectorResult,
   GroupCollectorRole,
+  GroupCollectorTaskPayload,
+  GroupCollectorTaskProgress,
+  GroupCollectorTaskResult,
+  GroupCollectorTaskStartResult,
+  GroupCollectorTaskStatus,
+  GroupCollectorTaskStopResult,
   GroupCollectorUserPayload
 } from '../../src/types'
 
@@ -205,6 +212,122 @@ function resolveCollectorSource(input: string) {
   return raw
 }
 
+function extractInviteHash(input: string) {
+  const raw = input.trim()
+  if (!raw) return ''
+  const plusMatched = raw.match(/(?:https?:\/\/)?t\.me\/(?:joinchat\/|\+)([^/?#]+)/i)
+  if (plusMatched?.[1]) return plusMatched[1].trim()
+  return ''
+}
+
+function normalizeCollectorGroupSource(input: string) {
+  const raw = input.trim()
+  if (!raw) return null
+  const inviteHash = extractInviteHash(raw)
+  if (inviteHash) {
+    return {
+      kind: 'invite' as const,
+      value: inviteHash,
+      label: `https://t.me/+${inviteHash}`
+    }
+  }
+
+  const publicMatched = raw.match(/(?:https?:\/\/)?t\.me\/([A-Za-z0-9_]{5,})(?:\?.*)?$/i)
+  if (publicMatched?.[1]) {
+    const username = publicMatched[1].replace(/^@+/, '')
+    return {
+      kind: 'username' as const,
+      value: `@${username}`,
+      label: `@${username}`
+    }
+  }
+
+  if (/^@?[A-Za-z0-9_]{5,}$/i.test(raw)) {
+    const username = raw.replace(/^@+/, '')
+    return {
+      kind: 'username' as const,
+      value: `@${username}`,
+      label: `@${username}`
+    }
+  }
+
+  return null
+}
+
+async function resolveCollectorGroupEntity(client: TelegramClient, source: ReturnType<typeof normalizeCollectorGroupSource>) {
+  if (!source) throw new Error('群链接或群用户名不对')
+
+  if (source.kind === 'invite') {
+    const invite = await client.invoke(new Api.messages.CheckChatInvite({ hash: source.value }))
+    if ((invite as { className?: string }).className === 'ChatInviteAlready') {
+      return (invite as { chat?: unknown }).chat ?? null
+    }
+    return invite
+  }
+
+  return client.getEntity(source.value as never)
+}
+
+async function ensureCollectorGroupJoined(client: TelegramClient, source: ReturnType<typeof normalizeCollectorGroupSource>, entity: unknown) {
+  if (!source) throw new Error('群链接或群用户名不对')
+
+  if (source.kind === 'invite') {
+    const invite = await client.invoke(new Api.messages.CheckChatInvite({ hash: source.value }))
+    const className = (invite as { className?: string }).className || ''
+    if (/ChatInviteAlready/i.test(className)) {
+      return {
+        joined: true,
+        label: readGroupTitle((invite as { chat?: unknown }).chat ?? invite, source.label)
+      }
+    }
+
+    const result = await client.invoke(new Api.messages.ImportChatInvite({ hash: source.value }))
+    return {
+      joined: true,
+      label: readGroupTitle(result, source.label)
+    }
+  }
+
+  try {
+    await client.invoke(new Api.channels.GetParticipant({
+      channel: entity as never,
+      participant: new Api.InputPeerSelf()
+    }))
+
+    return {
+      joined: true,
+      label: readGroupTitle(entity, source.label)
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!/USER_NOT_PARTICIPANT|PARTICIPANT_ID_INVALID/i.test(message)) {
+      throw error
+    }
+  }
+
+  await client.invoke(new Api.channels.JoinChannel({ channel: entity as never }))
+  return {
+    joined: true,
+    label: readGroupTitle(entity, source.label)
+  }
+}
+
+function formatCollectorGroupError(error: unknown) {
+  const normalized = error instanceof Error ? error.message.trim() : String(error).trim()
+  if (!normalized) return '采集时出了点问题'
+  if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '私密链接失效了，或者这个邀请链接已经不能用了'
+  if (/CHANNEL_PRIVATE/i.test(normalized)) return '这个群进不去，可能是私密群，或者当前账号没有权限'
+  if (/USER_ALREADY_PARTICIPANT/i.test(normalized)) return '这个账号本来就在群里'
+  if (/USERNAME_INVALID/i.test(normalized)) return '@群用户名写错了'
+  if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '@群用户名不存在'
+  if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '这个群链接或群引用不对，Telegram 找不到它'
+  if (/USER_BANNED_IN_CHANNEL/i.test(normalized)) return '这个账号在目标群里被限制了'
+  if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '这个群限制加入，当前账号没法直接进'
+  if (/INVITE_REQUEST_SENT/i.test(normalized)) return '这个群需要审核，当前账号只提交了入群申请，暂时还采不了'
+  if (/USERS_TOO_MUCH|CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号的加群数量已经接近上限了，先清理一些群再试'
+  return formatDirectMessageError(error)
+}
+
 function normalizeCollectorDisplayName(user: { id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null }) {
   const firstName = typeof user.firstName === 'string' ? user.firstName.trim() : ''
   const lastName = typeof user.lastName === 'string' ? user.lastName.trim() : ''
@@ -243,6 +366,21 @@ function stringifyEntityId(value: unknown) {
 
 function readParticipantUserId(participant: any) {
   return stringifyEntityId(participant?.userId ?? participant?.user_id ?? participant?.peer?.userId ?? participant?.peer?.user_id)
+}
+
+function readGroupTitle(source: unknown, fallback: string) {
+  if (Array.isArray((source as { chats?: unknown[] } | null)?.chats)) {
+    const chats = (source as { chats: Array<{ title?: unknown; username?: unknown }> }).chats
+    const firstTitle = chats.map((item) => typeof item.title === 'string' ? item.title.trim() : '').find(Boolean)
+    if (firstTitle) return firstTitle
+    const firstUsername = chats.map((item) => typeof item.username === 'string' ? item.username.trim() : '').find(Boolean)
+    if (firstUsername) return `@${firstUsername.replace(/^@+/, '')}`
+  }
+
+  const entity = source as { title?: unknown; username?: unknown } | null
+  if (typeof entity?.title === 'string' && entity.title.trim()) return entity.title.trim()
+  if (typeof entity?.username === 'string' && entity.username.trim()) return `@${entity.username.replace(/^@+/, '')}`
+  return fallback
 }
 
 function readCollectorLastSeen(user: Record<string, unknown>): { bucket: GroupCollectorLastSeenBucket; label: string } {
@@ -479,6 +617,12 @@ interface ActiveSendTask {
   clients: Map<number, TelegramClient>
 }
 
+interface ActiveGroupCollectorTask {
+  cancelled: boolean
+  accountIds: number[]
+  clients: Map<number, TelegramClient>
+}
+
 export class DirectMessageService {
   private autoReplyRuntime = new Map<number, AutoReplyRuntimeEntry>()
   private autoReplyState: DirectMessageAutoReplyState = {
@@ -492,6 +636,8 @@ export class DirectMessageService {
   private autoReplyCooldowns = new Map<string, number>()
   private autoReplyEventSink?: (payload: DirectMessageAutoReplyEvent) => void
   private activeSendTask: ActiveSendTask | null = null
+  private groupCollectorProgressSink?: (payload: GroupCollectorTaskProgress) => void
+  private activeGroupCollectorTasks = new Map<string, ActiveGroupCollectorTask>()
 
   constructor(
     private readonly accountRepository: AccountRepository,
@@ -502,6 +648,84 @@ export class DirectMessageService {
 
   setAutoReplyEventSink(sink?: (payload: DirectMessageAutoReplyEvent) => void) {
     this.autoReplyEventSink = sink
+  }
+
+  setGroupCollectorProgressSink(sink?: (payload: GroupCollectorTaskProgress) => void) {
+    this.groupCollectorProgressSink = sink
+  }
+
+  async startGroupCollectorTask(payload: GroupCollectorTaskPayload): Promise<GroupCollectorTaskStartResult> {
+    const accountIds = Array.from(new Set(payload.accountIds.filter((item) => Number.isFinite(item))))
+    const sources = Array.from(new Set(payload.sources.map((item) => item.trim()).filter(Boolean)))
+    const maxGroupsPerAccount = Math.max(1, Math.min(payload.maxGroupsPerAccount ?? 5, 20))
+
+    if (accountIds.length === 0) {
+      throw new Error('请先选择采集账号。')
+    }
+    if (sources.length === 0) {
+      throw new Error('请先添加采集群列表。')
+    }
+
+    const busyAccountIds = new Set<number>()
+    this.activeGroupCollectorTasks.forEach((task) => {
+      if (task.cancelled) return
+      task.accountIds.forEach((accountId) => busyAccountIds.add(accountId))
+    })
+
+    const occupied = accountIds.filter((accountId) => busyAccountIds.has(accountId))
+    if (occupied.length > 0) {
+      throw new Error('所选账号里有正在执行其他采集任务的账号，请换一批空闲账号再试。')
+    }
+
+    const capacity = accountIds.length * maxGroupsPerAccount
+    if (sources.length > capacity) {
+      throw new Error(`当前最多只能采集 ${capacity} 个群。按默认每个账号最多 5 个群，你还需要再补一些空闲账号。`)
+    }
+
+    const taskId = payload.taskId || createId('collector_task')
+    const task: ActiveGroupCollectorTask = {
+      cancelled: false,
+      accountIds,
+      clients: new Map<number, TelegramClient>()
+    }
+    this.activeGroupCollectorTasks.set(taskId, task)
+
+    void this.runGroupCollectorTask(taskId, task, {
+      ...payload,
+      taskId,
+      accountIds,
+      sources,
+      maxGroupsPerAccount
+    }).finally(() => {
+      this.activeGroupCollectorTasks.delete(taskId)
+    })
+
+    return {
+      taskId,
+      accepted: true,
+      message: `采集任务已启动：${accountIds.length} 个账号，${sources.length} 个群。`
+    }
+  }
+
+  async stopGroupCollectorTask(taskId: string): Promise<GroupCollectorTaskStopResult> {
+    const task = this.activeGroupCollectorTasks.get(taskId)
+    if (!task) {
+      return {
+        taskId,
+        stopped: false,
+        message: '当前任务已经结束，或者不存在。'
+      }
+    }
+
+    task.cancelled = true
+    await Promise.all(Array.from(task.clients.values()).map((client) => this.clientManager.destroyClient(client).catch(() => undefined)))
+    task.clients.clear()
+
+    return {
+      taskId,
+      stopped: true,
+      message: '已停止当前采集任务。'
+    }
   }
 
   async stopCurrentSend(): Promise<DirectMessageStopResult> {
@@ -928,94 +1152,7 @@ export class DirectMessageService {
     const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
 
     try {
-      const sourceRef = resolveCollectorSource(payload.source)
-      if (!sourceRef) {
-        throw new Error('请先填写群链接或群用户名')
-      }
-
-      const entity = await client.getEntity(sourceRef as never)
-      const adminRoleMap = await loadAdminRoleMap(client, entity)
-      let rawUsers: Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }> = []
-
-      if (payload.mode === 'public_members') {
-        const participantLimit = Number.isFinite(payload.participantLimit) ? Number(payload.participantLimit) : 0
-        const params: Record<string, unknown> = {}
-        if (participantLimit > 0) {
-          params.limit = Math.max(1, Math.min(participantLimit, 5000))
-        }
-        rawUsers = await (client as TelegramClient & {
-          getParticipants: (entity: unknown, params: Record<string, unknown>) => Promise<Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }>>
-        }).getParticipants(entity as never, params)
-      } else {
-        const historyLimit = Number.isFinite(payload.historyLimit) ? Number(payload.historyLimit) : 1000
-        const messages = await (client as TelegramClient & {
-          getMessages: (entity: unknown, params: Record<string, unknown>) => Promise<Array<any>>
-        }).getMessages(entity as never, { limit: Math.max(1, Math.min(historyLimit, 5000)) })
-
-        const users = new Map<string, { id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }>()
-        for (const message of messages || []) {
-          let sender = typeof message?.getSender === 'function' ? await message.getSender() : null
-          if (!sender && message?.senderId) {
-            try {
-              sender = await client.getEntity(message.senderId as never)
-            } catch {
-              sender = null
-            }
-          }
-          if (!sender || typeof sender !== 'object') continue
-          const userId = stringifyEntityId((sender as { id?: unknown }).id)
-          if (!userId || users.has(userId)) continue
-          users.set(userId, sender as any)
-        }
-        rawUsers = Array.from(users.values())
-      }
-
-      const seen = new Set<string>()
-      const items: GroupCollectorUserPayload[] = []
-      let skipped = 0
-
-      for (const rawUser of rawUsers) {
-        const userId = stringifyEntityId(rawUser.id)
-        if (!userId || seen.has(userId)) {
-          skipped += 1
-          continue
-        }
-        seen.add(userId)
-
-        const lastSeen = readCollectorLastSeen(rawUser as Record<string, unknown>)
-        const item: GroupCollectorUserPayload = {
-          userId,
-          displayName: normalizeCollectorDisplayName(rawUser),
-          username: typeof rawUser.username === 'string' ? rawUser.username : '',
-          phone: typeof rawUser.phone === 'string' ? rawUser.phone : '',
-          targetValue: normalizeCollectedValue(rawUser),
-          sourceLabel: payload.mode === 'public_members' ? '公开群成员' : '历史发言用户',
-          role: adminRoleMap.get(userId) || 'member',
-          isBot: Boolean((rawUser as { bot?: boolean | null }).bot),
-          hasAvatar: readCollectorHasAvatar(rawUser as Record<string, unknown>),
-          hasUsername: Boolean(typeof rawUser.username === 'string' && rawUser.username.trim()),
-          isPremium: readCollectorIsPremium(rawUser as Record<string, unknown>),
-          lastSeenBucket: lastSeen.bucket,
-          lastSeenLabel: lastSeen.label
-        }
-
-        if (!shouldKeepCollectorUser(item, payload.filters)) {
-          skipped += 1
-          continue
-        }
-
-        items.push(item)
-      }
-
-      return {
-        total: rawUsers.length,
-        matched: items.length,
-        filtered: skipped,
-        items,
-        message: items.length > 0
-          ? `采集完成，命中 ${items.length} 个用户。`
-          : '这次没有命中符合条件的用户。'
-      }
+      return await this.collectGroupUsersWithClient(client, payload)
     } catch (error) {
       throw new Error(formatDirectMessageError(error))
     } finally {
@@ -1135,6 +1272,250 @@ export class DirectMessageService {
 
   async dispose() {
     await this.stopAllAutoReply()
+  }
+
+  private async collectGroupUsersWithClient(client: TelegramClient, payload: GroupCollectorPayload): Promise<GroupCollectorResult> {
+    const normalizedSource = normalizeCollectorGroupSource(payload.source) || (resolveCollectorSource(payload.source) ? {
+      kind: 'username' as const,
+      value: resolveCollectorSource(payload.source),
+      label: resolveCollectorSource(payload.source)
+    } : null)
+
+    if (!normalizedSource) {
+      throw new Error('请先填写群链接或群用户名')
+    }
+
+    const entity = await resolveCollectorGroupEntity(client, normalizedSource)
+    const targetEntity = (entity as { chat?: unknown } | null)?.chat ?? entity
+    const adminRoleMap = await loadAdminRoleMap(client, targetEntity)
+    let rawUsers: Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }> = []
+
+    if (payload.mode === 'public_members') {
+      const participantLimit = Number.isFinite(payload.participantLimit) ? Number(payload.participantLimit) : 0
+      const params: Record<string, unknown> = {}
+      if (participantLimit > 0) {
+        params.limit = Math.max(1, Math.min(participantLimit, 5000))
+      }
+      rawUsers = await (client as TelegramClient & {
+        getParticipants: (entity: unknown, params: Record<string, unknown>) => Promise<Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }>>
+      }).getParticipants(targetEntity as never, params)
+    } else {
+      const historyLimit = Number.isFinite(payload.historyLimit) ? Number(payload.historyLimit) : 1000
+      const messages = await (client as TelegramClient & {
+        getMessages: (entity: unknown, params: Record<string, unknown>) => Promise<Array<any>>
+      }).getMessages(targetEntity as never, { limit: Math.max(1, Math.min(historyLimit, 5000)) })
+
+      const users = new Map<string, { id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }>()
+      for (const message of messages || []) {
+        let sender = typeof message?.getSender === 'function' ? await message.getSender() : null
+        if (!sender && message?.senderId) {
+          try {
+            sender = await client.getEntity(message.senderId as never)
+          } catch {
+            sender = null
+          }
+        }
+        if (!sender || typeof sender !== 'object') continue
+        const userId = stringifyEntityId((sender as { id?: unknown }).id)
+        if (!userId || users.has(userId)) continue
+        users.set(userId, sender as any)
+      }
+      rawUsers = Array.from(users.values())
+    }
+
+    const seen = new Set<string>()
+    const items: GroupCollectorUserPayload[] = []
+    let skipped = 0
+
+    for (const rawUser of rawUsers) {
+      const userId = stringifyEntityId(rawUser.id)
+      if (!userId || seen.has(userId)) {
+        skipped += 1
+        continue
+      }
+      seen.add(userId)
+
+      const lastSeen = readCollectorLastSeen(rawUser as Record<string, unknown>)
+      const item: GroupCollectorUserPayload = {
+        userId,
+        displayName: normalizeCollectorDisplayName(rawUser),
+        username: typeof rawUser.username === 'string' ? rawUser.username : '',
+        phone: typeof rawUser.phone === 'string' ? rawUser.phone : '',
+        targetValue: normalizeCollectedValue(rawUser),
+        sourceLabel: payload.mode === 'public_members' ? '公开群成员' : '历史发言用户',
+        role: adminRoleMap.get(userId) || 'member',
+        isBot: Boolean((rawUser as { bot?: boolean | null }).bot),
+        hasAvatar: readCollectorHasAvatar(rawUser as Record<string, unknown>),
+        hasUsername: Boolean(typeof rawUser.username === 'string' && rawUser.username.trim()),
+        isPremium: readCollectorIsPremium(rawUser as Record<string, unknown>),
+        lastSeenBucket: lastSeen.bucket,
+        lastSeenLabel: lastSeen.label
+      }
+
+      if (!shouldKeepCollectorUser(item, payload.filters)) {
+        skipped += 1
+        continue
+      }
+
+      items.push(item)
+    }
+
+    return {
+      total: rawUsers.length,
+      matched: items.length,
+      filtered: skipped,
+      items,
+      message: items.length > 0
+        ? `采集完成，命中 ${items.length} 个用户。`
+        : '这次没有命中符合条件的用户。'
+    }
+  }
+
+  private emitGroupCollectorProgress(payload: GroupCollectorTaskProgress) {
+    this.groupCollectorProgressSink?.(payload)
+  }
+
+  private async runGroupCollectorTask(taskId: string, task: ActiveGroupCollectorTask, payload: GroupCollectorTaskPayload & { maxGroupsPerAccount: number }) {
+    const accounts = this.accountRepository.getByIds(payload.accountIds)
+    const normalizedSources = payload.sources
+      .map((source) => normalizeCollectorGroupSource(source))
+      .filter((source): source is NonNullable<ReturnType<typeof normalizeCollectorGroupSource>> => Boolean(source))
+
+    const chunks: Array<Array<NonNullable<ReturnType<typeof normalizeCollectorGroupSource>>>> = []
+    for (let index = 0; index < normalizedSources.length; index += payload.maxGroupsPerAccount) {
+      chunks.push(normalizedSources.slice(index, index + payload.maxGroupsPerAccount))
+    }
+
+    const assignments = accounts.map((account, index) => ({
+      account,
+      sources: chunks[index] ?? []
+    })).filter((entry) => entry.sources.length > 0)
+
+    const uniqueItems = new Map<string, GroupCollectorUserPayload>()
+    let joinedCount = 0
+    let successCount = 0
+    let failedCount = 0
+    let processedGroups = 0
+
+    const pushLog = (status: GroupCollectorTaskStatus, level: CheckLogLevel, message: string, accountId: number | null, accountPhone: string, source: string, result?: GroupCollectorTaskResult | null) => {
+      this.emitGroupCollectorProgress({
+        taskId,
+        status,
+        totalGroups: normalizedSources.length,
+        processedGroups,
+        totalAccounts: payload.accountIds.length,
+        joinedCount,
+        successCount,
+        failedCount,
+        message,
+        log: {
+          id: createId('collector_log'),
+          taskId,
+          level,
+          createdAt: new Date().toISOString(),
+          accountId,
+          accountPhone,
+          source,
+          message
+        },
+        result: result ?? null
+      })
+    }
+
+    const buildResult = (status: GroupCollectorTaskStatus, message: string): GroupCollectorTaskResult => ({
+      taskId,
+      status,
+      joinedCount,
+      successCount,
+      failedCount,
+      totalGroups: normalizedSources.length,
+      totalAccounts: payload.accountIds.length,
+      items: Array.from(uniqueItems.values()),
+      usernames: Array.from(new Set(Array.from(uniqueItems.values()).map((item) => item.username ? `@${item.username.replace(/^@+/, '')}` : '').filter(Boolean))),
+      message
+    })
+
+    this.emitGroupCollectorProgress({
+      taskId,
+      status: 'running',
+      totalGroups: normalizedSources.length,
+      processedGroups,
+      totalAccounts: payload.accountIds.length,
+      joinedCount,
+      successCount,
+      failedCount,
+      message: `采集任务已开始：${payload.accountIds.length} 个账号，${normalizedSources.length} 个群。`,
+      log: null,
+      result: null
+    })
+
+    await Promise.allSettled(assignments.map(async ({ account, sources }) => {
+      const phone = account.phone?.trim() ? (account.phone.startsWith('+') ? account.phone : `+${account.phone}`) : `账号#${account.id}`
+      const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+      task.clients.set(account.id, client)
+
+      try {
+        for (const source of sources) {
+          if (task.cancelled) break
+
+          try {
+            const entity = await resolveCollectorGroupEntity(client, source)
+            const targetEntity = (entity as { chat?: unknown } | null)?.chat ?? entity
+            const joinedState = await ensureCollectorGroupJoined(client, source, targetEntity)
+            joinedCount += 1
+            pushLog('running', 'info', `[${phone}] 已加入 ${joinedState.label} - 正在采集用户`, account.id, phone, joinedState.label)
+
+            const result = await this.collectGroupUsersWithClient(client, {
+              accountId: account.id,
+              source: source.value,
+              mode: payload.mode,
+              participantLimit: payload.participantLimit,
+              historyLimit: payload.historyLimit,
+              filters: payload.filters
+            })
+
+            let added = 0
+            result.items.forEach((item) => {
+              const key = item.userId || normalizeTargetValue(item.targetValue || item.username || item.phone || item.displayName)
+              if (!key || uniqueItems.has(key)) return
+              uniqueItems.set(key, item)
+              added += 1
+            })
+            successCount = uniqueItems.size
+            processedGroups += 1
+            pushLog('running', 'success', `[${phone}] 已加入 ${joinedState.label} - 正在采集用户 - ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}`, account.id, phone, joinedState.label)
+          } catch (error) {
+            failedCount += 1
+            processedGroups += 1
+            pushLog('running', 'error', `[${phone}] 加入失败（${formatCollectorGroupError(error)}）`, account.id, phone, source.label)
+          }
+        }
+      } catch (error) {
+        pushLog('running', 'error', `[${phone}] 当前账号启动采集失败（${formatCollectorGroupError(error)}）`, account.id, phone, '')
+      } finally {
+        task.clients.delete(account.id)
+        await this.clientManager.destroyClient(client).catch(() => undefined)
+      }
+    }))
+
+    const finalStatus: GroupCollectorTaskStatus = task.cancelled ? 'stopped' : 'completed'
+    const finalMessage = task.cancelled
+      ? '采集任务已停止。'
+      : `采集完成：成功采集 ${successCount} 个去重用户，失败 ${failedCount} 个群。`
+    const finalResult = buildResult(finalStatus, finalMessage)
+    this.emitGroupCollectorProgress({
+      taskId,
+      status: finalStatus,
+      totalGroups: normalizedSources.length,
+      processedGroups,
+      totalAccounts: payload.accountIds.length,
+      joinedCount,
+      successCount,
+      failedCount,
+      message: finalMessage,
+      log: null,
+      result: finalResult
+    })
   }
 
   private async stopAllAutoReply() {

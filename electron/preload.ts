@@ -1,10 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
+import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'TG-Matrix',
   platform: process.platform,
-  version: process.env.npm_package_version || '0.0.5'
+  version: process.env.npm_package_version || '0.0.6'
 })
 
 contextBridge.exposeInMainWorld('desktopWindow', {
@@ -107,12 +107,19 @@ contextBridge.exposeInMainWorld('desktopDirectMessage', {
   stopSend: () => ipcRenderer.invoke('direct-message:stop-send') as Promise<DirectMessageStopResult>,
   collectUsers: (payload: DirectMessageCollectPayload) => ipcRenderer.invoke('direct-message:collect-users', payload) as Promise<DirectMessageCollectResult>,
   collectGroupUsers: (payload: GroupCollectorPayload) => ipcRenderer.invoke('direct-message:collect-group-users', payload) as Promise<GroupCollectorResult>,
+  startGroupCollectorTask: (payload: GroupCollectorTaskPayload) => ipcRenderer.invoke('direct-message:start-group-collector-task', payload) as Promise<GroupCollectorTaskStartResult>,
+  stopGroupCollectorTask: (taskId: string) => ipcRenderer.invoke('direct-message:stop-group-collector-task', taskId) as Promise<GroupCollectorTaskStopResult>,
   configureAutoReply: (payload: DirectMessageAutoReplyPayload) => ipcRenderer.invoke('direct-message:configure-auto-reply', payload) as Promise<DirectMessageAutoReplyState>,
   getAutoReplyState: () => ipcRenderer.invoke('direct-message:get-auto-reply-state') as Promise<DirectMessageAutoReplyState>,
   onSendProgress: (callback: (payload: DirectMessageSendProgress) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: DirectMessageSendProgress) => callback(payload)
     ipcRenderer.on('direct-message:send-progress', listener)
     return () => ipcRenderer.removeListener('direct-message:send-progress', listener)
+  },
+  onGroupCollectorProgress: (callback: (payload: GroupCollectorTaskProgress) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: GroupCollectorTaskProgress) => callback(payload)
+    ipcRenderer.on('direct-message:group-collector-progress', listener)
+    return () => ipcRenderer.removeListener('direct-message:group-collector-progress', listener)
   },
   onAutoReplyEvent: (callback: (payload: DirectMessageAutoReplyEvent) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: DirectMessageAutoReplyEvent) => callback(payload)

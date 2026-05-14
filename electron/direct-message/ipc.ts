@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { DirectMessageAutoReplyPayload, DirectMessageCollectPayload, DirectMessageSendPayload, GroupCollectorPayload } from '../../src/types'
+import type { DirectMessageAutoReplyPayload, DirectMessageCollectPayload, DirectMessageSendPayload, GroupCollectorPayload, GroupCollectorTaskPayload } from '../../src/types'
 import type { DirectMessageService } from './service'
 
 interface RegisterDirectMessageIpcOptions {
@@ -15,6 +15,12 @@ export function registerDirectMessageIpc(options: RegisterDirectMessageIpcOption
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
     mainWindow.webContents.send('direct-message:auto-reply-event', payload)
+  })
+
+  directMessageService.setGroupCollectorProgressSink((payload) => {
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('direct-message:group-collector-progress', payload)
   })
 
   ipcMain.handle('direct-message:send', async (event, payload: DirectMessageSendPayload) => {
@@ -33,6 +39,14 @@ export function registerDirectMessageIpc(options: RegisterDirectMessageIpcOption
 
   ipcMain.handle('direct-message:collect-group-users', async (_event, payload: GroupCollectorPayload) => {
     return directMessageService.collectGroupUsers(payload)
+  })
+
+  ipcMain.handle('direct-message:start-group-collector-task', async (_event, payload: GroupCollectorTaskPayload) => {
+    return directMessageService.startGroupCollectorTask(payload)
+  })
+
+  ipcMain.handle('direct-message:stop-group-collector-task', async (_event, taskId: string) => {
+    return directMessageService.stopGroupCollectorTask(taskId)
   })
 
   ipcMain.handle('direct-message:configure-auto-reply', async (_event, payload: DirectMessageAutoReplyPayload) => {

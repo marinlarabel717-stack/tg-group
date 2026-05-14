@@ -554,6 +554,69 @@ export interface GroupCollectorResult {
   message: string
 }
 
+export type GroupCollectorTaskStatus = 'running' | 'completed' | 'stopped' | 'failed'
+
+export interface GroupCollectorTaskPayload {
+  taskId: string
+  accountIds: number[]
+  sources: string[]
+  mode: GroupCollectorMode
+  participantLimit?: number
+  historyLimit?: number
+  filters: GroupCollectorFilterPayload
+  maxGroupsPerAccount?: number
+}
+
+export interface GroupCollectorTaskStartResult {
+  taskId: string
+  accepted: boolean
+  message: string
+}
+
+export interface GroupCollectorTaskStopResult {
+  taskId: string
+  stopped: boolean
+  message: string
+}
+
+export interface GroupCollectorTaskLogEntry {
+  id: string
+  taskId: string
+  level: CheckLogLevel
+  createdAt: string
+  accountId: number | null
+  accountPhone: string
+  source: string
+  message: string
+}
+
+export interface GroupCollectorTaskResult {
+  taskId: string
+  status: GroupCollectorTaskStatus
+  joinedCount: number
+  successCount: number
+  failedCount: number
+  totalGroups: number
+  totalAccounts: number
+  items: GroupCollectorUserPayload[]
+  usernames: string[]
+  message: string
+}
+
+export interface GroupCollectorTaskProgress {
+  taskId: string
+  status: GroupCollectorTaskStatus
+  totalGroups: number
+  processedGroups: number
+  totalAccounts: number
+  joinedCount: number
+  successCount: number
+  failedCount: number
+  message: string
+  log?: GroupCollectorTaskLogEntry | null
+  result?: GroupCollectorTaskResult | null
+}
+
 export interface DirectMessageAutoReplyRulePayload {
   id: string
   keyword: string
@@ -693,9 +756,12 @@ export interface DesktopDirectMessageApi {
   stopSend: () => Promise<DirectMessageStopResult>
   collectUsers: (payload: DirectMessageCollectPayload) => Promise<DirectMessageCollectResult>
   collectGroupUsers: (payload: GroupCollectorPayload) => Promise<GroupCollectorResult>
+  startGroupCollectorTask: (payload: GroupCollectorTaskPayload) => Promise<GroupCollectorTaskStartResult>
+  stopGroupCollectorTask: (taskId: string) => Promise<GroupCollectorTaskStopResult>
   configureAutoReply: (payload: DirectMessageAutoReplyPayload) => Promise<DirectMessageAutoReplyState>
   getAutoReplyState: () => Promise<DirectMessageAutoReplyState>
   onSendProgress: (callback: (payload: DirectMessageSendProgress) => void) => () => void
+  onGroupCollectorProgress: (callback: (payload: GroupCollectorTaskProgress) => void) => () => void
   onAutoReplyEvent: (callback: (payload: DirectMessageAutoReplyEvent) => void) => () => void
 }
 
