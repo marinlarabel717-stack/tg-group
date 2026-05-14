@@ -128,9 +128,17 @@ def _serialize_user(user: Any, role_map: Dict[int, str]) -> Dict[str, Any]:
 
 
 async def _collect_public_members(client: Any, entity: Any, participant_limit: int, role_map: Dict[int, str]) -> List[Dict[str, Any]]:
-    limit = max(1, min(participant_limit, 5000)) if participant_limit > 0 else None
-    users = await client.get_participants(entity, limit=limit)
-    return [_serialize_user(user, role_map) for user in users]
+    limit = max(1, participant_limit) if participant_limit > 0 else None
+    users: List[Dict[str, Any]] = []
+    collected = 0
+
+    async for user in client.iter_participants(entity):
+        users.append(_serialize_user(user, role_map))
+        collected += 1
+        if limit is not None and collected >= limit:
+            break
+
+    return users
 
 
 async def _collect_history_users(client: Any, entity: Any, history_limit: int, history_days: int, role_map: Dict[int, str]) -> List[Dict[str, Any]]:

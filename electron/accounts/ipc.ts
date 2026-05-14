@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { CheckAction, CheckResultInput, ImportProgressPayload, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState } from './types'
+import type { CheckAction, CheckResultInput, ImportProgressPayload, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
 import type { AppSettings } from '../app-settings-store'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
@@ -31,6 +31,7 @@ interface RegisterAccountIpcOptions {
 function createEmptyTwoFactorState(): TwoFactorProgressState {
   return {
     running: false,
+    stopRequested: false,
     action: null,
     phase: 'apply',
     concurrency: 1,
@@ -117,6 +118,7 @@ function buildProfileUpdateItemWithOptionalTwoFA(account: ReturnType<AccountRepo
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, telegramTwoFactorService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
   let twoFactorState = createEmptyTwoFactorState()
+  let twoFactorStopRequested = false
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
     const mainWindow = getMainWindow()
@@ -145,6 +147,17 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     twoFactorState = {
       ...twoFactorState,
       ...patch,
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitTwoFactorProgress()
+  }
+
+  const bumpTwoFactorCounters = (kind: 'success' | 'failed') => {
+    twoFactorState = {
+      ...twoFactorState,
+      completed: twoFactorState.completed + 1,
+      successCount: twoFactorState.successCount + (kind === 'success' ? 1 : 0),
+      failedCount: twoFactorState.failedCount + (kind === 'failed' ? 1 : 0),
       lastUpdatedAt: new Date().toISOString()
     }
     emitTwoFactorProgress()
@@ -330,6 +343,36 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     return result
   })
 
+  ipcMain.handle('accounts:stop-two-factor', async (): Promise<TwoFactorStopResult> => {
+    if (!twoFactorState.running) {
+      return {
+        stopped: false,
+        message: '当前没有正在执行的 2FA 任务。'
+      }
+    }
+
+    if (twoFactorStopRequested || twoFactorState.stopRequested) {
+      return {
+        stopped: false,
+        message: '已经在停止当前 2FA 任务了，请等已启动的账号先收尾。'
+      }
+    }
+
+    twoFactorStopRequested = true
+    updateTwoFactorState({ stopRequested: true })
+    pushTwoFactorLog({
+      accountId: null,
+      phone: '',
+      level: 'warning',
+      message: '已收到停止指令：不会再领取新账号，正在等待当前已启动的账号先收尾。'
+    })
+
+    return {
+      stopped: true,
+      message: '已开始停止当前 2FA 任务。'
+    }
+  })
+
   ipcMain.handle('accounts:manage-two-factor', async (_event, payload: TwoFactorOperationPayload): Promise<TwoFactorOperationResult> => {
     const accountIds = Array.isArray(payload?.accountIds) ? payload.accountIds.filter((id) => Number.isFinite(id)) : []
     const action = payload?.action
@@ -370,8 +413,10 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
     const runtimeConcurrency = Math.max(1, appSettingsStore.get().checkConcurrency)
 
+    twoFactorStopRequested = false
     twoFactorState = {
       running: true,
+      stopRequested: false,
       action: action as TwoFactorAction,
       phase,
       concurrency: Math.min(runtimeConcurrency, Math.max(1, orderedAccounts.length)),
@@ -437,10 +482,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
             level: 'success',
             message: result.message
           })
-          updateTwoFactorState({
-            completed: twoFactorState.completed + 1,
-            successCount: twoFactorState.successCount + 1
-          })
+          bumpTwoFactorCounters('success')
           return
         }
 
@@ -450,14 +492,14 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
           level: 'error',
           message: result.message
         })
-        updateTwoFactorState({
-          completed: twoFactorState.completed + 1,
-          failedCount: twoFactorState.failedCount + 1
-        })
+        bumpTwoFactorCounters('failed')
       }
 
       const workers = Array.from({ length: workerCount }, () => (async () => {
         while (true) {
+          if (twoFactorStopRequested) {
+            return
+          }
           const account = queue.shift()
           if (!account) {
             return
@@ -475,6 +517,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     } finally {
       updateTwoFactorState({
         running: false,
+        stopRequested: twoFactorStopRequested,
         currentAccountId: null,
         currentPhone: null
       })
@@ -484,8 +527,16 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       accountId: null,
       phone: '',
       level: 'info',
-      message: `2FA 任务执行完成：成功 ${twoFactorState.successCount}，失败 ${twoFactorState.failedCount}。`
+      message: twoFactorStopRequested
+        ? `2FA 任务已停止：成功 ${twoFactorState.successCount}，失败 ${twoFactorState.failedCount}，剩余 ${Math.max(0, orderedAccounts.length - twoFactorState.completed)} 个账号未继续执行。`
+        : `2FA 任务执行完成：成功 ${twoFactorState.successCount}，失败 ${twoFactorState.failedCount}。`
     })
+
+    const finalMessage = twoFactorStopRequested
+      ? `2FA 任务已停止：成功 ${twoFactorState.successCount}，失败 ${twoFactorState.failedCount}，剩余 ${Math.max(0, orderedAccounts.length - twoFactorState.completed)} 个账号未继续执行。`
+      : `2FA 任务执行完成：成功 ${twoFactorState.successCount}，失败 ${twoFactorState.failedCount}。`
+
+    twoFactorStopRequested = false
 
     return {
       action: action as TwoFactorAction,
@@ -493,7 +544,8 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       total: orderedAccounts.length,
       successCount: twoFactorState.successCount,
       failedCount: twoFactorState.failedCount,
-      results
+      results,
+      message: finalMessage
     }
   })
 }

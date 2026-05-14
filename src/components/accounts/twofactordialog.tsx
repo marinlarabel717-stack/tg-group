@@ -217,9 +217,11 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
 })
 
 export const TwoFactorProgressDialog = memo(function TwoFactorProgressDialog({
-  state
+  state,
+  onStop
 }: {
   state: TwoFactorProgressState | null
+  onStop: () => void
 }) {
   if (!state?.running) return null
 
@@ -256,6 +258,11 @@ export const TwoFactorProgressDialog = memo(function TwoFactorProgressDialog({
           <div className="rounded-[12px] bg-white/[0.03] px-3 py-3 text-textMuted">
             任务执行中只更新进度，不再一条一条刷新账号资料和筛选结果，等全部处理完后再统一落表。
           </div>
+          <div className={`rounded-[12px] px-3 py-3 text-sm ${state.stopRequested ? 'border border-amber-400/15 bg-amber-400/10 text-amber-100' : 'bg-white/[0.03] text-textMuted'}`}>
+            {state.stopRequested
+              ? '已收到停止指令：不会再领取新账号，正在等当前已启动的账号收尾。'
+              : '如果中途想停，现在可以直接停止；已开始处理的账号会先收尾，未开始的账号不会继续执行。'}
+          </div>
           <div className="rounded-[12px] bg-white/[0.03] px-3 py-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-textMuted">
               <span>{latestLog ? new Date(latestLog.createdAt).toLocaleTimeString() : '--:--:--'}</span>
@@ -266,6 +273,17 @@ export const TwoFactorProgressDialog = memo(function TwoFactorProgressDialog({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onStop}
+          disabled={state.stopRequested}
+          className="h-11 rounded-[12px] bg-amber-300 px-4 text-sm font-medium text-slate-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {state.stopRequested ? '停止中...' : '停止任务'}
+        </button>
       </div>
     </ResultDialogShell>
   )

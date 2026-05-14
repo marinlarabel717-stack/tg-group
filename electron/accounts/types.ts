@@ -189,6 +189,12 @@ export interface TwoFactorOperationResult {
   successCount: number
   failedCount: number
   results: TwoFactorOperationResultItem[]
+  message?: string
+}
+
+export interface TwoFactorStopResult {
+  stopped: boolean
+  message: string
 }
 
 export interface TwoFactorLogEntry {
@@ -202,6 +208,7 @@ export interface TwoFactorLogEntry {
 
 export interface TwoFactorProgressState {
   running: boolean
+  stopRequested: boolean
   action: TwoFactorAction | null
   phase: TwoFactorOperationPhase
   concurrency: number

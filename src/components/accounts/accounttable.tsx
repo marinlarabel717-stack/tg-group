@@ -1172,6 +1172,7 @@ export const AccountTable = memo(function AccountTable() {
     setTwoFactorResult(null)
     setTwoFactorProgress({
       running: true,
+      stopRequested: false,
       action: payload.action,
       phase: payload.phase ?? 'apply',
       concurrency: 1,
@@ -1194,6 +1195,20 @@ export const AccountTable = memo(function AccountTable() {
       setTwoFactorProgress(null)
     } finally {
       setTwoFactorSubmitting(false)
+    }
+  }, [])
+
+  const handleStopTwoFactor = useCallback(async () => {
+    if (!window.desktopAccounts?.stopTwoFactor) {
+      setBulkActionHint('当前环境没有注入停止 2FA 任务的能力。')
+      return
+    }
+
+    try {
+      const result = await window.desktopAccounts.stopTwoFactor()
+      setBulkActionHint(result.message)
+    } catch (error) {
+      setBulkActionHint(error instanceof Error ? error.message : '停止 2FA 任务失败，请稍后再试。')
     }
   }, [])
 
@@ -1629,7 +1644,7 @@ export const AccountTable = memo(function AccountTable() {
         onClose={() => setTwoFactorDialog(null)}
         onSubmit={handleSubmitTwoFactor}
       />
-      <TwoFactorProgressDialog state={twoFactorProgress} />
+      <TwoFactorProgressDialog state={twoFactorProgress} onStop={() => void handleStopTwoFactor()} />
       <TwoFactorResultDialog
         result={twoFactorResult}
         onClose={() => {

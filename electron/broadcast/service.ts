@@ -342,13 +342,18 @@ async function resolveGroupEntity(client: TelegramClient, groupRef: ReturnType<t
     try {
       return await client.getEntity(groupRef.value as never)
     } catch (error) {
-      const dialogs = await client.getDialogs({ limit: 300 }).catch(() => []) as Array<{ id?: { toString?: () => string }; entity?: unknown }>
-      const matchedDialog = dialogs.find((dialog) => {
-        const dialogId = typeof dialog?.id?.toString === 'function' ? dialog.id.toString() : ''
-        return dialogId === String(groupRef.value)
-      })
-      if (matchedDialog?.entity) {
-        return matchedDialog.entity
+      for (const archived of [false, true]) {
+        const dialogs: Array<{ id?: { toString?: () => string }; entity?: unknown }> = []
+        for await (const dialog of client.iterDialogs({ archived })) {
+          dialogs.push(dialog as { id?: { toString?: () => string }; entity?: unknown })
+        }
+        const matchedDialog = dialogs.find((dialog) => {
+          const dialogId = typeof dialog?.id?.toString === 'function' ? dialog.id.toString() : ''
+          return dialogId === String(groupRef.value)
+        })
+        if (matchedDialog?.entity) {
+          return matchedDialog.entity
+        }
       }
       throw error
     }
@@ -805,7 +810,13 @@ export class BroadcastService {
     const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
 
     try {
-      const dialogs = await client.getDialogs({ limit: 5000 })
+      const dialogs: any[] = []
+      for (const archived of [false, true]) {
+        for await (const dialog of client.iterDialogs({ archived })) {
+          dialogs.push(dialog)
+        }
+      }
+
       const groups = dialogs
         .filter((dialog) => dialog.isGroup || (dialog.isChannel && !(dialog.entity as any)?.broadcast))
         .map((dialog) => {

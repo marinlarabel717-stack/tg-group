@@ -580,15 +580,13 @@ export class AccountCheckEngine {
     let finalFailure: ReturnType<AccountCheckEngine['createFailureResult']> | null = null
     let finalProxyMeta: ProxyUsageMeta = { proxyUsed: false, proxyDisplay: null }
 
-    if (mode === 'account-status') {
-      try {
-        const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结预检查')
-        if (telethonFrozen?.status === 'frozen') {
-          return this.buildFrozenResultFromTelethon(account, telethonFrozen, startedAt, finalProxyMeta, 'Telethon 冻结预检查', mode)
-        }
-      } catch {
-        // ignore precheck failure and continue with main mtproto flow
+    try {
+      const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结预检查')
+      if (telethonFrozen?.status === 'frozen') {
+        return this.buildFrozenResultFromTelethon(account, telethonFrozen, startedAt, finalProxyMeta, 'Telethon 冻结预检查', mode)
       }
+    } catch {
+      // ignore precheck failure and continue with main mtproto flow
     }
 
     for (let index = 0; index < proxyAttempts.length; index += 1) {
