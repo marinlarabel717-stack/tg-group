@@ -106,7 +106,6 @@ const lastSeenOptions: Array<{ value: GroupCollectorLastSeenBucket; label: strin
 
 const SOFT_INPUT_CLASS = 'border border-white/[0.06] bg-black/10 text-white outline-none transition focus:border-white/[0.12] focus:bg-black/12'
 const SOFT_TAB_CLASS = 'border border-white/[0.06] transition'
-const MAX_GROUPS_PER_ACCOUNT = 5
 
 function createId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
@@ -174,9 +173,9 @@ function normalizeGroupSource(input: string): Omit<GroupSourceRecord, 'id'> | nu
   return null
 }
 
-function appendGroupSources(current: GroupSourceRecord[], input: string) {
-  const seen = new Set(current.map((item) => item.normalized))
-  const next = [...current]
+function parseGroupSourcesInput(input: string) {
+  const seen = new Set<string>()
+  const next: GroupSourceRecord[] = []
   let added = 0
   let duplicate = 0
   let invalid = 0
@@ -417,17 +416,12 @@ export default function SessionManagerModule() {
 
   const canStart = selectedAccountIds.length > 0 && groupSources.length > 0 && !loading
 
-  const applyGroupInput = (input: string) => {
-    let summary = { added: 0, duplicate: 0, invalid: 0 }
-    let nextGroups: GroupSourceRecord[] = []
-    setGroupSources((current) => {
-      const result = appendGroupSources(current, input)
-      summary = { added: result.added, duplicate: result.duplicate, invalid: result.invalid }
-      nextGroups = result.next
-      return result.next
-    })
+  const syncGroupSourcesFromInput = (input: string) => {
+    const result = parseGroupSourcesInput(input)
+    const summary = { added: result.added, duplicate: result.duplicate, invalid: result.invalid }
+    setGroupSources(result.next)
     setGroupInputSummary(summary)
-    setGroupInput(nextGroups.map((item) => item.displayValue).join('\n'))
+    setGroupInput(input)
     if (summary.added === 0 && summary.duplicate === 0 && summary.invalid === 0) {
       return
     }
@@ -437,12 +431,14 @@ export default function SessionManagerModule() {
   const handleImportFile = async (file: File | null) => {
     if (!file) return
     const text = await file.text()
-    applyGroupInput(text)
+    const nextInput = groupInput.trim() ? `${groupInput.trim()}\n${text.trim()}` : text.trim()
+    syncGroupSourcesFromInput(nextInput)
   }
 
   const handlePasteGroups = (text: string) => {
     if (!text.trim()) return
-    applyGroupInput(text)
+    const nextInput = groupInput.trim() ? `${groupInput.trim()}\n${text.trim()}` : text.trim()
+    syncGroupSourcesFromInput(nextInput)
   }
 
   const handleStart = async () => {
@@ -457,11 +453,6 @@ export default function SessionManagerModule() {
       setErrorMessage('请先添加采集群列表。')
       return
     }
-    if (groupSources.length > selectedAccountIds.length * MAX_GROUPS_PER_ACCOUNT) {
-      setErrorMessage(`当前最多只能采集 ${selectedAccountIds.length * MAX_GROUPS_PER_ACCOUNT} 个群。默认一个账号最多 5 个群。`)
-      return
-    }
-
     const taskId = createId('collector_task')
     const taskTitle = `任务 ${tasks.length + 1}`
 
@@ -494,8 +485,7 @@ export default function SessionManagerModule() {
         participantLimit: participantLimit.trim() ? Number(participantLimit) : undefined,
         historyLimit: historyLimit.trim() ? Number(historyLimit) : undefined,
         historyDays: historyDays.trim() ? Number(historyDays) : undefined,
-        filters,
-        maxGroupsPerAccount: MAX_GROUPS_PER_ACCOUNT
+        filters
       })
       setActiveTab('logs')
       setHintMessage('采集任务已开始，已自动跳转到采集日志。')
@@ -649,7 +639,7 @@ export default function SessionManagerModule() {
                 }}
                 onBlur={() => {
                   if (groupInput.trim()) {
-                    applyGroupInput(groupInput)
+                    syncGroupSourcesFromInput(groupInput)
                   }
                 }}
                 placeholder="一行一个，支持 @群用户名 / t.me公开链接 / t.me私密邀请链接"
@@ -657,7 +647,6 @@ export default function SessionManagerModule() {
               />
               <div className="mt-3 flex flex-wrap gap-2 text-sm text-textMuted">
                 <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-violet-300">会自动去重和过滤无效格式</div>
-                <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">当前有效 {groupSources.length} 条</div>
                 {groupInputSummary.duplicate > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">去重 {groupInputSummary.duplicate} 条</div> : null}
                 {groupInputSummary.invalid > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">过滤错误 {groupInputSummary.invalid} 条</div> : null}
               </div>

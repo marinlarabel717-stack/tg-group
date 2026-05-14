@@ -340,6 +340,10 @@ async function ensureCollectorGroupJoined(client: TelegramClient, source: Return
 function formatCollectorGroupError(error: unknown) {
   const normalized = error instanceof Error ? error.message.trim() : String(error).trim()
   if (!normalized) return '采集时出了点问题'
+  const waitMatched = normalized.match(/A wait of (\d+) seconds is required/i)
+  if (waitMatched?.[1]) return `操作太快了，Telegram 要求先等 ${waitMatched[1]} 秒再继续。`
+  const floodMatched = normalized.match(/FLOOD_WAIT_(\d+)/i)
+  if (floodMatched?.[1]) return `当前账号被限流了，需要先等 ${floodMatched[1]} 秒。`
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '私密链接失效了，或者这个邀请链接已经不能用了'
   if (/CHANNEL_PRIVATE/i.test(normalized)) return '这个群进不去，可能是私密群，或者当前账号没有权限'
   if (/USER_ALREADY_PARTICIPANT/i.test(normalized)) return '这个账号本来就在群里'
@@ -682,7 +686,6 @@ export class DirectMessageService {
   async startGroupCollectorTask(payload: GroupCollectorTaskPayload): Promise<GroupCollectorTaskStartResult> {
     const accountIds = Array.from(new Set(payload.accountIds.filter((item) => Number.isFinite(item))))
     const sources = Array.from(new Set(payload.sources.map((item) => item.trim()).filter(Boolean)))
-    const maxGroupsPerAccount = Math.max(1, Math.min(payload.maxGroupsPerAccount ?? 5, 20))
 
     if (accountIds.length === 0) {
       throw new Error('请先选择采集账号。')
@@ -702,11 +705,6 @@ export class DirectMessageService {
       throw new Error('所选账号里有正在执行其他采集任务的账号，请换一批空闲账号再试。')
     }
 
-    const capacity = accountIds.length * maxGroupsPerAccount
-    if (sources.length > capacity) {
-      throw new Error(`当前最多只能采集 ${capacity} 个群。按默认每个账号最多 5 个群，你还需要再补一些空闲账号。`)
-    }
-
     const taskId = payload.taskId || createId('collector_task')
     const task: ActiveGroupCollectorTask = {
       cancelled: false,
@@ -719,8 +717,7 @@ export class DirectMessageService {
       ...payload,
       taskId,
       accountIds,
-      sources,
-      maxGroupsPerAccount
+      sources
     }).finally(() => {
       this.activeGroupCollectorTasks.delete(taskId)
     })
@@ -1415,27 +1412,18 @@ export class DirectMessageService {
     this.groupCollectorProgressSink?.(payload)
   }
 
-  private async runGroupCollectorTask(taskId: string, task: ActiveGroupCollectorTask, payload: GroupCollectorTaskPayload & { maxGroupsPerAccount: number }) {
+  private async runGroupCollectorTask(taskId: string, task: ActiveGroupCollectorTask, payload: GroupCollectorTaskPayload) {
     const accounts = this.accountRepository.getByIds(payload.accountIds)
     const normalizedSources = payload.sources
       .map((source) => normalizeCollectorGroupSource(source))
       .filter((source): source is NonNullable<ReturnType<typeof normalizeCollectorGroupSource>> => Boolean(source))
-
-    const chunks: Array<Array<NonNullable<ReturnType<typeof normalizeCollectorGroupSource>>>> = []
-    for (let index = 0; index < normalizedSources.length; index += payload.maxGroupsPerAccount) {
-      chunks.push(normalizedSources.slice(index, index + payload.maxGroupsPerAccount))
-    }
-
-    const assignments = accounts.map((account, index) => ({
-      account,
-      sources: chunks[index] ?? []
-    })).filter((entry) => entry.sources.length > 0)
 
     const uniqueItems = new Map<string, GroupCollectorUserPayload>()
     let joinedCount = 0
     let successCount = 0
     let failedCount = 0
     let processedGroups = 0
+    const pendingSources = [...normalizedSources]
 
     const pushLog = (status: GroupCollectorTaskStatus, level: CheckLogLevel, message: string, accountId: number | null, accountPhone: string, source: string, result?: GroupCollectorTaskResult | null) => {
       this.emitGroupCollectorProgress({
@@ -1475,6 +1463,47 @@ export class DirectMessageService {
       message
     })
 
+    const accountRuntimes = await Promise.all(accounts.map(async (account) => {
+      const phone = account.phone?.trim() ? (account.phone.startsWith('+') ? account.phone : `+${account.phone}`) : `账号#${account.id}`
+      try {
+        const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+        task.clients.set(account.id, client)
+        return {
+          account,
+          client,
+          phone,
+          cooldownUntil: 0,
+          active: false
+        }
+      } catch (error) {
+        failedCount += 1
+        pushLog('running', 'error', `[${phone}] 当前账号启动采集失败（${formatCollectorGroupError(error)}）`, account.id, phone, '')
+        return null
+      }
+    }))
+
+    const runtimes = accountRuntimes.filter((item): item is NonNullable<typeof item> => Boolean(item))
+
+    if (runtimes.length === 0) {
+      const finalStatus: GroupCollectorTaskStatus = 'failed'
+      const finalMessage = '没有可用账号能启动采集任务，请先检查这些账号是否能正常连接。'
+      const finalResult = buildResult(finalStatus, finalMessage)
+      this.emitGroupCollectorProgress({
+        taskId,
+        status: finalStatus,
+        totalGroups: normalizedSources.length,
+        processedGroups,
+        totalAccounts: payload.accountIds.length,
+        joinedCount,
+        successCount,
+        failedCount,
+        message: finalMessage,
+        log: null,
+        result: finalResult
+      })
+      return
+    }
+
     this.emitGroupCollectorProgress({
       taskId,
       status: 'running',
@@ -1489,64 +1518,107 @@ export class DirectMessageService {
       result: null
     })
 
-    await Promise.allSettled(assignments.map(async ({ account, sources }) => {
-      const phone = account.phone?.trim() ? (account.phone.startsWith('+') ? account.phone : `+${account.phone}`) : `账号#${account.id}`
-      const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
-      task.clients.set(account.id, client)
+    const activeWorkers = new Set<Promise<void>>()
+
+    const runSourceWithAccount = async (runtime: (typeof runtimes)[number], source: NonNullable<ReturnType<typeof normalizeCollectorGroupSource>>) => {
+      runtime.active = true
+      let label = source.label
 
       try {
-        for (const source of sources) {
-          if (task.cancelled) break
+        const entity = await resolveCollectorGroupEntity(runtime.client, source)
+        const joinedState = await ensureCollectorGroupJoined(runtime.client, source, (entity as { chat?: unknown } | null)?.chat ?? entity)
+        label = joinedState.label
+        joinedCount += 1
+        pushLog('running', 'info', `[${runtime.phone}] 已准备 ${joinedState.label}，开始采集用户`, runtime.account.id, runtime.phone, joinedState.label)
 
-          try {
-            const entity = await resolveCollectorGroupEntity(client, source)
-            const joinedState = await ensureCollectorGroupJoined(client, source, (entity as { chat?: unknown } | null)?.chat ?? entity)
-            joinedCount += 1
-            pushLog('running', 'info', `[${phone}] 已加入 ${joinedState.label} - 正在采集用户`, account.id, phone, joinedState.label)
+        const result = await this.collectGroupUsersWithClient(runtime.client, {
+          accountId: runtime.account.id,
+          source: source.label,
+          mode: payload.mode,
+          participantLimit: payload.participantLimit,
+          historyLimit: payload.historyLimit,
+          historyDays: payload.historyDays,
+          filters: payload.filters
+        })
 
-            try {
-              const result = await this.collectGroupUsersWithClient(client, {
-                accountId: account.id,
-                source: source.label,
-                mode: payload.mode,
-                participantLimit: payload.participantLimit,
-                historyLimit: payload.historyLimit,
-                historyDays: payload.historyDays,
-                filters: payload.filters
-              })
-
-              let added = 0
-              result.items.forEach((item) => {
-                const key = item.userId || normalizeTargetValue(item.targetValue || item.username || item.phone || item.displayName)
-                if (!key || uniqueItems.has(key)) return
-                uniqueItems.set(key, item)
-                added += 1
-              })
-              successCount = uniqueItems.size
-              processedGroups += 1
-              if (result.items.length > 0) {
-                pushLog('running', 'success', `[${phone}] 已加入 ${joinedState.label} - 正在采集用户 - ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}（原始 ${result.total}，过滤 ${result.filtered}）`, account.id, phone, joinedState.label)
-              } else {
-                pushLog('running', 'warning', `[${phone}] 已加入 ${joinedState.label} - 这轮没采到可用用户（原始 ${result.total}，过滤 ${result.filtered}，原因：${result.message}）`, account.id, phone, joinedState.label)
-              }
-            } catch (error) {
-              failedCount += 1
-              processedGroups += 1
-              pushLog('running', 'error', `[${phone}] 已加入 ${joinedState.label} - 采集失败（${formatCollectorGroupError(error)}）`, account.id, phone, joinedState.label)
-            }
-          } catch (error) {
-            failedCount += 1
-            processedGroups += 1
-            pushLog('running', 'error', `[${phone}] 加入失败（${formatCollectorGroupError(error)}）`, account.id, phone, source.label)
-          }
+        let added = 0
+        result.items.forEach((item) => {
+          const key = item.userId || normalizeTargetValue(item.targetValue || item.username || item.phone || item.displayName)
+          if (!key || uniqueItems.has(key)) return
+          uniqueItems.set(key, item)
+          added += 1
+        })
+        successCount = uniqueItems.size
+        processedGroups += 1
+        if (result.items.length > 0) {
+          pushLog('running', 'success', `[${runtime.phone}] ${joinedState.label} 采集完成：命中 ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}（原始 ${result.total}，过滤 ${result.filtered}）`, runtime.account.id, runtime.phone, joinedState.label)
+        } else {
+          pushLog('running', 'warning', `[${runtime.phone}] ${joinedState.label} 这轮没采到可用用户（原始 ${result.total}，过滤 ${result.filtered}，原因：${result.message}）`, runtime.account.id, runtime.phone, joinedState.label)
         }
       } catch (error) {
-        pushLog('running', 'error', `[${phone}] 当前账号启动采集失败（${formatCollectorGroupError(error)}）`, account.id, phone, '')
+        const waitSeconds = readRiskPauseSeconds(error)
+        if (!task.cancelled && waitSeconds) {
+          runtime.cooldownUntil = Date.now() + waitSeconds * 1000
+          pendingSources.push(source)
+          pushLog('running', 'warning', `[${runtime.phone}] ${label} 触发频繁，先等待 ${waitSeconds} 秒，稍后自动继续，任务不会结束。`, runtime.account.id, runtime.phone, label)
+          return
+        }
+
+        failedCount += 1
+        processedGroups += 1
+        const actionLabel = label === source.label ? '加入/采集失败' : '采集失败'
+        pushLog('running', 'error', `[${runtime.phone}] ${label} ${actionLabel}（${formatCollectorGroupError(error)}）`, runtime.account.id, runtime.phone, label)
       } finally {
-        task.clients.delete(account.id)
-        await this.clientManager.destroyClient(client).catch(() => undefined)
+        runtime.active = false
       }
-    }))
+    }
+
+    try {
+      while (!task.cancelled && (pendingSources.length > 0 || activeWorkers.size > 0)) {
+        let dispatched = false
+        const now = Date.now()
+
+        for (const runtime of runtimes) {
+          if (pendingSources.length === 0) break
+          if (runtime.active || runtime.cooldownUntil > now) continue
+
+          const nextSource = pendingSources.shift()
+          if (!nextSource) break
+
+          const worker = runSourceWithAccount(runtime, nextSource).finally(() => {
+            activeWorkers.delete(worker)
+          })
+          activeWorkers.add(worker)
+          dispatched = true
+        }
+
+        if (task.cancelled) break
+        if (dispatched) continue
+
+        if (activeWorkers.size > 0) {
+          await Promise.race(Array.from(activeWorkers))
+          continue
+        }
+
+        if (pendingSources.length > 0) {
+          const nextCooldownAt = Math.min(...runtimes.map((runtime) => runtime.cooldownUntil > now ? runtime.cooldownUntil : Number.POSITIVE_INFINITY))
+          if (Number.isFinite(nextCooldownAt) && nextCooldownAt > now) {
+            const waitMs = Math.min(nextCooldownAt - now, 5000)
+            await sleep(waitMs)
+            continue
+          }
+        }
+      }
+
+      if (activeWorkers.size > 0) {
+        await Promise.allSettled(Array.from(activeWorkers))
+      }
+    } finally {
+      await Promise.allSettled(runtimes.map(async (runtime) => {
+        task.clients.delete(runtime.account.id)
+        await this.clientManager.destroyClient(runtime.client).catch(() => undefined)
+      }))
+    }
 
     const finalStatus: GroupCollectorTaskStatus = task.cancelled ? 'stopped' : 'completed'
     const finalMessage = task.cancelled

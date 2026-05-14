@@ -566,7 +566,6 @@ export interface GroupCollectorTaskPayload {
   historyLimit?: number
   historyDays?: number
   filters: GroupCollectorFilterPayload
-  maxGroupsPerAccount?: number
 }
 
 export interface GroupCollectorTaskStartResult {
