@@ -270,6 +270,17 @@ function normalizeCollectorGroupSource(input: string) {
   return null
 }
 
+function isMissingCollectorTargetError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  const normalized = message.trim()
+  if (!normalized) return false
+  return /Cannot find any entity corresponding to/i.test(normalized)
+    || /USERNAME_INVALID|USERNAME_NOT_OCCUPIED/i.test(normalized)
+    || /CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)
+    || /INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)
+    || /No user has ".+" as username/i.test(normalized)
+}
+
 async function resolveCollectorGroupEntity(client: TelegramClient, source: ReturnType<typeof normalizeCollectorGroupSource>) {
   if (!source) throw new Error('群链接或群用户名不对')
 
@@ -281,7 +292,22 @@ async function resolveCollectorGroupEntity(client: TelegramClient, source: Retur
     return invite
   }
 
-  return client.getEntity(source.value as never)
+  try {
+    return await client.getEntity(source.value as never)
+  } catch (error) {
+    if (source.kind !== 'username' || !isMissingCollectorTargetError(error)) {
+      throw error
+    }
+
+    const username = source.value.replace(/^@+/, '').trim()
+    if (!username) throw error
+
+    try {
+      return await client.getEntity(`https://t.me/${username}` as never)
+    } catch {
+      throw error
+    }
+  }
 }
 
 async function ensureCollectorGroupJoined(client: TelegramClient, source: ReturnType<typeof normalizeCollectorGroupSource>, entity: unknown) {
@@ -344,6 +370,9 @@ function formatCollectorGroupError(error: unknown) {
   if (waitMatched?.[1]) return `操作太快了，Telegram 要求先等 ${waitMatched[1]} 秒再继续。`
   const floodMatched = normalized.match(/FLOOD_WAIT_(\d+)/i)
   if (floodMatched?.[1]) return `当前账号被限流了，需要先等 ${floodMatched[1]} 秒。`
+  if (/Cannot find any entity corresponding to/i.test(normalized)) return '当前账号没法直接识别这个群，群可能存在，建议改用完整链接或邀请链接再试'
+  const noUserMatched = normalized.match(/No user has "([^"]+)" as username/i)
+  if (noUserMatched?.[1]) return `Telegram 没找到 @${noUserMatched[1].replace(/^@+/, '')}，这个群用户名可能写错了，或者已经失效了`
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '私密链接失效了，或者这个邀请链接已经不能用了'
   if (/CHANNEL_PRIVATE/i.test(normalized)) return '这个群进不去，可能是私密群，或者当前账号没有权限'
   if (/USER_ALREADY_PARTICIPANT/i.test(normalized)) return '这个账号本来就在群里'
