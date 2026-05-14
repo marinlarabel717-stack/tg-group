@@ -229,7 +229,7 @@ export interface TwoFactorOperationResultItem {
   phone: string
   success: boolean
   message: string
-  nextTwoFA: string | null
+  nextTwoFA?: string | null
   emailPattern: string | null
 }
 

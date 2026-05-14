@@ -17,6 +17,11 @@ interface TelethonTwoFactorRawResult {
   next_two_fa?: string | null
 }
 
+function readResetWaitMessage(rawMessage: string) {
+  const message = rawMessage.trim()
+  return message || '已触发忘记密码，正在等待 Telegram 的重置期结束。'
+}
+
 function resolvePythonExecutable() {
   const candidates = [
     path.resolve(process.cwd(), '.venv', 'Scripts', 'python.exe'),
@@ -56,6 +61,13 @@ function formatTwoFactorError(error: string) {
   }
   if (upper.includes('EMAIL_INVALID')) {
     return '恢复邮箱格式不对，Telegram 没有接受。'
+  }
+  if (upper.includes('RESET_PASSWORD_WAIT_')) {
+    const waitAt = normalized.split('RESET_PASSWORD_WAIT_')[1]?.trim()
+    return waitAt ? `这个账号已经在等待 Telegram 自动重置 2FA，要等到 ${waitAt} 后才能继续。` : '这个账号已经在等待 Telegram 自动重置 2FA。'
+  }
+  if (upper.includes('RESET_PASSWORD_WAIT')) {
+    return '这个账号已经在等待 Telegram 自动重置 2FA。'
   }
   if (upper.includes('FLOOD_WAIT')) {
     const match = upper.match(/FLOOD_WAIT_?(\d+)/)
@@ -120,10 +132,14 @@ export class TelethonTwoFactorService {
       const raw = JSON.parse(stdout.trim()) as TelethonTwoFactorRawResult
       const ok = Boolean(raw.ok)
       const emailPattern = typeof raw.email_pattern === 'string' && raw.email_pattern.trim() ? raw.email_pattern.trim() : null
-      const nextTwoFA = typeof raw.next_two_fa === 'string' ? raw.next_two_fa : null
+      const nextTwoFA = Object.prototype.hasOwnProperty.call(raw, 'next_two_fa')
+        ? (typeof raw.next_two_fa === 'string' ? raw.next_two_fa : null)
+        : undefined
       const phase = payload.phase ?? 'apply'
       const message = ok
-        ? (typeof raw.message === 'string' && raw.message.trim() ? raw.message.trim() : this.buildSuccessMessage(payload.action, phase, emailPattern))
+        ? (payload.action === 'reset-2fa'
+          ? readResetWaitMessage(typeof raw.message === 'string' ? raw.message : '')
+          : (typeof raw.message === 'string' && raw.message.trim() ? raw.message.trim() : this.buildSuccessMessage(payload.action, phase, emailPattern)))
         : formatTwoFactorError(typeof raw.reason === 'string' ? raw.reason : '')
 
       return {
@@ -154,9 +170,6 @@ export class TelethonTwoFactorService {
     if (action === 'disable-2fa') {
       return '2FA 已经关闭。'
     }
-    if (phase === 'request-recovery') {
-      return emailPattern ? `忘记密码已触发，恢复验证码会发到 ${emailPattern}` : '忘记密码已触发，恢复验证码已经发出。'
-    }
-    return '邮箱验证码校验通过，2FA 已经重置成功。'
+    return emailPattern ? `忘记密码已触发，恢复验证码会发到 ${emailPattern}` : '忘记密码已触发。'
   }
 }

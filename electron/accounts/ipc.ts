@@ -92,6 +92,27 @@ function buildProfileUpdateItem(account: ReturnType<AccountRepository['getByIds'
   }
 }
 
+function buildProfileUpdateItemWithOptionalTwoFA(account: ReturnType<AccountRepository['getByIds']>[number], nextTwoFA: string | null | undefined): CheckResultInput {
+  if (typeof nextTwoFA === 'undefined') {
+    return {
+      id: account.id,
+      status: account.status,
+      phone: account.phone,
+      username: account.username,
+      userId: account.userId,
+      country: account.country,
+      proxyDisplay: account.proxyDisplay ?? null,
+      lastCheckTime: account.lastCheckTime,
+      lastOnlineTime: account.lastOnlineTime,
+      profile: {
+        ...account.profile
+      }
+    }
+  }
+
+  return buildProfileUpdateItem(account, nextTwoFA)
+}
+
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, telegramTwoFactorService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
   let twoFactorState = createEmptyTwoFactorState()
@@ -340,15 +361,11 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       }
     }
 
-    if ((action === 'change-2fa' || (action === 'reset-2fa' && phase === 'confirm-recovery')) && !(payload.newPassword?.trim())) {
+    if (action === 'change-2fa' && !(payload.newPassword?.trim())) {
       throw new Error('请先填写新的 2FA。')
     }
 
     const recoveryCodeMap = buildRecoveryCodeMap(payload)
-
-    if (action === 'reset-2fa' && phase === 'confirm-recovery' && recoveryCodeMap.size === 0) {
-      throw new Error('请先填写邮箱验证码。')
-    }
 
     twoFactorState = {
       running: true,
@@ -372,8 +389,8 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
         accountId: null,
         phone: '',
         level: 'info',
-        message: phase === 'request-recovery'
-          ? `已开始为 ${orderedAccounts.length} 个账号触发忘记密码。`
+        message: action === 'reset-2fa'
+          ? `已开始为 ${orderedAccounts.length} 个账号发起 2FA 重置申请。`
           : `已开始执行 ${orderedAccounts.length} 个账号的 2FA 任务。`
       })
 
@@ -388,8 +405,8 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
           accountId: account.id,
           phone: account.phone,
           level: 'info',
-          message: phase === 'request-recovery'
-            ? `开始为 ${account.phone || `账号 #${account.id}`} 触发忘记密码。`
+          message: action === 'reset-2fa'
+            ? `开始为 ${account.phone || `账号 #${account.id}`} 发起 2FA 重置申请。`
             : `开始处理 ${account.phone || `账号 #${account.id}`}。`
         })
 
@@ -402,13 +419,11 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
         results.push(result)
 
         if (result.success) {
-          if (action !== 'reset-2fa' || phase === 'confirm-recovery' || phase === 'apply') {
-            if (action !== 'reset-2fa' || phase !== 'request-recovery') {
-              const accountsSnapshot = accountRepository.applyCheckResults([
-                buildProfileUpdateItem(account, result.nextTwoFA)
-              ])
-              emitAccountsUpdated(accountsSnapshot)
-            }
+          if (action !== 'reset-2fa' || result.nextTwoFA !== undefined) {
+            const accountsSnapshot = accountRepository.applyCheckResults([
+              buildProfileUpdateItemWithOptionalTwoFA(account, result.nextTwoFA)
+            ])
+            emitAccountsUpdated(accountsSnapshot)
           }
 
           pushTwoFactorLog({

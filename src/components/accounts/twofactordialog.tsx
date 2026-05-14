@@ -21,36 +21,6 @@ function readActionTone(action: TwoFactorAction) {
   return 'info' as const
 }
 
-function normalizePhone(value: string) {
-  return value.replace(/[^\d+]/g, '')
-}
-
-function parseRecoveryCodes(accounts: AccountRecord[], input: string) {
-  const lines = input
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-
-  if (accounts.length === 1 && lines.length === 1 && !/[=,，:：\s-]/.test(lines[0])) {
-    return [{ accountId: accounts[0].id, code: lines[0] }]
-  }
-
-  const phoneMap = new Map(accounts.map((account) => [normalizePhone(account.phone), account.id]))
-  const result: Array<{ accountId: number; code: string }> = []
-
-  for (const line of lines) {
-    const parts = line.split(/(?:----|——|=|：|:|,|，|\s+)/).map((part) => part.trim()).filter(Boolean)
-    if (parts.length < 2) continue
-    const target = normalizePhone(parts[0])
-    const code = parts.slice(1).join('').trim()
-    const accountId = phoneMap.get(target)
-    if (!accountId || !code) continue
-    result.push({ accountId, code })
-  }
-
-  return result
-}
-
 export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
   open,
   action,
@@ -70,7 +40,6 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [hint, setHint] = useState('')
-  const [recoveryCodesText, setRecoveryCodesText] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -79,7 +48,6 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
     setNewPassword('')
     setConfirmPassword('')
     setHint('')
-    setRecoveryCodesText('')
     setError('')
   }, [open, action, accounts])
 
@@ -130,32 +98,14 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
       return
     }
 
-    const recoveryCodes = parseRecoveryCodes(accounts, recoveryCodesText)
-    if (recoveryCodes.length === 0) {
+    if (action === 'reset-2fa') {
       await onSubmit({
         action: 'reset-2fa',
-        phase: 'request-recovery',
+        phase: 'apply',
         accountIds: accounts.map((account) => account.id)
       })
       return
     }
-    if (!newPassword.trim()) {
-      setError('请先填写重置后的新 2FA。')
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      setError('两次输入的新 2FA 不一致。')
-      return
-    }
-
-    await onSubmit({
-      action,
-      phase: 'confirm-recovery',
-      accountIds: accounts.map((account) => account.id),
-      newPassword,
-      hint,
-      recoveryCodes
-    })
   }
 
   const accountPreview = accounts.slice(0, 4).map((account) => account.phone).filter(Boolean)
@@ -242,23 +192,8 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
 
         {action === 'reset-2fa' ? (
           <div className="rounded-[14px] border border-sky-400/15 bg-sky-400/8 px-4 py-3 text-sm text-sky-100">
-            重置 2FA 这里走的是 Telegram 官方的 <span className="font-medium text-white">“忘记密码”</span> 链路。
-            如果下面还没填验证码，点提交时会直接替所选账号触发忘记密码；收到恢复邮箱验证码后，再按 <span className="font-medium text-white">手机号 ---- 验证码</span> 填回来完成重置。
-          </div>
-        ) : null}
-
-        {action === 'reset-2fa' ? (
-          <div>
-            <div className="mb-2 text-sm text-textMuted">邮箱验证码</div>
-            <textarea
-              value={recoveryCodesText}
-              onChange={(event) => setRecoveryCodesText(event.target.value)}
-              placeholder={accounts.length === 1 ? '没收到前可以先留空；收到后直接填验证码，或填：手机号 ---- 验证码' : '没收到前可以先留空；收到后每行一条：手机号 ---- 验证码'}
-              className="min-h-[120px] w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-sm text-white outline-none transition focus:border-white/[0.12] focus:bg-hover"
-            />
-            <div className="mt-2 text-xs text-textMuted">
-              {accounts.length === 1 ? '单账号没填验证码时，会先走忘记密码；填了验证码后，再提交完成重置。' : '多账号时请逐行填写“手机号 + 验证码”，例如：+8613800138000 ---- 12345'}
-            </div>
+            这里直接走 Telegram 官方的 <span className="font-medium text-white">忘记密码 / 重置 2FA</span> 链路。
+            点提交后，会直接为所选账号发起重置申请；如果 Telegram 接受，会进入大约 <span className="font-medium text-white">7 天等待期</span>，到时间后 2FA 才会被自动清掉。
           </div>
         ) : null}
       </div>
@@ -274,7 +209,7 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
           取消
         </button>
         <button type="button" onClick={() => void submitApply()} disabled={submitting} className="h-11 rounded-[12px] bg-violet-300 px-4 text-sm font-medium text-slate-950 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40">
-          {submitting ? '处理中...' : action === 'disable-2fa' ? '开始关闭 2FA' : action === 'reset-2fa' ? (recoveryCodesText.trim() ? '提交验证码并重置' : '开始走忘记密码') : '开始更改 2FA'}
+          {submitting ? '处理中...' : action === 'disable-2fa' ? '开始关闭 2FA' : action === 'reset-2fa' ? '开始重置 2FA' : '开始更改 2FA'}
         </button>
       </div>
     </ResultDialogShell>
@@ -296,7 +231,7 @@ export const TwoFactorProgressDialog = memo(function TwoFactorProgressDialog({
       open={true}
       onClose={() => {}}
       title={`${actionLabel}进行中`}
-      subtitle={state.phase === 'request-recovery' ? '正在替所选账号触发忘记密码' : '正在逐个处理你选中的账号'}
+      subtitle={state.action === 'reset-2fa' ? '正在为所选账号发起忘记密码 / 7 天重置申请' : '正在逐个处理你选中的账号'}
       icon={<Loader2 size={18} className="animate-spin" />}
       tone={tone}
       maxWidth="max-w-[620px]"
@@ -347,14 +282,13 @@ export const TwoFactorResultDialog = memo(function TwoFactorResultDialog({
   const tone = readActionTone(result.action)
   const actionLabel = readActionLabel(result.action)
   const failedItems = result.results.filter((item) => !item.success)
-  const emailItems = result.results.filter((item) => item.emailPattern)
 
   return (
     <ResultDialogShell
       open={true}
       onClose={onClose}
       title={`${actionLabel}完成`}
-      subtitle={result.phase === 'request-recovery' ? '忘记密码触发结果如下' : '本次批量处理结果如下'}
+      subtitle={result.action === 'reset-2fa' ? '忘记密码 / 7 天重置结果如下' : '本次批量处理结果如下'}
       icon={failedItems.length > 0 ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
       tone={failedItems.length > 0 ? 'warning' : tone}
       maxWidth="max-w-[620px]"
@@ -367,23 +301,9 @@ export const TwoFactorResultDialog = memo(function TwoFactorResultDialog({
         <ResultStatCard label="失败" value={result.failedCount} tone={result.failedCount > 0 ? 'danger' : 'neutral'} />
       </div>
 
-      {result.phase === 'request-recovery' ? (
+      {result.action === 'reset-2fa' ? (
         <div className="rounded-[14px] border border-sky-400/15 bg-sky-400/8 px-4 py-3 text-sm text-sky-100">
-          忘记密码已经触发。等恢复邮箱收到验证码后，再回到“重置 2FA”，把验证码按“手机号 ---- 验证码”填进去，再提交完成重置。
-        </div>
-      ) : null}
-
-      {emailItems.length > 0 ? (
-        <div className="rounded-[14px] border border-white/8 bg-panel/80 p-3">
-          <div className="mb-3 text-sm font-medium text-white">忘记密码发送目标</div>
-          <div className="max-h-[180px] space-y-2 overflow-y-auto pr-1 text-sm text-slate-200">
-            {emailItems.map((item) => (
-              <div key={item.accountId} className="flex items-center justify-between rounded-[12px] bg-white/[0.03] px-3 py-3">
-                <span>{item.phone}</span>
-                <span className="text-sky-200">{item.emailPattern}</span>
-              </div>
-            ))}
-          </div>
+          这一步只是向 Telegram 发起重置 2FA 申请。若 Telegram 接受，会进入等待期，到时间后才会自动把 2FA 清掉，不需要你再手动填验证码。
         </div>
       ) : null}
 
