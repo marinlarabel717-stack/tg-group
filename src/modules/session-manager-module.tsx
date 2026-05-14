@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronDown, Clock3, Copy, FolderSearch2, Hash, Link2, ListFilter, Play, RadioTower, Search, Square, Trash2, Upload, X } from 'lucide-react'
+import { Check, Clock3, Copy, FolderSearch2, Hash, ListFilter, Play, RadioTower, Search, Square, Trash2, Upload, X } from 'lucide-react'
 import { GlassPanel } from '../components/common/glasspanel'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../components/accounts/resultdialog'
 import { formatAccountStatus } from '../lib/ui-text'
@@ -283,7 +283,8 @@ export default function SessionManagerModule() {
   const [groupInput, setGroupInput] = useState('')
   const [groupSources, setGroupSources] = useState<GroupSourceRecord[]>([])
   const [participantLimit, setParticipantLimit] = useState('')
-  const [historyLimit, setHistoryLimit] = useState('1000')
+  const [historyLimit, setHistoryLimit] = useState('')
+  const [historyDays, setHistoryDays] = useState('')
   const [roleFilters, setRoleFilters] = useState<GroupCollectorRole[]>([])
   const [onlyBots, setOnlyBots] = useState(false)
   const [avatarFilters, setAvatarFilters] = useState<Array<'has' | 'none'>>([])
@@ -410,15 +411,27 @@ export default function SessionManagerModule() {
   const canStart = selectedAccountIds.length > 0 && groupSources.length > 0 && !loading
 
   const applyGroupInput = (input: string) => {
-    const { next, added, duplicate, invalid } = appendGroupSources(groupSources, input)
-    setGroupSources(next)
+    let summary = { added: 0, duplicate: 0, invalid: 0 }
+    setGroupSources((current) => {
+      const result = appendGroupSources(current, input)
+      summary = { added: result.added, duplicate: result.duplicate, invalid: result.invalid }
+      return result.next
+    })
     setGroupInput('')
-    setHintMessage(`已添加 ${added} 个群${duplicate > 0 ? `，去重 ${duplicate} 个` : ''}${invalid > 0 ? `，过滤错误 ${invalid} 个` : ''}。`)
+    if (summary.added === 0 && summary.duplicate === 0 && summary.invalid === 0) {
+      return
+    }
+    setHintMessage(`已添加 ${summary.added} 个群${summary.duplicate > 0 ? `，去重 ${summary.duplicate} 个` : ''}${summary.invalid > 0 ? `，过滤错误 ${summary.invalid} 个` : ''}。`)
   }
 
   const handleImportFile = async (file: File | null) => {
     if (!file) return
     const text = await file.text()
+    applyGroupInput(text)
+  }
+
+  const handlePasteGroups = (text: string) => {
+    if (!text.trim()) return
     applyGroupInput(text)
   }
 
@@ -470,6 +483,7 @@ export default function SessionManagerModule() {
         mode,
         participantLimit: participantLimit.trim() ? Number(participantLimit) : undefined,
         historyLimit: historyLimit.trim() ? Number(historyLimit) : undefined,
+        historyDays: historyDays.trim() ? Number(historyDays) : undefined,
         filters,
         maxGroupsPerAccount: MAX_GROUPS_PER_ACCOUNT
       })
@@ -566,20 +580,14 @@ export default function SessionManagerModule() {
       <GlassPanel>
         <div className="space-y-4">
           <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-xs tracking-[0.18em] text-textMuted">采集账号</div>
-                <div className="mt-2 text-sm text-white">{selectedAccounts.length > 0 ? `已选择 ${selectedAccounts.length} 个账号` : '点击选择账号'}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAccountPickerOpen(true)}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-4 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
-              >
-                选择账号
-                <ChevronDown size={15} className="transition" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setAccountPickerOpen(true)}
+              className="block w-full rounded-[14px] border border-white/[0.08] bg-black/10 px-4 py-4 text-left transition hover:border-white/[0.12] hover:bg-white/[0.03]"
+            >
+              <div className="text-xs tracking-[0.18em] text-textMuted">采集账号</div>
+              <div className="mt-2 text-sm text-white">{selectedAccounts.length > 0 ? `已选择 ${selectedAccounts.length} 个账号，点击重新选择` : '点击选择账号'}</div>
+            </button>
 
             {selectedAccounts.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-2">
@@ -623,22 +631,22 @@ export default function SessionManagerModule() {
             <textarea
               value={groupInput}
               onChange={(event) => setGroupInput(event.target.value)}
-              placeholder="支持 @用户名、公开链接、私密邀请链接；可直接粘贴多行"
+              onPaste={(event) => {
+                const text = event.clipboardData.getData('text')
+                if (!text.trim()) return
+                event.preventDefault()
+                handlePasteGroups(text)
+              }}
+              onBlur={() => {
+                if (groupInput.trim()) {
+                  applyGroupInput(groupInput)
+                }
+              }}
+              placeholder="直接粘贴群链接或 @群用户名，粘贴后会自动统计数量、去重、过滤错误格式"
               className={`mt-4 min-h-[120px] w-full rounded-[14px] px-3 py-3 ${SOFT_INPUT_CLASS}`}
             />
 
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => applyGroupInput(groupInput)}
-                disabled={!groupInput.trim()}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-violet-300/16 bg-violet-400/10 px-4 text-sm font-medium text-violet-200 transition hover:bg-violet-400/16 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Link2 size={15} />
-                添加群列表
-              </button>
-              <div className="text-sm text-textMuted">已识别 {groupSources.length} 个群，自动去重并过滤格式错误。</div>
-            </div>
+            <div className="mt-3 text-sm text-textMuted">已识别 {groupSources.length} 个群，粘贴或导入后会自动去重并过滤格式错误。</div>
 
             <div className="mt-4 max-h-[220px] space-y-2 overflow-auto pr-1">
               {groupSources.length === 0 ? (
@@ -691,6 +699,15 @@ export default function SessionManagerModule() {
                     value={historyLimit}
                     onChange={(event) => setHistoryLimit(event.target.value.replace(/[^\d]/g, ''))}
                     placeholder="例如 1000"
+                    className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
+                  />
+                </label>
+                <label className="rounded-[14px] bg-black/10 px-4 py-4 text-sm">
+                  <div className="text-xs tracking-[0.18em] text-textMuted">采集最近几天</div>
+                  <input
+                    value={historyDays}
+                    onChange={(event) => setHistoryDays(event.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="例如 3 / 5 / 7，留空则不按天数限制"
                     className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
                   />
                 </label>

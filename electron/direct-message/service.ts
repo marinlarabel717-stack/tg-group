@@ -212,6 +212,22 @@ function resolveCollectorSource(input: string) {
   return raw
 }
 
+function readTelegramMessageTimestampMs(message: { date?: unknown }) {
+  const raw = message?.date
+  if (raw instanceof Date) return raw.getTime()
+  if (typeof raw === 'number') return raw > 1_000_000_000_000 ? raw : raw * 1000
+  if (typeof raw === 'bigint') {
+    const value = Number(raw)
+    return Number.isFinite(value) ? (value > 1_000_000_000_000 ? value : value * 1000) : Number.NaN
+  }
+  if (raw && typeof raw === 'object' && typeof (raw as { valueOf?: () => unknown }).valueOf === 'function') {
+    const value = (raw as { valueOf: () => unknown }).valueOf()
+    if (value instanceof Date) return value.getTime()
+    if (typeof value === 'number') return value > 1_000_000_000_000 ? value : value * 1000
+  }
+  return Number.NaN
+}
+
 function extractInviteHash(input: string) {
   const raw = input.trim()
   if (!raw) return ''
@@ -1310,13 +1326,21 @@ export class DirectMessageService {
         getParticipants: (entity: unknown, params: Record<string, unknown>) => Promise<Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }>>
       }).getParticipants(targetEntity as never, params)
     } else {
-      const historyLimit = Number.isFinite(payload.historyLimit) ? Number(payload.historyLimit) : 1000
+      const historyLimit = Number.isFinite(payload.historyLimit) ? Number(payload.historyLimit) : 5000
+      const historyDays = Number.isFinite(payload.historyDays) ? Number(payload.historyDays) : 0
+      const cutoffTimeMs = historyDays > 0 ? Date.now() - historyDays * 24 * 60 * 60 * 1000 : null
       const messages = await (client as TelegramClient & {
         getMessages: (entity: unknown, params: Record<string, unknown>) => Promise<Array<any>>
       }).getMessages(targetEntity as never, { limit: Math.max(1, Math.min(historyLimit, 5000)) })
 
       const users = new Map<string, { id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }>()
       for (const message of messages || []) {
+        if (cutoffTimeMs) {
+          const messageTimeMs = readTelegramMessageTimestampMs(message)
+          if (Number.isFinite(messageTimeMs) && messageTimeMs < cutoffTimeMs) {
+            continue
+          }
+        }
         let sender = typeof message?.getSender === 'function' ? await message.getSender() : null
         if (!sender && message?.senderId) {
           try {
@@ -1381,7 +1405,9 @@ export class DirectMessageService {
           ? `这次拉到 ${rawUsers.length} 个用户，但都被过滤条件筛掉了。`
           : payload.mode === 'public_members'
             ? '这次没有拉到群成员，可能这个群不开放成员列表，或者当前账号权限不够。'
-            : '这次没有从历史消息里扫到可用用户，可能群里最近没人发言，或者历史消息太少。'
+            : payload.historyDays && payload.historyDays > 0
+              ? `这次没有从最近 ${payload.historyDays} 天的历史消息里扫到可用用户，可能这几天没人发言，或者历史消息太少。`
+              : '这次没有从历史消息里扫到可用用户，可能群里最近没人发言，或者历史消息太少。'
     }
   }
 
@@ -1485,6 +1511,7 @@ export class DirectMessageService {
                 mode: payload.mode,
                 participantLimit: payload.participantLimit,
                 historyLimit: payload.historyLimit,
+                historyDays: payload.historyDays,
                 filters: payload.filters
               })
 

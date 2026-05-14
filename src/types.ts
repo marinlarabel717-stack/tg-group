@@ -527,6 +527,7 @@ export interface GroupCollectorPayload {
   mode: GroupCollectorMode
   participantLimit?: number
   historyLimit?: number
+  historyDays?: number
   filters: GroupCollectorFilterPayload
 }
 
@@ -563,6 +564,7 @@ export interface GroupCollectorTaskPayload {
   mode: GroupCollectorMode
   participantLimit?: number
   historyLimit?: number
+  historyDays?: number
   filters: GroupCollectorFilterPayload
   maxGroupsPerAccount?: number
 }
