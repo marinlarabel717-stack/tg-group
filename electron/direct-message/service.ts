@@ -1602,11 +1602,7 @@ export class DirectMessageService {
       let label = source.label
 
       try {
-        const entity = await resolveCollectorGroupEntity(runtime.client, source)
-        const joinedState = await ensureCollectorGroupJoined(runtime.client, source, (entity as { chat?: unknown } | null)?.chat ?? entity)
-        label = joinedState.label
-        joinedCount += 1
-        pushLog('running', 'info', `[${runtime.phone}] 已准备 ${joinedState.label}，开始采集用户`, runtime.account.id, runtime.phone, joinedState.label)
+        pushLog('running', 'info', `[${runtime.phone}] 已开始处理 ${label}，准备采集用户`, runtime.account.id, runtime.phone, label)
 
         const result = await this.collectGroupUsersWithClient(runtime.client, {
           accountId: runtime.account.id,
@@ -1618,6 +1614,7 @@ export class DirectMessageService {
           filters: payload.filters
         }, runtime.account)
 
+        joinedCount += 1
         let added = 0
         result.items.forEach((item) => {
           const key = item.userId || normalizeTargetValue(item.targetValue || item.username || item.phone || item.displayName)
@@ -1628,9 +1625,9 @@ export class DirectMessageService {
         successCount = uniqueItems.size
         processedGroups += 1
         if (result.items.length > 0) {
-          pushLog('running', 'success', `[${runtime.phone}] ${joinedState.label} 采集完成：命中 ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}（原始 ${result.total}，过滤 ${result.filtered}）`, runtime.account.id, runtime.phone, joinedState.label)
+          pushLog('running', 'success', `[${runtime.phone}] ${label} 采集完成：命中 ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}（原始 ${result.total}，过滤 ${result.filtered}）`, runtime.account.id, runtime.phone, label)
         } else {
-          pushLog('running', 'warning', `[${runtime.phone}] ${joinedState.label} 这轮没采到可用用户（原始 ${result.total}，过滤 ${result.filtered}，原因：${result.message}）`, runtime.account.id, runtime.phone, joinedState.label)
+          pushLog('running', 'warning', `[${runtime.phone}] ${label} 这轮没采到可用用户（原始 ${result.total}，过滤 ${result.filtered}，原因：${result.message}）`, runtime.account.id, runtime.phone, label)
         }
       } catch (error) {
         const waitSeconds = readRiskPauseSeconds(error)
