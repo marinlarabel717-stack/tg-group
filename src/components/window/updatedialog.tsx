@@ -5,7 +5,7 @@ import { BrandLogo } from '../common/brandlogo'
 
 const defaultState: AppUpdaterState = {
   status: 'idle',
-  currentVersion: window.desktopInfo?.version || '0.0.30',
+  currentVersion: window.desktopInfo?.version || '0.0.31',
   availableVersion: null,
   progressPercent: 0,
   transferredBytes: 0,

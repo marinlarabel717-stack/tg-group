@@ -2,6 +2,7 @@ export type ModuleKey =
   | 'dashboard'
   | 'accounts'
   | 'automation'
+  | 'bot-center'
   | 'auto-join'
   | 'direct-message'
   | 'proxy-pool'
@@ -344,6 +345,55 @@ export interface DesktopAppSettings {
   checkConcurrency: number
   licenseApiBaseUrl: string
   licenseOfflineGraceDays: number
+}
+
+export type BotCenterLogLevel = 'info' | 'success' | 'warning' | 'error'
+
+export interface BotCenterConfig {
+  botToken: string
+  autoStart: boolean
+  guestReplyEnabled: boolean
+  guestReplyTitle: string
+  guestReplyText: string
+}
+
+export interface BotCenterProfile {
+  id: number | null
+  username: string
+  firstName: string
+  canJoinGroups: boolean
+  canReadAllGroupMessages: boolean
+  supportsGuestQueries: boolean
+  fetchedAt: string | null
+  valid: boolean
+}
+
+export interface BotCenterStats {
+  receivedGuestCount: number
+  answeredGuestCount: number
+  failedGuestCount: number
+  lastGuestAt: string | null
+}
+
+export interface BotCenterLogEntry {
+  id: string
+  createdAt: string
+  level: BotCenterLogLevel
+  message: string
+}
+
+export interface BotCenterState {
+  config: BotCenterConfig
+  profile: BotCenterProfile
+  stats: BotCenterStats
+  running: boolean
+  polling: boolean
+  startedAt: string | null
+  lastPollAt: string | null
+  lastActionMessage: string
+  lastError: string
+  updateOffset: number
+  logs: BotCenterLogEntry[]
 }
 
 export interface DesktopLicenseState {
@@ -792,6 +842,16 @@ export interface DesktopSettingsApi {
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
 }
 
+export interface DesktopBotCenterApi {
+  getState: () => Promise<BotCenterState>
+  saveConfig: (patch: Partial<BotCenterConfig>) => Promise<BotCenterState>
+  refreshProfile: () => Promise<BotCenterState>
+  start: () => Promise<BotCenterState>
+  stop: () => Promise<BotCenterState>
+  clearLogs: () => Promise<BotCenterState>
+  onState: (callback: (state: BotCenterState) => void) => () => void
+}
+
 export interface DesktopProxyPoolApi {
   getState: () => Promise<ProxyPoolState>
   replaceProxyList: (text: string) => Promise<ProxyPoolState>
@@ -872,6 +932,7 @@ declare global {
   interface Window {
     desktopAccounts?: DesktopAccountsApi
     desktopSettings?: DesktopSettingsApi
+    desktopBotCenter?: DesktopBotCenterApi
     desktopProxyPool?: DesktopProxyPoolApi
     desktopLicense?: DesktopLicenseApi
     desktopBroadcast?: DesktopBroadcastApi

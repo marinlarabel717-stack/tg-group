@@ -7,6 +7,7 @@ import { ModuleLoading } from './moduleloading'
 const DashboardModule = lazy(() => import('./dashboard-module'))
 const AccountsModule = lazy(() => import('./accounts-module'))
 const AutomationModule = lazy(() => import('./automation-module'))
+const BotCenterModule = lazy(() => import('./bot-center-module'))
 const AutoJoinModule = lazy(() => import('./auto-join-module'))
 const DirectMessageModule = lazy(() => import('./direct-message-module'))
 const ProxyPoolModule = lazy(() => import('./proxy-pool-module'))
@@ -18,6 +19,7 @@ const moduleMap: Record<ModuleKey, LazyExoticComponent<ComponentType>> = {
   dashboard: DashboardModule,
   accounts: AccountsModule,
   automation: AutomationModule,
+  'bot-center': BotCenterModule,
   'auto-join': AutoJoinModule,
   'direct-message': DirectMessageModule,
   'proxy-pool': ProxyPoolModule,

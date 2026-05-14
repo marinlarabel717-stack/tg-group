@@ -1,4 +1,4 @@
-import { ChartColumnBig, ChevronLeft, ChevronRight, ExternalLink, FileClock, MessageCircleMore, Network, Radio, SearchCheck, Settings2, UserPlus2, Users } from 'lucide-react'
+import { Bot, ChartColumnBig, ChevronLeft, ChevronRight, ExternalLink, FileClock, MessageCircleMore, Network, Radio, SearchCheck, Settings2, UserPlus2, Users } from 'lucide-react'
 import { memo } from 'react'
 import type { ModuleKey } from '../../types'
 import { moduleLabelMap } from '../../lib/ui-text'
@@ -10,6 +10,7 @@ const items: { key: ModuleKey; label: string; icon: typeof ChartColumnBig }[] = 
   { key: 'dashboard', label: moduleLabelMap.dashboard, icon: ChartColumnBig },
   { key: 'accounts', label: moduleLabelMap.accounts, icon: Users },
   { key: 'automation', label: moduleLabelMap.automation, icon: Radio },
+  { key: 'bot-center', label: moduleLabelMap['bot-center'], icon: Bot },
   { key: 'auto-join', label: moduleLabelMap['auto-join'], icon: UserPlus2 },
   { key: 'direct-message', label: moduleLabelMap['direct-message'], icon: MessageCircleMore },
   { key: 'proxy-pool', label: moduleLabelMap['proxy-pool'], icon: Network },

@@ -1,10 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState, TwoFactorStopResult } from '../src/types'
+import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BotCenterConfig, BotCenterState, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState, TwoFactorStopResult } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'TG-Matrix',
   platform: process.platform,
-  version: process.env.npm_package_version || '0.0.30'
+  version: process.env.npm_package_version || '0.0.31'
 })
 
 contextBridge.exposeInMainWorld('desktopWindow', {
@@ -74,6 +74,20 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
 contextBridge.exposeInMainWorld('desktopSettings', {
   get: () => ipcRenderer.invoke('app-settings:get'),
   update: (patch: { checkConcurrency?: number; licenseApiBaseUrl?: string; licenseOfflineGraceDays?: number }) => ipcRenderer.invoke('app-settings:update', patch)
+})
+
+contextBridge.exposeInMainWorld('desktopBotCenter', {
+  getState: () => ipcRenderer.invoke('bot-center:get-state') as Promise<BotCenterState>,
+  saveConfig: (patch: Partial<BotCenterConfig>) => ipcRenderer.invoke('bot-center:save-config', patch) as Promise<BotCenterState>,
+  refreshProfile: () => ipcRenderer.invoke('bot-center:refresh-profile') as Promise<BotCenterState>,
+  start: () => ipcRenderer.invoke('bot-center:start') as Promise<BotCenterState>,
+  stop: () => ipcRenderer.invoke('bot-center:stop') as Promise<BotCenterState>,
+  clearLogs: () => ipcRenderer.invoke('bot-center:clear-logs') as Promise<BotCenterState>,
+  onState: (callback: (state: BotCenterState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: BotCenterState) => callback(state)
+    ipcRenderer.on('bot-center:state', listener)
+    return () => ipcRenderer.removeListener('bot-center:state', listener)
+  }
 })
 
 contextBridge.exposeInMainWorld('desktopProxyPool', {

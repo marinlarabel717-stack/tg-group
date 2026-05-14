@@ -37,6 +37,8 @@ import { registerDirectMessageIpc } from './direct-message/ipc'
 import { AutoJoinService } from './auto-join/service'
 import { registerAutoJoinIpc } from './auto-join/ipc'
 import { DesktopAppUpdater } from './app-updater'
+import { BotCenterService } from './bot-center/service'
+import { registerBotCenterIpc } from './bot-center/ipc'
 
 const BRAND_NAME = 'TG-Matrix'
 
@@ -48,6 +50,7 @@ let managedSessionsWatcher: fs.FSWatcher | null = null
 let managedSessionsSyncTimer: NodeJS.Timeout | null = null
 let managedSessionsWatcherSuspendCount = 0
 let desktopAppUpdater: DesktopAppUpdater | null = null
+let botCenterService: BotCenterService | null = null
 
 const APP_WINDOW_BOUNDS = {
   width: 1600,
@@ -246,6 +249,7 @@ async function bootstrap() {
   const licenseStore = new LicenseStore(licensePath)
   const licenseService = new LicenseService(licenseStore, appSettingsStore)
   const proxyPoolStoragePath = resolveDataPath('proxy-pool.json')
+  const botCenterStoragePath = resolveDataPath('bot-center.json')
   const appSettings = appSettingsStore.get()
   const repository = new AccountRepository(database)
   const proxyPoolService = new ProxyPoolService(proxyPoolStoragePath)
@@ -273,6 +277,7 @@ async function bootstrap() {
   const telethonGroupCollector = new TelethonGroupCollector()
   const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager, proxyPoolService, telethonGroupCollector)
   const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager, proxyPoolService)
+  botCenterService = new BotCenterService(botCenterStoragePath)
   const resultWriter = new CheckResultWriter(repository, {
     onWrite: (accounts) => emitAccountsUpdated(accounts)
   })
@@ -313,6 +318,13 @@ async function bootstrap() {
   ipcMain.handle('license:validate', () => licenseService.validate())
   ipcMain.handle('license:clear', () => licenseService.clear())
 
+  const emitBotCenterState = () => {
+    if (!mainWindow || mainWindow.isDestroyed() || !botCenterService) return
+    mainWindow.webContents.send('bot-center:state', botCenterService.getState())
+  }
+
+  botCenterService.onState(() => emitBotCenterState())
+
   await importService.syncManagedSessions()
 
   bindManagedSessionsWatcher(importService, repository, managedSessionsDirectory)
@@ -343,7 +355,13 @@ async function bootstrap() {
   registerAutoJoinIpc({
     autoJoinService
   })
+  registerBotCenterIpc({
+    botCenterService,
+    emitState: emitBotCenterState
+  })
   createWindow()
+  emitBotCenterState()
+  void botCenterService.autoStartIfNeeded()
   desktopAppUpdater.scheduleStartupCheck()
 
   app.on('activate', () => {
@@ -367,4 +385,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   managedSessionsWatcher?.close()
   desktopAppUpdater?.dispose()
+  void botCenterService?.dispose()
 })
