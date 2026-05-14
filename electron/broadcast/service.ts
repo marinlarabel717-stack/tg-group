@@ -534,6 +534,20 @@ export class BroadcastService {
     private readonly telethonJoinedGroupReader: TelethonJoinedGroupReader
   ) {}
 
+  private async listJoinedGroupsWithTelethonFallback(account: AccountRecord, fallbackMessage: string) {
+    if (!this.telethonJoinedGroupReader.isAvailable()) {
+      throw new Error(fallbackMessage)
+    }
+
+    const telethonGroups = await this.telethonJoinedGroupReader.list(account.sessionPath, 35)
+    if (telethonGroups && telethonGroups.length > 0) {
+      return dedupeJoinedGroups(telethonGroups)
+        .sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'))
+    }
+
+    throw new Error('Telethon 这次也没读到这个账号的已加入群。你这个号虽然在线，但当前会话的对话列表还是没拉回来；先在 Telegram 客户端里点开几个群，再回来重试。')
+  }
+
   async stopCurrentPush(): Promise<BroadcastStopResult> {
     if (!this.activePushTask) {
       return {
@@ -864,7 +878,7 @@ export class BroadcastService {
       const dialogs = await loadDialogsWithFallback(client)
 
       if (dialogs.length === 0) {
-        throw new Error('NO_DIALOGS_LOADED')
+        return await this.listJoinedGroupsWithTelethonFallback(account, '当前账号这次没有从 Telegram 拉到任何对话列表。若你明明加了很多群，先在 Telegram 客户端里打开几个群再重试；如果还是空，重新登录这个账号再试。')
       }
 
       const groups = dialogs
@@ -894,13 +908,8 @@ export class BroadcastService {
 
       return dedupedGroups
     } catch (error) {
-      if (isGramJsDialogConstructorError(error) && this.telethonJoinedGroupReader.isAvailable()) {
-        const telethonGroups = await this.telethonJoinedGroupReader.list(account.sessionPath, 35)
-        if (telethonGroups && telethonGroups.length > 0) {
-          return dedupeJoinedGroups(telethonGroups)
-            .sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'))
-        }
-        throw new Error('Telethon 也没读到这个账号的已加入群。你这个号虽然在线，但这次对话列表还是没拉回来；先在 Telegram 客户端里点开几个群，再回来重试。')
+      if (isGramJsDialogConstructorError(error)) {
+        return await this.listJoinedGroupsWithTelethonFallback(account, 'GramJS 读取这个账号的对话列表时炸了，已经自动切 Telethon 兜底；如果 Telethon 也拿不到群，就说明当前会话的 dialogs 这次没拉回来。')
       }
 
       if ((error instanceof Error ? error.message : String(error)).includes('NO_DIALOGS_LOADED')) {
