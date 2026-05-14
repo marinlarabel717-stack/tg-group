@@ -1,7 +1,18 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import type { BotCenterConfig, BotCenterLogEntry, BotCenterLogLevel, BotCenterProfile, BotCenterState, BotCenterStats } from '../../src/types'
+import type {
+  BotCenterButtonStyle,
+  BotCenterConfig,
+  BotCenterKeywordMatchType,
+  BotCenterKeywordRule,
+  BotCenterLogEntry,
+  BotCenterLogLevel,
+  BotCenterProfile,
+  BotCenterReplyKind,
+  BotCenterState,
+  BotCenterStats
+} from '../../src/types'
 
 interface PersistedBotCenterPayload {
   config?: Partial<BotCenterConfig>
@@ -9,12 +20,35 @@ interface PersistedBotCenterPayload {
   updateOffset?: number
 }
 
+const DEFAULT_KEYWORD_RULE: BotCenterKeywordRule = {
+  id: '',
+  enabled: true,
+  keyword: '',
+  matchType: 'contains',
+  replyEnabled: true,
+  replyType: 'text',
+  title: 'TG-Matrix',
+  text: '你好，我已收到你的召唤。\n\n你刚刚发送的是：{text}',
+  imageUrl: '',
+  buttonEnabled: false,
+  buttonText: '',
+  buttonUrl: '',
+  buttonStyle: 'primary'
+}
+
 const DEFAULT_CONFIG: BotCenterConfig = {
   botToken: '',
   autoStart: false,
   guestReplyEnabled: true,
   guestReplyTitle: 'TG-Matrix',
-  guestReplyText: '你好，我已收到你的召唤。\n\n你刚刚发送的是：{text}'
+  guestReplyText: '你好，我已收到你的召唤。\n\n你刚刚发送的是：{text}',
+  guestReplyType: 'text',
+  guestReplyImageUrl: '',
+  guestReplyButtonEnabled: false,
+  guestReplyButtonText: '',
+  guestReplyButtonUrl: '',
+  guestReplyButtonStyle: 'primary',
+  keywordRules: []
 }
 
 const DEFAULT_PROFILE: BotCenterProfile = {
@@ -43,13 +77,62 @@ function normalizeString(value: unknown, fallback = '') {
   return typeof value === 'string' ? value.trim() : fallback
 }
 
+function normalizeReplyKind(value: unknown, fallback: BotCenterReplyKind): BotCenterReplyKind {
+  return value === 'photo' ? 'photo' : fallback
+}
+
+function normalizeMatchType(value: unknown, fallback: BotCenterKeywordMatchType): BotCenterKeywordMatchType {
+  return value === 'equals' ? 'equals' : fallback
+}
+
+function normalizeButtonStyle(value: unknown, fallback: BotCenterButtonStyle): BotCenterButtonStyle {
+  if (value === 'primary' || value === 'success' || value === 'danger' || value === 'default') {
+    return value
+  }
+  return fallback
+}
+
+function createId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function normalizeKeywordRule(input?: Partial<BotCenterKeywordRule>, index = 0): BotCenterKeywordRule {
+  return {
+    id: normalizeString(input?.id) || createId(`rule-${index}`),
+    enabled: normalizeBoolean(input?.enabled, DEFAULT_KEYWORD_RULE.enabled),
+    keyword: normalizeString(input?.keyword),
+    matchType: normalizeMatchType(input?.matchType, DEFAULT_KEYWORD_RULE.matchType),
+    replyEnabled: normalizeBoolean(input?.replyEnabled, DEFAULT_KEYWORD_RULE.replyEnabled),
+    replyType: normalizeReplyKind(input?.replyType, DEFAULT_KEYWORD_RULE.replyType),
+    title: normalizeString(input?.title, DEFAULT_KEYWORD_RULE.title) || DEFAULT_KEYWORD_RULE.title,
+    text: typeof input?.text === 'string' && input.text.trim() ? input.text : DEFAULT_KEYWORD_RULE.text,
+    imageUrl: normalizeString(input?.imageUrl),
+    buttonEnabled: normalizeBoolean(input?.buttonEnabled, DEFAULT_KEYWORD_RULE.buttonEnabled),
+    buttonText: normalizeString(input?.buttonText),
+    buttonUrl: normalizeString(input?.buttonUrl),
+    buttonStyle: normalizeButtonStyle(input?.buttonStyle, DEFAULT_KEYWORD_RULE.buttonStyle)
+  }
+}
+
+function normalizeKeywordRules(input: unknown): BotCenterKeywordRule[] {
+  if (!Array.isArray(input)) return []
+  return input.map((item, index) => normalizeKeywordRule(item as Partial<BotCenterKeywordRule>, index))
+}
+
 function normalizeConfig(input?: Partial<BotCenterConfig>): BotCenterConfig {
   return {
     botToken: normalizeString(input?.botToken),
     autoStart: normalizeBoolean(input?.autoStart, DEFAULT_CONFIG.autoStart),
     guestReplyEnabled: normalizeBoolean(input?.guestReplyEnabled, DEFAULT_CONFIG.guestReplyEnabled),
     guestReplyTitle: normalizeString(input?.guestReplyTitle, DEFAULT_CONFIG.guestReplyTitle) || DEFAULT_CONFIG.guestReplyTitle,
-    guestReplyText: normalizeString(input?.guestReplyText, DEFAULT_CONFIG.guestReplyText) || DEFAULT_CONFIG.guestReplyText
+    guestReplyText: typeof input?.guestReplyText === 'string' && input.guestReplyText.trim() ? input.guestReplyText : DEFAULT_CONFIG.guestReplyText,
+    guestReplyType: normalizeReplyKind(input?.guestReplyType, DEFAULT_CONFIG.guestReplyType),
+    guestReplyImageUrl: normalizeString(input?.guestReplyImageUrl),
+    guestReplyButtonEnabled: normalizeBoolean(input?.guestReplyButtonEnabled, DEFAULT_CONFIG.guestReplyButtonEnabled),
+    guestReplyButtonText: normalizeString(input?.guestReplyButtonText),
+    guestReplyButtonUrl: normalizeString(input?.guestReplyButtonUrl),
+    guestReplyButtonStyle: normalizeButtonStyle(input?.guestReplyButtonStyle, DEFAULT_CONFIG.guestReplyButtonStyle),
+    keywordRules: normalizeKeywordRules(input?.keywordRules)
   }
 }
 
@@ -95,11 +178,46 @@ function maskToken(token: string) {
 
 function buildLog(level: BotCenterLogLevel, message: string): BotCenterLogEntry {
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: createId('log'),
     createdAt: new Date().toISOString(),
     level,
     message
   }
+}
+
+function applyTemplate(template: string, variables: Record<string, string>) {
+  let output = template
+  for (const [key, value] of Object.entries(variables)) {
+    output = output.split(`{${key}}`).join(value)
+  }
+  return output
+}
+
+function normalizeKeywordText(value: string) {
+  return value.trim().toLocaleLowerCase('zh-CN')
+}
+
+interface GuestContext {
+  text: string
+  caller: Record<string, any>
+  callerName: string
+  callerUsername: string
+  chat: Record<string, any>
+  chatTitle: string
+}
+
+interface ResolvedReplyConfig {
+  source: 'default' | 'keyword'
+  ruleId: string | null
+  ruleKeyword: string | null
+  title: string
+  text: string
+  replyType: BotCenterReplyKind
+  imageUrl: string
+  buttonEnabled: boolean
+  buttonText: string
+  buttonUrl: string
+  buttonStyle: BotCenterButtonStyle
 }
 
 export class BotCenterService {
@@ -376,9 +494,20 @@ export class BotCenterService {
       : typeof guestMessage?.caption === 'string' && guestMessage.caption.trim()
         ? guestMessage.caption.trim()
         : '[非文本消息]'
-    const caller = guestMessage?.from ?? guestMessage?.guest_sender_user ?? null
+    const caller = (guestMessage?.from ?? guestMessage?.guest_sender_user ?? null) as Record<string, any> | null
     const callerName = [caller?.first_name, caller?.last_name].filter((item) => typeof item === 'string' && item.trim()).join(' ').trim() || '访客用户'
-    const chatTitle = typeof guestMessage?.chat?.title === 'string' && guestMessage.chat.title.trim() ? guestMessage.chat.title.trim() : '未命名群组'
+    const callerUsername = typeof caller?.username === 'string' && caller.username.trim() ? `@${caller.username.replace(/^@+/, '')}` : '未提供'
+    const chat = (guestMessage?.chat ?? {}) as Record<string, any>
+    const chatTitle = typeof chat?.title === 'string' && chat.title.trim() ? chat.title.trim() : '未命名群组'
+
+    const context: GuestContext = {
+      text,
+      caller: caller || {},
+      callerName,
+      callerUsername,
+      chat,
+      chatTitle
+    }
 
     this.state = {
       ...this.state,
@@ -411,20 +540,13 @@ export class BotCenterService {
       return
     }
 
-    const replyText = this.renderReplyText(text, caller, guestMessage?.chat)
+    const resolvedReply = this.resolveReplyConfig(context)
+    const replyPayload = this.buildGuestQueryResult(context, resolvedReply)
 
     try {
       await this.callBotApi(token, 'answerGuestQuery', {
         guest_query_id: queryId,
-        result: {
-          type: 'article',
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          title: this.state.config.guestReplyTitle || 'TG-Matrix',
-          input_message_content: {
-            message_text: replyText
-          },
-          description: 'TG-Matrix Guest Bot 自动回复'
-        }
+        result: replyPayload
       })
 
       this.state = {
@@ -436,7 +558,9 @@ export class BotCenterService {
         lastActionMessage: `已向群【${chatTitle}】回复 Guest 消息。`,
         lastError: ''
       }
-      this.log('success', `Guest 消息已回复：群【${chatTitle}】 / 用户【${callerName}】`)
+      this.log('success', resolvedReply.source === 'keyword'
+        ? `Guest 消息已按关键词【${resolvedReply.ruleKeyword || ''}】回复：群【${chatTitle}】 / 用户【${callerName}】`
+        : `Guest 消息已回复：群【${chatTitle}】 / 用户【${callerName}】`)
       this.emit()
     } catch (error) {
       const message = error instanceof Error ? error.message : '回复 Guest 消息失败。'
@@ -453,19 +577,116 @@ export class BotCenterService {
     }
   }
 
-  private renderReplyText(text: string, caller: any, chat: any) {
-    const template = this.state.config.guestReplyText || DEFAULT_CONFIG.guestReplyText
-    const callerName = [caller?.first_name, caller?.last_name].filter((item) => typeof item === 'string' && item.trim()).join(' ').trim() || '访客用户'
-    const callerUsername = typeof caller?.username === 'string' && caller.username.trim() ? `@${caller.username.replace(/^@+/, '')}` : '未提供'
-    const chatTitle = typeof chat?.title === 'string' && chat.title.trim() ? chat.title.trim() : '未命名群组'
-    const botUsername = this.state.profile.username ? `@${this.state.profile.username}` : '当前机器人'
+  private resolveReplyConfig(context: GuestContext): ResolvedReplyConfig {
+    const matchedRule = this.findMatchedKeywordRule(context.text)
+    if (matchedRule) {
+      return {
+        source: 'keyword',
+        ruleId: matchedRule.id,
+        ruleKeyword: matchedRule.keyword,
+        title: matchedRule.title || DEFAULT_KEYWORD_RULE.title,
+        text: matchedRule.text || DEFAULT_KEYWORD_RULE.text,
+        replyType: matchedRule.replyType,
+        imageUrl: matchedRule.imageUrl,
+        buttonEnabled: matchedRule.buttonEnabled,
+        buttonText: matchedRule.buttonText,
+        buttonUrl: matchedRule.buttonUrl,
+        buttonStyle: matchedRule.buttonStyle
+      }
+    }
 
-    return template
-      .split('{text}').join(text)
-      .split('{caller_name}').join(callerName)
-      .split('{caller_username}').join(callerUsername)
-      .split('{chat_title}').join(chatTitle)
-      .split('{bot_username}').join(botUsername)
+    return {
+      source: 'default',
+      ruleId: null,
+      ruleKeyword: null,
+      title: this.state.config.guestReplyTitle || DEFAULT_CONFIG.guestReplyTitle,
+      text: this.state.config.guestReplyText || DEFAULT_CONFIG.guestReplyText,
+      replyType: this.state.config.guestReplyType,
+      imageUrl: this.state.config.guestReplyImageUrl,
+      buttonEnabled: this.state.config.guestReplyButtonEnabled,
+      buttonText: this.state.config.guestReplyButtonText,
+      buttonUrl: this.state.config.guestReplyButtonUrl,
+      buttonStyle: this.state.config.guestReplyButtonStyle
+    }
+  }
+
+  private findMatchedKeywordRule(text: string) {
+    const normalizedText = normalizeKeywordText(text)
+    if (!normalizedText) return null
+
+    for (const rule of this.state.config.keywordRules) {
+      if (!rule.enabled || !rule.replyEnabled) continue
+      const keyword = normalizeKeywordText(rule.keyword)
+      if (!keyword) continue
+      const matched = rule.matchType === 'equals'
+        ? normalizedText === keyword
+        : normalizedText.includes(keyword)
+      if (matched) return rule
+    }
+
+    return null
+  }
+
+  private buildGuestQueryResult(context: GuestContext, replyConfig: ResolvedReplyConfig) {
+    const renderedText = this.renderReplyText(replyConfig.text, context)
+    const replyMarkup = this.buildReplyMarkup(replyConfig)
+
+    if (replyConfig.replyType === 'photo' && replyConfig.imageUrl) {
+      return {
+        type: 'photo',
+        id: createId('guest-photo'),
+        title: replyConfig.title || 'TG-Matrix',
+        photo_url: replyConfig.imageUrl,
+        thumbnail_url: replyConfig.imageUrl,
+        caption: renderedText,
+        description: replyConfig.source === 'keyword'
+          ? `关键词回复：${replyConfig.ruleKeyword || ''}`
+          : 'TG-Matrix Guest Bot 自动回复',
+        ...(replyMarkup ? { reply_markup: replyMarkup } : null)
+      }
+    }
+
+    return {
+      type: 'article',
+      id: createId('guest-article'),
+      title: replyConfig.title || 'TG-Matrix',
+      input_message_content: {
+        message_text: renderedText
+      },
+      description: replyConfig.source === 'keyword'
+        ? `关键词回复：${replyConfig.ruleKeyword || ''}`
+        : 'TG-Matrix Guest Bot 自动回复',
+      ...(replyMarkup ? { reply_markup: replyMarkup } : null)
+    }
+  }
+
+  private buildReplyMarkup(replyConfig: ResolvedReplyConfig) {
+    if (!replyConfig.buttonEnabled) return null
+    if (!replyConfig.buttonText || !replyConfig.buttonUrl) return null
+
+    const button: Record<string, unknown> = {
+      text: replyConfig.buttonText,
+      url: replyConfig.buttonUrl
+    }
+
+    if (replyConfig.buttonStyle !== 'default') {
+      button.style = replyConfig.buttonStyle
+    }
+
+    return {
+      inline_keyboard: [[button]]
+    }
+  }
+
+  private renderReplyText(template: string, context: GuestContext) {
+    const botUsername = this.state.profile.username ? `@${this.state.profile.username}` : '当前机器人'
+    return applyTemplate(template || DEFAULT_CONFIG.guestReplyText, {
+      text: context.text,
+      caller_name: context.callerName,
+      caller_username: context.callerUsername,
+      chat_title: context.chatTitle,
+      bot_username: botUsername
+    })
   }
 
   private async callBotApi(token: string, method: string, payload: Record<string, unknown>, signal?: AbortSignal) {
@@ -531,7 +752,10 @@ export class BotCenterService {
   private cloneState(): BotCenterState {
     return {
       ...this.state,
-      config: { ...this.state.config },
+      config: {
+        ...this.state.config,
+        keywordRules: this.state.config.keywordRules.map((item) => ({ ...item }))
+      },
       profile: { ...this.state.profile },
       stats: { ...this.state.stats },
       logs: this.state.logs.map((item) => ({ ...item }))

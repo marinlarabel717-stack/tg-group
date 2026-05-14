@@ -348,6 +348,25 @@ export interface DesktopAppSettings {
 }
 
 export type BotCenterLogLevel = 'info' | 'success' | 'warning' | 'error'
+export type BotCenterReplyKind = 'text' | 'photo'
+export type BotCenterKeywordMatchType = 'contains' | 'equals'
+export type BotCenterButtonStyle = 'default' | 'primary' | 'success' | 'danger'
+
+export interface BotCenterKeywordRule {
+  id: string
+  enabled: boolean
+  keyword: string
+  matchType: BotCenterKeywordMatchType
+  replyEnabled: boolean
+  replyType: BotCenterReplyKind
+  title: string
+  text: string
+  imageUrl: string
+  buttonEnabled: boolean
+  buttonText: string
+  buttonUrl: string
+  buttonStyle: BotCenterButtonStyle
+}
 
 export interface BotCenterConfig {
   botToken: string
@@ -355,6 +374,13 @@ export interface BotCenterConfig {
   guestReplyEnabled: boolean
   guestReplyTitle: string
   guestReplyText: string
+  guestReplyType: BotCenterReplyKind
+  guestReplyImageUrl: string
+  guestReplyButtonEnabled: boolean
+  guestReplyButtonText: string
+  guestReplyButtonUrl: string
+  guestReplyButtonStyle: BotCenterButtonStyle
+  keywordRules: BotCenterKeywordRule[]
 }
 
 export interface BotCenterProfile {

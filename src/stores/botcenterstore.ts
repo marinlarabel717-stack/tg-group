@@ -20,7 +20,14 @@ const DEFAULT_STATE: BotCenterState = {
     autoStart: false,
     guestReplyEnabled: true,
     guestReplyTitle: 'TG-Matrix',
-    guestReplyText: '你好，我已收到你的召唤。\n\n你刚刚发送的是：{text}'
+    guestReplyText: '你好，我已收到你的召唤。\n\n你刚刚发送的是：{text}',
+    guestReplyType: 'text',
+    guestReplyImageUrl: '',
+    guestReplyButtonEnabled: false,
+    guestReplyButtonText: '',
+    guestReplyButtonUrl: '',
+    guestReplyButtonStyle: 'primary',
+    keywordRules: []
   },
   profile: {
     id: null,
