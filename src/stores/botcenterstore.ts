@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { BotCenterConfig, BotCenterState } from '../types'
+import type { BotCenterBotState, BotCenterConfig, BotCenterState } from '../types'
 
 interface BotCenterStoreState {
   state: BotCenterState
@@ -7,49 +7,61 @@ interface BotCenterStoreState {
   loading: boolean
   saving: boolean
   init: () => Promise<void>
-  saveConfig: (patch: Partial<BotCenterConfig>) => Promise<void>
-  refreshProfile: () => Promise<void>
-  start: () => Promise<void>
-  stop: () => Promise<void>
-  clearLogs: () => Promise<void>
+  addBot: () => Promise<void>
+  removeBot: (botId: string) => Promise<void>
+  selectBot: (botId: string) => Promise<void>
+  saveConfig: (botId: string, patch: Partial<BotCenterConfig>) => Promise<void>
+  refreshProfile: (botId: string) => Promise<void>
+  start: (botId: string) => Promise<void>
+  stop: (botId: string) => Promise<void>
+  clearLogs: (botId: string) => Promise<void>
+}
+
+function createDefaultBot(): BotCenterBotState {
+  return {
+    id: 'bot-default',
+    config: {
+      name: '机器人 1',
+      botToken: '',
+      autoStart: false,
+      guestReplyEnabled: true,
+      guestReplyTitle: 'TG-Matrix',
+      guestReplyText: '你好，我已收到你的召唤。\n\n你刚刚发送的是：{text}',
+      guestReplyType: 'text',
+      guestReplyImageUrl: '',
+      guestReplyButtons: [],
+      keywordRules: []
+    },
+    profile: {
+      id: null,
+      username: '',
+      firstName: '',
+      canJoinGroups: true,
+      canReadAllGroupMessages: false,
+      supportsGuestQueries: false,
+      fetchedAt: null,
+      valid: false
+    },
+    stats: {
+      receivedGuestCount: 0,
+      answeredGuestCount: 0,
+      failedGuestCount: 0,
+      lastGuestAt: null
+    },
+    running: false,
+    polling: false,
+    startedAt: null,
+    lastPollAt: null,
+    lastActionMessage: '',
+    lastError: '',
+    updateOffset: 0,
+    logs: []
+  }
 }
 
 const DEFAULT_STATE: BotCenterState = {
-  config: {
-    botToken: '',
-    autoStart: false,
-    guestReplyEnabled: true,
-    guestReplyTitle: 'TG-Matrix',
-    guestReplyText: '你好，我已收到你的召唤。\n\n你刚刚发送的是：{text}',
-    guestReplyType: 'text',
-    guestReplyImageUrl: '',
-    guestReplyButtons: [],
-    keywordRules: []
-  },
-  profile: {
-    id: null,
-    username: '',
-    firstName: '',
-    canJoinGroups: true,
-    canReadAllGroupMessages: false,
-    supportsGuestQueries: false,
-    fetchedAt: null,
-    valid: false
-  },
-  stats: {
-    receivedGuestCount: 0,
-    answeredGuestCount: 0,
-    failedGuestCount: 0,
-    lastGuestAt: null
-  },
-  running: false,
-  polling: false,
-  startedAt: null,
-  lastPollAt: null,
-  lastActionMessage: '',
-  lastError: '',
-  updateOffset: 0,
-  logs: []
+  bots: [createDefaultBot()],
+  activeBotId: 'bot-default'
 }
 
 let subscribed = false
@@ -70,7 +82,10 @@ async function runAction(set: StoreSet, action: () => Promise<BotCenterState>) {
       saving: false,
       state: {
         ...current.state,
-        lastError: error instanceof Error ? error.message : '机器人中心操作失败。'
+        bots: current.state.bots.map((bot) => ({
+          ...bot,
+          lastError: error instanceof Error ? error.message : '机器人中心操作失败。'
+        }))
       }
     }))
   }
@@ -89,7 +104,10 @@ export const useBotCenterStore = create<BotCenterStoreState>((set, get) => ({
         initialized: true,
         state: {
           ...current.state,
-          lastError: '当前运行环境未注入机器人中心 API。'
+          bots: current.state.bots.map((bot) => ({
+            ...bot,
+            lastError: '当前运行环境未注入机器人中心 API。'
+          }))
         }
       }))
       return
@@ -112,49 +130,57 @@ export const useBotCenterStore = create<BotCenterStoreState>((set, get) => ({
         loading: false,
         state: {
           ...current.state,
-          lastError: error instanceof Error ? error.message : '读取机器人中心状态失败。'
+          bots: current.state.bots.map((bot) => ({
+            ...bot,
+            lastError: error instanceof Error ? error.message : '读取机器人中心状态失败。'
+          }))
         }
       }))
     }
   },
-  saveConfig: async (patch) => {
+  addBot: async () => {
     const api = getApi()
-    if (!api) {
-      set((current) => ({ state: { ...current.state, lastError: '当前运行环境未注入机器人中心 API。' } }))
-      return
-    }
-    await runAction(set, () => api.saveConfig(patch))
+    if (!api) return
+    await runAction(set, () => api.addBot())
   },
-  refreshProfile: async () => {
+  removeBot: async (botId) => {
     const api = getApi()
-    if (!api) {
-      set((current) => ({ state: { ...current.state, lastError: '当前运行环境未注入机器人中心 API。' } }))
-      return
-    }
-    await runAction(set, () => api.refreshProfile())
+    if (!api) return
+    await runAction(set, () => api.removeBot(botId))
   },
-  start: async () => {
+  selectBot: async (botId) => {
     const api = getApi()
-    if (!api) {
-      set((current) => ({ state: { ...current.state, lastError: '当前运行环境未注入机器人中心 API。' } }))
-      return
+    if (!api) return
+    try {
+      const state = await api.selectBot(botId)
+      set({ state })
+    } catch {
+      // ignore select failures quietly
     }
-    await runAction(set, () => api.start())
   },
-  stop: async () => {
+  saveConfig: async (botId, patch) => {
     const api = getApi()
-    if (!api) {
-      set((current) => ({ state: { ...current.state, lastError: '当前运行环境未注入机器人中心 API。' } }))
-      return
-    }
-    await runAction(set, () => api.stop())
+    if (!api) return
+    await runAction(set, () => api.saveConfig(botId, patch))
   },
-  clearLogs: async () => {
+  refreshProfile: async (botId) => {
     const api = getApi()
-    if (!api) {
-      set((current) => ({ state: { ...current.state, lastError: '当前运行环境未注入机器人中心 API。' } }))
-      return
-    }
-    await runAction(set, () => api.clearLogs())
+    if (!api) return
+    await runAction(set, () => api.refreshProfile(botId))
+  },
+  start: async (botId) => {
+    const api = getApi()
+    if (!api) return
+    await runAction(set, () => api.start(botId))
+  },
+  stop: async (botId) => {
+    const api = getApi()
+    if (!api) return
+    await runAction(set, () => api.stop(botId))
+  },
+  clearLogs: async (botId) => {
+    const api = getApi()
+    if (!api) return
+    await runAction(set, () => api.clearLogs(botId))
   }
 }))

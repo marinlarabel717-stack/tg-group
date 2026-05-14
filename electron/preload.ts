@@ -4,7 +4,7 @@ import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress,
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'TG-Matrix',
   platform: process.platform,
-  version: process.env.npm_package_version || '0.0.33'
+  version: process.env.npm_package_version || '0.0.34'
 })
 
 contextBridge.exposeInMainWorld('desktopWindow', {
@@ -78,11 +78,14 @@ contextBridge.exposeInMainWorld('desktopSettings', {
 
 contextBridge.exposeInMainWorld('desktopBotCenter', {
   getState: () => ipcRenderer.invoke('bot-center:get-state') as Promise<BotCenterState>,
-  saveConfig: (patch: Partial<BotCenterConfig>) => ipcRenderer.invoke('bot-center:save-config', patch) as Promise<BotCenterState>,
-  refreshProfile: () => ipcRenderer.invoke('bot-center:refresh-profile') as Promise<BotCenterState>,
-  start: () => ipcRenderer.invoke('bot-center:start') as Promise<BotCenterState>,
-  stop: () => ipcRenderer.invoke('bot-center:stop') as Promise<BotCenterState>,
-  clearLogs: () => ipcRenderer.invoke('bot-center:clear-logs') as Promise<BotCenterState>,
+  addBot: () => ipcRenderer.invoke('bot-center:add-bot') as Promise<BotCenterState>,
+  removeBot: (botId: string) => ipcRenderer.invoke('bot-center:remove-bot', botId) as Promise<BotCenterState>,
+  selectBot: (botId: string) => ipcRenderer.invoke('bot-center:select-bot', botId) as Promise<BotCenterState>,
+  saveConfig: (botId: string, patch: Partial<BotCenterConfig>) => ipcRenderer.invoke('bot-center:save-config', botId, patch) as Promise<BotCenterState>,
+  refreshProfile: (botId: string) => ipcRenderer.invoke('bot-center:refresh-profile', botId) as Promise<BotCenterState>,
+  start: (botId: string) => ipcRenderer.invoke('bot-center:start', botId) as Promise<BotCenterState>,
+  stop: (botId: string) => ipcRenderer.invoke('bot-center:stop', botId) as Promise<BotCenterState>,
+  clearLogs: (botId: string) => ipcRenderer.invoke('bot-center:clear-logs', botId) as Promise<BotCenterState>,
   onState: (callback: (state: BotCenterState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: BotCenterState) => callback(state)
     ipcRenderer.on('bot-center:state', listener)

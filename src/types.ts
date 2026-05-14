@@ -373,6 +373,7 @@ export interface BotCenterKeywordRule {
 }
 
 export interface BotCenterConfig {
+  name: string
   botToken: string
   autoStart: boolean
   guestReplyEnabled: boolean
@@ -409,7 +410,8 @@ export interface BotCenterLogEntry {
   message: string
 }
 
-export interface BotCenterState {
+export interface BotCenterBotState {
+  id: string
   config: BotCenterConfig
   profile: BotCenterProfile
   stats: BotCenterStats
@@ -421,6 +423,11 @@ export interface BotCenterState {
   lastError: string
   updateOffset: number
   logs: BotCenterLogEntry[]
+}
+
+export interface BotCenterState {
+  bots: BotCenterBotState[]
+  activeBotId: string | null
 }
 
 export interface DesktopLicenseState {
@@ -871,11 +878,14 @@ export interface DesktopSettingsApi {
 
 export interface DesktopBotCenterApi {
   getState: () => Promise<BotCenterState>
-  saveConfig: (patch: Partial<BotCenterConfig>) => Promise<BotCenterState>
-  refreshProfile: () => Promise<BotCenterState>
-  start: () => Promise<BotCenterState>
-  stop: () => Promise<BotCenterState>
-  clearLogs: () => Promise<BotCenterState>
+  addBot: () => Promise<BotCenterState>
+  removeBot: (botId: string) => Promise<BotCenterState>
+  selectBot: (botId: string) => Promise<BotCenterState>
+  saveConfig: (botId: string, patch: Partial<BotCenterConfig>) => Promise<BotCenterState>
+  refreshProfile: (botId: string) => Promise<BotCenterState>
+  start: (botId: string) => Promise<BotCenterState>
+  stop: (botId: string) => Promise<BotCenterState>
+  clearLogs: (botId: string) => Promise<BotCenterState>
   onState: (callback: (state: BotCenterState) => void) => () => void
 }
 

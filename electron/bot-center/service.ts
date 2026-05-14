@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import type {
+  BotCenterBotState,
   BotCenterButtonStyle,
   BotCenterConfig,
   BotCenterKeywordMatchType,
@@ -15,10 +16,32 @@ import type {
   BotCenterStats
 } from '../../src/types'
 
+interface PersistedBotConfig extends Partial<BotCenterConfig> {
+  [key: string]: unknown
+}
+
+interface PersistedBotPayload {
+  id?: string
+  config?: PersistedBotConfig
+  profile?: Partial<BotCenterProfile>
+  stats?: Partial<BotCenterStats>
+  updateOffset?: number
+  lastPollAt?: string | null
+  lastActionMessage?: string
+  lastError?: string
+}
+
 interface PersistedBotCenterPayload {
-  config?: Partial<BotCenterConfig>
+  bots?: PersistedBotPayload[]
+  activeBotId?: string | null
+  config?: PersistedBotConfig
   profile?: Partial<BotCenterProfile>
   updateOffset?: number
+}
+
+interface BotRuntimeHandle {
+  loopPromise: Promise<void> | null
+  abortController: AbortController | null
 }
 
 const DEFAULT_BUTTON: BotCenterReplyButton = {
@@ -42,6 +65,7 @@ const DEFAULT_KEYWORD_RULE: BotCenterKeywordRule = {
 }
 
 const DEFAULT_CONFIG: BotCenterConfig = {
+  name: '机器人 1',
   botToken: '',
   autoStart: false,
   guestReplyEnabled: true,
@@ -96,6 +120,10 @@ function normalizeButtonStyle(value: unknown, fallback: BotCenterButtonStyle): B
 
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function createBotName(index: number) {
+  return `机器人 ${index}`
 }
 
 function normalizeReplyButton(input?: Partial<BotCenterReplyButton>, index = 0): BotCenterReplyButton {
@@ -154,8 +182,9 @@ function normalizeKeywordRules(input: unknown): BotCenterKeywordRule[] {
   return input.map((item, index) => normalizeKeywordRule(item as Partial<BotCenterKeywordRule> & Record<string, unknown>, index))
 }
 
-function normalizeConfig(input?: Partial<BotCenterConfig> & Record<string, unknown>): BotCenterConfig {
+function normalizeConfig(input?: Partial<BotCenterConfig> & Record<string, unknown>, index = 1): BotCenterConfig {
   return {
+    name: normalizeString(input?.name, createBotName(index)) || createBotName(index),
     botToken: normalizeString(input?.botToken),
     autoStart: normalizeBoolean(input?.autoStart, DEFAULT_CONFIG.autoStart),
     guestReplyEnabled: normalizeBoolean(input?.guestReplyEnabled, DEFAULT_CONFIG.guestReplyEnabled),
@@ -186,31 +215,13 @@ function normalizeProfile(input?: Partial<BotCenterProfile>): BotCenterProfile {
   }
 }
 
-function emptyState(config?: Partial<BotCenterConfig> & Record<string, unknown>, profile?: Partial<BotCenterProfile>, updateOffset = 0): BotCenterState {
+function normalizeStats(input?: Partial<BotCenterStats>): BotCenterStats {
   return {
-    config: normalizeConfig({ ...DEFAULT_CONFIG, ...config }),
-    profile: normalizeProfile({ ...DEFAULT_PROFILE, ...profile }),
-    stats: { ...DEFAULT_STATS },
-    running: false,
-    polling: false,
-    startedAt: null,
-    lastPollAt: null,
-    lastActionMessage: '',
-    lastError: '',
-    updateOffset: Number.isFinite(updateOffset) ? Math.max(0, Math.trunc(updateOffset)) : 0,
-    logs: []
+    receivedGuestCount: typeof input?.receivedGuestCount === 'number' ? input.receivedGuestCount : 0,
+    answeredGuestCount: typeof input?.answeredGuestCount === 'number' ? input.answeredGuestCount : 0,
+    failedGuestCount: typeof input?.failedGuestCount === 'number' ? input.failedGuestCount : 0,
+    lastGuestAt: typeof input?.lastGuestAt === 'string' && input.lastGuestAt.trim() ? input.lastGuestAt : null
   }
-}
-
-function capLogs(logs: BotCenterLogEntry[]) {
-  return logs.slice(0, 200)
-}
-
-function maskToken(token: string) {
-  const trimmed = token.trim()
-  if (!trimmed) return '未填写'
-  if (trimmed.length <= 10) return `${trimmed.slice(0, 3)}***`
-  return `${trimmed.slice(0, 5)}***${trimmed.slice(-4)}`
 }
 
 function buildLog(level: BotCenterLogLevel, message: string): BotCenterLogEntry {
@@ -222,16 +233,54 @@ function buildLog(level: BotCenterLogLevel, message: string): BotCenterLogEntry 
   }
 }
 
+function capLogs(logs: BotCenterLogEntry[]) {
+  return logs.slice(0, 200)
+}
+
+function emptyBot(index = 1): BotCenterBotState {
+  return {
+    id: createId('bot'),
+    config: normalizeConfig(undefined, index),
+    profile: { ...DEFAULT_PROFILE },
+    stats: { ...DEFAULT_STATS },
+    running: false,
+    polling: false,
+    startedAt: null,
+    lastPollAt: null,
+    lastActionMessage: '',
+    lastError: '',
+    updateOffset: 0,
+    logs: []
+  }
+}
+
+function normalizeBotState(input: PersistedBotPayload, index = 0): BotCenterBotState {
+  return {
+    id: normalizeString(input?.id) || createId(`bot-${index + 1}`),
+    config: normalizeConfig(input?.config, index + 1),
+    profile: normalizeProfile(input?.profile),
+    stats: normalizeStats(input?.stats),
+    running: false,
+    polling: false,
+    startedAt: null,
+    lastPollAt: typeof input?.lastPollAt === 'string' ? input.lastPollAt : null,
+    lastActionMessage: typeof input?.lastActionMessage === 'string' ? input.lastActionMessage : '',
+    lastError: typeof input?.lastError === 'string' ? input.lastError : '',
+    updateOffset: Number.isFinite(input?.updateOffset) ? Math.max(0, Math.trunc(input.updateOffset as number)) : 0,
+    logs: []
+  }
+}
+
+function normalizeKeywordText(value: string) {
+  return value.trim().toLocaleLowerCase('zh-CN')
+}
+
 function applyTemplate(template: string, variables: Record<string, string>) {
   let output = template
   for (const [key, value] of Object.entries(variables)) {
     output = output.split(`{${key}}`).join(value)
   }
   return output
-}
-
-function normalizeKeywordText(value: string) {
-  return value.trim().toLocaleLowerCase('zh-CN')
 }
 
 interface GuestContext {
@@ -254,8 +303,7 @@ interface ResolvedReplyConfig {
 export class BotCenterService {
   private state: BotCenterState
   private readonly listeners = new Set<(state: BotCenterState) => void>()
-  private loopPromise: Promise<void> | null = null
-  private abortController: AbortController | null = null
+  private readonly runtimes = new Map<string, BotRuntimeHandle>()
 
   constructor(private readonly filePath: string) {
     this.state = this.loadState()
@@ -272,47 +320,97 @@ export class BotCenterService {
     return this.cloneState()
   }
 
-  async saveConfig(patch: Partial<BotCenterConfig>) {
-    const wasRunning = this.state.running
-    const previousToken = this.state.config.botToken
-    const nextConfig = normalizeConfig({ ...this.state.config, ...patch })
-    const tokenChanged = nextConfig.botToken !== previousToken
+  async addBot() {
+    const nextBot = emptyBot(this.state.bots.length + 1)
+    this.state = {
+      ...this.state,
+      bots: [...this.state.bots, nextBot],
+      activeBotId: nextBot.id
+    }
+    this.persist()
+    this.emit()
+    return this.cloneState()
+  }
 
-    if (wasRunning && tokenChanged) {
-      await this.stop('Bot Token 已变更，正在重启监听。')
+  async removeBot(botId: string) {
+    const bot = this.getBot(botId)
+    if (!bot) return this.cloneState()
+
+    if (bot.running || bot.polling) {
+      await this.stop(botId, `${bot.config.name} 已停止监听。`)
+    }
+
+    let nextBots = this.state.bots.filter((item) => item.id !== botId)
+    if (nextBots.length === 0) {
+      nextBots = [emptyBot(1)]
     }
 
     this.state = {
       ...this.state,
-      config: nextConfig,
-      updateOffset: tokenChanged ? 0 : this.state.updateOffset,
-      profile: tokenChanged ? { ...DEFAULT_PROFILE } : this.state.profile,
-      lastError: '',
-      lastActionMessage: `机器人配置已保存，当前 Token：${maskToken(nextConfig.botToken)}`
+      bots: nextBots,
+      activeBotId: nextBots.some((item) => item.id === this.state.activeBotId) ? this.state.activeBotId : nextBots[0]?.id ?? null
     }
+    this.runtimes.delete(botId)
+    this.persist()
+    this.emit()
+    return this.cloneState()
+  }
+
+  async selectBot(botId: string) {
+    if (!this.getBot(botId)) return this.cloneState()
+    this.state = { ...this.state, activeBotId: botId }
+    this.persist()
+    this.emit()
+    return this.cloneState()
+  }
+
+  async saveConfig(botId: string, patch: Partial<BotCenterConfig>) {
+    const bot = this.getBot(botId)
+    if (!bot) return this.cloneState()
+
+    const wasRunning = bot.running
+    const previousToken = bot.config.botToken
+    const nextConfig = normalizeConfig({ ...bot.config, ...patch }, this.getBotIndex(botId) + 1)
+    const tokenChanged = nextConfig.botToken !== previousToken
+
+    if (wasRunning && tokenChanged) {
+      await this.stop(botId, 'Bot Token 已变更，正在重启监听。')
+    }
+
+    this.updateBot(botId, (current) => ({
+      ...current,
+      config: nextConfig,
+      updateOffset: tokenChanged ? 0 : current.updateOffset,
+      profile: tokenChanged ? { ...DEFAULT_PROFILE } : current.profile,
+      lastError: '',
+      lastActionMessage: `机器人配置已保存，当前 Token：${this.maskToken(nextConfig.botToken)}`
+    }))
     this.persist()
     this.emit()
 
     if (nextConfig.botToken) {
-      await this.refreshProfile(false)
+      await this.refreshProfile(botId, false)
     }
 
     if (wasRunning && tokenChanged && nextConfig.botToken) {
-      await this.start()
+      await this.start(botId)
     }
 
     return this.cloneState()
   }
 
-  async refreshProfile(clearLastMessage = true) {
-    const token = this.state.config.botToken.trim()
+  async refreshProfile(botId: string, clearLastMessage = true) {
+    const bot = this.getBot(botId)
+    if (!bot) return this.cloneState()
+
+    const token = bot.config.botToken.trim()
     if (!token) {
-      this.state = {
-        ...this.state,
+      this.updateBot(botId, (current) => ({
+        ...current,
         profile: { ...DEFAULT_PROFILE },
         lastError: '请先填写 Bot Token。',
-        lastActionMessage: clearLastMessage ? '' : this.state.lastActionMessage
-      }
+        lastActionMessage: clearLastMessage ? '' : current.lastActionMessage
+      }))
       this.persist()
       this.emit()
       return this.cloneState()
@@ -328,8 +426,8 @@ export class BotCenterService {
         supports_guest_queries?: boolean
       }
 
-      this.state = {
-        ...this.state,
+      this.updateBot(botId, (current) => ({
+        ...current,
         profile: {
           id: typeof payload?.id === 'number' ? payload.id : null,
           username: typeof payload?.username === 'string' ? payload.username : '',
@@ -341,88 +439,99 @@ export class BotCenterService {
           valid: true
         },
         lastError: '',
-        lastActionMessage: clearLastMessage ? '已刷新 Bot 信息。' : this.state.lastActionMessage
-      }
-      this.log('success', `Bot 信息已刷新：@${this.state.profile.username || '未命名'}，Guest Mode ${this.state.profile.supportsGuestQueries ? '已开启' : '未开启'}`)
+        lastActionMessage: clearLastMessage ? '已刷新 Bot 信息。' : current.lastActionMessage
+      }))
+      const nextBot = this.getBot(botId)
+      this.log(botId, 'success', `Bot 信息已刷新：@${nextBot?.profile.username || '未命名'}，Guest Mode ${nextBot?.profile.supportsGuestQueries ? '已开启' : '未开启'}`)
       this.persist()
       this.emit()
       return this.cloneState()
     } catch (error) {
       const message = error instanceof Error ? error.message : '读取 Bot 信息失败。'
-      this.state = {
-        ...this.state,
+      this.updateBot(botId, (current) => ({
+        ...current,
         profile: { ...DEFAULT_PROFILE },
         lastError: message,
         lastActionMessage: ''
-      }
-      this.log('error', `读取 Bot 信息失败：${message}`)
+      }))
+      this.log(botId, 'error', `读取 Bot 信息失败：${message}`)
       this.persist()
       this.emit()
       return this.cloneState()
     }
   }
 
-  async start() {
-    if (this.state.running) {
-      this.state = { ...this.state, lastActionMessage: '机器人监听已经在运行中了。', lastError: '' }
+  async start(botId: string) {
+    const bot = this.getBot(botId)
+    if (!bot) return this.cloneState()
+
+    if (bot.running) {
+      this.updateBot(botId, (current) => ({ ...current, lastActionMessage: '机器人监听已经在运行中了。', lastError: '' }))
       this.emit()
       return this.cloneState()
     }
 
-    const token = this.state.config.botToken.trim()
+    const token = bot.config.botToken.trim()
     if (!token) {
-      this.state = { ...this.state, lastError: '请先填写 Bot Token。', lastActionMessage: '' }
+      this.updateBot(botId, (current) => ({ ...current, lastError: '请先填写 Bot Token。', lastActionMessage: '' }))
       this.emit()
       return this.cloneState()
     }
 
-    await this.refreshProfile(false)
-    if (!this.state.profile.valid) return this.cloneState()
+    await this.refreshProfile(botId, false)
+    const refreshedBot = this.getBot(botId)
+    if (!refreshedBot?.profile.valid) return this.cloneState()
 
-    if (!this.state.profile.supportsGuestQueries) {
-      this.state = {
-        ...this.state,
-        lastError: '这个 Bot 还没开启 Guest Mode，请先去 BotFather 打开 Guest Mode。',
+    if (!refreshedBot.profile.supportsGuestQueries) {
+      this.updateBot(botId, (current) => ({
+        ...current,
+        lastError: '这个 Bot 还没开启 Guest Mode，请先去 BotFather 打开 Guest Chat Mode。',
         lastActionMessage: ''
-      }
-      this.log('warning', '启动被拦截：Bot 当前未开启 Guest Mode。')
+      }))
+      this.log(botId, 'warning', '启动被拦截：Bot 当前未开启 Guest Chat Mode。')
       this.emit()
       return this.cloneState()
     }
 
-    this.state = {
-      ...this.state,
+    this.updateBot(botId, (current) => ({
+      ...current,
       running: true,
       polling: false,
       startedAt: new Date().toISOString(),
       lastError: '',
-      lastActionMessage: `Guest Bot 监听已启动，当前 Bot：@${this.state.profile.username || '未命名'}`
-    }
-    this.log('success', `Guest Bot 监听已启动，等待群里 @${this.state.profile.username || '机器人'} 的访客消息。`)
+      lastActionMessage: `Guest Bot 监听已启动，当前 Bot：@${current.profile.username || '未命名'}`
+    }))
+    this.log(botId, 'success', `Guest Bot 监听已启动，等待群里 @${refreshedBot.profile.username || '机器人'} 的访客消息。`)
     this.emit()
 
-    this.loopPromise = this.pollLoop(token)
-    void this.loopPromise
+    const runtime = this.ensureRuntime(botId)
+    runtime.loopPromise = this.pollLoop(botId, token)
+    void runtime.loopPromise
     return this.cloneState()
   }
 
-  async stop(message = 'Guest Bot 监听已停止。') {
-    if (!this.state.running && !this.state.polling) {
-      this.state = { ...this.state, lastActionMessage: '当前没有正在运行的机器人监听。', lastError: '' }
+  async stop(botId: string, message = 'Guest Bot 监听已停止。') {
+    const bot = this.getBot(botId)
+    if (!bot) return this.cloneState()
+
+    if (!bot.running && !bot.polling) {
+      this.updateBot(botId, (current) => ({ ...current, lastActionMessage: '当前没有正在运行的机器人监听。', lastError: '' }))
       this.emit()
       return this.cloneState()
     }
 
-    this.state = {
-      ...this.state,
+    this.updateBot(botId, (current) => ({
+      ...current,
       running: false,
       polling: false,
       lastActionMessage: message,
       lastError: ''
-    }
-    this.abortController?.abort()
-    const runningLoop = this.loopPromise
-    this.loopPromise = null
+    }))
+
+    const runtime = this.ensureRuntime(botId)
+    runtime.abortController?.abort()
+    const runningLoop = runtime.loopPromise
+    runtime.loopPromise = null
     if (runningLoop) {
       try {
         await runningLoop
@@ -430,71 +539,85 @@ export class BotCenterService {
         // ignore
       }
     }
-    this.log('info', message)
+
+    this.log(botId, 'info', message)
     this.emit()
     return this.cloneState()
   }
 
-  async clearLogs() {
-    this.state = {
-      ...this.state,
+  async clearLogs(botId: string) {
+    this.updateBot(botId, (current) => ({
+      ...current,
       logs: [],
       lastActionMessage: '机器人日志已清空。',
       lastError: ''
-    }
+    }))
     this.emit()
     return this.cloneState()
   }
 
   async autoStartIfNeeded() {
-    if (!this.state.config.autoStart || !this.state.config.botToken.trim()) return this.cloneState()
-    return this.start()
+    for (const bot of this.state.bots) {
+      if (!bot.config.autoStart || !bot.config.botToken.trim()) continue
+      try {
+        await this.start(bot.id)
+      } catch {
+        // ignore per-bot failure to avoid blocking the rest
+      }
+    }
+    return this.cloneState()
   }
 
   async dispose() {
-    await this.stop('应用正在退出，已停止机器人监听。')
+    for (const bot of this.state.bots) {
+      if (bot.running || bot.polling) {
+        await this.stop(bot.id, '应用正在退出，已停止机器人监听。')
+      }
+    }
   }
 
-  private async pollLoop(token: string) {
-    while (this.state.running) {
-      this.abortController = new AbortController()
-      this.state = { ...this.state, polling: true, lastPollAt: new Date().toISOString() }
+  private async pollLoop(botId: string, token: string) {
+    while (this.getBot(botId)?.running) {
+      const runtime = this.ensureRuntime(botId)
+      runtime.abortController = new AbortController()
+      this.updateBot(botId, (current) => ({ ...current, polling: true, lastPollAt: new Date().toISOString() }))
       this.emit()
 
       try {
+        const currentBot = this.getBot(botId)
         const updates = await this.callBotApi(token, 'getUpdates', {
-          offset: this.state.updateOffset + 1,
+          offset: (currentBot?.updateOffset || 0) + 1,
           timeout: 50,
           allowed_updates: ['guest_message']
-        }, this.abortController.signal) as Array<{ update_id?: number; guest_message?: Record<string, any> }>
+        }, runtime.abortController.signal) as Array<{ update_id?: number; guest_message?: Record<string, any> }>
 
-        this.state = { ...this.state, polling: false, lastPollAt: new Date().toISOString(), lastError: '' }
+        this.updateBot(botId, (current) => ({ ...current, polling: false, lastPollAt: new Date().toISOString(), lastError: '' }))
         this.emit()
 
         for (const update of updates) {
           const updateId = typeof update?.update_id === 'number' ? update.update_id : null
           if (typeof updateId === 'number') {
-            this.state = { ...this.state, updateOffset: Math.max(this.state.updateOffset, updateId) }
+            this.updateBot(botId, (current) => ({ ...current, updateOffset: Math.max(current.updateOffset, updateId) }))
             this.persist()
           }
 
           if (!update?.guest_message) continue
-          await this.handleGuestMessage(token, update.guest_message)
+          await this.handleGuestMessage(botId, token, update.guest_message)
         }
       } catch (error) {
-        if (!this.state.running) break
+        if (!this.getBot(botId)?.running) break
         const message = error instanceof Error ? error.message : 'Guest Bot 轮询失败。'
-        this.state = { ...this.state, polling: false, lastPollAt: new Date().toISOString(), lastError: message }
-        this.log('error', `轮询失败：${message}`)
+        this.updateBot(botId, (current) => ({ ...current, polling: false, lastPollAt: new Date().toISOString(), lastError: message }))
+        this.log(botId, 'error', `轮询失败：${message}`)
         this.emit()
         await delay(2500)
       } finally {
-        this.abortController = null
+        runtime.abortController = null
       }
     }
   }
 
-  private async handleGuestMessage(token: string, guestMessage: Record<string, any>) {
+  private async handleGuestMessage(botId: string, token: string, guestMessage: Record<string, any>) {
     const queryId = guestMessage?.guest_query_id
     const text = typeof guestMessage?.text === 'string' && guestMessage.text.trim()
       ? guestMessage.text.trim()
@@ -509,59 +632,61 @@ export class BotCenterService {
 
     const context: GuestContext = { text, callerName, callerUsername, chatTitle }
 
-    this.state = {
-      ...this.state,
-      stats: { ...this.state.stats, receivedGuestCount: this.state.stats.receivedGuestCount + 1, lastGuestAt: new Date().toISOString() }
-    }
-    this.log('info', `收到 Guest 消息：群【${chatTitle}】 / 用户【${callerName}】 / 内容【${text}】`)
+    this.updateBot(botId, (current) => ({
+      ...current,
+      stats: { ...current.stats, receivedGuestCount: current.stats.receivedGuestCount + 1, lastGuestAt: new Date().toISOString() }
+    }))
+    this.log(botId, 'info', `收到 Guest 消息：群【${chatTitle}】 / 用户【${callerName}】 / 内容【${text}】`)
     this.emit()
 
-    if (!this.state.config.guestReplyEnabled) {
-      this.log('warning', '当前已关闭 Guest 自动回复，本次只记录日志，不做回复。')
+    const bot = this.getBot(botId)
+    if (!bot?.config.guestReplyEnabled) {
+      this.log(botId, 'warning', '当前已关闭 Guest 自动回复，本次只记录日志，不做回复。')
       this.emit()
       return
     }
 
     if (!queryId) {
-      this.state = {
-        ...this.state,
-        stats: { ...this.state.stats, failedGuestCount: this.state.stats.failedGuestCount + 1 },
+      this.updateBot(botId, (current) => ({
+        ...current,
+        stats: { ...current.stats, failedGuestCount: current.stats.failedGuestCount + 1 },
         lastError: '收到 Guest 消息，但未取到 guest_query_id。'
-      }
-      this.log('error', '收到 Guest 消息，但未取到 guest_query_id，无法回消息。')
+      }))
+      this.log(botId, 'error', '收到 Guest 消息，但未取到 guest_query_id，无法回消息。')
       this.emit()
       return
     }
 
-    const resolvedReply = this.resolveReplyConfig(context)
-    const replyPayload = this.buildGuestQueryResult(context, resolvedReply)
+    const resolvedReply = this.resolveReplyConfig(botId, context)
+    const replyPayload = this.buildGuestQueryResult(botId, context, resolvedReply)
 
     try {
       await this.callBotApi(token, 'answerGuestQuery', { guest_query_id: queryId, result: replyPayload })
-      this.state = {
-        ...this.state,
-        stats: { ...this.state.stats, answeredGuestCount: this.state.stats.answeredGuestCount + 1 },
+      this.updateBot(botId, (current) => ({
+        ...current,
+        stats: { ...current.stats, answeredGuestCount: current.stats.answeredGuestCount + 1 },
         lastActionMessage: `已向群【${chatTitle}】回复 Guest 消息。`,
         lastError: ''
-      }
-      this.log('success', resolvedReply.source === 'keyword'
+      }))
+      this.log(botId, 'success', resolvedReply.source === 'keyword'
         ? `Guest 消息已按关键词【${resolvedReply.ruleKeyword || ''}】回复：群【${chatTitle}】 / 用户【${callerName}】`
         : `Guest 消息已回复：群【${chatTitle}】 / 用户【${callerName}】`)
       this.emit()
     } catch (error) {
       const message = error instanceof Error ? error.message : '回复 Guest 消息失败。'
-      this.state = {
-        ...this.state,
-        stats: { ...this.state.stats, failedGuestCount: this.state.stats.failedGuestCount + 1 },
+      this.updateBot(botId, (current) => ({
+        ...current,
+        stats: { ...current.stats, failedGuestCount: current.stats.failedGuestCount + 1 },
         lastError: message
-      }
-      this.log('error', `回复 Guest 消息失败：${message}`)
+      }))
+      this.log(botId, 'error', `回复 Guest 消息失败：${message}`)
       this.emit()
     }
   }
 
-  private resolveReplyConfig(context: GuestContext): ResolvedReplyConfig {
-    const matchedRule = this.findMatchedKeywordRule(context.text)
+  private resolveReplyConfig(botId: string, context: GuestContext): ResolvedReplyConfig {
+    const bot = this.getBot(botId)
+    const matchedRule = this.findMatchedKeywordRule(botId, context.text)
     if (matchedRule) {
       return {
         source: 'keyword',
@@ -577,19 +702,20 @@ export class BotCenterService {
     return {
       source: 'default',
       ruleKeyword: null,
-      title: this.state.config.guestReplyTitle || DEFAULT_CONFIG.guestReplyTitle,
-      text: this.state.config.guestReplyText || DEFAULT_CONFIG.guestReplyText,
-      replyType: this.state.config.guestReplyType,
-      imageUrl: this.state.config.guestReplyImageUrl,
-      buttons: this.state.config.guestReplyButtons
+      title: bot?.config.guestReplyTitle || DEFAULT_CONFIG.guestReplyTitle,
+      text: bot?.config.guestReplyText || DEFAULT_CONFIG.guestReplyText,
+      replyType: bot?.config.guestReplyType || DEFAULT_CONFIG.guestReplyType,
+      imageUrl: bot?.config.guestReplyImageUrl || '',
+      buttons: bot?.config.guestReplyButtons || []
     }
   }
 
-  private findMatchedKeywordRule(text: string) {
+  private findMatchedKeywordRule(botId: string, text: string) {
+    const bot = this.getBot(botId)
     const normalizedText = normalizeKeywordText(text)
-    if (!normalizedText) return null
+    if (!normalizedText || !bot) return null
 
-    for (const rule of this.state.config.keywordRules) {
+    for (const rule of bot.config.keywordRules) {
       if (!rule.enabled || !rule.replyEnabled) continue
       const keyword = normalizeKeywordText(rule.keyword)
       if (!keyword) continue
@@ -600,8 +726,8 @@ export class BotCenterService {
     return null
   }
 
-  private buildGuestQueryResult(context: GuestContext, replyConfig: ResolvedReplyConfig) {
-    const renderedText = this.renderReplyText(replyConfig.text, context)
+  private buildGuestQueryResult(botId: string, context: GuestContext, replyConfig: ResolvedReplyConfig) {
+    const renderedText = this.renderReplyText(botId, replyConfig.text, context)
     const replyMarkup = this.buildReplyMarkup(replyConfig.buttons)
 
     if (replyConfig.replyType === 'photo' && replyConfig.imageUrl) {
@@ -630,7 +756,6 @@ export class BotCenterService {
   private buildReplyMarkup(buttons: BotCenterReplyButton[]) {
     const validButtons = buttons.filter((item) => item.text && item.url)
     if (validButtons.length === 0) return null
-
     return {
       inline_keyboard: [validButtons.map((item) => ({
         text: item.text,
@@ -640,8 +765,8 @@ export class BotCenterService {
     }
   }
 
-  private renderReplyText(template: string, context: GuestContext) {
-    const botUsername = this.state.profile.username ? `@${this.state.profile.username}` : '当前机器人'
+  private renderReplyText(botId: string, template: string, context: GuestContext) {
+    const botUsername = this.getBot(botId)?.profile.username ? `@${this.getBot(botId)?.profile.username}` : '当前机器人'
     return applyTemplate(template || DEFAULT_CONFIG.guestReplyText, {
       text: context.text,
       caller_name: context.callerName,
@@ -673,27 +798,60 @@ export class BotCenterService {
 
   private loadState() {
     try {
-      if (!fs.existsSync(this.filePath)) return emptyState()
+      if (!fs.existsSync(this.filePath)) {
+        const bot = emptyBot(1)
+        return { bots: [bot], activeBotId: bot.id }
+      }
+
       const raw = fs.readFileSync(this.filePath, 'utf8')
       const parsed = JSON.parse(raw) as PersistedBotCenterPayload
-      return emptyState(parsed.config as (Partial<BotCenterConfig> & Record<string, unknown>) | undefined, parsed.profile, parsed.updateOffset)
+
+      if (Array.isArray(parsed.bots) && parsed.bots.length > 0) {
+        const bots = parsed.bots.map((item, index) => normalizeBotState(item, index))
+        const activeBotId = bots.some((bot) => bot.id === parsed.activeBotId) ? parsed.activeBotId ?? bots[0].id : bots[0].id
+        return { bots, activeBotId }
+      }
+
+      if (parsed.config) {
+        const legacyBot = normalizeBotState({
+          id: createId('bot-legacy'),
+          config: parsed.config,
+          profile: parsed.profile ? normalizeProfile(parsed.profile) : undefined,
+          updateOffset: parsed.updateOffset
+        }, 0)
+        return { bots: [legacyBot], activeBotId: legacyBot.id }
+      }
     } catch {
-      return emptyState()
+      // ignore
     }
+
+    const bot = emptyBot(1)
+    return { bots: [bot], activeBotId: bot.id }
   }
 
   private persist() {
     const payload: PersistedBotCenterPayload = {
-      config: this.state.config,
-      profile: this.state.profile,
-      updateOffset: this.state.updateOffset
+      bots: this.state.bots.map((bot) => ({
+        id: bot.id,
+        config: { ...bot.config },
+        profile: { ...bot.profile },
+        stats: { ...bot.stats },
+        updateOffset: bot.updateOffset,
+        lastPollAt: bot.lastPollAt,
+        lastActionMessage: bot.lastActionMessage,
+        lastError: bot.lastError
+      })),
+      activeBotId: this.state.activeBotId
     }
     fs.mkdirSync(path.dirname(this.filePath), { recursive: true })
     fs.writeFileSync(this.filePath, JSON.stringify(payload, null, 2), 'utf8')
   }
 
-  private log(level: BotCenterLogLevel, message: string) {
-    this.state = { ...this.state, logs: capLogs([buildLog(level, message), ...this.state.logs]) }
+  private log(botId: string, level: BotCenterLogLevel, message: string) {
+    this.updateBot(botId, (current) => ({
+      ...current,
+      logs: capLogs([buildLog(level, message), ...current.logs])
+    }))
   }
 
   private emit() {
@@ -703,15 +861,48 @@ export class BotCenterService {
 
   private cloneState(): BotCenterState {
     return {
-      ...this.state,
-      config: {
-        ...this.state.config,
-        guestReplyButtons: this.state.config.guestReplyButtons.map((item) => ({ ...item })),
-        keywordRules: this.state.config.keywordRules.map((item) => ({ ...item, buttons: item.buttons.map((button) => ({ ...button })) }))
-      },
-      profile: { ...this.state.profile },
-      stats: { ...this.state.stats },
-      logs: this.state.logs.map((item) => ({ ...item }))
+      activeBotId: this.state.activeBotId,
+      bots: this.state.bots.map((bot) => ({
+        ...bot,
+        config: {
+          ...bot.config,
+          guestReplyButtons: bot.config.guestReplyButtons.map((item) => ({ ...item })),
+          keywordRules: bot.config.keywordRules.map((item) => ({ ...item, buttons: item.buttons.map((button) => ({ ...button })) }))
+        },
+        profile: { ...bot.profile },
+        stats: { ...bot.stats },
+        logs: bot.logs.map((item) => ({ ...item }))
+      }))
     }
+  }
+
+  private getBotIndex(botId: string) {
+    return this.state.bots.findIndex((bot) => bot.id === botId)
+  }
+
+  private getBot(botId: string) {
+    return this.state.bots.find((bot) => bot.id === botId) ?? null
+  }
+
+  private updateBot(botId: string, updater: (bot: BotCenterBotState) => BotCenterBotState) {
+    this.state = {
+      ...this.state,
+      bots: this.state.bots.map((bot) => bot.id === botId ? updater(bot) : bot)
+    }
+  }
+
+  private ensureRuntime(botId: string) {
+    const existing = this.runtimes.get(botId)
+    if (existing) return existing
+    const next = { loopPromise: null, abortController: null }
+    this.runtimes.set(botId, next)
+    return next
+  }
+
+  private maskToken(token: string) {
+    const trimmed = token.trim()
+    if (!trimmed) return '未填写'
+    if (trimmed.length <= 10) return `${trimmed.slice(0, 3)}***`
+    return `${trimmed.slice(0, 5)}***${trimmed.slice(-4)}`
   }
 }
