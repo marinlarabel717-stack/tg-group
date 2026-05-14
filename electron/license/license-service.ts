@@ -41,6 +41,31 @@ function normalizeLicenseApiBaseUrl(value: string) {
   }
 }
 
+function tryBuildHttpFallbackApiBaseUrl(value: string) {
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== 'https:') return ''
+    if (parsed.hostname.toLowerCase() !== 'tgmatrix.duckdns.org') return ''
+    parsed.protocol = 'http:'
+    return parsed.toString().replace(/\/$/, '')
+  } catch {
+    return ''
+  }
+}
+
+function formatLicenseNetworkError(error: unknown, apiBaseUrl: string) {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const normalized = message.trim().toLowerCase()
+  if (!normalized) return '连接授权服务失败，请稍后重试。'
+  if (normalized.includes('fetch failed') || normalized.includes('networkerror') || normalized.includes('econnrefused') || normalized.includes('etimedout')) {
+    return `当前连不上授权服务：${apiBaseUrl}。请确认地址可用；当前推荐填写 http://tgmatrix.duckdns.org`
+  }
+  if (normalized.includes('aborted')) {
+    return `连接授权服务超时：${apiBaseUrl}。请稍后重试，或改成 http://tgmatrix.duckdns.org`
+  }
+  return message
+}
+
 async function postJson<T>(url: string, body: unknown) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000)
@@ -243,20 +268,31 @@ export class LicenseService {
       }
     }
 
+    const requestBody = {
+      cardKey: record.cardKey,
+      licenseToken: record.licenseToken,
+      machineId: this.machineId,
+      deviceName: os.hostname(),
+      appVersion: app.getVersion()
+    }
+
     try {
-      const response = await postJson<{
+      let response: {
         ok?: boolean
         message?: string
         expireAt?: string | null
         offlineGraceUntil?: string | null
         licenseStatus?: 'active' | 'expired' | 'disabled' | 'invalid'
-      }>(`${apiBaseUrl.replace(/\/$/, '')}/api/license/validate`, {
-        cardKey: record.cardKey,
-        licenseToken: record.licenseToken,
-        machineId: this.machineId,
-        deviceName: os.hostname(),
-        appVersion: app.getVersion()
-      })
+      }
+
+      try {
+        response = await postJson(`${apiBaseUrl.replace(/\/$/, '')}/api/license/validate`, requestBody)
+      } catch (primaryError) {
+        const fallbackApiBaseUrl = tryBuildHttpFallbackApiBaseUrl(apiBaseUrl)
+        if (!fallbackApiBaseUrl) throw primaryError
+        response = await postJson(`${fallbackApiBaseUrl.replace(/\/$/, '')}/api/license/validate`, requestBody)
+        this.appSettingsStore.update({ licenseApiBaseUrl: fallbackApiBaseUrl })
+      }
 
       if (!response?.ok) {
         const nextRecord: StoredLicenseRecord = {
@@ -306,11 +342,11 @@ export class LicenseService {
 
       return {
         ok: false,
-        message: error instanceof Error ? error.message : '授权校验失败。',
+        message: formatLicenseNetworkError(error, apiBaseUrl),
         snapshot: this.buildSnapshot(record, {
           status: 'invalid',
           canEnter: false,
-          message: error instanceof Error ? error.message : '授权校验失败。'
+          message: formatLicenseNetworkError(error, apiBaseUrl)
         })
       }
     }
@@ -335,20 +371,31 @@ export class LicenseService {
       }
     }
 
+    const requestBody = {
+      cardKey: normalized,
+      machineId: this.machineId,
+      deviceName: os.hostname(),
+      appVersion: app.getVersion()
+    }
+
     try {
-      const response = await postJson<{
+      let response: {
         ok?: boolean
         message?: string
         licenseToken?: string
         expireAt?: string | null
         offlineGraceUntil?: string | null
         licenseStatus?: 'active' | 'expired' | 'disabled' | 'invalid'
-      }>(`${apiBaseUrl.replace(/\/$/, '')}/api/license/activate`, {
-        cardKey: normalized,
-        machineId: this.machineId,
-        deviceName: os.hostname(),
-        appVersion: app.getVersion()
-      })
+      }
+
+      try {
+        response = await postJson(`${apiBaseUrl.replace(/\/$/, '')}/api/license/activate`, requestBody)
+      } catch (primaryError) {
+        const fallbackApiBaseUrl = tryBuildHttpFallbackApiBaseUrl(apiBaseUrl)
+        if (!fallbackApiBaseUrl) throw primaryError
+        response = await postJson(`${fallbackApiBaseUrl.replace(/\/$/, '')}/api/license/activate`, requestBody)
+        this.appSettingsStore.update({ licenseApiBaseUrl: fallbackApiBaseUrl })
+      }
 
       if (!response?.ok || !response.licenseToken) {
         return {
@@ -379,7 +426,7 @@ export class LicenseService {
     } catch (error) {
       return {
         ok: false,
-        message: error instanceof Error ? error.message : '卡密激活失败。',
+        message: formatLicenseNetworkError(error, apiBaseUrl),
         snapshot: this.getSnapshot()
       }
     }
