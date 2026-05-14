@@ -630,7 +630,9 @@ export const useBroadcastStore = create<BroadcastState>()(
           set({
             joinedGroups,
             loadingJoinedGroups: false,
-            lastActionMessage: joinedGroups.length > 0 ? `已读取 ${joinedGroups.length} 个已加入群。` : '这个账号暂时没读到可用群组。'
+            lastActionMessage: joinedGroups.length > 0
+              ? `已读取 ${joinedGroups.length} 个已加入群。`
+              : '这个账号这次没读到可用群组；如果你明明加了很多群，先在 Telegram 客户端里打开几个群，再点一次读取。'
           })
         } catch (error) {
           set({

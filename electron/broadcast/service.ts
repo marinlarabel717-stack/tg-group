@@ -380,6 +380,49 @@ function normalizeJoinedGroupTitle(value: string) {
   return value.trim().toLowerCase()
 }
 
+function pushUniqueDialog(dialogs: any[], dialog: any, seenDialogKeys: Set<string>) {
+  const entity = dialog?.entity as any
+  const dialogId = typeof dialog?.id?.toString === 'function'
+    ? dialog.id.toString()
+    : String(entity?.id ?? '')
+  const accessHash = entity?.accessHash?.toString?.() ?? entity?.access_hash?.toString?.() ?? ''
+  const username = typeof entity?.username === 'string' ? entity.username.trim().toLowerCase() : ''
+  const key = `${dialogId}::${accessHash}::${username}`
+  if (!dialogId || seenDialogKeys.has(key)) return
+  seenDialogKeys.add(key)
+  dialogs.push(dialog)
+}
+
+async function loadDialogsWithFallback(client: TelegramClient) {
+  const dialogs: any[] = []
+  const seenDialogKeys = new Set<string>()
+
+  for (const archived of [false, true]) {
+    for await (const dialog of client.iterDialogs({ archived })) {
+      pushUniqueDialog(dialogs, dialog, seenDialogKeys)
+    }
+  }
+
+  if (dialogs.length > 0) {
+    return dialogs
+  }
+
+  const dialogClient = client as TelegramClient & {
+    getDialogs?: (params: { limit: number; archived?: boolean }) => Promise<any[]>
+  }
+
+  if (typeof dialogClient.getDialogs === 'function') {
+    for (const archived of [false, true]) {
+      const fallbackDialogs = await dialogClient.getDialogs({ limit: 5000, archived })
+      for (const dialog of Array.isArray(fallbackDialogs) ? fallbackDialogs : []) {
+        pushUniqueDialog(dialogs, dialog, seenDialogKeys)
+      }
+    }
+  }
+
+  return dialogs
+}
+
 function dedupeJoinedGroups(groups: BroadcastJoinedGroup[]) {
   const result = new Map<string, BroadcastJoinedGroup>()
 
@@ -810,11 +853,10 @@ export class BroadcastService {
     const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
 
     try {
-      const dialogs: any[] = []
-      for (const archived of [false, true]) {
-        for await (const dialog of client.iterDialogs({ archived })) {
-          dialogs.push(dialog)
-        }
+      const dialogs = await loadDialogsWithFallback(client)
+
+      if (dialogs.length === 0) {
+        throw new Error('NO_DIALOGS_LOADED')
       }
 
       const groups = dialogs
@@ -844,6 +886,9 @@ export class BroadcastService {
 
       return dedupedGroups
     } catch (error) {
+      if ((error instanceof Error ? error.message : String(error)).includes('NO_DIALOGS_LOADED')) {
+        throw new Error('当前账号这次没有从 Telegram 拉到任何对话列表。若你明明加了很多群，先在 Telegram 客户端里打开几个群再重试；如果还是空，重新登录这个账号再试。')
+      }
       throw new Error(formatBroadcastError(error))
     } finally {
       await this.clientManager.destroyClient(client)
