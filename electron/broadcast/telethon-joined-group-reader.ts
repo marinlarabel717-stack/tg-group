@@ -23,7 +23,9 @@ interface TelethonJoinedGroupRawResult {
 }
 
 function resolvePythonExecutable() {
+  const bundledRuntime = resolveRuntimeAssetPath('python', 'python.exe')
   const candidates = [
+    bundledRuntime,
     path.resolve(process.cwd(), '.venv', 'Scripts', 'python.exe'),
     path.resolve(process.cwd(), '.venv', 'bin', 'python'),
     'python'

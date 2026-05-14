@@ -1,6 +1,6 @@
 {
   "name": "telegram-multi-account-manager",
-  "version": "0.0.40",
+  "version": "0.0.41",
   "private": true,
   "description": "TG-Matrix desktop manager",
   "author": "TG-Matrix",
@@ -11,12 +11,13 @@
     "dev": "vite",
     "patch:telegram-repeat": "node scripts/patch-telegram-repeat.cjs",
     "build": "npm run patch:telegram-repeat && tsc && vite build",
+    "prepare:python-runtime": "node scripts/prepare-python-runtime.cjs",
     "postinstall": "node scripts/patch-telegram-repeat.cjs",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
-    "pack:dir": "npm run build && electron-builder --dir --publish never",
-    "dist:win": "npm run build && electron-builder --win nsis --publish never",
-    "dist:exe": "npm run build && electron-builder --win nsis --x64 --publish never",
-    "dist:portable": "npm run build && electron-builder --win portable --publish never",
+    "pack:dir": "npm run prepare:python-runtime && npm run build && electron-builder --dir --publish never",
+    "dist:win": "npm run prepare:python-runtime && npm run build && electron-builder --win nsis --publish never",
+    "dist:exe": "npm run prepare:python-runtime && npm run build && electron-builder --win nsis --x64 --publish never",
+    "dist:portable": "npm run prepare:python-runtime && npm run build && electron-builder --win portable --publish never",
     "license:server": "node license-server/server.mjs",
     "license:create-card": "node license-server/create-card.mjs",
     "license:list-cards": "node license-server/list-cards.mjs",
@@ -62,6 +63,10 @@
       {
         "from": "electron/broadcast/telethon_list_joined_groups.py",
         "to": "runtime/broadcast/telethon_list_joined_groups.py"
+      },
+      {
+        "from": "build/runtime/python",
+        "to": "runtime/python"
       },
       {
         "from": "build/icon.png",

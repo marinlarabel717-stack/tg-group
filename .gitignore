@@ -4,6 +4,7 @@ dist-electron/
 release/
 .vite/
 .venv/
+build/runtime/
 tmp_*.cjs
 tmp_*.js
 tmp_frozen_sample/
