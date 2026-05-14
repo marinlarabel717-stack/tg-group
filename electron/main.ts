@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -218,6 +218,12 @@ function bindWindowControls() {
 
   ipcMain.handle('window:set-mode', (_event, mode: 'license' | 'app') => {
     applyWindowMode(mode)
+    return true
+  })
+
+  ipcMain.handle('window:open-external', async (_event, url: string) => {
+    if (!url || typeof url !== 'string') return false
+    await shell.openExternal(url)
     return true
   })
 }

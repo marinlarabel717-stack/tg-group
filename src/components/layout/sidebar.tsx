@@ -1,4 +1,4 @@
-import { Boxes, ChartColumnBig, ChevronLeft, ChevronRight, FileClock, MessageCircleMore, Network, Radio, Settings2, UserPlus2, Users } from 'lucide-react'
+import { ChartColumnBig, ChevronLeft, ChevronRight, ExternalLink, FileClock, MessageCircleMore, Network, Radio, SearchCheck, Settings2, UserPlus2, Users } from 'lucide-react'
 import { memo } from 'react'
 import type { ModuleKey } from '../../types'
 import { moduleLabelMap } from '../../lib/ui-text'
@@ -13,7 +13,7 @@ const items: { key: ModuleKey; label: string; icon: typeof ChartColumnBig }[] = 
   { key: 'auto-join', label: moduleLabelMap['auto-join'], icon: UserPlus2 },
   { key: 'direct-message', label: moduleLabelMap['direct-message'], icon: MessageCircleMore },
   { key: 'proxy-pool', label: moduleLabelMap['proxy-pool'], icon: Network },
-  { key: 'session-manager', label: moduleLabelMap['session-manager'], icon: Boxes },
+  { key: 'session-manager', label: moduleLabelMap['session-manager'], icon: SearchCheck },
   { key: 'logs', label: moduleLabelMap.logs, icon: FileClock },
   { key: 'settings', label: moduleLabelMap.settings, icon: Settings2 }
 ]
@@ -40,25 +40,64 @@ const SidebarBrand = memo(function SidebarBrand({ collapsed }: { collapsed: bool
   )
 })
 
-const SidebarPulse = memo(function SidebarPulse({ collapsed }: { collapsed: boolean }) {
+const CONTACT_US_URL = ''
+const PRODUCT_INTRO_URL = ''
+
+const SidebarLinks = memo(function SidebarLinks({ collapsed }: { collapsed: boolean }) {
+  const desktopWindow = window.desktopWindow
+
+  const openLink = (url: string) => {
+    if (!url) return
+    void desktopWindow?.openExternal?.(url)
+  }
+
+  const baseClassName = `mt-auto flex flex-col gap-2 ${collapsed ? 'items-center' : ''}`
+
   if (collapsed) {
     return (
-      <div className="mt-auto flex justify-center rounded-[14px] bg-card px-0 py-4" title="系统脉冲 · 99.82%">
-        <div className="h-3 w-3 animate-pulseLine rounded-full bg-cyan-300" />
+      <div className={baseClassName}>
+        <button
+          type="button"
+          disabled={!CONTACT_US_URL}
+          onClick={() => openLink(CONTACT_US_URL)}
+          className="inline-flex h-11 w-full items-center justify-center rounded-[14px] border border-white/[0.08] bg-card text-slate-100 transition hover:border-white/[0.12] hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-45"
+          title="联系我们"
+        >
+          <ExternalLink size={16} />
+        </button>
+        <button
+          type="button"
+          disabled={!PRODUCT_INTRO_URL}
+          onClick={() => openLink(PRODUCT_INTRO_URL)}
+          className="inline-flex h-11 w-full items-center justify-center rounded-[14px] border border-white/[0.08] bg-card text-slate-100 transition hover:border-white/[0.12] hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-45"
+          title="产品介绍"
+        >
+          <SearchCheck size={16} />
+        </button>
       </div>
     )
   }
 
   return (
-    <div className="mt-auto rounded-[14px] bg-card p-3.5">
-      <div className="text-[11px] tracking-[0.22em] text-textMuted">系统脉冲</div>
-      <div className="mt-2.5 flex items-center justify-between">
-        <div>
-          <div className="text-xl font-semibold text-white">99.82%</div>
-          <div className="text-[13px] text-textMuted">运行健康度</div>
-        </div>
-        <div className="h-3 w-3 animate-pulseLine rounded-full bg-cyan-300" />
-      </div>
+    <div className={baseClassName}>
+      <button
+        type="button"
+        disabled={!CONTACT_US_URL}
+        onClick={() => openLink(CONTACT_US_URL)}
+        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] border border-white/[0.08] bg-card px-4 text-sm font-medium text-slate-100 transition hover:border-white/[0.12] hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        <ExternalLink size={15} />
+        联系我们
+      </button>
+      <button
+        type="button"
+        disabled={!PRODUCT_INTRO_URL}
+        onClick={() => openLink(PRODUCT_INTRO_URL)}
+        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] border border-white/[0.08] bg-card px-4 text-sm font-medium text-slate-100 transition hover:border-white/[0.12] hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        <SearchCheck size={15} />
+        产品介绍
+      </button>
     </div>
   )
 })
@@ -87,7 +126,7 @@ export const Sidebar = memo(function Sidebar() {
         ))}
       </div>
 
-      <SidebarPulse collapsed={sidebarCollapsed} />
+      <SidebarLinks collapsed={sidebarCollapsed} />
     </aside>
   )
 })

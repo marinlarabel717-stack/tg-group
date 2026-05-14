@@ -4,7 +4,7 @@ import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress,
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'TG-Matrix',
   platform: process.platform,
-  version: process.env.npm_package_version || '0.0.2'
+  version: process.env.npm_package_version || '0.0.3'
 })
 
 contextBridge.exposeInMainWorld('desktopWindow', {
@@ -12,7 +12,8 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),
   close: () => ipcRenderer.invoke('window:close'),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
-  setMode: (mode: 'license' | 'app') => ipcRenderer.invoke('window:set-mode', mode)
+  setMode: (mode: 'license' | 'app') => ipcRenderer.invoke('window:set-mode', mode),
+  openExternal: (url: string) => ipcRenderer.invoke('window:open-external', url)
 })
 
 contextBridge.exposeInMainWorld('desktopUpdater', {

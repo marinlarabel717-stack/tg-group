@@ -686,6 +686,7 @@ export interface DesktopWindowApi {
   close: () => Promise<void>
   isMaximized: () => Promise<boolean>
   setMode: (mode: 'license' | 'app') => Promise<boolean>
+  openExternal?: (url: string) => Promise<boolean>
 }
 
 declare global {

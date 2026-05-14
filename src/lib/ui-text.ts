@@ -15,7 +15,7 @@ export const moduleLabelMap = {
   'auto-join': '自动加群',
   'direct-message': '私信用户',
   'proxy-pool': '代理池',
-  'session-manager': '会话管理',
+  'session-manager': '采集用户',
   logs: '日志中心',
   settings: '设置'
 } as const
