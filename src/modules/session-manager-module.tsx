@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Clock3, Copy, FolderSearch2, Hash, Link2, ListFilter, Play, RadioTower, Search, Square, Trash2, Upload, X } from 'lucide-react'
 import { GlassPanel } from '../components/common/glasspanel'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../components/accounts/resultdialog'
+import { formatAccountStatus } from '../lib/ui-text'
 import { useAccountStore } from '../stores/accountstore'
 import { useDirectMessageStore } from '../stores/directmessagestore'
 import { useUIStore } from '../stores/uistore'
@@ -219,6 +220,20 @@ function getTaskTone(status: GroupCollectorTaskStatus) {
   if (status === 'stopped') return 'text-amber-200 bg-amber-300/10'
   if (status === 'failed') return 'text-rose-300 bg-rose-400/10'
   return 'text-sky-300 bg-sky-400/10'
+}
+
+function getAccountStatusTone(status: string, busy: boolean) {
+  if (busy) return 'bg-amber-300/12 text-amber-200'
+  if (status === 'alive') return 'bg-emerald-400/12 text-emerald-300'
+  if (status === 'limited') return 'bg-sky-400/12 text-sky-300'
+  if (status === 'temporary_limited') return 'bg-orange-400/12 text-orange-300'
+  if (status === 'geo_restricted') return 'bg-amber-300/12 text-amber-200'
+  if (status === 'frozen') return 'bg-cyan-400/12 text-cyan-300'
+  if (status === 'multi_ip') return 'bg-indigo-400/12 text-indigo-300'
+  if (status === 'timeout') return 'bg-violet-400/12 text-violet-300'
+  if (status === 'banned' || status === 'session_expired' || status === 'not_logged_in') return 'bg-rose-400/12 text-rose-200'
+  if (status === 'checking') return 'bg-teal-400/12 text-teal-300'
+  return 'bg-white/10 text-slate-200'
 }
 
 function TabBar({ activeTab, setActiveTab }: { activeTab: CollectorTabKey; setActiveTab: (tab: CollectorTabKey) => void }) {
@@ -913,7 +928,7 @@ export default function SessionManagerModule() {
       {accountPickerOpen ? (
         <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setAccountPickerOpen(false)}>
           <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.06] bg-card px-5 py-4">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-card px-5 py-4">
               <div className="text-lg font-semibold text-white">选择采集账号</div>
               <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setAccountPickerOpen(false)}><X size={16} /></button>
             </div>
@@ -922,7 +937,7 @@ export default function SessionManagerModule() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="relative w-full lg:max-w-[360px]">
                   <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
-                  <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名" className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-white/[0.12]" />
+                  <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名" className={`h-11 w-full rounded-[12px] pl-11 pr-4 text-sm ${SOFT_INPUT_CLASS}`} />
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <button type="button" onClick={() => setDraftAccountIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
@@ -930,7 +945,7 @@ export default function SessionManagerModule() {
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-[18px] border border-white/[0.06] bg-panel">
+              <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
                 <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/6 px-4 py-3 text-xs uppercase tracking-[0.16em] text-textMuted">
                   <div>选择</div>
                   <div>手机号</div>
@@ -952,11 +967,11 @@ export default function SessionManagerModule() {
                         <div className="truncate text-white">{account.phone || '—'}</div>
                         <div className="min-w-0">
                           <div className="truncate text-white">{readAccountLabel(account)}</div>
-                          {busy ? <div className="mt-1 text-xs text-textMuted">当前已被其他采集任务占用</div> : null}
+                          {busy ? <div className="mt-1 text-xs text-textMuted">任务：当前已被其他采集任务占用</div> : null}
                         </div>
                         <div>
-                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${busy ? 'bg-amber-300/12 text-amber-200' : 'bg-white/10 text-slate-200'}`}>
-                            {busy ? '占用中' : '可选择'}
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status, busy)}`}>
+                            {busy ? '占用中' : formatAccountStatus(account.status as never)}
                           </span>
                         </div>
                       </label>
@@ -966,7 +981,7 @@ export default function SessionManagerModule() {
               </div>
             </div>
 
-            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/[0.06] bg-card px-5 py-4">
+            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/8 bg-card px-5 py-4">
               <button type="button" onClick={() => setAccountPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
               <button type="button" onClick={applyAccountSelection} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">应用账号选择</button>
             </div>
