@@ -10,6 +10,7 @@ import { type AccountClientProxyOptions, TelegramClientManager } from './telegra
 import { TelethonFreezeChecker } from './telethon-freeze-checker'
 import { readPremiumExpiryViaClient } from '../telegram-desktop-premium-service'
 import { type AccountCheckProxy, ProxyPoolService } from '../../proxy-pool/service'
+import type { TelethonFreezeCheckResult } from './telethon-freeze-checker'
 
 interface CheckLogger {
   (payload: { type: 'login_success'; phone: string } | { type: 'login_failed'; phone: string; reason: string }): void
@@ -160,6 +161,69 @@ export class AccountCheckEngine {
       status,
       errorMessage,
       retryable: this.statusResolver.isRetryable(status, error)
+    }
+  }
+
+  private async buildFrozenResultFromTelethon(
+    account: AccountRecord,
+    telethonFrozen: TelethonFreezeCheckResult,
+    startedAt: number,
+    proxyMeta: ProxyUsageMeta,
+    source: string
+  ): Promise<AccountCheckResult> {
+    const updated = await this.updateService.buildSuccessProfile({
+      account,
+      client: null,
+      liveUser: {
+        id: telethonFrozen.user_id ?? account.userId,
+        first_name: telethonFrozen.first_name ?? account.profile.first_name,
+        last_name: telethonFrozen.last_name ?? account.profile.last_name,
+        username: telethonFrozen.username ?? account.username,
+        phone: telethonFrozen.phone ?? account.phone
+      },
+      fullUser: null,
+      spambotReply: '',
+      status: 'frozen',
+      checkMode: 'account-status',
+      freezeSince: readTelethonFreezeSince(telethonFrozen),
+      freezeUntil: readTelethonFreezeUntil(telethonFrozen),
+      freezeAppealUrl: telethonFrozen.freeze_appeal_url ?? null,
+      proxyUsed: proxyMeta.proxyUsed,
+      proxyDisplay: proxyMeta.proxyDisplay,
+      durationMs: Date.now() - startedAt
+    })
+
+    const payload: CheckResultInput = {
+      id: account.id,
+      profile: updated.profile,
+      status: 'frozen',
+      phone: updated.phone,
+      username: updated.username,
+      userId: updated.userId,
+      country: updated.country,
+      proxyDisplay: updated.proxyDisplay,
+      lastCheckTime: updated.lastCheckTime,
+      lastOnlineTime: updated.lastOnlineTime
+    }
+
+    this.resultWriter.write(payload)
+
+    return {
+      accountId: account.id,
+      status: 'frozen',
+      profile: {
+        ...updated.profile,
+        check_error: `${source}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`
+      },
+      phone: updated.phone,
+      username: updated.username,
+      userId: updated.userId,
+      country: updated.country,
+      proxyDisplay: updated.proxyDisplay,
+      lastCheckTime: updated.lastCheckTime,
+      lastOnlineTime: updated.lastOnlineTime,
+      durationMs: Date.now() - startedAt,
+      retryable: false
     }
   }
 
@@ -555,6 +619,17 @@ export class AccountCheckEngine {
     const proxyAttempts = this.pickProxyAttempts()
     let finalFailure: ReturnType<AccountCheckEngine['createFailureResult']> | null = null
     let finalProxyMeta: ProxyUsageMeta = { proxyUsed: false, proxyDisplay: null }
+
+    if (mode === 'account-status') {
+      try {
+        const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结预检查')
+        if (telethonFrozen?.status === 'frozen') {
+          return this.buildFrozenResultFromTelethon(account, telethonFrozen, startedAt, finalProxyMeta, 'Telethon 冻结预检查')
+        }
+      } catch {
+        // ignore precheck failure and continue with main mtproto flow
+      }
+    }
 
     for (let index = 0; index < proxyAttempts.length; index += 1) {
       const proxy = proxyAttempts[index]
