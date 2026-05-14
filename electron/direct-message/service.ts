@@ -370,6 +370,12 @@ function formatCollectorGroupError(error: unknown) {
   if (waitMatched?.[1]) return `操作太快了，Telegram 要求先等 ${waitMatched[1]} 秒再继续。`
   const floodMatched = normalized.match(/FLOOD_WAIT_(\d+)/i)
   if (floodMatched?.[1]) return `当前账号被限流了，需要先等 ${floodMatched[1]} 秒。`
+  if (/PEER_FLOOD/i.test(normalized)) return '这个账号触发 Telegram 风控了，先暂停一会再采。'
+  if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '当前已开启全局代理，但没有可用代理，所以这次采集没法继续。请先补代理，或者关闭全局代理后再试。'
+  if (/FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(normalized)) return '这个账号已经冻结了，当前采集功能用不了，系统会自动停掉这个账号。'
+  if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(normalized)) return '这个账号已经被封了，当前采集功能用不了，系统会自动停掉这个账号。'
+  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号登录已经失效了，需要重新登录，系统会自动停掉这个账号。'
+  if (/ACCOUNT_RESTRICTED/i.test(normalized)) return '这个账号当前被 Telegram 限制了，当前采集功能用不了，系统会自动停掉这个账号。'
   if (/Cannot find any entity corresponding to/i.test(normalized)) return '当前账号没法直接识别这个群，群可能存在，建议改用完整链接或邀请链接再试'
   const noUserMatched = normalized.match(/No user has "([^"]+)" as username/i)
   if (noUserMatched?.[1]) return `Telegram 没找到 @${noUserMatched[1].replace(/^@+/, '')}，这个群用户名可能写错了，或者已经失效了`
@@ -383,7 +389,7 @@ function formatCollectorGroupError(error: unknown) {
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '这个群限制加入，当前账号没法直接进'
   if (/INVITE_REQUEST_SENT/i.test(normalized)) return '这个群需要审核，当前账号只提交了入群申请，暂时还采不了'
   if (/USERS_TOO_MUCH|CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号的加群数量已经接近上限了，先清理一些群再试'
-  return formatDirectMessageError(error)
+  return `采集失败：${normalized}`
 }
 
 function normalizeCollectorDisplayName(user: { id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null }) {
