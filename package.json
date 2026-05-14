@@ -1,6 +1,6 @@
 {
   "name": "telegram-multi-account-manager",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "private": true,
   "description": "TG-Matrix desktop manager",
   "author": "TG-Matrix",
@@ -46,6 +46,10 @@
       {
         "from": "electron/accounts/check-engine/telethon_freeze_check.py",
         "to": "runtime/accounts/check-engine/telethon_freeze_check.py"
+      },
+      {
+        "from": "electron/direct-message/telethon_group_collect.py",
+        "to": "runtime/direct-message/telethon_group_collect.py"
       },
       {
         "from": "build/icon.png",

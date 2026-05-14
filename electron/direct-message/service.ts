@@ -8,6 +8,7 @@ import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
+import { TelethonGroupCollector } from './telethon-group-collector'
 import type {
   CheckLogLevel,
   DirectMessageAutoReplyEvent,
@@ -707,7 +708,8 @@ export class DirectMessageService {
     private readonly accountRepository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
-    private readonly proxyPoolService: ProxyPoolService
+    private readonly proxyPoolService: ProxyPoolService,
+    private readonly telethonGroupCollector: TelethonGroupCollector
   ) {}
 
   setAutoReplyEventSink(sink?: (payload: DirectMessageAutoReplyEvent) => void) {
@@ -1209,9 +1211,9 @@ export class DirectMessageService {
     const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
 
     try {
-      return await this.collectGroupUsersWithClient(client, payload)
+      return await this.collectGroupUsersWithClient(client, payload, account)
     } catch (error) {
-      throw new Error(formatDirectMessageError(error))
+      throw new Error(formatCollectorGroupError(error))
     } finally {
       await this.clientManager.destroyClient(client)
     }
@@ -1331,7 +1333,69 @@ export class DirectMessageService {
     await this.stopAllAutoReply()
   }
 
-  private async collectGroupUsersWithClient(client: TelegramClient, payload: GroupCollectorPayload): Promise<GroupCollectorResult> {
+  private buildGroupCollectorResultFromUsers(
+    rawUsers: Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown; role?: GroupCollectorRole | 'member' | null; hasAvatar?: boolean | null; statusBucket?: string | null; statusLabel?: string | null }>,
+    payload: GroupCollectorPayload,
+    adminRoleMap: Map<string, GroupCollectorRole> = new Map()
+  ): GroupCollectorResult {
+    const seen = new Set<string>()
+    const items: GroupCollectorUserPayload[] = []
+    let skipped = 0
+
+    for (const rawUser of rawUsers) {
+      const userId = stringifyEntityId(rawUser.id)
+      if (!userId || seen.has(userId)) {
+        skipped += 1
+        continue
+      }
+      seen.add(userId)
+
+      const fallbackLastSeen = readCollectorLastSeen(rawUser as Record<string, unknown>)
+      const role = rawUser.role === 'owner' || rawUser.role === 'admin'
+        ? rawUser.role
+        : adminRoleMap.get(userId) || 'member'
+      const item: GroupCollectorUserPayload = {
+        userId,
+        displayName: normalizeCollectorDisplayName(rawUser),
+        username: typeof rawUser.username === 'string' ? rawUser.username : '',
+        phone: typeof rawUser.phone === 'string' ? rawUser.phone : '',
+        targetValue: normalizeCollectedValue(rawUser),
+        sourceLabel: payload.mode === 'public_members' ? '公开群成员' : '历史发言用户',
+        role,
+        isBot: Boolean((rawUser as { bot?: boolean | null }).bot),
+        hasAvatar: typeof rawUser.hasAvatar === 'boolean' ? rawUser.hasAvatar : readCollectorHasAvatar(rawUser as Record<string, unknown>),
+        hasUsername: Boolean(typeof rawUser.username === 'string' && rawUser.username.trim()),
+        isPremium: Boolean(typeof rawUser.premium === 'boolean' ? rawUser.premium : readCollectorIsPremium(rawUser as Record<string, unknown>)),
+        lastSeenBucket: typeof rawUser.statusBucket === 'string' && rawUser.statusBucket.trim() ? rawUser.statusBucket as GroupCollectorLastSeenBucket : fallbackLastSeen.bucket,
+        lastSeenLabel: typeof rawUser.statusLabel === 'string' && rawUser.statusLabel.trim() ? rawUser.statusLabel : fallbackLastSeen.label
+      }
+
+      if (!shouldKeepCollectorUser(item, payload.filters)) {
+        skipped += 1
+        continue
+      }
+
+      items.push(item)
+    }
+
+    return {
+      total: rawUsers.length,
+      matched: items.length,
+      filtered: skipped,
+      items,
+      message: items.length > 0
+        ? `采集完成，原始 ${rawUsers.length}，命中 ${items.length}，过滤 ${skipped}。`
+        : rawUsers.length > 0
+          ? `这次拉到 ${rawUsers.length} 个用户，但都被过滤条件筛掉了。`
+          : payload.mode === 'public_members'
+            ? '这次没有拉到群成员，可能这个群不开放成员列表，或者当前账号权限不够。'
+            : payload.historyDays && payload.historyDays > 0
+              ? `这次没有从最近 ${payload.historyDays} 天的历史消息里扫到可用用户，可能这几天没人发言，或者历史消息太少。`
+              : '这次没有从历史消息里扫到可用用户，可能群里最近没人发言，或者历史消息太少。'
+    }
+  }
+
+  private async collectGroupUsersWithClient(client: TelegramClient, payload: GroupCollectorPayload, account?: AccountRecord): Promise<GroupCollectorResult> {
     const normalizedSource = normalizeCollectorGroupSource(payload.source) || (resolveCollectorSource(payload.source) ? {
       kind: 'username' as const,
       value: resolveCollectorSource(payload.source),
@@ -1340,6 +1404,35 @@ export class DirectMessageService {
 
     if (!normalizedSource) {
       throw new Error('请先填写群链接或群用户名')
+    }
+
+    if (account) {
+      const telethonResult = await this.telethonGroupCollector.collect({
+        sessionPath: account.sessionPath,
+        source: payload.source,
+        mode: payload.mode,
+        participantLimit: payload.participantLimit,
+        historyLimit: payload.historyLimit,
+        historyDays: payload.historyDays,
+        timeoutSeconds: payload.mode === 'hidden_history' ? 60 : 45
+      }).catch(() => null)
+
+      if (telethonResult) {
+        const telethonUsers = telethonResult.users.map((user) => ({
+          id: user.id,
+          username: user.username,
+          phone: user.phone,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          bot: user.bot,
+          premium: user.premium,
+          hasAvatar: user.hasAvatar,
+          role: user.role,
+          statusBucket: user.statusBucket,
+          statusLabel: user.statusLabel
+        }))
+        return this.buildGroupCollectorResultFromUsers(telethonUsers, payload)
+      }
     }
 
     const entity = await resolveCollectorGroupEntity(client, normalizedSource)
@@ -1389,58 +1482,7 @@ export class DirectMessageService {
       rawUsers = Array.from(users.values())
     }
 
-    const seen = new Set<string>()
-    const items: GroupCollectorUserPayload[] = []
-    let skipped = 0
-
-    for (const rawUser of rawUsers) {
-      const userId = stringifyEntityId(rawUser.id)
-      if (!userId || seen.has(userId)) {
-        skipped += 1
-        continue
-      }
-      seen.add(userId)
-
-      const lastSeen = readCollectorLastSeen(rawUser as Record<string, unknown>)
-      const item: GroupCollectorUserPayload = {
-        userId,
-        displayName: normalizeCollectorDisplayName(rawUser),
-        username: typeof rawUser.username === 'string' ? rawUser.username : '',
-        phone: typeof rawUser.phone === 'string' ? rawUser.phone : '',
-        targetValue: normalizeCollectedValue(rawUser),
-        sourceLabel: payload.mode === 'public_members' ? '公开群成员' : '历史发言用户',
-        role: adminRoleMap.get(userId) || 'member',
-        isBot: Boolean((rawUser as { bot?: boolean | null }).bot),
-        hasAvatar: readCollectorHasAvatar(rawUser as Record<string, unknown>),
-        hasUsername: Boolean(typeof rawUser.username === 'string' && rawUser.username.trim()),
-        isPremium: readCollectorIsPremium(rawUser as Record<string, unknown>),
-        lastSeenBucket: lastSeen.bucket,
-        lastSeenLabel: lastSeen.label
-      }
-
-      if (!shouldKeepCollectorUser(item, payload.filters)) {
-        skipped += 1
-        continue
-      }
-
-      items.push(item)
-    }
-
-    return {
-      total: rawUsers.length,
-      matched: items.length,
-      filtered: skipped,
-      items,
-      message: items.length > 0
-        ? `采集完成，原始 ${rawUsers.length}，命中 ${items.length}，过滤 ${skipped}。`
-        : rawUsers.length > 0
-          ? `这次拉到 ${rawUsers.length} 个用户，但都被过滤条件筛掉了。`
-          : payload.mode === 'public_members'
-            ? '这次没有拉到群成员，可能这个群不开放成员列表，或者当前账号权限不够。'
-            : payload.historyDays && payload.historyDays > 0
-              ? `这次没有从最近 ${payload.historyDays} 天的历史消息里扫到可用用户，可能这几天没人发言，或者历史消息太少。`
-              : '这次没有从历史消息里扫到可用用户，可能群里最近没人发言，或者历史消息太少。'
-    }
+    return this.buildGroupCollectorResultFromUsers(rawUsers, payload, adminRoleMap)
   }
 
   private emitGroupCollectorProgress(payload: GroupCollectorTaskProgress) {
@@ -1574,7 +1616,7 @@ export class DirectMessageService {
           historyLimit: payload.historyLimit,
           historyDays: payload.historyDays,
           filters: payload.filters
-        })
+        }, runtime.account)
 
         let added = 0
         result.items.forEach((item) => {

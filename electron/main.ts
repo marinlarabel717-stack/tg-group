@@ -31,6 +31,7 @@ import { LicenseService } from './license/license-service'
 import { BroadcastService } from './broadcast/service'
 import { registerBroadcastIpc } from './broadcast/ipc'
 import { DirectMessageService } from './direct-message/service'
+import { TelethonGroupCollector } from './direct-message/telethon-group-collector'
 import { registerDirectMessageIpc } from './direct-message/ipc'
 import { AutoJoinService } from './auto-join/service'
 import { registerAutoJoinIpc } from './auto-join/ipc'
@@ -267,7 +268,8 @@ async function bootstrap() {
   const statusResolver = new StatusResolver()
   const updateService = new AccountUpdateService(accountsRootPath)
   const broadcastService = new BroadcastService(repository, sessionLoader, clientManager, proxyPoolService)
-  const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager, proxyPoolService)
+  const telethonGroupCollector = new TelethonGroupCollector()
+  const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager, proxyPoolService, telethonGroupCollector)
   const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager, proxyPoolService)
   const resultWriter = new CheckResultWriter(repository, {
     onWrite: (accounts) => emitAccountsUpdated(accounts)
