@@ -156,7 +156,7 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
           </div>
         ) : null}
 
-        {action !== 'disable-2fa' ? (
+        {action === 'change-2fa' ? (
           <>
             <div>
               <div className="mb-2 text-sm text-textMuted">新的 2FA</div>
@@ -164,7 +164,7 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
                 type="password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                placeholder={action === 'reset-2fa' ? '重置后统一改成这个 2FA' : '批量改成这个 2FA'}
+                placeholder="批量改成这个 2FA"
                 className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-white outline-none transition focus:border-white/[0.12] focus:bg-hover"
               />
             </div>
@@ -209,7 +209,7 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
           取消
         </button>
         <button type="button" onClick={() => void submitApply()} disabled={submitting} className="h-11 rounded-[12px] bg-violet-300 px-4 text-sm font-medium text-slate-950 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40">
-          {submitting ? '处理中...' : action === 'disable-2fa' ? '开始关闭 2FA' : action === 'reset-2fa' ? '开始重置 2FA' : '开始更改 2FA'}
+          {submitting ? '处理中...' : action === 'disable-2fa' ? '开始关闭 2FA' : action === 'reset-2fa' ? '发起 7 天重置申请' : '开始更改 2FA'}
         </button>
       </div>
     </ResultDialogShell>
@@ -225,6 +225,7 @@ export const TwoFactorProgressDialog = memo(function TwoFactorProgressDialog({
 
   const tone = state.action ? readActionTone(state.action) : 'violet'
   const actionLabel = state.action ? readActionLabel(state.action) : '2FA 处理'
+  const latestLog = state.logs[state.logs.length - 1] ?? null
 
   return (
     <ResultDialogShell
@@ -239,31 +240,31 @@ export const TwoFactorProgressDialog = memo(function TwoFactorProgressDialog({
     >
       <ResultHero label="当前进度" value={`${state.completed} / ${state.total}`} tone={tone} />
 
-      <div className="grid grid-cols-3 gap-3 text-center text-sm">
+      <div className="grid grid-cols-4 gap-3 text-center text-sm">
         <ResultStatCard label="成功" value={state.successCount} tone="success" />
         <ResultStatCard label="失败" value={state.failedCount} tone="danger" />
+        <ResultStatCard label="并发线程" value={state.concurrency} tone="info" />
         <ResultStatCard label="当前账号" value={state.currentPhone || '等待中'} tone="neutral" />
       </div>
 
-      <div className="rounded-[14px] border border-white/8 bg-panel/80 p-3">
+      <div className="rounded-[14px] border border-white/8 bg-panel/80 p-4">
         <div className="mb-3 flex items-center gap-2 text-sm text-white">
           <MailCheck size={16} className="text-violet-300" />
-          运行日志
+          当前状态
         </div>
-        <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1 text-sm">
-          {state.logs.length === 0 ? (
-            <div className="rounded-[12px] bg-white/[0.03] px-3 py-3 text-textMuted">正在准备任务...</div>
-          ) : state.logs.map((log) => (
-            <div key={log.id} className="rounded-[12px] bg-white/[0.03] px-3 py-3">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-textMuted">
-                <span>{new Date(log.createdAt).toLocaleTimeString()}</span>
-                {log.phone ? <span>{log.phone}</span> : null}
-              </div>
-              <div className={`mt-1 ${log.level === 'error' ? 'text-rose-200' : log.level === 'success' ? 'text-emerald-200' : log.level === 'warning' ? 'text-amber-200' : 'text-slate-200'}`}>
-                {log.message}
-              </div>
+        <div className="space-y-3 text-sm">
+          <div className="rounded-[12px] bg-white/[0.03] px-3 py-3 text-textMuted">
+            任务执行中只更新进度，不再一条一条刷新账号资料和筛选结果，等全部处理完后再统一落表。
+          </div>
+          <div className="rounded-[12px] bg-white/[0.03] px-3 py-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-textMuted">
+              <span>{latestLog ? new Date(latestLog.createdAt).toLocaleTimeString() : '--:--:--'}</span>
+              {latestLog?.phone ? <span>{latestLog.phone}</span> : null}
             </div>
-          ))}
+            <div className={`mt-1 min-h-[24px] ${latestLog?.level === 'error' ? 'text-rose-200' : latestLog?.level === 'success' ? 'text-emerald-200' : latestLog?.level === 'warning' ? 'text-amber-200' : 'text-slate-200'}`}>
+              {latestLog?.message || '正在准备任务...'}
+            </div>
+          </div>
         </div>
       </div>
     </ResultDialogShell>

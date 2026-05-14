@@ -1174,6 +1174,7 @@ export const AccountTable = memo(function AccountTable() {
       running: true,
       action: payload.action,
       phase: payload.phase ?? 'apply',
+      concurrency: 1,
       total: payload.accountIds.length,
       completed: 0,
       successCount: 0,

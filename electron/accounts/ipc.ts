@@ -33,6 +33,7 @@ function createEmptyTwoFactorState(): TwoFactorProgressState {
     running: false,
     action: null,
     phase: 'apply',
+    concurrency: 1,
     total: 0,
     completed: 0,
     successCount: 0,
@@ -367,10 +368,13 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
     const recoveryCodeMap = buildRecoveryCodeMap(payload)
 
+    const runtimeConcurrency = Math.max(1, appSettingsStore.get().checkConcurrency)
+
     twoFactorState = {
       running: true,
       action: action as TwoFactorAction,
       phase,
+      concurrency: Math.min(runtimeConcurrency, Math.max(1, orderedAccounts.length)),
       total: orderedAccounts.length,
       completed: 0,
       successCount: 0,
@@ -390,11 +394,15 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
         phone: '',
         level: 'info',
         message: action === 'reset-2fa'
-          ? `已开始为 ${orderedAccounts.length} 个账号发起 2FA 重置申请。`
-          : `已开始执行 ${orderedAccounts.length} 个账号的 2FA 任务。`
+          ? `已开始为 ${orderedAccounts.length} 个账号发起 2FA 重置申请，当前按 ${twoFactorState.concurrency} 个并发执行。`
+          : `已开始执行 ${orderedAccounts.length} 个账号的 2FA 任务，当前按 ${twoFactorState.concurrency} 个并发执行。`
       })
 
-      for (const account of orderedAccounts) {
+      const pendingProfileUpdates: CheckResultInput[] = []
+      const queue = [...orderedAccounts]
+      const workerCount = Math.min(twoFactorState.concurrency, queue.length)
+
+      const runAccount = async (account: typeof orderedAccounts[number]) => {
         const currentPassword = buildResolvedCurrentPassword(account, payload)
         const recoveryCode = recoveryCodeMap.get(account.id) ?? ''
         updateTwoFactorState({
@@ -420,10 +428,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
         if (result.success) {
           if (action !== 'reset-2fa' || result.nextTwoFA !== undefined) {
-            const accountsSnapshot = accountRepository.applyCheckResults([
-              buildProfileUpdateItemWithOptionalTwoFA(account, result.nextTwoFA)
-            ])
-            emitAccountsUpdated(accountsSnapshot)
+            pendingProfileUpdates.push(buildProfileUpdateItemWithOptionalTwoFA(account, result.nextTwoFA))
           }
 
           pushTwoFactorLog({
@@ -436,7 +441,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
             completed: twoFactorState.completed + 1,
             successCount: twoFactorState.successCount + 1
           })
-          continue
+          return
         }
 
         pushTwoFactorLog({
@@ -449,6 +454,23 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
           completed: twoFactorState.completed + 1,
           failedCount: twoFactorState.failedCount + 1
         })
+      }
+
+      const workers = Array.from({ length: workerCount }, () => (async () => {
+        while (true) {
+          const account = queue.shift()
+          if (!account) {
+            return
+          }
+          await runAccount(account)
+        }
+      })())
+
+      await Promise.all(workers)
+
+      if (pendingProfileUpdates.length > 0) {
+        const accountsSnapshot = accountRepository.applyCheckResults(pendingProfileUpdates)
+        emitAccountsUpdated(accountsSnapshot)
       }
     } finally {
       updateTwoFactorState({

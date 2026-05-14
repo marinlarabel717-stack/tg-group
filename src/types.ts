@@ -255,6 +255,7 @@ export interface TwoFactorProgressState {
   running: boolean
   action: TwoFactorAction | null
   phase: TwoFactorOperationPhase
+  concurrency: number
   total: number
   completed: number
   successCount: number
