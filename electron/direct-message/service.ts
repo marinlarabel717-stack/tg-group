@@ -1376,8 +1376,12 @@ export class DirectMessageService {
       filtered: skipped,
       items,
       message: items.length > 0
-        ? `采集完成，命中 ${items.length} 个用户。`
-        : '这次没有命中符合条件的用户。'
+        ? `采集完成，原始 ${rawUsers.length}，命中 ${items.length}，过滤 ${skipped}。`
+        : rawUsers.length > 0
+          ? `这次拉到 ${rawUsers.length} 个用户，但都被过滤条件筛掉了。`
+          : payload.mode === 'public_members'
+            ? '这次没有拉到群成员，可能这个群不开放成员列表，或者当前账号权限不够。'
+            : '这次没有从历史消息里扫到可用用户，可能群里最近没人发言，或者历史消息太少。'
     }
   }
 
@@ -1493,7 +1497,11 @@ export class DirectMessageService {
               })
               successCount = uniqueItems.size
               processedGroups += 1
-              pushLog('running', 'success', `[${phone}] 已加入 ${joinedState.label} - 正在采集用户 - ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}`, account.id, phone, joinedState.label)
+              if (result.items.length > 0) {
+                pushLog('running', 'success', `[${phone}] 已加入 ${joinedState.label} - 正在采集用户 - ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}（原始 ${result.total}，过滤 ${result.filtered}）`, account.id, phone, joinedState.label)
+              } else {
+                pushLog('running', 'warning', `[${phone}] 已加入 ${joinedState.label} - 这轮没采到可用用户（原始 ${result.total}，过滤 ${result.filtered}，原因：${result.message}）`, account.id, phone, joinedState.label)
+              }
             } catch (error) {
               failedCount += 1
               processedGroups += 1
