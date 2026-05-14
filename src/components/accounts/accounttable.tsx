@@ -23,13 +23,14 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, CircleAlert, HeartPulse, KeyRound, Loader2, LockKeyhole, Settings2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
-import type { AccountRecord, CheckAction } from '../../types'
+import type { AccountRecord, CheckAction, TwoFactorAction, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
 import { AccountSummaryCards } from './accountsummarycards'
 import { TableFilters } from './tablefilters'
 import { TablePagination } from './tablepagination'
 import { TableToolbar } from './tabletoolbar'
+import { TwoFactorManageDialog, TwoFactorProgressDialog, TwoFactorResultDialog } from './twofactordialog'
 import { filterAccounts, useAccountStore, type AccountStatusFilter } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap, type AccountTaskKind } from '../../lib/account-task-status'
 import { formatAccountStatus, formatCountryDisplay, formatDateTime, formatDateTimeFull, formatProfileSource } from '../../lib/ui-text'
@@ -49,6 +50,11 @@ const ACCOUNT_GRID_STYLE: CSSProperties = {
 interface PremiumDialogState {
   account: AccountRecord
   premiumExpiryOverride?: string | null
+}
+
+interface TwoFactorDialogState {
+  action: TwoFactorAction
+  accountIds: number[]
 }
 
 type BulkOperationSubmenu = 'two-fa' | 'profile' | null
@@ -612,6 +618,10 @@ export const AccountTable = memo(function AccountTable() {
   const [bulkSubmenu, setBulkSubmenu] = useState<BulkOperationSubmenu>(null)
   const [bulkActionHint, setBulkActionHint] = useState('')
   const [bulkMenuLayout, setBulkMenuLayout] = useState({ left: 16, width: 320 })
+  const [twoFactorDialog, setTwoFactorDialog] = useState<TwoFactorDialogState | null>(null)
+  const [twoFactorSubmitting, setTwoFactorSubmitting] = useState(false)
+  const [twoFactorProgress, setTwoFactorProgress] = useState<TwoFactorProgressState | null>(null)
+  const [twoFactorResult, setTwoFactorResult] = useState<TwoFactorOperationResult | null>(null)
   const deferredSearch = useDeferredValue(search)
   const tableCardRef = useRef<HTMLDivElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -696,6 +706,12 @@ export const AccountTable = memo(function AccountTable() {
     const timer = window.setTimeout(() => setBulkActionHint(''), 1800)
     return () => window.clearTimeout(timer)
   }, [bulkActionHint])
+
+  useEffect(() => {
+    return window.desktopAccounts?.onTwoFactorProgress?.((state) => {
+      setTwoFactorProgress(state)
+    })
+  }, [])
 
   const syncBulkMenuLayout = useCallback(() => {
     const tableCard = tableCardRef.current
@@ -1134,8 +1150,50 @@ export const AccountTable = memo(function AccountTable() {
     setBulkSubmenu(null)
   }, [handleStartCheck])
 
-  const handlePendingBulkAction = useCallback((label: string) => {
-    setBulkActionHint(`${label} 入口我已经先放好了，下一步接真实功能。`)
+  const handleOpenTwoFactorDialog = useCallback((action: TwoFactorAction) => {
+    if (selectedIds.length === 0) {
+      setBulkActionHint('请先选择要处理的账号。')
+      return
+    }
+
+    setTwoFactorDialog({ action, accountIds: selectedIds })
+    setBulkMenuOpen(false)
+    setBulkSubmenu(null)
+    setBulkActionHint('')
+  }, [selectedIds])
+
+  const handleSubmitTwoFactor = useCallback(async (payload: TwoFactorOperationPayload) => {
+    if (!window.desktopAccounts?.manageTwoFactor) {
+      setBulkActionHint('当前环境没有注入 2FA 能力。')
+      return
+    }
+
+    setTwoFactorSubmitting(true)
+    setTwoFactorResult(null)
+    setTwoFactorProgress({
+      running: true,
+      action: payload.action,
+      phase: payload.phase ?? 'apply',
+      total: payload.accountIds.length,
+      completed: 0,
+      successCount: 0,
+      failedCount: 0,
+      currentAccountId: null,
+      currentPhone: null,
+      logs: [],
+      lastUpdatedAt: new Date().toISOString()
+    })
+    setTwoFactorDialog(null)
+
+    try {
+      const result = await window.desktopAccounts.manageTwoFactor(payload)
+      setTwoFactorResult(result)
+    } catch (error) {
+      setBulkActionHint(error instanceof Error ? error.message : '2FA 操作失败，请稍后再试。')
+      setTwoFactorProgress(null)
+    } finally {
+      setTwoFactorSubmitting(false)
+    }
   }, [])
 
   const handleOpenPremiumDialog = useCallback(async (account: AccountRecord) => {
@@ -1171,6 +1229,9 @@ export const AccountTable = memo(function AccountTable() {
     setCopiedPhone(null)
     setFrozenDialogAccount(null)
     setPremiumDialogAccount(null)
+    setTwoFactorDialog(null)
+    setTwoFactorProgress(null)
+    setTwoFactorResult(null)
 
     if (viewportRef.current) {
       viewportRef.current.scrollTop = 0
@@ -1185,6 +1246,13 @@ export const AccountTable = memo(function AccountTable() {
   const handleScrollbarScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     setScrollLeft(event.currentTarget.scrollLeft)
   }, [])
+
+  const selectedTwoFactorAccounts = useMemo(() => {
+    if (!twoFactorDialog) return []
+    const accountIdSet = new Set(twoFactorDialog.accountIds)
+    return accounts.filter((account) => accountIdSet.has(account.id))
+  }, [accounts, twoFactorDialog])
+  const operationBusy = busy || twoFactorSubmitting || Boolean(twoFactorProgress?.running)
 
   const handleViewportWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
     if (!scrollbarRef.current) return
@@ -1292,7 +1360,7 @@ export const AccountTable = memo(function AccountTable() {
         totalCount={totalCount}
         deletePresetCounts={deletePresetCounts}
         loading={tableLoading}
-        busy={busy}
+        busy={operationBusy}
         onImportFiles={() => void importFiles()}
         onImportFolder={() => void importFolder()}
         onExportSelected={() => void exportSelected()}
@@ -1495,7 +1563,7 @@ export const AccountTable = memo(function AccountTable() {
                             </div>
                             <div className="space-y-2">
                               {twoFaMenuItems.map((item) => (
-                                <button key={item.id} type="button" onClick={() => handlePendingBulkAction(item.label)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                                <button key={item.id} type="button" onClick={() => handleOpenTwoFactorDialog(item.id)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
                                   <KeyRound size={15} className="text-neonSoft" />
                                   <span>{item.label}</span>
                                 </button>
@@ -1512,7 +1580,7 @@ export const AccountTable = memo(function AccountTable() {
                             </div>
                             <div className="space-y-2">
                               {profileMenuItems.map((item) => (
-                                <button key={item.id} type="button" onClick={() => handlePendingBulkAction(item.label)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                                <button key={item.id} type="button" onClick={() => setBulkActionHint(`${item.label} 入口我已经先放好了，下一步接真实功能。`)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
                                   <UserRoundPen size={15} className="text-neonSoft" />
                                   <span>{item.label}</span>
                                 </button>
@@ -1552,6 +1620,22 @@ export const AccountTable = memo(function AccountTable() {
           onClose={() => setPremiumDialogAccount(null)}
         />
       ) : null}
+      <TwoFactorManageDialog
+        open={Boolean(twoFactorDialog)}
+        action={twoFactorDialog?.action ?? null}
+        accounts={selectedTwoFactorAccounts}
+        submitting={twoFactorSubmitting}
+        onClose={() => setTwoFactorDialog(null)}
+        onSubmit={handleSubmitTwoFactor}
+      />
+      <TwoFactorProgressDialog state={twoFactorProgress} />
+      <TwoFactorResultDialog
+        result={twoFactorResult}
+        onClose={() => {
+          setTwoFactorResult(null)
+          setTwoFactorProgress(null)
+        }}
+      />
       {shortcutDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 pt-12 pb-6" onClick={() => setShortcutDialogOpen(false)}>
           <div className="w-full max-w-[540px] rounded-[18px] border border-white/[0.06] bg-card shadow-[0_16px_48px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>

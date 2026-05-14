@@ -1,10 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
+import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'TG-Matrix',
   platform: process.platform,
-  version: process.env.npm_package_version || '0.0.23'
+  version: process.env.npm_package_version || '0.0.24'
 })
 
 contextBridge.exposeInMainWorld('desktopWindow', {
@@ -61,7 +61,13 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
   exportByIds: (ids: number[]) => ipcRenderer.invoke('accounts:export', ids),
   revealPath: (targetPath: string) => ipcRenderer.invoke('accounts:reveal-path', targetPath),
   openTelegramWeb: (accountId: number) => ipcRenderer.invoke('accounts:open-telegram-web', accountId),
-  readPremiumExpiryFromDesktop: (accountId: number) => ipcRenderer.invoke('accounts:read-premium-expiry-from-desktop', accountId)
+  readPremiumExpiryFromDesktop: (accountId: number) => ipcRenderer.invoke('accounts:read-premium-expiry-from-desktop', accountId),
+  manageTwoFactor: (payload: TwoFactorOperationPayload) => ipcRenderer.invoke('accounts:manage-two-factor', payload) as Promise<TwoFactorOperationResult>,
+  onTwoFactorProgress: (callback: (state: TwoFactorProgressState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: TwoFactorProgressState) => callback(state)
+    ipcRenderer.on('accounts:two-factor-progress', listener)
+    return () => ipcRenderer.removeListener('accounts:two-factor-progress', listener)
+  }
 })
 
 contextBridge.exposeInMainWorld('desktopSettings', {

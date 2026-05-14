@@ -17,6 +17,8 @@ export type AccountStatus = (typeof ACCOUNT_STATUS_VALUES)[number]
 export type ProfileSource = 'json_import' | 'login_check'
 export type CheckLogLevel = 'info' | 'success' | 'warning' | 'error'
 export type CheckAction = 'account-status' | 'account-survival' | 'profile-refresh' | 'proxy-health'
+export type TwoFactorAction = 'change-2fa' | 'disable-2fa' | 'reset-2fa'
+export type TwoFactorOperationPhase = 'apply' | 'request-recovery' | 'confirm-recovery'
 
 export interface AccountJsonProfile extends Record<string, unknown> {
   app_id?: number
@@ -158,6 +160,58 @@ export interface PremiumExpiryReadResult {
   message: string
   rawText?: string | null
   screenshotPath?: string | null
+}
+
+export interface TwoFactorOperationPayload {
+  action: TwoFactorAction
+  phase?: TwoFactorOperationPhase
+  accountIds: number[]
+  currentPassword?: string
+  newPassword?: string
+  hint?: string
+  recoveryCode?: string
+  recoveryCodes?: Array<{ accountId: number; code: string }>
+}
+
+export interface TwoFactorOperationResultItem {
+  accountId: number
+  phone: string
+  success: boolean
+  message: string
+  nextTwoFA: string | null
+  emailPattern: string | null
+}
+
+export interface TwoFactorOperationResult {
+  action: TwoFactorAction
+  phase: TwoFactorOperationPhase
+  total: number
+  successCount: number
+  failedCount: number
+  results: TwoFactorOperationResultItem[]
+}
+
+export interface TwoFactorLogEntry {
+  id: string
+  accountId: number | null
+  phone: string
+  level: CheckLogLevel
+  message: string
+  createdAt: string
+}
+
+export interface TwoFactorProgressState {
+  running: boolean
+  action: TwoFactorAction | null
+  phase: TwoFactorOperationPhase
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  currentAccountId: number | null
+  currentPhone: string | null
+  logs: TwoFactorLogEntry[]
+  lastUpdatedAt: string | null
 }
 
 export interface CheckLogEntry {

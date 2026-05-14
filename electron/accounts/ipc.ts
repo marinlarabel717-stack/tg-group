@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { CheckAction, CheckResultInput, ImportProgressPayload } from './types'
+import type { CheckAction, CheckResultInput, ImportProgressPayload, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState } from './types'
 import type { AppSettings } from '../app-settings-store'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
@@ -11,6 +11,7 @@ import type { AppSettingsStore } from '../app-settings-store'
 import type { TelegramWebService } from './telegram-web-service'
 import type { TelegramDesktopPremiumService } from './telegram-desktop-premium-service'
 import type { ProxyPoolService } from '../proxy-pool/service'
+import type { TelethonTwoFactorService } from './telethon-two-factor-service'
 
 interface RegisterAccountIpcOptions {
   getMainWindow: () => BrowserWindow | null
@@ -22,12 +23,78 @@ interface RegisterAccountIpcOptions {
   proxyPoolService: ProxyPoolService
   telegramWebService: TelegramWebService
   telegramDesktopPremiumService: TelegramDesktopPremiumService
+  telegramTwoFactorService: TelethonTwoFactorService
   emitAccountsUpdated: (accounts: ReturnType<AccountRepository['list']>) => void
   withManagedSessionsWatcherSuspended: <T>(action: () => Promise<T>) => Promise<T>
 }
 
+function createEmptyTwoFactorState(): TwoFactorProgressState {
+  return {
+    running: false,
+    action: null,
+    phase: 'apply',
+    total: 0,
+    completed: 0,
+    successCount: 0,
+    failedCount: 0,
+    currentAccountId: null,
+    currentPhone: null,
+    logs: [],
+    lastUpdatedAt: null
+  }
+}
+
+function createTwoFactorLogEntry(input: Omit<TwoFactorLogEntry, 'id' | 'createdAt'>): TwoFactorLogEntry {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: new Date().toISOString(),
+    ...input
+  }
+}
+
+function buildStoredTwoFactor(account: ReturnType<AccountRepository['getByIds']>[number]) {
+  const raw = account.profile?.twoFA
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : ''
+}
+
+function buildResolvedCurrentPassword(account: ReturnType<AccountRepository['getByIds']>[number], payload: TwoFactorOperationPayload) {
+  const manual = typeof payload.currentPassword === 'string' ? payload.currentPassword.trim() : ''
+  if (manual) return manual
+  return buildStoredTwoFactor(account)
+}
+
+function buildRecoveryCodeMap(payload: TwoFactorOperationPayload) {
+  const map = new Map<number, string>()
+  for (const item of payload.recoveryCodes ?? []) {
+    if (!item || !Number.isFinite(item.accountId)) continue
+    const code = typeof item.code === 'string' ? item.code.trim() : ''
+    if (!code) continue
+    map.set(item.accountId, code)
+  }
+  return map
+}
+
+function buildProfileUpdateItem(account: ReturnType<AccountRepository['getByIds']>[number], nextTwoFA: string | null): CheckResultInput {
+  return {
+    id: account.id,
+    status: account.status,
+    phone: account.phone,
+    username: account.username,
+    userId: account.userId,
+    country: account.country,
+    proxyDisplay: account.proxyDisplay ?? null,
+    lastCheckTime: account.lastCheckTime,
+    lastOnlineTime: account.lastOnlineTime,
+    profile: {
+      ...account.profile,
+      twoFA: nextTwoFA
+    }
+  }
+}
+
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
-  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
+  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, telegramTwoFactorService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
+  let twoFactorState = createEmptyTwoFactorState()
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
     const mainWindow = getMainWindow()
@@ -44,6 +111,30 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
     mainWindow.webContents.send('accounts:import-progress', payload)
+  }
+
+  const emitTwoFactorProgress = () => {
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('accounts:two-factor-progress', twoFactorState)
+  }
+
+  const updateTwoFactorState = (patch: Partial<TwoFactorProgressState>) => {
+    twoFactorState = {
+      ...twoFactorState,
+      ...patch,
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitTwoFactorProgress()
+  }
+
+  const pushTwoFactorLog = (entry: Omit<TwoFactorLogEntry, 'id' | 'createdAt'>) => {
+    twoFactorState = {
+      ...twoFactorState,
+      logs: [...twoFactorState.logs, createTwoFactorLogEntry(entry)].slice(-400),
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitTwoFactorProgress()
   }
 
   checkQueue.on('state', emitCheckState)
@@ -215,5 +306,153 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }
 
     return result
+  })
+
+  ipcMain.handle('accounts:manage-two-factor', async (_event, payload: TwoFactorOperationPayload): Promise<TwoFactorOperationResult> => {
+    const accountIds = Array.isArray(payload?.accountIds) ? payload.accountIds.filter((id) => Number.isFinite(id)) : []
+    const action = payload?.action
+    const phase: TwoFactorOperationPhase = payload?.phase ?? 'apply'
+
+    if (!action || !['change-2fa', 'disable-2fa', 'reset-2fa'].includes(action)) {
+      throw new Error('2FA 操作类型不正确。')
+    }
+    if (accountIds.length === 0) {
+      throw new Error('请先选择要处理的账号。')
+    }
+    if (twoFactorState.running) {
+      throw new Error('当前已经有一个 2FA 任务正在执行，请等它完成后再试。')
+    }
+
+    const accounts = accountRepository.getByIds(accountIds)
+    const accountMap = new Map(accounts.map((account) => [account.id, account]))
+    const orderedAccounts = accountIds
+      .map((id) => accountMap.get(id))
+      .filter((account): account is NonNullable<typeof account> => Boolean(account))
+
+    if (orderedAccounts.length === 0) {
+      throw new Error('没有找到可执行的账号。')
+    }
+
+    if (action === 'disable-2fa') {
+      const hasAnyPassword = orderedAccounts.some((account) => Boolean(buildResolvedCurrentPassword(account, payload)))
+      if (!hasAnyPassword) {
+        throw new Error('当前没有可用的旧 2FA，至少要手动填写一个旧 2FA，或者先给账号补上本地 2FA 记录。')
+      }
+    }
+
+    if ((action === 'change-2fa' || (action === 'reset-2fa' && phase === 'confirm-recovery')) && !(payload.newPassword?.trim())) {
+      throw new Error('请先填写新的 2FA。')
+    }
+
+    const recoveryCodeMap = buildRecoveryCodeMap(payload)
+
+    if (action === 'reset-2fa' && phase === 'confirm-recovery' && recoveryCodeMap.size === 0) {
+      throw new Error('请先填写邮箱验证码。')
+    }
+
+    twoFactorState = {
+      running: true,
+      action: action as TwoFactorAction,
+      phase,
+      total: orderedAccounts.length,
+      completed: 0,
+      successCount: 0,
+      failedCount: 0,
+      currentAccountId: null,
+      currentPhone: null,
+      logs: [],
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitTwoFactorProgress()
+
+    const results: TwoFactorOperationResultItem[] = []
+
+    try {
+      pushTwoFactorLog({
+        accountId: null,
+        phone: '',
+        level: 'info',
+        message: `已开始执行 ${orderedAccounts.length} 个账号的 2FA 任务。`
+      })
+
+      for (const account of orderedAccounts) {
+        const currentPassword = buildResolvedCurrentPassword(account, payload)
+        const recoveryCode = recoveryCodeMap.get(account.id) ?? ''
+        updateTwoFactorState({
+          currentAccountId: account.id,
+          currentPhone: account.phone
+        })
+        pushTwoFactorLog({
+          accountId: account.id,
+          phone: account.phone,
+          level: 'info',
+          message: `开始处理 ${account.phone || `账号 #${account.id}`}。`
+        })
+
+        const result = await telegramTwoFactorService.execute(account, {
+          ...payload,
+          currentPassword,
+          recoveryCode
+        })
+
+        results.push(result)
+
+        if (result.success) {
+          if (action !== 'reset-2fa' || phase === 'confirm-recovery' || phase === 'apply') {
+            if (action !== 'reset-2fa' || phase !== 'request-recovery') {
+              const accountsSnapshot = accountRepository.applyCheckResults([
+                buildProfileUpdateItem(account, result.nextTwoFA)
+              ])
+              emitAccountsUpdated(accountsSnapshot)
+            }
+          }
+
+          pushTwoFactorLog({
+            accountId: account.id,
+            phone: account.phone,
+            level: 'success',
+            message: result.message
+          })
+          updateTwoFactorState({
+            completed: twoFactorState.completed + 1,
+            successCount: twoFactorState.successCount + 1
+          })
+          continue
+        }
+
+        pushTwoFactorLog({
+          accountId: account.id,
+          phone: account.phone,
+          level: 'error',
+          message: result.message
+        })
+        updateTwoFactorState({
+          completed: twoFactorState.completed + 1,
+          failedCount: twoFactorState.failedCount + 1
+        })
+      }
+    } finally {
+      updateTwoFactorState({
+        running: false,
+        currentAccountId: null,
+        currentPhone: null
+      })
+    }
+
+    pushTwoFactorLog({
+      accountId: null,
+      phone: '',
+      level: 'info',
+      message: `2FA 任务执行完成：成功 ${twoFactorState.successCount}，失败 ${twoFactorState.failedCount}。`
+    })
+
+    return {
+      action: action as TwoFactorAction,
+      phase,
+      total: orderedAccounts.length,
+      successCount: twoFactorState.successCount,
+      failedCount: twoFactorState.failedCount,
+      results
+    }
   })
 }
