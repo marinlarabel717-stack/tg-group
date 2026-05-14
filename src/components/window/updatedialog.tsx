@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Loader2, RefreshCw, Rocket, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, Download, Loader2, RefreshCw, Rocket, TriangleAlert, X } from 'lucide-react'
 import type { AppUpdaterState } from '../../types'
-import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
+import { BrandLogo } from '../common/brandlogo'
 
 const defaultState: AppUpdaterState = {
   status: 'idle',
-  currentVersion: window.desktopInfo?.version || '0.0.1',
+  currentVersion: window.desktopInfo?.version || '0.0.2',
   availableVersion: null,
   progressPercent: 0,
   transferredBytes: 0,
@@ -21,6 +21,13 @@ function formatBytes(bytes: number) {
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
   const value = bytes / (1024 ** index)
   return `${value >= 100 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`
+}
+
+function formatReleaseDate(value: string | null) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 export function UpdateDialog() {
@@ -53,40 +60,57 @@ export function UpdateDialog() {
 
   const visibilityKey = `${state.status}:${state.availableVersion || ''}:${state.message}`
   const open = ['available', 'downloading', 'downloaded', 'error'].includes(state.status) && hiddenKey !== visibilityKey
-  const percentText = `${Math.max(0, Math.min(100, state.progressPercent)).toFixed(state.progressPercent >= 10 ? 0 : 1)}%`
+  const progressValue = Math.max(0, Math.min(100, state.progressPercent))
+  const percentText = `${progressValue.toFixed(progressValue >= 10 ? 0 : 1)}%`
 
   const config = useMemo(() => {
     switch (state.status) {
       case 'available':
         return {
           title: '发现新版本',
-          subtitle: '检测到更高版本，可直接自动更新',
+          subtitle: '检测到更高版本，可直接在软件内完成更新。',
           icon: <Rocket size={18} />,
-          tone: 'info' as const,
+          badge: '自动更新',
+          iconClassName: 'text-cyan-200',
+          badgeClassName: 'border border-cyan-300/16 bg-cyan-300/10 text-cyan-100',
+          accentClassName: 'from-cyan-300 via-sky-300 to-blue-400',
+          statToneClassName: 'border-cyan-300/14 bg-cyan-300/8 text-cyan-50',
           closable: true
         }
       case 'downloading':
         return {
-          title: '正在自动更新',
-          subtitle: '更新包下载中，请稍等',
+          title: '正在更新 TG-Matrix',
+          subtitle: '更新包下载中，完成后会自动静默安装。',
           icon: <Loader2 size={18} className="animate-spin" />,
-          tone: 'violet' as const,
+          badge: '下载中',
+          iconClassName: 'text-sky-200',
+          badgeClassName: 'border border-sky-300/16 bg-sky-300/10 text-sky-100',
+          accentClassName: 'from-cyan-300 via-sky-300 to-indigo-400',
+          statToneClassName: 'border-sky-300/14 bg-sky-300/8 text-sky-50',
           closable: true
         }
       case 'downloaded':
         return {
-          title: '更新已下载',
-          subtitle: '软件即将自动重启并安装新版本',
-          icon: <Download size={18} />,
-          tone: 'success' as const,
+          title: '正在安装更新',
+          subtitle: '更新包已下载完成，软件即将自动重启并安装。',
+          icon: <CheckCircle2 size={18} />,
+          badge: '即将安装',
+          iconClassName: 'text-emerald-200',
+          badgeClassName: 'border border-emerald-300/16 bg-emerald-300/10 text-emerald-100',
+          accentClassName: 'from-emerald-300 via-cyan-300 to-sky-400',
+          statToneClassName: 'border-emerald-300/14 bg-emerald-300/8 text-emerald-50',
           closable: false
         }
       case 'error':
         return {
           title: '更新失败',
-          subtitle: '检查更新时出了点问题，可直接重试',
+          subtitle: '检查或下载更新时出了点问题，可以直接重试。',
           icon: <TriangleAlert size={18} />,
-          tone: 'danger' as const,
+          badge: '需要处理',
+          iconClassName: 'text-rose-200',
+          badgeClassName: 'border border-rose-300/16 bg-rose-300/10 text-rose-100',
+          accentClassName: 'from-rose-300 via-orange-300 to-amber-300',
+          statToneClassName: 'border-rose-300/14 bg-rose-300/8 text-rose-50',
           closable: true
         }
       default:
@@ -113,76 +137,128 @@ export function UpdateDialog() {
   }
 
   return (
-    <ResultDialogShell
-      open={open}
-      onClose={handleClose}
-      title={config.title}
-      subtitle={config.subtitle}
-      icon={config.icon}
-      tone={config.tone}
-      closable={config.closable}
-      maxWidth="max-w-[460px]"
-    >
-      <ResultHero
-        label={state.status === 'error' ? '错误信息' : '当前版本 → 新版本'}
-        value={state.status === 'error'
-          ? state.message
-          : `${state.currentVersion} → ${state.availableVersion || state.currentVersion}`}
-        tone={config.tone}
-      />
+    <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center p-5">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_44%),linear-gradient(180deg,rgba(2,6,23,0.06),rgba(2,6,23,0.32))]" />
 
-      {state.status === 'downloading' ? (
-        <>
-          <div className="flex items-center justify-between rounded-[14px] bg-panel px-4 py-3 text-sm">
-            <div className="flex items-center gap-2 text-white">
-              <Loader2 size={16} className="animate-spin text-violet-300" />
-              <span>{state.message}</span>
+      <div className="pointer-events-auto relative w-full max-w-[520px] rounded-[34px] p-[1px]">
+        <div className="relative overflow-hidden rounded-[34px] border border-white/[0.05] bg-[linear-gradient(180deg,rgba(10,16,30,0.84)_0%,rgba(7,12,24,0.94)_100%)] px-6 py-5 text-white backdrop-blur-[30px]">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),transparent_28%)]" />
+          <div className={`pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r ${config.accentClassName} opacity-60`} />
+          <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-cyan-300/8 blur-3xl" />
+
+          {config.closable ? (
+            <button
+              type="button"
+              onClick={handleClose}
+              className="absolute right-5 top-5 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-slate-950/34 text-white/80 transition hover:border-cyan-300/24 hover:bg-cyan-300/10 hover:text-white"
+              aria-label="关闭更新提示"
+            >
+              <X size={16} />
+            </button>
+          ) : null}
+
+          <div className="relative z-10 flex items-start justify-between gap-4 pr-12">
+            <div className="min-w-0">
+              <BrandLogo
+                size={44}
+                title="TG-Matrix"
+                className="items-center gap-3"
+                textClassName="text-left"
+                titleClassName="bg-[linear-gradient(180deg,#ffffff_0%,#dbeafe_100%)] bg-clip-text text-[24px] font-semibold tracking-[0.01em] text-transparent"
+              />
+              <div className="mt-4 flex items-center gap-2">
+                <div className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/6 ${config.iconClassName}`}>
+                  {config.icon}
+                </div>
+                <span className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-medium ${config.badgeClassName}`}>
+                  {config.badge}
+                </span>
+              </div>
             </div>
-            <div className="font-medium text-violet-300">{percentText}</div>
           </div>
 
-          <div className="h-2 overflow-hidden rounded-full bg-panel">
-            <div className="h-full rounded-full bg-violet-300 transition-all duration-300" style={{ width: percentText }} />
+          <div className="relative z-10 mt-5">
+            <div className="text-[24px] font-semibold tracking-[0.01em] text-white">{config.title}</div>
+            <div className="mt-2 text-sm leading-6 text-white/64">{config.subtitle}</div>
           </div>
-        </>
-      ) : (
-        <div className="rounded-[12px] border border-white/10 bg-panel px-4 py-3 text-sm text-slate-200">
-          {state.message}
+
+          <div className="relative z-10 mt-5 rounded-[24px] border border-white/[0.05] bg-[rgba(6,11,22,0.46)] p-4 backdrop-blur-xl">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-[0.18em] text-white/34">更新进度</div>
+                <div className="mt-2 text-[30px] font-semibold leading-none text-white">{percentText}</div>
+              </div>
+              <div className="text-right text-sm text-white/52">
+                <div>{state.currentVersion} → {state.availableVersion || state.currentVersion}</div>
+                <div className="mt-1">发布时间：{formatReleaseDate(state.releaseDate)}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/8">
+              <div
+                className={`h-full rounded-full bg-gradient-to-r ${config.accentClassName} transition-all duration-300`}
+                style={{ width: `${progressValue}%` }}
+              />
+            </div>
+
+            <div className="mt-3 text-sm text-white/70">{state.message}</div>
+          </div>
+
+          <div className="relative z-10 mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.04] px-4 py-3">
+              <div className="text-xs text-white/38">当前版本</div>
+              <div className="mt-1 text-sm font-medium text-white">{state.currentVersion}</div>
+            </div>
+            <div className={`rounded-[18px] px-4 py-3 ${config.statToneClassName}`}>
+              <div className="text-xs text-white/48">新版本</div>
+              <div className="mt-1 text-sm font-medium text-white">{state.availableVersion || '—'}</div>
+            </div>
+            <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.04] px-4 py-3">
+              <div className="text-xs text-white/38">已下载</div>
+              <div className="mt-1 text-sm font-medium text-white">{formatBytes(state.transferredBytes)}</div>
+            </div>
+            <div className="rounded-[18px] border border-white/[0.05] bg-white/[0.04] px-4 py-3">
+              <div className="text-xs text-white/38">下载速度</div>
+              <div className="mt-1 text-sm font-medium text-white">{`${formatBytes(state.bytesPerSecond)}/s`}</div>
+            </div>
+          </div>
+
+          <div className="relative z-10 mt-5 flex flex-col gap-3">
+            {state.status === 'available' ? (
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-cyan-300/16 bg-[linear-gradient(180deg,rgba(19,31,55,0.98)_0%,rgba(9,17,34,1)_100%)] text-sm font-medium text-cyan-50 transition hover:border-cyan-300/28"
+              >
+                <Download size={16} className="text-cyan-300" />
+                自动更新
+              </button>
+            ) : null}
+
+            {state.status === 'error' ? (
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-rose-300/16 bg-rose-300/10 text-sm font-medium text-rose-100 transition hover:border-rose-300/24 hover:bg-rose-300/14"
+              >
+                <RefreshCw size={16} />
+                重新检查更新
+              </button>
+            ) : null}
+
+            {state.status === 'downloaded' ? (
+              <button
+                type="button"
+                onClick={handleInstall}
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-emerald-300/16 bg-emerald-300/10 text-sm font-medium text-emerald-50 transition hover:border-emerald-300/24 hover:bg-emerald-300/14"
+              >
+                <Download size={16} />
+                立即重启更新
+              </button>
+            ) : null}
+          </div>
         </div>
-      )}
-
-      <div className="grid grid-cols-3 gap-3 text-center text-sm">
-        <ResultStatCard label="当前版本" value={state.currentVersion} tone="neutral" />
-        <ResultStatCard label="新版本" value={state.availableVersion || '—'} tone={state.status === 'error' ? 'danger' : 'info'} />
-        <ResultStatCard label="下载进度" value={state.status === 'downloading' || state.status === 'downloaded' ? percentText : '待开始'} tone={state.status === 'downloaded' ? 'success' : state.status === 'error' ? 'danger' : 'violet'} />
       </div>
-
-      {state.status === 'downloading' ? (
-        <div className="grid grid-cols-3 gap-3 text-center text-sm">
-          <ResultStatCard label="已下载" value={formatBytes(state.transferredBytes)} tone="info" />
-          <ResultStatCard label="总大小" value={formatBytes(state.totalBytes)} tone="neutral" />
-          <ResultStatCard label="速度" value={`${formatBytes(state.bytesPerSecond)}/s`} tone="violet" />
-        </div>
-      ) : null}
-
-      {state.status === 'available' ? (
-        <ResultPrimaryButton label="自动更新" onClick={handleDownload} tone="info" />
-      ) : null}
-
-      {state.status === 'error' ? (
-        <button
-          type="button"
-          onClick={handleRetry}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-[12px] border border-rose-300/18 bg-rose-400/10 text-sm font-medium text-rose-200 transition hover:bg-rose-400/14"
-        >
-          <RefreshCw size={15} />
-          <span>重新检查更新</span>
-        </button>
-      ) : null}
-
-      {state.status === 'downloaded' ? (
-        <ResultPrimaryButton label="立即重启更新" onClick={handleInstall} tone="success" />
-      ) : null}
-    </ResultDialogShell>
+    </div>
   )
 }

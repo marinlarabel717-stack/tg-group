@@ -81,18 +81,19 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
   }
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-transparent text-white">
+    <div className="relative h-screen w-screen overflow-hidden bg-transparent p-[6px] text-white">
       <div
-        className="relative flex h-full w-full flex-col overflow-hidden rounded-[32px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,16,30,0.82)_0%,rgba(7,12,24,0.92)_100%)] px-6 py-4 backdrop-blur-[24px]"
+        className="relative flex h-full w-full flex-col overflow-hidden rounded-[30px] border border-white/[0.04] bg-[linear-gradient(180deg,rgba(10,16,30,0.74)_0%,rgba(7,12,24,0.88)_100%)] px-6 py-4 backdrop-blur-[28px]"
         style={dragRegionStyle}
       >
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),transparent_24%)]" />
-        <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(186,230,253,0.22),transparent)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.022),transparent_24%)]" />
+        <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(186,230,253,0.16),transparent)]" />
+        <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-cyan-300/8 blur-3xl" />
 
         <button
           type="button"
           onClick={() => void window.desktopWindow?.close()}
-          className="absolute right-6 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-slate-950/34 text-lg leading-none text-white/80 transition hover:border-cyan-300/28 hover:bg-cyan-300/10 hover:text-white active:scale-[0.97]"
+          className="absolute right-6 top-5 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/[0.08] bg-slate-950/28 text-lg leading-none text-white/80 transition hover:border-cyan-300/22 hover:bg-cyan-300/8 hover:text-white active:scale-[0.97]"
           style={{ ...noDragRegionStyle, pointerEvents: 'auto' }}
           aria-label="关闭"
         >
@@ -109,7 +110,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
           />
         </div>
 
-        <div className="relative z-10 mt-5">
+        <div className="relative z-10 mt-5 rounded-[22px] bg-[rgba(6,11,22,0.18)] p-0">
           <input
             value={cardKey}
             onChange={(event) => setCardKey(event.target.value)}
@@ -123,7 +124,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
             placeholder="请输入卡密"
             spellCheck={false}
             autoComplete="off"
-            className="h-12 w-full rounded-[16px] border border-cyan-200/12 bg-[rgba(5,10,22,0.58)] px-4 text-white placeholder:text-white/28 outline-none backdrop-blur-xl transition focus:border-cyan-300/38 focus:bg-[rgba(7,14,28,0.78)] focus:shadow-[0_0_0_1px_rgba(103,232,249,0.08)]"
+            className="h-12 w-full rounded-[16px] border border-cyan-200/[0.10] bg-[rgba(5,10,22,0.46)] px-4 text-white placeholder:text-white/26 outline-none backdrop-blur-xl transition focus:border-cyan-300/28 focus:bg-[rgba(7,14,28,0.68)] focus:shadow-[0_0_0_1px_rgba(103,232,249,0.06)]"
           />
 
           <button
@@ -131,16 +132,16 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
             disabled={activating || validating || (loading && !initialized)}
             onClick={() => void submitLicense()}
             style={noDragRegionStyle}
-            className="mt-3.5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-cyan-300/16 bg-[linear-gradient(180deg,rgba(19,31,55,0.98)_0%,rgba(9,17,34,1)_100%)] px-6 text-sm font-medium text-cyan-50 transition hover:border-cyan-300/28 disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-3.5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-cyan-300/[0.14] bg-[linear-gradient(180deg,rgba(19,31,55,0.92)_0%,rgba(9,17,34,0.98)_100%)] px-6 text-sm font-medium text-cyan-50 transition hover:border-cyan-300/24 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {activating || validating || (loading && !initialized) ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} className="text-cyan-300" />}
             激活卡密
           </button>
         </div>
 
-        {statusMessage ? <div className="relative z-10 mt-3 rounded-[14px] border border-white/8 bg-white/[0.05] px-4 py-2.5 text-sm text-slate-100 backdrop-blur-xl">{statusMessage}</div> : null}
-        {errorMessage ? <div className="relative z-10 mt-3 rounded-[14px] border border-rose-300/16 bg-rose-400/10 px-4 py-2.5 text-sm text-rose-100 backdrop-blur-xl">{errorMessage}</div> : null}
-        {!state.apiConfigured ? <div className="relative z-10 mt-3 rounded-[14px] border border-amber-300/18 bg-amber-300/10 px-4 py-2.5 text-sm text-amber-50 backdrop-blur-xl">授权服务地址还没配好，当前默认会先连 http://tgmatrix.duckdns.org。</div> : null}
+        {statusMessage ? <div className="relative z-10 mt-3 rounded-[14px] border border-white/[0.06] bg-white/[0.04] px-4 py-2.5 text-sm text-slate-100 backdrop-blur-xl">{statusMessage}</div> : null}
+        {errorMessage ? <div className="relative z-10 mt-3 rounded-[14px] border border-rose-300/[0.14] bg-rose-400/[0.08] px-4 py-2.5 text-sm text-rose-100 backdrop-blur-xl">{errorMessage}</div> : null}
+        {!state.apiConfigured ? <div className="relative z-10 mt-3 rounded-[14px] border border-amber-300/[0.16] bg-amber-300/[0.08] px-4 py-2.5 text-sm text-amber-50 backdrop-blur-xl">授权服务地址还没配好，当前默认会先连 http://tgmatrix.duckdns.org。</div> : null}
       </div>
     </div>
   )
