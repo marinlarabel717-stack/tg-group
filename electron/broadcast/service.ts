@@ -805,7 +805,7 @@ export class BroadcastService {
     const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
 
     try {
-      const dialogs = await client.getDialogs({ limit: 200 })
+      const dialogs = await client.getDialogs({ limit: 5000 })
       const groups = dialogs
         .filter((dialog) => dialog.isGroup || (dialog.isChannel && !(dialog.entity as any)?.broadcast))
         .map((dialog) => {

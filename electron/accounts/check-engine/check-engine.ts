@@ -176,7 +176,8 @@ export class AccountCheckEngine {
     telethonFrozen: TelethonFreezeCheckResult,
     startedAt: number,
     proxyMeta: ProxyUsageMeta,
-    source: string
+    source: string,
+    checkMode: 'account-status' | 'account-survival' = 'account-status'
   ): Promise<AccountCheckResult> {
     const updated = await this.updateService.buildSuccessProfile({
       account,
@@ -191,7 +192,7 @@ export class AccountCheckEngine {
       fullUser: null,
       spambotReply: '',
       status: 'frozen',
-      checkMode: 'account-status',
+      checkMode,
       freezeSince: readTelethonFreezeSince(telethonFrozen),
       freezeUntil: readTelethonFreezeUntil(telethonFrozen),
       freezeAppealUrl: telethonFrozen.freeze_appeal_url ?? null,
@@ -583,7 +584,7 @@ export class AccountCheckEngine {
       try {
         const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结预检查')
         if (telethonFrozen?.status === 'frozen') {
-          return this.buildFrozenResultFromTelethon(account, telethonFrozen, startedAt, finalProxyMeta, 'Telethon 冻结预检查')
+          return this.buildFrozenResultFromTelethon(account, telethonFrozen, startedAt, finalProxyMeta, 'Telethon 冻结预检查', mode)
         }
       } catch {
         // ignore precheck failure and continue with main mtproto flow
