@@ -13,6 +13,7 @@ export type DirectMessageMessageType = 'text' | 'channel_forward' | 'hidden_chan
 export type DirectMessageSendMode = 'username' | 'contact' | 'txt'
 export type DirectMessageCollectorMode = 'manual' | 'contact' | 'group_members' | 'comment_users' | 'react_users'
 export type DirectMessagePreviewStatus = 'queued' | 'sent' | 'failed'
+export type DirectMessageDeleteMode = 'none' | 'self' | 'both'
 
 export interface DirectMessageTargetRecord {
   id: string
@@ -121,6 +122,7 @@ interface DirectMessageState {
   imageName: string
   sourceLink: string
   postbotCode: string
+  deleteMode: DirectMessageDeleteMode
   groupConcurrency: number
   accountPerGroup: number
   intervalSeconds: number
@@ -149,6 +151,7 @@ interface DirectMessageState {
   clearImage: () => void
   setSourceLink: (value: string) => void
   setPostbotCode: (value: string) => void
+  setDeleteMode: (value: DirectMessageDeleteMode) => void
   setGroupConcurrency: (value: number) => void
   setAccountPerGroup: (value: number) => void
   setIntervalSeconds: (value: number) => void
@@ -352,6 +355,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       imageName: '',
       sourceLink: '',
       postbotCode: '',
+      deleteMode: 'none',
       groupConcurrency: 3,
       accountPerGroup: 5,
       intervalSeconds: 25,
@@ -393,6 +397,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       clearImage: () => set({ imageUrl: '', imageName: '', previewItems: [] }),
       setSourceLink: (value) => set({ sourceLink: value, previewItems: [] }),
       setPostbotCode: (value) => set({ postbotCode: value, previewItems: [] }),
+      setDeleteMode: (value) => set({ deleteMode: value, previewItems: [] }),
       setGroupConcurrency: (value) => set({ groupConcurrency: Math.max(1, value || 1) }),
       setAccountPerGroup: (value) => set({ accountPerGroup: Math.max(1, value || 1), previewItems: [] }),
       setIntervalSeconds: (value) => set({ intervalSeconds: Math.max(5, value || 5), previewItems: [] }),
@@ -609,6 +614,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
             imageUrl: state.imageUrl,
             sourceLink: state.sourceLink,
             postbotCode: state.postbotCode,
+            deleteMode: state.deleteMode,
             concurrency: state.groupConcurrency
           })
           const run = buildRunFromResult(result, state)
@@ -751,7 +757,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
     }),
     {
       name: 'tg-group-direct-message-store',
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => window.localStorage),
       partialize: (state) => ({
         activeTab: state.activeTab,
@@ -768,6 +774,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         imageName: state.imageName,
         sourceLink: state.sourceLink,
         postbotCode: state.postbotCode,
+        deleteMode: state.deleteMode,
         groupConcurrency: state.groupConcurrency,
         accountPerGroup: state.accountPerGroup,
         intervalSeconds: state.intervalSeconds,
@@ -800,6 +807,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           imageName: state?.imageName || '',
           sourceLink: state?.sourceLink || '',
           postbotCode: state?.postbotCode || '',
+          deleteMode: state?.deleteMode === 'self' || state?.deleteMode === 'both' ? state.deleteMode : 'none',
           groupConcurrency: state?.groupConcurrency || 3,
           accountPerGroup: state?.accountPerGroup || 5,
           intervalSeconds: state?.intervalSeconds || 25,

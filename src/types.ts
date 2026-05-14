@@ -596,6 +596,7 @@ export interface DirectMessageSendPayload {
   imageUrl: string
   sourceLink: string
   postbotCode: string
+  deleteMode?: 'none' | 'self' | 'both'
   concurrency?: number
 }
 

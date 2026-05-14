@@ -588,6 +588,17 @@ function extractResponseMessageId(result: unknown) {
   return null
 }
 
+function readDeleteModeLabel(mode: DirectMessageSendPayload['deleteMode']) {
+  if (mode === 'self') return '仅自己删除'
+  if (mode === 'both') return '双向删除'
+  return '不删除'
+}
+
+async function deleteSentMessage(client: TelegramClient, entity: unknown, messageId: number, mode: DirectMessageSendPayload['deleteMode']) {
+  if (!messageId || mode === 'none' || !Number.isFinite(messageId)) return
+  await client.deleteMessages(entity as never, [messageId], { revoke: mode === 'both' })
+}
+
 function readAccountLabel(account: AccountRecord) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
   const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
@@ -991,6 +1002,19 @@ export class DirectMessageService {
               sentAt: new Date().toISOString(),
               accountId: item.accountId
             }
+
+            if (payload.deleteMode && payload.deleteMode !== 'none' && !resultItem.remoteMessageId) {
+              resultItem.errorMessage = `已发送，但没拿到消息ID，暂时无法自动执行${readDeleteModeLabel(payload.deleteMode)}。`
+            }
+
+            if (resultItem.remoteMessageId && payload.deleteMode && payload.deleteMode !== 'none') {
+              try {
+                await deleteSentMessage(client, resolved.entity, resultItem.remoteMessageId, payload.deleteMode)
+                resultItem.errorMessage = `已发送，且已${readDeleteModeLabel(payload.deleteMode)}。`
+              } catch (deleteError) {
+                resultItem.errorMessage = `已发送，但${readDeleteModeLabel(payload.deleteMode)}失败：${formatDirectMessageError(deleteError)}`
+              }
+            }
             break
           } catch (error) {
             await cleanup?.()
@@ -1092,16 +1116,19 @@ export class DirectMessageService {
     const successCount = results.filter((item) => item.status === 'sent').length
     const failedCount = results.filter((item) => item.status === 'failed').length
     const remainingCount = Math.max(0, payload.items.length - results.length)
+    const deleteModeSuffix = payload.deleteMode && payload.deleteMode !== 'none'
+      ? ` 删除方式：${readDeleteModeLabel(payload.deleteMode)}。`
+      : ''
     return {
       total: results.length,
       successCount,
       failedCount,
       items: results,
       message: task.cancelled
-        ? `${stopReason || '任务已停止。'} 成功 ${successCount} 条，失败 ${failedCount} 条，剩余 ${remainingCount} 条未继续发送。`
+        ? `${stopReason || '任务已停止。'} 成功 ${successCount} 条，失败 ${failedCount} 条，剩余 ${remainingCount} 条未继续发送。${deleteModeSuffix}`
         : failedCount === 0
-          ? `已成功发出 ${successCount} 条私信。`
-          : `发送完成：成功 ${successCount} 条，失败 ${failedCount} 条。`
+          ? `已成功发出 ${successCount} 条私信。${deleteModeSuffix}`
+          : `发送完成：成功 ${successCount} 条，失败 ${failedCount} 条。${deleteModeSuffix}`
     }
   }
 

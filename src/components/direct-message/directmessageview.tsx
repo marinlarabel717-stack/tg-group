@@ -19,6 +19,7 @@ import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-t
 import {
   useDirectMessageStore,
   type DirectMessageCollectorMode,
+  type DirectMessageDeleteMode,
   type DirectMessageTabKey
 } from '../../stores/directmessagestore'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
@@ -36,6 +37,12 @@ const messageModes = [
   { key: 'hidden_channel_forward', label: '隐藏频道来源转发' },
   { key: 'postbot_code', label: 'post图文+按钮' }
 ] as const
+
+const deleteModes: Array<{ key: DirectMessageDeleteMode; label: string; hint: string }> = [
+  { key: 'none', label: '不删除', hint: '发出去后保留消息。' },
+  { key: 'self', label: '仅自己删除', hint: '发送后自动在当前账号侧删除，对方那边保留。' },
+  { key: 'both', label: '双向删除', hint: '发送后尝试双方都删，更适合 @机器人 用户。' }
+]
 
 function readAccountLabel(account: { id: number; username?: string; phone?: string; profile?: Record<string, unknown> }) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
@@ -156,6 +163,8 @@ const SendWorkbench = memo(function SendWorkbench() {
   const setSourceLink = useDirectMessageStore((state) => state.setSourceLink)
   const postbotCode = useDirectMessageStore((state) => state.postbotCode)
   const setPostbotCode = useDirectMessageStore((state) => state.setPostbotCode)
+  const deleteMode = useDirectMessageStore((state) => state.deleteMode)
+  const setDeleteMode = useDirectMessageStore((state) => state.setDeleteMode)
   const groupConcurrency = useDirectMessageStore((state) => state.groupConcurrency)
   const setGroupConcurrency = useDirectMessageStore((state) => state.setGroupConcurrency)
   const intervalSeconds = useDirectMessageStore((state) => state.intervalSeconds)
@@ -265,6 +274,26 @@ const SendWorkbench = memo(function SendWorkbench() {
                 <div className="text-xs tracking-[0.18em] text-textMuted">并发线程</div>
                 <input type="number" min={1} max={20} value={groupConcurrency} onChange={(event) => setGroupConcurrency(Number(event.target.value) || 1)} className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]" />
               </label>
+            </div>
+
+            <div className="mt-4 rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+              <div className="text-xs tracking-[0.18em] text-textMuted">发送后删除</div>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                {deleteModes.map((mode) => {
+                  const active = deleteMode === mode.key
+                  return (
+                    <button
+                      key={mode.key}
+                      type="button"
+                      onClick={() => setDeleteMode(mode.key)}
+                      className={`rounded-[14px] border px-4 py-3 text-left transition ${active ? 'border-violet-300/45 bg-violet-400/10 text-violet-200' : 'border-white/[0.06] bg-black/10 text-slate-200 hover:border-white/[0.12] hover:bg-white/[0.03]'}`}
+                    >
+                      <div className="text-sm font-medium">{mode.label}</div>
+                      <div className="mt-1 text-xs text-textMuted">{mode.hint}</div>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </GlassPanel>
 

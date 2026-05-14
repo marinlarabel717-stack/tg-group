@@ -3,7 +3,7 @@ import { WindowControls } from './windowcontrols'
 
 export const AppFrame = memo(function AppFrame({ children }: PropsWithChildren) {
   const appName = window.desktopInfo?.appName || 'TG-Matrix'
-  const version = window.desktopInfo?.version || '0.0.39'
+  const version = window.desktopInfo?.version || '0.0.40'
 
   return (
     <div className="relative h-screen overflow-hidden bg-base p-3 text-textMain">
