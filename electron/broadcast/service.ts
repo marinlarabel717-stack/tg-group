@@ -93,11 +93,6 @@ function formatBroadcastError(error: unknown) {
   return `发送失败：${normalized}`
 }
 
-function isGramJsDialogConstructorError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  return message.includes('Could not find a matching Constructor ID')
-}
-
 function parseTelegramMessageLink(input: string) {
   const raw = input.trim()
   if (!raw) return null
@@ -534,9 +529,9 @@ export class BroadcastService {
     private readonly telethonJoinedGroupReader: TelethonJoinedGroupReader
   ) {}
 
-  private async listJoinedGroupsWithTelethonFallback(account: AccountRecord, fallbackMessage: string) {
+  private async listJoinedGroupsWithTelethonPrimary(account: AccountRecord) {
     if (!this.telethonJoinedGroupReader.isAvailable()) {
-      throw new Error(fallbackMessage)
+      throw new Error('TELETHON_JOINED_GROUP_READER_UNAVAILABLE')
     }
 
     const telethonGroups = await this.telethonJoinedGroupReader.list(account.sessionPath, 35)
@@ -871,6 +866,15 @@ export class BroadcastService {
       throw new Error('账号不存在')
     }
 
+    try {
+      return await this.listJoinedGroupsWithTelethonPrimary(account)
+    } catch (telethonError) {
+      const message = telethonError instanceof Error ? telethonError.message : String(telethonError)
+      if (!message.includes('TELETHON_JOINED_GROUP_READER_UNAVAILABLE')) {
+        throw new Error(message)
+      }
+    }
+
     let client: TelegramClient | null = null
 
     try {
@@ -878,7 +882,7 @@ export class BroadcastService {
       const dialogs = await loadDialogsWithFallback(client)
 
       if (dialogs.length === 0) {
-        return await this.listJoinedGroupsWithTelethonFallback(account, '当前账号这次没有从 Telegram 拉到任何对话列表。若你明明加了很多群，先在 Telegram 客户端里打开几个群再重试；如果还是空，重新登录这个账号再试。')
+        throw new Error('当前账号这次没有从 Telegram 拉到任何对话列表。Telethon 当前也不可用；若你明明加了很多群，先检查内置运行时是否完整，再重试。')
       }
 
       const groups = dialogs
@@ -908,12 +912,8 @@ export class BroadcastService {
 
       return dedupedGroups
     } catch (error) {
-      if (isGramJsDialogConstructorError(error)) {
-        return await this.listJoinedGroupsWithTelethonFallback(account, 'GramJS 读取这个账号的对话列表时炸了，已经自动切 Telethon 兜底；如果 Telethon 也拿不到群，就说明当前会话的 dialogs 这次没拉回来。')
-      }
-
       if ((error instanceof Error ? error.message : String(error)).includes('NO_DIALOGS_LOADED')) {
-        throw new Error('当前账号这次没有从 Telegram 拉到任何对话列表。若你明明加了很多群，先在 Telegram 客户端里打开几个群再重试；如果还是空，重新登录这个账号再试。')
+        throw new Error('当前账号这次没有从 Telegram 拉到任何对话列表。Telethon 当前也不可用；若你明明加了很多群，先在 Telegram 客户端里打开几个群再重试；如果还是空，重新登录这个账号再试。')
       }
       throw new Error(formatBroadcastError(error))
     } finally {
