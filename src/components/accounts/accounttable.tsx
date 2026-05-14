@@ -406,7 +406,7 @@ const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }
   const freezeUntilDisplay = freezeUntil !== '—' ? freezeUntil : '当前已判定冻结，但 Telegram 暂未返回冻结结束时间'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 pt-12 pb-6" onClick={onClose}>
       <div className="w-full max-w-[420px] rounded-[18px] border border-sky-400/20 bg-card shadow-[0_16px_48px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
@@ -462,7 +462,7 @@ const PremiumStatusDialog = memo(function PremiumStatusDialog({ account, premium
   const premiumExpiryDisplay = premiumExpiry !== '—' ? premiumExpiry : '暂未读取到会员到期时间'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 pt-12 pb-6" onClick={onClose}>
       <div className="w-full max-w-[420px] rounded-[18px] border border-fuchsia-400/20 bg-card shadow-[0_16px_48px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
           <div>
@@ -1551,7 +1551,7 @@ export const AccountTable = memo(function AccountTable() {
         />
       ) : null}
       {shortcutDialogOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={() => setShortcutDialogOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-4 pt-12 pb-6" onClick={() => setShortcutDialogOpen(false)}>
           <div className="w-full max-w-[540px] rounded-[18px] border border-white/[0.06] bg-card shadow-[0_16px_48px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
               <div>

@@ -5,7 +5,7 @@ import { BrandLogo } from '../common/brandlogo'
 
 const defaultState: AppUpdaterState = {
   status: 'idle',
-  currentVersion: window.desktopInfo?.version || '0.0.12',
+  currentVersion: window.desktopInfo?.version || '0.0.13',
   availableVersion: null,
   progressPercent: 0,
   transferredBytes: 0,
@@ -137,7 +137,7 @@ export function UpdateDialog() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center p-5">
+    <div className="pointer-events-none fixed inset-0 z-[80] flex items-start justify-center px-5 pt-12 pb-6">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_44%),linear-gradient(180deg,rgba(2,6,23,0.06),rgba(2,6,23,0.32))]" />
 
       <div className="pointer-events-auto relative w-full max-w-[520px] rounded-[34px] p-[1px]">

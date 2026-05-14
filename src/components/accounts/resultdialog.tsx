@@ -125,13 +125,13 @@ export function ResultDialogShell({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] bg-slate-950/58 px-4 py-6" onClick={closable ? onClose : undefined}>
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/58 px-4 pt-12 pb-6" onClick={closable ? onClose : undefined}>
       <div
         ref={panelRef}
         className={`fixed w-full ${maxWidth} rounded-[20px] border bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)] ${toneBoxClass[tone]}`}
         style={position
           ? { left: `${position.left}px`, top: `${position.top}px` }
-          : { left: '50%', top: '50%', transform: 'translate(-50%, -52%)' }}
+          : { left: '50%', top: '44%', transform: 'translate(-50%, -50%)' }}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex cursor-grab items-center justify-between border-b border-white/8 px-5 py-4 active:cursor-grabbing" onPointerDown={handlePointerDown}>
