@@ -4,7 +4,7 @@ import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress,
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'TG-Matrix',
   platform: process.platform,
-  version: process.env.npm_package_version || '0.0.18'
+  version: process.env.npm_package_version || '0.0.19'
 })
 
 contextBridge.exposeInMainWorld('desktopWindow', {

@@ -212,8 +212,10 @@ function cellShellClass(columnId: string, isHeader = false) {
   return 'flex h-full w-full min-w-0 items-center justify-start px-1'
 }
 
-function readProxy(globalProxyEnabled: boolean) {
-  return globalProxyEnabled ? '代理' : '直连'
+function readProxy(account: AccountRecord) {
+  if (typeof account.proxyDisplay === 'string' && account.proxyDisplay.trim()) return '代理'
+  if (account.profile?.proxy === true) return '代理'
+  return '直连'
 }
 
 function TaskBadge({ accountId, taskMap }: { accountId: number; taskMap: Map<number, AccountTaskKind> }) {
@@ -624,10 +626,10 @@ export const AccountTable = memo(function AccountTable() {
     () =>
       baseData.filter((account) => {
         if (sourceFilter && account.profileSource !== sourceFilter) return false
-        if (proxyFilter && readProxy(globalProxyEnabled) !== proxyFilter) return false
+        if (proxyFilter && readProxy(account) !== proxyFilter) return false
         return true
       }),
-    [baseData, sourceFilter, proxyFilter, globalProxyEnabled]
+    [baseData, sourceFilter, proxyFilter]
   )
   const scopedData = useMemo(
     () => summaryScopedData.filter((account) => matchesPremiumFilter(account, premiumFilter)),
@@ -856,7 +858,7 @@ export const AccountTable = memo(function AccountTable() {
         header: '网络',
         size: 88,
         cell: ({ row }) => {
-          const value = readProxy(globalProxyEnabled)
+          const value = readProxy(row.original)
           return <div className={cellTextClass()} title={value}>{value}</div>
         }
       },
@@ -948,8 +950,8 @@ export const AccountTable = memo(function AccountTable() {
     []
   )
   const proxies = useMemo(
-    () => Array.from(new Set(accounts.map(() => readProxy(globalProxyEnabled)))).filter(Boolean).map((value) => ({ label: value, value })),
-    [accounts, globalProxyEnabled]
+    () => Array.from(new Set(accounts.map((account) => readProxy(account)))).filter(Boolean).map((value) => ({ label: value, value })),
+    [accounts]
   )
 
   const selectedCount = selectedIds.length
@@ -994,7 +996,7 @@ export const AccountTable = memo(function AccountTable() {
             return false
           }
         }
-        if (shortcut.proxyFilter && readProxy(globalProxyEnabled) !== shortcut.proxyFilter) return false
+        if (shortcut.proxyFilter && readProxy(account) !== shortcut.proxyFilter) return false
         if (!matchesPremiumFilter(account, shortcut.premiumFilter)) return false
         return true
       }).length
