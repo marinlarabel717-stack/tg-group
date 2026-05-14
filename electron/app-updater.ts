@@ -1,4 +1,5 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
+import path from 'node:path'
 import updaterPackage, { type ProgressInfo, type UpdateInfo } from 'electron-updater'
 
 const { autoUpdater } = updaterPackage
@@ -17,16 +18,36 @@ export interface UpdaterState {
   releaseDate: string | null
 }
 
+function isPortableBuild() {
+  const portableExecutableFile = process.env.PORTABLE_EXECUTABLE_FILE?.trim()
+  const portableExecutableDir = process.env.PORTABLE_EXECUTABLE_DIR?.trim()
+  if (portableExecutableFile || portableExecutableDir) return true
+
+  const exeName = path.basename(process.execPath || app.getPath('exe') || '').toLowerCase()
+  return exeName.includes('portable')
+}
+
+function isAutoUpdateSupported() {
+  return app.isPackaged && !isPortableBuild()
+}
+
+function getUnsupportedMessage() {
+  if (!app.isPackaged) return '开发环境不检查自动更新。'
+  if (isPortableBuild()) return '便携版已禁用自动更新，请手动替换新版程序。'
+  return '当前运行环境不支持自动更新。'
+}
+
 function createInitialState(): UpdaterState {
+  const supported = isAutoUpdateSupported()
   return {
-    status: app.isPackaged ? 'idle' : 'unsupported',
+    status: supported ? 'idle' : 'unsupported',
     currentVersion: app.getVersion(),
     availableVersion: null,
     progressPercent: 0,
     transferredBytes: 0,
     totalBytes: 0,
     bytesPerSecond: 0,
-    message: app.isPackaged ? '准备检查更新。' : '开发环境不检查自动更新。',
+    message: supported ? '准备检查更新。' : getUnsupportedMessage(),
     releaseDate: null
   }
 }
@@ -37,6 +58,11 @@ export class DesktopAppUpdater {
   private autoInstallTimer: NodeJS.Timeout | null = null
 
   constructor(private readonly getMainWindow: () => BrowserWindow | null) {
+    if (!isAutoUpdateSupported()) {
+      this.state = createInitialState()
+      return
+    }
+
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = true
     autoUpdater.allowDowngrade = false
@@ -167,10 +193,10 @@ export class DesktopAppUpdater {
   }
 
   scheduleStartupCheck(delayMs = 2200) {
-    if (!app.isPackaged) {
+    if (!isAutoUpdateSupported()) {
       this.updateState({
         status: 'unsupported',
-        message: '开发环境不检查自动更新。'
+        message: getUnsupportedMessage()
       })
       return
     }
@@ -182,10 +208,10 @@ export class DesktopAppUpdater {
   }
 
   async checkForUpdates() {
-    if (!app.isPackaged) {
+    if (!isAutoUpdateSupported()) {
       this.updateState({
         status: 'unsupported',
-        message: '开发环境不检查自动更新。'
+        message: getUnsupportedMessage()
       })
       return this.state
     }
@@ -195,10 +221,10 @@ export class DesktopAppUpdater {
   }
 
   async downloadUpdate() {
-    if (!app.isPackaged) {
+    if (!isAutoUpdateSupported()) {
       this.updateState({
         status: 'unsupported',
-        message: '开发环境不检查自动更新。'
+        message: getUnsupportedMessage()
       })
       return this.state
     }
@@ -224,7 +250,7 @@ export class DesktopAppUpdater {
 
   quitAndInstall() {
     this.clearAutoInstallTimer()
-    if (this.state.status !== 'downloaded') {
+    if (!isAutoUpdateSupported() || this.state.status !== 'downloaded') {
       return false
     }
 
