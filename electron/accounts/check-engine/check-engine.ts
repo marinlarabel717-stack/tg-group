@@ -262,84 +262,8 @@ export class AccountCheckEngine {
     }
   }
 
-  private async buildAliveResultFromTelethonFallback(
-    account: AccountRecord,
-    liveUser: unknown,
-    telethonResult: TelethonFreezeCheckResult | null,
-    startedAt: number,
-    proxyMeta: ProxyUsageMeta,
-    source: string,
-    probes: string[]
-  ): Promise<AccountCheckResult> {
-    const liveUserRecord = typeof liveUser === 'object' && liveUser ? liveUser as Record<string, unknown> : {}
-    const mergedLiveUser = {
-      ...liveUserRecord,
-      id: telethonResult?.user_id ?? liveUserRecord.id ?? account.userId,
-      first_name: telethonResult?.first_name ?? liveUserRecord.first_name ?? account.profile.first_name,
-      last_name: telethonResult?.last_name ?? liveUserRecord.last_name ?? account.profile.last_name,
-      username: telethonResult?.username ?? liveUserRecord.username ?? account.username,
-      phone: telethonResult?.phone ?? liveUserRecord.phone ?? account.phone
-    }
-
-    const updated = await this.updateService.buildSuccessProfile({
-      account,
-      client: null,
-      liveUser: mergedLiveUser,
-      fullUser: null,
-      spambotReply: '',
-      status: 'alive',
-      checkMode: 'account-status',
-      proxyUsed: proxyMeta.proxyUsed,
-      proxyDisplay: proxyMeta.proxyDisplay,
-      durationMs: Date.now() - startedAt
-    })
-
-    const fallbackReason = [
-      source,
-      telethonResult?.reason ? `Telethon:${telethonResult.reason}` : '',
-      buildProbeSummary(probes)
-    ].filter(Boolean).join(' | ')
-
-    const profile = {
-      ...updated.profile,
-      check_error: fallbackReason || null
-    }
-
-    const payload: CheckResultInput = {
-      id: account.id,
-      profile,
-      status: 'alive',
-      phone: updated.phone,
-      username: updated.username,
-      userId: updated.userId,
-      country: updated.country,
-      proxyDisplay: updated.proxyDisplay,
-      lastCheckTime: updated.lastCheckTime,
-      lastOnlineTime: updated.lastOnlineTime
-    }
-
-    this.resultWriter.write(payload)
-
-    return {
-      accountId: account.id,
-      status: 'alive',
-      profile,
-      phone: updated.phone,
-      username: updated.username,
-      userId: updated.userId,
-      country: updated.country,
-      proxyDisplay: updated.proxyDisplay,
-      lastCheckTime: updated.lastCheckTime,
-      lastOnlineTime: updated.lastOnlineTime,
-      durationMs: Date.now() - startedAt,
-      retryable: false,
-      errorMessage: fallbackReason || undefined
-    }
-  }
-
   private async runTelethonFallbackStatusCheck(
     account: AccountRecord,
-    liveUser: unknown,
     startedAt: number,
     proxyMeta: ProxyUsageMeta,
     probes: string[],
@@ -353,10 +277,6 @@ export class AccountCheckEngine {
 
     if (telethonResult?.status === 'frozen') {
       return this.buildFrozenResultFromTelethon(account, telethonResult, startedAt, proxyMeta, source)
-    }
-
-    if (telethonResult?.status === 'alive') {
-      return this.buildAliveResultFromTelethonFallback(account, liveUser, telethonResult, startedAt, proxyMeta, source, probes)
     }
 
     if (telethonResult?.status === 'not_logged_in') {
@@ -374,7 +294,7 @@ export class AccountCheckEngine {
     return this.persistFailure(
       account,
       'unknown',
-      `${source}：GramJS 消息解析异常，Telethon 兜底未返回明确状态`,
+      `${source}：GramJS 消息解析异常，未成功拿到 SpamBot 回复，当前无法判断双向状态`,
       Date.now() - startedAt,
       false,
       'account-status',
@@ -568,7 +488,7 @@ export class AccountCheckEngine {
       probes.push(`冻结发送探针失败:${selfProbe.errorMessage}`)
       if (isGramJsMessageConstructorError(selfProbe.errorMessage)) {
         probes.push('冻结发送探针触发 GramJS 消息解析异常，转 Telethon 兜底')
-        return this.runTelethonFallbackStatusCheck(account, liveUser, startedAt, proxyMeta, probes, '冻结发送探针')
+        return this.runTelethonFallbackStatusCheck(account, startedAt, proxyMeta, probes, '冻结发送探针')
       }
     } else if (selfProbe.frozen) {
       probes.push(`冻结发送探针命中:${selfProbe.reason ?? 'FROZEN_RPC'}`)
@@ -645,7 +565,7 @@ export class AccountCheckEngine {
     } catch (error) {
       if (isGramJsMessageConstructorError(error)) {
         probes.push('SpamBot 链路触发 GramJS 消息解析异常，转 Telethon 兜底')
-        return this.runTelethonFallbackStatusCheck(account, liveUser, startedAt, proxyMeta, probes, 'SpamBot 检测')
+        return this.runTelethonFallbackStatusCheck(account, startedAt, proxyMeta, probes, 'SpamBot 检测')
       }
 
       throw error
