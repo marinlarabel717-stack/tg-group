@@ -55,13 +55,26 @@ function normalizeTelethonFreezeDate(value?: number | string | null) {
   }
 
   if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value)
+    const trimmed = value.trim()
+    const parsed = Number(trimmed)
     if (Number.isFinite(parsed) && parsed > 0) {
       return new Date(parsed * 1000).toISOString()
     }
+
+    const normalized = trimmed.replace(' UTC', 'Z')
+    const date = new Date(normalized)
+    if (!Number.isNaN(date.getTime())) return date.toISOString()
   }
 
   return null
+}
+
+function readTelethonFreezeSince(result: { freeze_since_date?: number | string | null; freeze_since_text?: string | null } | null | undefined) {
+  return normalizeTelethonFreezeDate(result?.freeze_since_date ?? result?.freeze_since_text ?? null)
+}
+
+function readTelethonFreezeUntil(result: { freeze_until_date?: number | string | null; freeze_until_text?: string | null } | null | undefined) {
+  return normalizeTelethonFreezeDate(result?.freeze_until_date ?? result?.freeze_until_text ?? null)
 }
 
 export class AccountCheckEngine {
@@ -319,8 +332,8 @@ export class AccountCheckEngine {
         spambotReply: '',
         status: 'frozen',
         checkMode: 'account-status',
-        freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? frozenState.freezeSince,
-        freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? frozenState.freezeUntil,
+        freezeSince: readTelethonFreezeSince(telethonFrozen) ?? frozenState.freezeSince,
+        freezeUntil: readTelethonFreezeUntil(telethonFrozen) ?? frozenState.freezeUntil,
         freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? frozenState.freezeAppealUrl,
         premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
         premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
@@ -387,8 +400,8 @@ export class AccountCheckEngine {
         spambotReply: '',
         status: 'frozen',
         checkMode: 'account-status',
-        freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? selfProbe.freezeSince,
-        freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? selfProbe.freezeUntil,
+        freezeSince: readTelethonFreezeSince(telethonFrozen) ?? selfProbe.freezeSince,
+        freezeUntil: readTelethonFreezeUntil(telethonFrozen) ?? selfProbe.freezeUntil,
         freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? selfProbe.freezeAppealUrl,
         premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
         premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
@@ -449,8 +462,8 @@ export class AccountCheckEngine {
       spambotReply: spamResult.replyText,
       status: spamResult.status as AccountCheckResult['status'],
       checkMode: 'account-status',
-      freezeSince: normalizeTelethonFreezeDate(telethonFrozen?.freeze_since_date) ?? spamResult.freezeSince,
-      freezeUntil: normalizeTelethonFreezeDate(telethonFrozen?.freeze_until_date) ?? spamResult.freezeUntil,
+      freezeSince: readTelethonFreezeSince(telethonFrozen) ?? spamResult.freezeSince,
+      freezeUntil: readTelethonFreezeUntil(telethonFrozen) ?? spamResult.freezeUntil,
       freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? spamResult.freezeAppealUrl,
       premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
       premiumExpirySource: premiumExpiryMeta.premiumExpirySource,

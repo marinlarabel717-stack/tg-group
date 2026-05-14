@@ -402,6 +402,8 @@ const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }
   const freezeUntil = formatDateTimeFull(readFreezeUntil(account))
   const appealUrl = readFreezeAppealUrl(account)
   const nickname = readNickname(account)
+  const freezeSinceDisplay = freezeSince !== '—' ? freezeSince : '当前已判定冻结，但 Telegram 暂未返回冻结开始时间'
+  const freezeUntilDisplay = freezeUntil !== '—' ? freezeUntil : '当前已判定冻结，但 Telegram 暂未返回冻结结束时间'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={onClose}>
@@ -433,12 +435,12 @@ const FrozenStatusDialog = memo(function FrozenStatusDialog({ account, onClose }
 
           <div className="rounded-[12px] bg-panel px-4 py-3">
             <div className="text-xs text-textMuted">冻结开始时间</div>
-            <div className="mt-1 font-medium text-white">{freezeSince}</div>
+            <div className="mt-1 font-medium text-white">{freezeSinceDisplay}</div>
           </div>
 
           <div className="rounded-[12px] bg-panel px-4 py-3">
             <div className="text-xs text-textMuted">冻结结束时间</div>
-            <div className="mt-1 font-medium text-white">{freezeUntil}</div>
+            <div className="mt-1 font-medium text-white">{freezeUntilDisplay}</div>
           </div>
 
           {appealUrl ? (
