@@ -372,7 +372,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
         accountId: null,
         phone: '',
         level: 'info',
-        message: `已开始执行 ${orderedAccounts.length} 个账号的 2FA 任务。`
+        message: phase === 'request-recovery'
+          ? `已开始为 ${orderedAccounts.length} 个账号触发忘记密码。`
+          : `已开始执行 ${orderedAccounts.length} 个账号的 2FA 任务。`
       })
 
       for (const account of orderedAccounts) {
@@ -386,7 +388,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
           accountId: account.id,
           phone: account.phone,
           level: 'info',
-          message: `开始处理 ${account.phone || `账号 #${account.id}`}。`
+          message: phase === 'request-recovery'
+            ? `开始为 ${account.phone || `账号 #${account.id}`} 触发忘记密码。`
+            : `开始处理 ${account.phone || `账号 #${account.id}`}。`
         })
 
         const result = await telegramTwoFactorService.execute(account, {

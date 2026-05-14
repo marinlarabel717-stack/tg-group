@@ -155,7 +155,7 @@ export class TelethonTwoFactorService {
       return '2FA 已经关闭。'
     }
     if (phase === 'request-recovery') {
-      return emailPattern ? `邮箱验证码已经发到 ${emailPattern}` : '邮箱验证码已经发出。'
+      return emailPattern ? `忘记密码已触发，恢复验证码会发到 ${emailPattern}` : '忘记密码已触发，恢复验证码已经发出。'
     }
     return '邮箱验证码校验通过，2FA 已经重置成功。'
   }
