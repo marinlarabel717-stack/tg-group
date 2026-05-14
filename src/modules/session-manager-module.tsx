@@ -419,13 +419,15 @@ export default function SessionManagerModule() {
 
   const applyGroupInput = (input: string) => {
     let summary = { added: 0, duplicate: 0, invalid: 0 }
+    let nextGroups: GroupSourceRecord[] = []
     setGroupSources((current) => {
       const result = appendGroupSources(current, input)
       summary = { added: result.added, duplicate: result.duplicate, invalid: result.invalid }
+      nextGroups = result.next
       return result.next
     })
     setGroupInputSummary(summary)
-    setGroupInput('')
+    setGroupInput(nextGroups.map((item) => item.displayValue).join('\n'))
     if (summary.added === 0 && summary.duplicate === 0 && summary.invalid === 0) {
       return
     }
@@ -570,7 +572,7 @@ export default function SessionManagerModule() {
     setAccountPickerOpen(false)
   }
 
-  const summaryText = `已选 ${selectedAccountIds.length} 个账号，已添加 ${groupSources.length} 个群，默认一个账号最多 ${MAX_GROUPS_PER_ACCOUNT} 个群。`
+  const summaryText = `已选 ${selectedAccountIds.length} 个账号，当前识别 ${groupSources.length} 个采集目标。`
 
   const groupTabContent = (
     <div className="space-y-5 contain-layout">
@@ -613,7 +615,7 @@ export default function SessionManagerModule() {
 
           <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-base font-semibold text-white">采集群列表</div>
+              <div className="text-base font-semibold text-white">采集目标</div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -634,15 +636,9 @@ export default function SessionManagerModule() {
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-3">
-              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">总数量</div><div className="mt-2 text-xl font-semibold text-white">{groupSources.length}</div></div>
-              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">本次新增</div><div className="mt-2 text-xl font-semibold text-white">{groupInputSummary.added}</div></div>
-              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">重复</div><div className="mt-2 text-xl font-semibold text-white">{groupInputSummary.duplicate}</div></div>
-              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">格式不对</div><div className="mt-2 text-xl font-semibold text-white">{groupInputSummary.invalid}</div></div>
-            </div>
-
             <div className="mt-4">
               <textarea
+                rows={12}
                 value={groupInput}
                 onChange={(event) => setGroupInput(event.target.value)}
                 onPaste={(event) => {
@@ -659,26 +655,12 @@ export default function SessionManagerModule() {
                 placeholder="一行一个，支持 @群用户名 / t.me公开链接 / t.me私密邀请链接"
                 className="w-full rounded-[16px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none transition focus:border-white/[0.12]"
               />
-              <div className="mt-3 flex flex-wrap gap-2">
-                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300">粘贴或导入后会自动统计数量、去重、过滤格式错误</div>
+              <div className="mt-3 flex flex-wrap gap-2 text-sm text-textMuted">
+                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-violet-300">会自动去重和过滤无效格式</div>
+                <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">当前有效 {groupSources.length} 条</div>
+                {groupInputSummary.duplicate > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">去重 {groupInputSummary.duplicate} 条</div> : null}
+                {groupInputSummary.invalid > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">过滤错误 {groupInputSummary.invalid} 条</div> : null}
               </div>
-            </div>
-
-            <div className="mt-4 max-h-[220px] space-y-2 overflow-auto pr-1">
-              {groupSources.length === 0 ? (
-                <div className="rounded-[16px] bg-panel px-4 py-6 text-sm text-textMuted">这里会显示本次要采集的群列表。</div>
-              ) : groupSources.map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-[12px] bg-panel px-4 py-3 text-sm text-white">
-                  <div className="min-w-0 truncate">{item.displayValue}</div>
-                  <button
-                    type="button"
-                    onClick={() => setGroupSources((current) => current.filter((entry) => entry.id !== item.id))}
-                    className="ml-3 text-textMuted transition hover:text-white"
-                  >
-                    删除
-                  </button>
-                </div>
-              ))}
             </div>
           </div>
 
