@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronDown, Clock3, Copy, FolderSearch2, Hash, Link2, ListFilter, Play, RadioTower, Square, Trash2, Upload } from 'lucide-react'
+import { Check, ChevronDown, Clock3, Copy, FolderSearch2, Hash, Link2, ListFilter, Play, RadioTower, Search, Square, Trash2, Upload, X } from 'lucide-react'
 import { GlassPanel } from '../components/common/glasspanel'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../components/accounts/resultdialog'
 import { useAccountStore } from '../stores/accountstore'
@@ -263,6 +263,7 @@ export default function SessionManagerModule() {
   const [mode, setMode] = useState<GroupCollectorMode>('public_members')
   const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([])
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
+  const [draftAccountIds, setDraftAccountIds] = useState<number[]>([])
   const [accountSearch, setAccountSearch] = useState('')
   const [groupInput, setGroupInput] = useState('')
   const [groupSources, setGroupSources] = useState<GroupSourceRecord[]>([])
@@ -364,10 +365,23 @@ export default function SessionManagerModule() {
     })
   }, [accountSearch, accounts])
 
+  const selectableFilteredAccounts = useMemo(
+    () => filteredAccounts.filter((account) => !busyAccountIds.has(account.id) || selectedAccountIds.includes(account.id)),
+    [busyAccountIds, filteredAccounts, selectedAccountIds]
+  )
+
   const activeTask = useMemo(
     () => tasks.find((task) => task.id === activeTaskId) || tasks[0] || null,
     [activeTaskId, tasks]
   )
+
+  useEffect(() => {
+    if (!accountPickerOpen) {
+      setDraftAccountIds(selectedAccountIds)
+      return
+    }
+    setAccountSearch('')
+  }, [accountPickerOpen, selectedAccountIds])
 
   useEffect(() => {
     if (!activeTaskId && tasks[0]) {
@@ -513,6 +527,11 @@ export default function SessionManagerModule() {
     setHintMessage('采集群列表已清空。')
   }
 
+  const applyAccountSelection = () => {
+    setSelectedAccountIds(draftAccountIds.filter((accountId) => !busyAccountIds.has(accountId) || selectedAccountIds.includes(accountId)))
+    setAccountPickerOpen(false)
+  }
+
   const summaryText = `已选 ${selectedAccountIds.length} 个账号，已添加 ${groupSources.length} 个群，默认一个账号最多 ${MAX_GROUPS_PER_ACCOUNT} 个群。`
 
   const groupTabContent = (
@@ -539,11 +558,11 @@ export default function SessionManagerModule() {
               </div>
               <button
                 type="button"
-                onClick={() => setAccountPickerOpen((current) => !current)}
+                onClick={() => setAccountPickerOpen(true)}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-4 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
               >
                 选择账号
-                <ChevronDown size={15} className={`transition ${accountPickerOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={15} className="transition" />
               </button>
             </div>
 
@@ -557,40 +576,7 @@ export default function SessionManagerModule() {
               </div>
             ) : null}
 
-            {accountPickerOpen ? (
-              <div className="mt-4 rounded-[16px] bg-black/10 px-4 py-4">
-                <input
-                  value={accountSearch}
-                  onChange={(event) => setAccountSearch(event.target.value)}
-                  placeholder="搜索手机号 / 用户名"
-                  className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
-                />
-                <div className="mt-3 max-h-[260px] space-y-2 overflow-auto pr-1">
-                  {filteredAccounts.map((account) => {
-                    const active = selectedAccountIds.includes(account.id)
-                    const busy = busyAccountIds.has(account.id) && !active
-                    return (
-                      <button
-                        key={account.id}
-                        type="button"
-                        disabled={busy}
-                        onClick={() => setSelectedAccountIds((current) => current.includes(account.id) ? current.filter((item) => item !== account.id) : [...current, account.id])}
-                        className={`flex w-full items-center justify-between rounded-[12px] px-3 py-3 text-left text-sm transition ${busy ? 'cursor-not-allowed bg-white/[0.03] text-white/28' : active ? 'bg-violet-400/10 text-violet-200' : 'bg-panel text-slate-200 hover:bg-white/[0.03]'}`}
-                      >
-                        <div>
-                          <div className="font-medium text-white">{readAccountPhone(account) || readAccountLabel(account)}</div>
-                          <div className="mt-1 text-xs text-textMuted">{readAccountLabel(account)}</div>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          {busy ? <span className="text-amber-200">任务占用中</span> : null}
-                          {active ? <Check size={14} /> : null}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : null}
+
           </div>
 
           <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
@@ -923,6 +909,70 @@ export default function SessionManagerModule() {
         <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
         {tabContent}
       </div>
+
+      {accountPickerOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setAccountPickerOpen(false)}>
+          <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.06] bg-card px-5 py-4">
+              <div className="text-lg font-semibold text-white">选择采集账号</div>
+              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setAccountPickerOpen(false)}><X size={16} /></button>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative w-full lg:max-w-[360px]">
+                  <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
+                  <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名" className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-white/[0.12]" />
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={() => setDraftAccountIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
+                  <button type="button" onClick={() => setDraftAccountIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-[18px] border border-white/[0.06] bg-panel">
+                <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/6 px-4 py-3 text-xs uppercase tracking-[0.16em] text-textMuted">
+                  <div>选择</div>
+                  <div>手机号</div>
+                  <div>账号名</div>
+                  <div>状态</div>
+                </div>
+
+                <div className="max-h-[520px] overflow-y-auto">
+                  {loading && accounts.length === 0 ? (
+                    <div className="px-4 py-12 text-center text-sm text-textMuted">正在读取账号...</div>
+                  ) : filteredAccounts.length === 0 ? (
+                    <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号</div>
+                  ) : filteredAccounts.map((account) => {
+                    const checked = draftAccountIds.includes(account.id)
+                    const busy = busyAccountIds.has(account.id) && !selectedAccountIds.includes(account.id)
+                    return (
+                      <label key={account.id} className={`grid grid-cols-[64px_220px_1.4fr_160px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${busy ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${checked ? 'bg-violet-400/10' : busy ? '' : 'hover:bg-white/[0.04]'}`}>
+                        <div className="flex items-center justify-center"><input type="checkbox" checked={checked} disabled={busy} onChange={(event) => setDraftAccountIds((current) => event.target.checked ? [...current, account.id] : current.filter((item) => item !== account.id))} /></div>
+                        <div className="truncate text-white">{account.phone || '—'}</div>
+                        <div className="min-w-0">
+                          <div className="truncate text-white">{readAccountLabel(account)}</div>
+                          {busy ? <div className="mt-1 text-xs text-textMuted">当前已被其他采集任务占用</div> : null}
+                        </div>
+                        <div>
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${busy ? 'bg-amber-300/12 text-amber-200' : 'bg-white/10 text-slate-200'}`}>
+                            {busy ? '占用中' : '可选择'}
+                          </span>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/[0.06] bg-card px-5 py-4">
+              <button type="button" onClick={() => setAccountPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
+              <button type="button" onClick={applyAccountSelection} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">应用账号选择</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ResultDialogShell
         open={resultDialog.open && Boolean(resultDialog.result)}
