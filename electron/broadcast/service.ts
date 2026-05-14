@@ -8,6 +8,7 @@ import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
 import type { BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastScheduledMessageItem, BroadcastScheduledMessageListResult, BroadcastStopResult } from '../../src/types'
+import { TelethonJoinedGroupReader } from './telethon-joined-group-reader'
 
 const MIN_SCHEDULE_AHEAD_MS = 60_000
 const TELEGRAM_SCHEDULE_QUEUE_LIMIT = 100
@@ -90,6 +91,11 @@ function formatBroadcastError(error: unknown) {
     return matched ? `当前发得有点快了，Telegram 要求先等 ${matched[1]} 秒，再继续发送。` : '当前发得有点快了，Telegram 要求先等几秒，再继续发送。'
   }
   return `发送失败：${normalized}`
+}
+
+function isGramJsDialogConstructorError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return message.includes('Could not find a matching Constructor ID')
 }
 
 function parseTelegramMessageLink(input: string) {
@@ -524,7 +530,8 @@ export class BroadcastService {
     private readonly accountRepository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
-    private readonly proxyPoolService: ProxyPoolService
+    private readonly proxyPoolService: ProxyPoolService,
+    private readonly telethonJoinedGroupReader: TelethonJoinedGroupReader
   ) {}
 
   async stopCurrentPush(): Promise<BroadcastStopResult> {
@@ -850,9 +857,10 @@ export class BroadcastService {
       throw new Error('账号不存在')
     }
 
-    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+    let client: TelegramClient | null = null
 
     try {
+      client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
       const dialogs = await loadDialogsWithFallback(client)
 
       if (dialogs.length === 0) {
@@ -886,12 +894,23 @@ export class BroadcastService {
 
       return dedupedGroups
     } catch (error) {
+      if (isGramJsDialogConstructorError(error) && this.telethonJoinedGroupReader.isAvailable()) {
+        const telethonGroups = await this.telethonJoinedGroupReader.list(account.sessionPath, 35)
+        if (telethonGroups && telethonGroups.length > 0) {
+          return dedupeJoinedGroups(telethonGroups)
+            .sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'))
+        }
+        throw new Error('Telethon 也没读到这个账号的已加入群。你这个号虽然在线，但这次对话列表还是没拉回来；先在 Telegram 客户端里点开几个群，再回来重试。')
+      }
+
       if ((error instanceof Error ? error.message : String(error)).includes('NO_DIALOGS_LOADED')) {
         throw new Error('当前账号这次没有从 Telegram 拉到任何对话列表。若你明明加了很多群，先在 Telegram 客户端里打开几个群再重试；如果还是空，重新登录这个账号再试。')
       }
       throw new Error(formatBroadcastError(error))
     } finally {
-      await this.clientManager.destroyClient(client)
+      if (client) {
+        await this.clientManager.destroyClient(client)
+      }
     }
   }
 

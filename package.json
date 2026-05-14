@@ -1,6 +1,6 @@
 {
   "name": "telegram-multi-account-manager",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "private": true,
   "description": "TG-Matrix desktop manager",
   "author": "TG-Matrix",
@@ -58,6 +58,10 @@
       {
         "from": "electron/direct-message/telethon_group_collect.py",
         "to": "runtime/direct-message/telethon_group_collect.py"
+      },
+      {
+        "from": "electron/broadcast/telethon_list_joined_groups.py",
+        "to": "runtime/broadcast/telethon_list_joined_groups.py"
       },
       {
         "from": "build/icon.png",
