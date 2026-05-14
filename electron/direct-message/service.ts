@@ -19,7 +19,13 @@ import type {
   DirectMessageSendProgress,
   DirectMessageSendResult,
   DirectMessageSendResultItem,
-  DirectMessageStopResult
+  DirectMessageStopResult,
+  GroupCollectorFilterPayload,
+  GroupCollectorLastSeenBucket,
+  GroupCollectorPayload,
+  GroupCollectorResult,
+  GroupCollectorRole,
+  GroupCollectorUserPayload
 } from '../../src/types'
 
 function formatDirectMessageError(error: unknown) {
@@ -187,6 +193,128 @@ function parseTelegramMessageLink(input: string) {
   }
 
   return null
+}
+
+function resolveCollectorSource(input: string) {
+  const raw = input.trim()
+  if (!raw) return ''
+  const target = parseDirectTarget(raw)
+  if (target?.kind === 'username') {
+    return target.value
+  }
+  return raw
+}
+
+function normalizeCollectorDisplayName(user: { id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null }) {
+  const firstName = typeof user.firstName === 'string' ? user.firstName.trim() : ''
+  const lastName = typeof user.lastName === 'string' ? user.lastName.trim() : ''
+  const fullName = [firstName, lastName].filter(Boolean).join(' ')
+  if (fullName) return fullName
+  if (typeof user.username === 'string' && user.username.trim()) return `@${user.username.replace(/^@+/, '').trim()}`
+  if (typeof user.phone === 'string' && user.phone.trim()) return user.phone.startsWith('+') ? user.phone : `+${user.phone}`
+  return `用户#${String(user.id ?? '').trim() || '未知'}`
+}
+
+function readCollectorHasAvatar(user: Record<string, unknown>) {
+  return Boolean(user.photo ?? user.profilePhoto ?? user.hasProfilePic)
+}
+
+function readCollectorIsPremium(user: Record<string, unknown>) {
+  return Boolean(user.premium ?? user.isPremium)
+}
+
+function readCollectorRole(participant: any): GroupCollectorRole | null {
+  const className = String(participant?.className || participant?.constructor?.name || '')
+  if (/Creator/i.test(className)) return 'owner'
+  if (/Admin/i.test(className)) return 'admin'
+  return null
+}
+
+function stringifyEntityId(value: unknown) {
+  if (typeof value === 'bigint') return value.toString()
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : ''
+  if (typeof value === 'string') return value
+  if (value && typeof value === 'object' && typeof (value as { toString?: () => string }).toString === 'function') {
+    const text = (value as { toString: () => string }).toString()
+    return text && text !== '[object Object]' ? text : ''
+  }
+  return ''
+}
+
+function readParticipantUserId(participant: any) {
+  return stringifyEntityId(participant?.userId ?? participant?.user_id ?? participant?.peer?.userId ?? participant?.peer?.user_id)
+}
+
+function readCollectorLastSeen(user: Record<string, unknown>): { bucket: GroupCollectorLastSeenBucket; label: string } {
+  const status = user.status as Record<string, unknown> | null | undefined
+  const className = String(status?.className || (status as any)?.constructor?.name || '')
+
+  if (/UserStatusOnline/i.test(className)) return { bucket: 'online', label: '在线' }
+  if (/UserStatusRecently/i.test(className)) return { bucket: 'recent', label: '最近在线' }
+  if (/UserStatusLastWeek/i.test(className)) return { bucket: 'week', label: '近一周' }
+  if (/UserStatusLastMonth/i.test(className)) return { bucket: 'month', label: '近一月' }
+  if (/UserStatusOffline/i.test(className)) return { bucket: 'offline', label: '离线' }
+  return { bucket: 'unknown', label: '未知' }
+}
+
+function shouldKeepCollectorUser(item: GroupCollectorUserPayload, filters: GroupCollectorFilterPayload) {
+  if (filters.roleFilters.length > 0 && !filters.roleFilters.includes(item.role)) {
+    return false
+  }
+
+  if (filters.onlyBots && !item.isBot) {
+    return false
+  }
+
+  if (filters.avatarFilters.length === 1) {
+    if (filters.avatarFilters[0] === 'has' && !item.hasAvatar) return false
+    if (filters.avatarFilters[0] === 'none' && item.hasAvatar) return false
+  }
+
+  if (filters.usernameFilters.length === 1) {
+    if (filters.usernameFilters[0] === 'has' && !item.hasUsername) return false
+    if (filters.usernameFilters[0] === 'none' && item.hasUsername) return false
+  }
+
+  if (filters.premiumFilters.length === 1) {
+    if (filters.premiumFilters[0] === 'premium' && !item.isPremium) return false
+    if (filters.premiumFilters[0] === 'normal' && item.isPremium) return false
+  }
+
+  if (filters.lastSeenFilters.length > 0 && !filters.lastSeenFilters.includes(item.lastSeenBucket)) {
+    return false
+  }
+
+  return true
+}
+
+async function loadAdminRoleMap(client: TelegramClient, entity: unknown) {
+  const roleMap = new Map<string, GroupCollectorRole>()
+
+  try {
+    const result = await client.invoke(new Api.channels.GetParticipants({
+      channel: entity as never,
+      filter: new Api.ChannelParticipantsAdmins(),
+      offset: 0,
+      limit: 200,
+      hash: bigInt.zero
+    }))
+
+    const participants = Array.isArray((result as { participants?: unknown[] }).participants)
+      ? (result as { participants: unknown[] }).participants
+      : []
+
+    for (const participant of participants) {
+      const userId = readParticipantUserId(participant)
+      const role = readCollectorRole(participant)
+      if (!userId || !role) continue
+      roleMap.set(userId, role)
+    }
+  } catch {
+    // ignore; basic groups / unavailable admin list fall back to member role
+  }
+
+  return roleMap
 }
 
 async function loadSourceMessage(client: TelegramClient, sourceLink: string) {
@@ -785,6 +913,108 @@ export class DirectMessageService {
         skipped,
         items: resultItems,
         message: resultItems.length > 0 ? `已采集 ${resultItems.length} 个可用用户。` : '没有采集到可直接发送的用户。'
+      }
+    } catch (error) {
+      throw new Error(formatDirectMessageError(error))
+    } finally {
+      await this.clientManager.destroyClient(client)
+    }
+  }
+
+  async collectGroupUsers(payload: GroupCollectorPayload): Promise<GroupCollectorResult> {
+    const account = this.accountRepository.getByIds([payload.accountId])[0]
+    if (!account) throw new Error('账号不存在')
+
+    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+
+    try {
+      const sourceRef = resolveCollectorSource(payload.source)
+      if (!sourceRef) {
+        throw new Error('请先填写群链接或群用户名')
+      }
+
+      const entity = await client.getEntity(sourceRef as never)
+      const adminRoleMap = await loadAdminRoleMap(client, entity)
+      let rawUsers: Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }> = []
+
+      if (payload.mode === 'public_members') {
+        const participantLimit = Number.isFinite(payload.participantLimit) ? Number(payload.participantLimit) : 0
+        const params: Record<string, unknown> = {}
+        if (participantLimit > 0) {
+          params.limit = Math.max(1, Math.min(participantLimit, 5000))
+        }
+        rawUsers = await (client as TelegramClient & {
+          getParticipants: (entity: unknown, params: Record<string, unknown>) => Promise<Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }>>
+        }).getParticipants(entity as never, params)
+      } else {
+        const historyLimit = Number.isFinite(payload.historyLimit) ? Number(payload.historyLimit) : 1000
+        const messages = await (client as TelegramClient & {
+          getMessages: (entity: unknown, params: Record<string, unknown>) => Promise<Array<any>>
+        }).getMessages(entity as never, { limit: Math.max(1, Math.min(historyLimit, 5000)) })
+
+        const users = new Map<string, { id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }>()
+        for (const message of messages || []) {
+          let sender = typeof message?.getSender === 'function' ? await message.getSender() : null
+          if (!sender && message?.senderId) {
+            try {
+              sender = await client.getEntity(message.senderId as never)
+            } catch {
+              sender = null
+            }
+          }
+          if (!sender || typeof sender !== 'object') continue
+          const userId = stringifyEntityId((sender as { id?: unknown }).id)
+          if (!userId || users.has(userId)) continue
+          users.set(userId, sender as any)
+        }
+        rawUsers = Array.from(users.values())
+      }
+
+      const seen = new Set<string>()
+      const items: GroupCollectorUserPayload[] = []
+      let skipped = 0
+
+      for (const rawUser of rawUsers) {
+        const userId = stringifyEntityId(rawUser.id)
+        if (!userId || seen.has(userId)) {
+          skipped += 1
+          continue
+        }
+        seen.add(userId)
+
+        const lastSeen = readCollectorLastSeen(rawUser as Record<string, unknown>)
+        const item: GroupCollectorUserPayload = {
+          userId,
+          displayName: normalizeCollectorDisplayName(rawUser),
+          username: typeof rawUser.username === 'string' ? rawUser.username : '',
+          phone: typeof rawUser.phone === 'string' ? rawUser.phone : '',
+          targetValue: normalizeCollectedValue(rawUser),
+          sourceLabel: payload.mode === 'public_members' ? '公开群成员' : '历史发言用户',
+          role: adminRoleMap.get(userId) || 'member',
+          isBot: Boolean((rawUser as { bot?: boolean | null }).bot),
+          hasAvatar: readCollectorHasAvatar(rawUser as Record<string, unknown>),
+          hasUsername: Boolean(typeof rawUser.username === 'string' && rawUser.username.trim()),
+          isPremium: readCollectorIsPremium(rawUser as Record<string, unknown>),
+          lastSeenBucket: lastSeen.bucket,
+          lastSeenLabel: lastSeen.label
+        }
+
+        if (!shouldKeepCollectorUser(item, payload.filters)) {
+          skipped += 1
+          continue
+        }
+
+        items.push(item)
+      }
+
+      return {
+        total: rawUsers.length,
+        matched: items.length,
+        filtered: skipped,
+        items,
+        message: items.length > 0
+          ? `采集完成，命中 ${items.length} 个用户。`
+          : '这次没有命中符合条件的用户。'
       }
     } catch (error) {
       throw new Error(formatDirectMessageError(error))

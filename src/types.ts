@@ -508,6 +508,52 @@ export interface DirectMessageCollectResult {
   message: string
 }
 
+export type GroupCollectorMode = 'public_members' | 'hidden_history'
+export type GroupCollectorRole = 'owner' | 'admin' | 'member'
+export type GroupCollectorLastSeenBucket = 'online' | 'recent' | 'week' | 'month' | 'offline' | 'unknown'
+
+export interface GroupCollectorFilterPayload {
+  roleFilters: GroupCollectorRole[]
+  onlyBots: boolean
+  avatarFilters: Array<'has' | 'none'>
+  usernameFilters: Array<'has' | 'none'>
+  premiumFilters: Array<'premium' | 'normal'>
+  lastSeenFilters: GroupCollectorLastSeenBucket[]
+}
+
+export interface GroupCollectorPayload {
+  accountId: number
+  source: string
+  mode: GroupCollectorMode
+  participantLimit?: number
+  historyLimit?: number
+  filters: GroupCollectorFilterPayload
+}
+
+export interface GroupCollectorUserPayload {
+  userId: string
+  displayName: string
+  username: string
+  phone: string
+  targetValue: string
+  sourceLabel: string
+  role: GroupCollectorRole
+  isBot: boolean
+  hasAvatar: boolean
+  hasUsername: boolean
+  isPremium: boolean
+  lastSeenBucket: GroupCollectorLastSeenBucket
+  lastSeenLabel: string
+}
+
+export interface GroupCollectorResult {
+  total: number
+  matched: number
+  filtered: number
+  items: GroupCollectorUserPayload[]
+  message: string
+}
+
 export interface DirectMessageAutoReplyRulePayload {
   id: string
   keyword: string
@@ -646,6 +692,7 @@ export interface DesktopDirectMessageApi {
   sendMessages: (payload: DirectMessageSendPayload) => Promise<DirectMessageSendResult>
   stopSend: () => Promise<DirectMessageStopResult>
   collectUsers: (payload: DirectMessageCollectPayload) => Promise<DirectMessageCollectResult>
+  collectGroupUsers: (payload: GroupCollectorPayload) => Promise<GroupCollectorResult>
   configureAutoReply: (payload: DirectMessageAutoReplyPayload) => Promise<DirectMessageAutoReplyState>
   getAutoReplyState: () => Promise<DirectMessageAutoReplyState>
   onSendProgress: (callback: (payload: DirectMessageSendProgress) => void) => () => void

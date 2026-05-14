@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { DirectMessageAutoReplyPayload, DirectMessageCollectPayload, DirectMessageSendPayload } from '../../src/types'
+import type { DirectMessageAutoReplyPayload, DirectMessageCollectPayload, DirectMessageSendPayload, GroupCollectorPayload } from '../../src/types'
 import type { DirectMessageService } from './service'
 
 interface RegisterDirectMessageIpcOptions {
@@ -29,6 +29,10 @@ export function registerDirectMessageIpc(options: RegisterDirectMessageIpcOption
 
   ipcMain.handle('direct-message:collect-users', async (_event, payload: DirectMessageCollectPayload) => {
     return directMessageService.collectUsers(payload)
+  })
+
+  ipcMain.handle('direct-message:collect-group-users', async (_event, payload: GroupCollectorPayload) => {
+    return directMessageService.collectGroupUsers(payload)
   })
 
   ipcMain.handle('direct-message:configure-auto-reply', async (_event, payload: DirectMessageAutoReplyPayload) => {

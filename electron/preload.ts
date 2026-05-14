@@ -1,10 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
+import type { AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, ImportProgressPayload, ProxyPoolSettings, ProxyPoolState } from '../src/types'
 
 contextBridge.exposeInMainWorld('desktopInfo', {
   appName: 'TG-Matrix',
   platform: process.platform,
-  version: process.env.npm_package_version || '0.0.3'
+  version: process.env.npm_package_version || '0.0.4'
 })
 
 contextBridge.exposeInMainWorld('desktopWindow', {
@@ -106,6 +106,7 @@ contextBridge.exposeInMainWorld('desktopDirectMessage', {
   sendMessages: (payload: DirectMessageSendPayload) => ipcRenderer.invoke('direct-message:send', payload),
   stopSend: () => ipcRenderer.invoke('direct-message:stop-send') as Promise<DirectMessageStopResult>,
   collectUsers: (payload: DirectMessageCollectPayload) => ipcRenderer.invoke('direct-message:collect-users', payload) as Promise<DirectMessageCollectResult>,
+  collectGroupUsers: (payload: GroupCollectorPayload) => ipcRenderer.invoke('direct-message:collect-group-users', payload) as Promise<GroupCollectorResult>,
   configureAutoReply: (payload: DirectMessageAutoReplyPayload) => ipcRenderer.invoke('direct-message:configure-auto-reply', payload) as Promise<DirectMessageAutoReplyState>,
   getAutoReplyState: () => ipcRenderer.invoke('direct-message:get-auto-reply-state') as Promise<DirectMessageAutoReplyState>,
   onSendProgress: (callback: (payload: DirectMessageSendProgress) => void) => {
