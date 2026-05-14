@@ -413,6 +413,15 @@ export class ProxyPoolService extends EventEmitter {
     return this.state.settings.enabled
   }
 
+  hasAvailableAccountCheckProxy(excludedIds: string[] = []) {
+    if (!this.state.settings.enabled) return false
+
+    const excluded = new Set(excludedIds)
+    const preferred = this.state.proxies.filter((proxy) => proxy.status === 'alive' && !excluded.has(proxy.id))
+    const fallback = this.state.proxies.filter((proxy) => proxy.status !== 'dead' && proxy.status !== 'checking' && !excluded.has(proxy.id))
+    return (preferred.length > 0 ? preferred : fallback).length > 0
+  }
+
   getAccountCheckProxy(excludedIds: string[] = []): AccountCheckProxy | null {
     if (!this.state.settings.enabled) return null
 

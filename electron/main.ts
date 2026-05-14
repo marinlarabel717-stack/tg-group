@@ -322,6 +322,7 @@ async function bootstrap() {
     accountStatusService: statusService,
     checkQueue,
     appSettingsStore,
+    proxyPoolService,
     telegramWebService,
     telegramDesktopPremiumService,
     emitAccountsUpdated,

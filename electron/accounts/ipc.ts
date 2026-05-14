@@ -10,6 +10,7 @@ import type { CheckQueue } from './check-engine/check-queue'
 import type { AppSettingsStore } from '../app-settings-store'
 import type { TelegramWebService } from './telegram-web-service'
 import type { TelegramDesktopPremiumService } from './telegram-desktop-premium-service'
+import type { ProxyPoolService } from '../proxy-pool/service'
 
 interface RegisterAccountIpcOptions {
   getMainWindow: () => BrowserWindow | null
@@ -18,6 +19,7 @@ interface RegisterAccountIpcOptions {
   accountStatusService: AccountStatusService
   checkQueue: CheckQueue
   appSettingsStore: AppSettingsStore
+  proxyPoolService: ProxyPoolService
   telegramWebService: TelegramWebService
   telegramDesktopPremiumService: TelegramDesktopPremiumService
   emitAccountsUpdated: (accounts: ReturnType<AccountRepository['list']>) => void
@@ -25,7 +27,7 @@ interface RegisterAccountIpcOptions {
 }
 
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
-  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, telegramWebService, telegramDesktopPremiumService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
+  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
     const mainWindow = getMainWindow()
@@ -69,6 +71,11 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       : payload?.actions?.length
         ? payload.actions
         : ['account-status']
+
+    if (proxyPoolService.isEnabled() && !proxyPoolService.hasAvailableAccountCheckProxy()) {
+      throw new Error('当前已开启全局代理，但没有可用代理，无法检查。请先导入代理或关闭全局代理后再试。')
+    }
+
     const mode = actions.includes('account-survival') ? 'account-survival' : 'account-status'
     const state = checkQueue.enqueue(ids, mode)
     emitCheckState()
