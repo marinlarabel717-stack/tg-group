@@ -23,10 +23,7 @@ const DEFAULT_STATE: BotCenterState = {
     guestReplyText: '你好，我已收到你的召唤。\n\n你刚刚发送的是：{text}',
     guestReplyType: 'text',
     guestReplyImageUrl: '',
-    guestReplyButtonEnabled: false,
-    guestReplyButtonText: '',
-    guestReplyButtonUrl: '',
-    guestReplyButtonStyle: 'primary',
+    guestReplyButtons: [],
     keywordRules: []
   },
   profile: {

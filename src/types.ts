@@ -352,6 +352,13 @@ export type BotCenterReplyKind = 'text' | 'photo'
 export type BotCenterKeywordMatchType = 'contains' | 'equals'
 export type BotCenterButtonStyle = 'default' | 'primary' | 'success' | 'danger'
 
+export interface BotCenterReplyButton {
+  id: string
+  text: string
+  url: string
+  style: BotCenterButtonStyle
+}
+
 export interface BotCenterKeywordRule {
   id: string
   enabled: boolean
@@ -362,10 +369,7 @@ export interface BotCenterKeywordRule {
   title: string
   text: string
   imageUrl: string
-  buttonEnabled: boolean
-  buttonText: string
-  buttonUrl: string
-  buttonStyle: BotCenterButtonStyle
+  buttons: BotCenterReplyButton[]
 }
 
 export interface BotCenterConfig {
@@ -376,10 +380,7 @@ export interface BotCenterConfig {
   guestReplyText: string
   guestReplyType: BotCenterReplyKind
   guestReplyImageUrl: string
-  guestReplyButtonEnabled: boolean
-  guestReplyButtonText: string
-  guestReplyButtonUrl: string
-  guestReplyButtonStyle: BotCenterButtonStyle
+  guestReplyButtons: BotCenterReplyButton[]
   keywordRules: BotCenterKeywordRule[]
 }
 
