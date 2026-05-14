@@ -8,6 +8,7 @@ import { SpamBotChecker } from './spam-bot-checker'
 import { StatusResolver } from './status-resolver'
 import { type AccountClientProxyOptions, TelegramClientManager } from './telegram-client-manager'
 import { TelethonFreezeChecker } from './telethon-freeze-checker'
+import { TelethonSpamBotChecker } from './telethon-spambot-checker'
 import { readPremiumExpiryViaClient } from '../telegram-desktop-premium-service'
 import { type AccountCheckProxy, ProxyPoolService } from '../../proxy-pool/service'
 import type { TelethonFreezeCheckResult } from './telethon-freeze-checker'
@@ -90,6 +91,7 @@ export class AccountCheckEngine {
     private readonly repository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
     private readonly telethonFreezeChecker: TelethonFreezeChecker,
+    private readonly telethonSpamBotChecker: TelethonSpamBotChecker,
     private readonly clientManager: TelegramClientManager,
     private readonly spamBotChecker: SpamBotChecker,
     private readonly statusResolver: StatusResolver,
@@ -302,6 +304,123 @@ export class AccountCheckEngine {
     )
   }
 
+  private async buildResultFromTelethonSpamBot(
+    account: AccountRecord,
+    client: TelegramClient,
+    liveUser: unknown,
+    startedAt: number,
+    proxyMeta: ProxyUsageMeta,
+    probes: string[]
+  ): Promise<AccountCheckResult> {
+    const telethonSpamBot = await withStepTimeout(
+      this.telethonSpamBotChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)),
+      this.timeoutMs,
+      'Telethon SpamBot 检测'
+    )
+
+    if (!telethonSpamBot) {
+      return this.persistFailure(
+        account,
+        'unknown',
+        'Telethon SpamBot 检测未返回结果，当前无法判断双向状态',
+        Date.now() - startedAt,
+        false,
+        'account-status',
+        proxyMeta
+      )
+    }
+
+    probes.push(`Telethon SpamBot:${telethonSpamBot.status}${telethonSpamBot.reason ? `:${telethonSpamBot.reason}` : ''}`)
+
+    if (telethonSpamBot.status === 'frozen') {
+      return this.buildFrozenResultFromTelethon(account, {
+        status: 'frozen',
+        reason: telethonSpamBot.reason,
+        user_id: telethonSpamBot.user_id,
+        first_name: telethonSpamBot.first_name,
+        last_name: telethonSpamBot.last_name,
+        username: telethonSpamBot.username,
+        phone: telethonSpamBot.phone,
+        freeze_since_date: telethonSpamBot.freeze_since_date,
+        freeze_until_date: telethonSpamBot.freeze_until_date,
+        freeze_since_text: telethonSpamBot.freeze_since_text,
+        freeze_until_text: telethonSpamBot.freeze_until_text,
+        freeze_appeal_url: telethonSpamBot.freeze_appeal_url,
+      }, startedAt, proxyMeta, 'Telethon SpamBot 检测')
+    }
+
+    if (telethonSpamBot.status === 'not_logged_in') {
+      return this.persistFailure(
+        account,
+        'not_logged_in',
+        'Telethon SpamBot 检测判定 Session 未登录',
+        Date.now() - startedAt,
+        false,
+        'account-status',
+        proxyMeta
+      )
+    }
+
+    if (telethonSpamBot.status === 'timeout' || telethonSpamBot.status === 'unknown') {
+      return this.persistFailure(
+        account,
+        telethonSpamBot.status,
+        `${telethonSpamBot.summary}${telethonSpamBot.reason ? `：${telethonSpamBot.reason}` : ''}`,
+        Date.now() - startedAt,
+        false,
+        'account-status',
+        proxyMeta
+      )
+    }
+
+    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes)
+    const updated = await this.updateService.buildSuccessProfile({
+      account,
+      client,
+      liveUser,
+      fullUser: null,
+      spambotReply: telethonSpamBot.replyText,
+      status: telethonSpamBot.status,
+      checkMode: 'account-status',
+      premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
+      premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
+      premiumExpirySyncedAt: premiumExpiryMeta.premiumExpirySyncedAt,
+      proxyUsed: proxyMeta.proxyUsed,
+      proxyDisplay: proxyMeta.proxyDisplay,
+      durationMs: Date.now() - startedAt
+    })
+
+    const payload: CheckResultInput = {
+      id: account.id,
+      profile: updated.profile,
+      status: telethonSpamBot.status,
+      phone: updated.phone,
+      username: updated.username,
+      userId: updated.userId,
+      country: updated.country,
+      proxyDisplay: updated.proxyDisplay,
+      lastCheckTime: updated.lastCheckTime,
+      lastOnlineTime: updated.lastOnlineTime
+    }
+
+    this.resultWriter.write(payload)
+
+    return {
+      accountId: account.id,
+      status: telethonSpamBot.status,
+      profile: updated.profile,
+      phone: updated.phone,
+      username: updated.username,
+      userId: updated.userId,
+      country: updated.country,
+      proxyDisplay: updated.proxyDisplay,
+      lastCheckTime: updated.lastCheckTime,
+      lastOnlineTime: updated.lastOnlineTime,
+      durationMs: Date.now() - startedAt,
+      retryable: false
+    }
+  }
+
   private async runAccountSurvivalCheck(
     account: AccountRecord,
     client: TelegramClient,
@@ -410,233 +529,13 @@ export class AccountCheckEngine {
 
     const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')
     probes.push('账号资料读取成功')
-    const frozenState = await withStepTimeout(this.spamBotChecker.detectFrozenState(client), this.timeoutMs, '冻结状态检测')
-    if (frozenState.errorMessage) {
-      probes.push(`冻结探针失败:${frozenState.errorMessage}`)
-    } else if (frozenState.frozen) {
-      probes.push(`冻结探针命中:${frozenState.reason ?? 'APP_CONFIG'}`)
-    } else {
-      probes.push('冻结探针未命中')
-    }
-    if (frozenState.appConfigSummary) {
-      probes.push(`AppConfig:${frozenState.appConfigSummary}`)
-    }
 
     const loginPhone = String((typeof liveUser === 'object' && liveUser && 'phone' in liveUser && typeof (liveUser as { phone?: unknown }).phone === 'string'
       ? (liveUser as { phone?: string }).phone
       : account.phone) || `账号#${account.id}`)
     logger({ type: 'login_success', phone: loginPhone })
 
-    if (frozenState.frozen) {
-      const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结检测')
-      if (telethonFrozen?.status) {
-        probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
-      }
-      const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes)
-      const updated = await this.updateService.buildSuccessProfile({
-        account,
-        client,
-        liveUser,
-        fullUser: null,
-        spambotReply: '',
-        status: 'frozen',
-        checkMode: 'account-status',
-        freezeSince: readTelethonFreezeSince(telethonFrozen) ?? frozenState.freezeSince,
-        freezeUntil: readTelethonFreezeUntil(telethonFrozen) ?? frozenState.freezeUntil,
-        freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? frozenState.freezeAppealUrl,
-        premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
-        premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
-        premiumExpirySyncedAt: premiumExpiryMeta.premiumExpirySyncedAt,
-        proxyUsed: proxyMeta.proxyUsed,
-        proxyDisplay: proxyMeta.proxyDisplay,
-        durationMs: Date.now() - startedAt
-      })
-
-      const payload: CheckResultInput = {
-        id: account.id,
-        profile: updated.profile,
-        status: 'frozen',
-        phone: updated.phone,
-        username: updated.username,
-        userId: updated.userId,
-        country: updated.country,
-        proxyDisplay: updated.proxyDisplay,
-        lastCheckTime: updated.lastCheckTime,
-        lastOnlineTime: updated.lastOnlineTime
-      }
-
-      this.resultWriter.write(payload)
-
-      return {
-        accountId: account.id,
-        status: 'frozen',
-        profile: updated.profile,
-        phone: updated.phone,
-        username: updated.username,
-        userId: updated.userId,
-        country: updated.country,
-        proxyDisplay: updated.proxyDisplay,
-        lastCheckTime: updated.lastCheckTime,
-        lastOnlineTime: updated.lastOnlineTime,
-        durationMs: Date.now() - startedAt,
-        retryable: false
-      }
-    }
-
-    const selfProbe = await withStepTimeout(this.spamBotChecker.probeFrozenBySelfMessage(client), this.timeoutMs, '冻结发送探针')
-    if (selfProbe.errorMessage) {
-      probes.push(`冻结发送探针失败:${selfProbe.errorMessage}`)
-      if (isGramJsMessageConstructorError(selfProbe.errorMessage)) {
-        probes.push('冻结发送探针触发 GramJS 消息解析异常，转 Telethon 兜底')
-        return this.runTelethonFallbackStatusCheck(account, startedAt, proxyMeta, probes, '冻结发送探针')
-      }
-    } else if (selfProbe.frozen) {
-      probes.push(`冻结发送探针命中:${selfProbe.reason ?? 'FROZEN_RPC'}`)
-    } else {
-      probes.push(`冻结发送探针未命中:${selfProbe.reason ?? 'SELF_PROBE_OK'}`)
-    }
-    if (selfProbe.appConfigSummary) {
-      probes.push(`冻结探针AppConfig:${selfProbe.appConfigSummary}`)
-    }
-
-    if (selfProbe.frozen) {
-      const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结检测')
-      if (telethonFrozen?.status) {
-        probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
-      }
-      const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes)
-      const updated = await this.updateService.buildSuccessProfile({
-        account,
-        client,
-        liveUser,
-        fullUser: null,
-        spambotReply: '',
-        status: 'frozen',
-        checkMode: 'account-status',
-        freezeSince: readTelethonFreezeSince(telethonFrozen) ?? selfProbe.freezeSince,
-        freezeUntil: readTelethonFreezeUntil(telethonFrozen) ?? selfProbe.freezeUntil,
-        freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? selfProbe.freezeAppealUrl,
-        premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
-        premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
-        premiumExpirySyncedAt: premiumExpiryMeta.premiumExpirySyncedAt,
-        proxyUsed: proxyMeta.proxyUsed,
-        proxyDisplay: proxyMeta.proxyDisplay,
-        durationMs: Date.now() - startedAt
-      })
-
-      const payload: CheckResultInput = {
-        id: account.id,
-        profile: updated.profile,
-        status: 'frozen',
-        phone: updated.phone,
-        username: updated.username,
-        userId: updated.userId,
-        country: updated.country,
-        proxyDisplay: updated.proxyDisplay,
-        lastCheckTime: updated.lastCheckTime,
-        lastOnlineTime: updated.lastOnlineTime
-      }
-
-      this.resultWriter.write(payload)
-
-      return {
-        accountId: account.id,
-        status: 'frozen',
-        profile: updated.profile,
-        phone: updated.phone,
-        username: updated.username,
-        userId: updated.userId,
-        country: updated.country,
-        proxyDisplay: updated.proxyDisplay,
-        lastCheckTime: updated.lastCheckTime,
-        lastOnlineTime: updated.lastOnlineTime,
-        durationMs: Date.now() - startedAt,
-        retryable: false
-      }
-    }
-
-    let fullUser: unknown
-    let spamResult
-    try {
-      fullUser = await withStepTimeout(this.spamBotChecker.getFullProfile(client), this.timeoutMs, '完整资料读取')
-      probes.push('完整资料读取成功')
-
-      spamResult = await withStepTimeout(this.spamBotChecker.check(client), this.timeoutMs, 'SpamBot 检测')
-    } catch (error) {
-      if (isGramJsMessageConstructorError(error)) {
-        probes.push('SpamBot 链路触发 GramJS 消息解析异常，转 Telethon 兜底')
-        return this.runTelethonFallbackStatusCheck(account, startedAt, proxyMeta, probes, 'SpamBot 检测')
-      }
-
-      throw error
-    }
-    probes.push(`SpamBot 检测完成:${spamResult.status}`)
-    const telethonFrozen = spamResult.status === 'frozen'
-      ? await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结检测')
-      : null
-    if (telethonFrozen?.status) {
-      probes.push(`Telethon 冻结补充:${telethonFrozen.status}${telethonFrozen.reason ? `:${telethonFrozen.reason}` : ''}`)
-    }
-    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes)
-    const updated = await this.updateService.buildSuccessProfile({
-      account,
-      client,
-      liveUser,
-      fullUser,
-      spambotReply: spamResult.replyText,
-      status: spamResult.status as AccountCheckResult['status'],
-      checkMode: 'account-status',
-      freezeSince: readTelethonFreezeSince(telethonFrozen) ?? spamResult.freezeSince,
-      freezeUntil: readTelethonFreezeUntil(telethonFrozen) ?? spamResult.freezeUntil,
-      freezeAppealUrl: telethonFrozen?.freeze_appeal_url ?? spamResult.freezeAppealUrl,
-      premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
-      premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
-      premiumExpirySyncedAt: premiumExpiryMeta.premiumExpirySyncedAt,
-      proxyUsed: proxyMeta.proxyUsed,
-      proxyDisplay: proxyMeta.proxyDisplay,
-      durationMs: Date.now() - startedAt
-    })
-
-    const payload: CheckResultInput = {
-      id: account.id,
-      profile: updated.profile,
-      status: spamResult.status as AccountCheckResult['status'],
-      phone: updated.phone,
-      username: updated.username,
-      userId: updated.userId,
-      country: updated.country,
-      proxyDisplay: updated.proxyDisplay,
-      lastCheckTime: updated.lastCheckTime,
-      lastOnlineTime: updated.lastOnlineTime
-    }
-
-    this.resultWriter.write(payload)
-
-    const probeSummary = buildProbeSummary(probes)
-    const replySnippet = buildReplySnippet(spamResult.replyText)
-    const unknownReason = spamResult.status === 'unknown'
-      ? [
-          spamResult.summary || 'SpamBot 回复未命中规则',
-          replySnippet ? `回复:${replySnippet}` : '',
-          probeSummary
-        ].filter(Boolean).join(' | ')
-      : undefined
-
-    return {
-      accountId: account.id,
-      status: spamResult.status,
-      profile: updated.profile,
-      phone: updated.phone,
-      username: updated.username,
-      userId: updated.userId,
-      country: updated.country,
-      proxyDisplay: updated.proxyDisplay,
-      lastCheckTime: updated.lastCheckTime,
-      lastOnlineTime: updated.lastOnlineTime,
-      durationMs: Date.now() - startedAt,
-      retryable: false,
-      errorMessage: unknownReason
-    }
+    return this.buildResultFromTelethonSpamBot(account, client, liveUser, startedAt, proxyMeta, probes)
   }
 
   async run(accountId: number, logger: CheckLogger, mode: 'account-status' | 'account-survival' = 'account-status'): Promise<AccountCheckResult> {

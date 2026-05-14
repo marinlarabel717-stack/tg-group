@@ -11,6 +11,7 @@ import { SpamBotChecker } from './accounts/check-engine/spam-bot-checker'
 import { StatusResolver } from './accounts/check-engine/status-resolver'
 import { TelegramClientManager } from './accounts/check-engine/telegram-client-manager'
 import { TelethonFreezeChecker } from './accounts/check-engine/telethon-freeze-checker'
+import { TelethonSpamBotChecker } from './accounts/check-engine/telethon-spambot-checker'
 import { AccountUpdateService } from './accounts/check-engine/account-update-service'
 import { AccountImportService } from './accounts/services/account-import-service'
 import { AccountRepository } from './accounts/services/account-repository'
@@ -253,6 +254,7 @@ async function bootstrap() {
 
   const sessionLoader = new SessionLoader()
   const telethonFreezeChecker = new TelethonFreezeChecker()
+  const telethonSpamBotChecker = new TelethonSpamBotChecker()
   const clientManager = new TelegramClientManager()
   const telegramWebPreloadPath = resolveRuntimeAssetPath('accounts', 'telegram-web-preload.cjs')
   const telegramWebService = new TelegramWebService(sessionLoader, clientManager, telegramWebPreloadPath, proxyPoolService)
@@ -274,6 +276,7 @@ async function bootstrap() {
     repository,
     sessionLoader,
     telethonFreezeChecker,
+    telethonSpamBotChecker,
     clientManager,
     spamBotChecker,
     statusResolver,

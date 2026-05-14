@@ -1,0 +1,132 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { resolveRuntimeAssetPath } from '../../runtime-paths'
+import { parseSpamBotReply } from './spam-bot-parser'
+import type { AccountStatus } from '../types'
+
+const execFileAsync = promisify(execFile)
+
+export interface TelethonSpamBotCheckResult {
+  status: AccountStatus | 'not_logged_in'
+  reason?: string | null
+  summary: string
+  replyText: string
+  user_id?: number | string | null
+  first_name?: string | null
+  last_name?: string | null
+  username?: string | null
+  phone?: string | null
+  freeze_since_date?: number | null
+  freeze_until_date?: number | null
+  freeze_since_text?: string | null
+  freeze_until_text?: string | null
+  freeze_appeal_url?: string | null
+}
+
+interface TelethonSpamBotCheckRawResult {
+  status?: string | null
+  reason?: string | null
+  reply_text?: string | null
+  user_id?: number | string | null
+  first_name?: string | null
+  last_name?: string | null
+  username?: string | null
+  phone?: string | null
+  freeze_since_date?: number | null
+  freeze_until_date?: number | null
+  freeze_since_text?: string | null
+  freeze_until_text?: string | null
+  freeze_appeal_url?: string | null
+}
+
+function resolvePythonExecutable() {
+  const candidates = [
+    path.resolve(process.cwd(), '.venv', 'Scripts', 'python.exe'),
+    path.resolve(process.cwd(), '.venv', 'bin', 'python'),
+    'python'
+  ]
+
+  return candidates.find((candidate) => candidate === 'python' || fs.existsSync(candidate)) ?? 'python'
+}
+
+function resolveScriptPath() {
+  return resolveRuntimeAssetPath('accounts', 'check-engine', 'telethon_spambot_check.py')
+}
+
+function buildSummary(status: TelethonSpamBotCheckResult['status'], raw: TelethonSpamBotCheckRawResult, replyText: string) {
+  if (replyText) {
+    return parseSpamBotReply(replyText).summary
+  }
+
+  if (status === 'frozen') return '账号处于冻结状态'
+  if (status === 'not_logged_in') return 'Session 未登录'
+  if (status === 'timeout') return '未在超时时间内收到 SpamBot 回复'
+  return raw.reason?.trim() || 'Telethon SpamBot 检测未返回明确结果'
+}
+
+function normalizeStatus(raw: TelethonSpamBotCheckRawResult): TelethonSpamBotCheckResult['status'] {
+  const rawStatus = String(raw.status || '').trim().toLowerCase()
+  const replyText = typeof raw.reply_text === 'string' ? raw.reply_text.trim() : ''
+
+  if (replyText) {
+    return parseSpamBotReply(replyText).status
+  }
+
+  if (rawStatus === 'frozen') return 'frozen'
+  if (rawStatus === 'not_logged_in') return 'not_logged_in'
+  if (rawStatus === 'timeout') return 'timeout'
+  return 'unknown'
+}
+
+export class TelethonSpamBotChecker {
+  private readonly pythonExecutable = resolvePythonExecutable()
+  private readonly scriptPath = resolveScriptPath()
+
+  isAvailable() {
+    return fs.existsSync(this.scriptPath)
+  }
+
+  async check(sessionPath: string, timeoutSeconds = 25): Promise<TelethonSpamBotCheckResult | null> {
+    if (!this.isAvailable()) return null
+
+    try {
+      const { stdout } = await execFileAsync(this.pythonExecutable, [this.scriptPath, sessionPath, String(timeoutSeconds)], {
+        cwd: process.cwd(),
+        windowsHide: true,
+        timeout: Math.max(timeoutSeconds + 5, 10) * 1000,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PYTHONIOENCODING: 'utf-8',
+          ACCOUNT_CHECK_API_ID: process.env.ACCOUNT_CHECK_API_ID || '2040',
+          ACCOUNT_CHECK_API_HASH: process.env.ACCOUNT_CHECK_API_HASH || 'b18441a1ff607e10a989891a5462e627'
+        }
+      })
+
+      const raw = JSON.parse(stdout.trim()) as TelethonSpamBotCheckRawResult
+      const replyText = typeof raw.reply_text === 'string' ? raw.reply_text.trim() : ''
+      const status = normalizeStatus(raw)
+
+      return {
+        status,
+        reason: raw.reason ?? null,
+        summary: buildSummary(status, raw, replyText),
+        replyText,
+        user_id: raw.user_id ?? null,
+        first_name: raw.first_name ?? null,
+        last_name: raw.last_name ?? null,
+        username: raw.username ?? null,
+        phone: raw.phone ?? null,
+        freeze_since_date: raw.freeze_since_date ?? null,
+        freeze_until_date: raw.freeze_until_date ?? null,
+        freeze_since_text: raw.freeze_since_text ?? null,
+        freeze_until_text: raw.freeze_until_text ?? null,
+        freeze_appeal_url: raw.freeze_appeal_url ?? null,
+      }
+    } catch {
+      return null
+    }
+  }
+}
