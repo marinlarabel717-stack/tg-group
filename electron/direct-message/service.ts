@@ -275,16 +275,23 @@ async function ensureCollectorGroupJoined(client: TelegramClient, source: Return
     const invite = await client.invoke(new Api.messages.CheckChatInvite({ hash: source.value }))
     const className = (invite as { className?: string }).className || ''
     if (/ChatInviteAlready/i.test(className)) {
+      const chatEntity = (invite as { chat?: unknown }).chat ?? null
       return {
         joined: true,
-        label: readGroupTitle((invite as { chat?: unknown }).chat ?? invite, source.label)
+        label: readGroupTitle(chatEntity ?? invite, source.label),
+        entity: chatEntity ?? invite
       }
     }
 
     const result = await client.invoke(new Api.messages.ImportChatInvite({ hash: source.value }))
+    const refreshedInvite = await client.invoke(new Api.messages.CheckChatInvite({ hash: source.value })).catch(() => null)
+    const chatEntity = (refreshedInvite as { chat?: unknown } | null)?.chat
+      ?? (result as { chats?: unknown[] }).chats?.[0]
+      ?? null
     return {
       joined: true,
-      label: readGroupTitle(result, source.label)
+      label: readGroupTitle(chatEntity ?? result, source.label),
+      entity: chatEntity ?? result
     }
   }
 
@@ -296,7 +303,8 @@ async function ensureCollectorGroupJoined(client: TelegramClient, source: Return
 
     return {
       joined: true,
-      label: readGroupTitle(entity, source.label)
+      label: readGroupTitle(entity, source.label),
+      entity
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -308,7 +316,8 @@ async function ensureCollectorGroupJoined(client: TelegramClient, source: Return
   await client.invoke(new Api.channels.JoinChannel({ channel: entity as never }))
   return {
     joined: true,
-    label: readGroupTitle(entity, source.label)
+    label: readGroupTitle(entity, source.label),
+    entity
   }
 }
 
@@ -1286,7 +1295,8 @@ export class DirectMessageService {
     }
 
     const entity = await resolveCollectorGroupEntity(client, normalizedSource)
-    const targetEntity = (entity as { chat?: unknown } | null)?.chat ?? entity
+    const joinedState = await ensureCollectorGroupJoined(client, normalizedSource, (entity as { chat?: unknown } | null)?.chat ?? entity)
+    const targetEntity = joinedState.entity ?? (entity as { chat?: unknown } | null)?.chat ?? entity
     const adminRoleMap = await loadAdminRoleMap(client, targetEntity)
     let rawUsers: Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }> = []
 
@@ -1460,30 +1470,35 @@ export class DirectMessageService {
 
           try {
             const entity = await resolveCollectorGroupEntity(client, source)
-            const targetEntity = (entity as { chat?: unknown } | null)?.chat ?? entity
-            const joinedState = await ensureCollectorGroupJoined(client, source, targetEntity)
+            const joinedState = await ensureCollectorGroupJoined(client, source, (entity as { chat?: unknown } | null)?.chat ?? entity)
             joinedCount += 1
             pushLog('running', 'info', `[${phone}] 已加入 ${joinedState.label} - 正在采集用户`, account.id, phone, joinedState.label)
 
-            const result = await this.collectGroupUsersWithClient(client, {
-              accountId: account.id,
-              source: source.value,
-              mode: payload.mode,
-              participantLimit: payload.participantLimit,
-              historyLimit: payload.historyLimit,
-              filters: payload.filters
-            })
+            try {
+              const result = await this.collectGroupUsersWithClient(client, {
+                accountId: account.id,
+                source: source.label,
+                mode: payload.mode,
+                participantLimit: payload.participantLimit,
+                historyLimit: payload.historyLimit,
+                filters: payload.filters
+              })
 
-            let added = 0
-            result.items.forEach((item) => {
-              const key = item.userId || normalizeTargetValue(item.targetValue || item.username || item.phone || item.displayName)
-              if (!key || uniqueItems.has(key)) return
-              uniqueItems.set(key, item)
-              added += 1
-            })
-            successCount = uniqueItems.size
-            processedGroups += 1
-            pushLog('running', 'success', `[${phone}] 已加入 ${joinedState.label} - 正在采集用户 - ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}`, account.id, phone, joinedState.label)
+              let added = 0
+              result.items.forEach((item) => {
+                const key = item.userId || normalizeTargetValue(item.targetValue || item.username || item.phone || item.displayName)
+                if (!key || uniqueItems.has(key)) return
+                uniqueItems.set(key, item)
+                added += 1
+              })
+              successCount = uniqueItems.size
+              processedGroups += 1
+              pushLog('running', 'success', `[${phone}] 已加入 ${joinedState.label} - 正在采集用户 - ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}`, account.id, phone, joinedState.label)
+            } catch (error) {
+              failedCount += 1
+              processedGroups += 1
+              pushLog('running', 'error', `[${phone}] 已加入 ${joinedState.label} - 采集失败（${formatCollectorGroupError(error)}）`, account.id, phone, joinedState.label)
+            }
           } catch (error) {
             failedCount += 1
             processedGroups += 1
