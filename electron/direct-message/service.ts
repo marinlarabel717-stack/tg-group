@@ -568,7 +568,7 @@ function buildPostbotText(parsed: { text: string; buttonText: string; buttonUrl:
   return `${base}${base ? '\n\n' : ''}${parsed.buttonText}\n${parsed.buttonUrl}`
 }
 
-const RANDOM_TEXT_EMOJIS = ['✨', '🌸', '🍀', '🎉', '💫', '🌈', '⭐️', '🎁', '🍃', '☀️'] as const
+const RANDOM_TEXT_EMOJIS = ['✨', '🌸', '🍀', '🎉', '💫', '🌈', '🎁', '🍃', '🔥', '💎'] as const
 
 function normalizeDelaySeconds(value: number | undefined, fallback = 0) {
   if (!Number.isFinite(value)) return fallback
