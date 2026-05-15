@@ -45,7 +45,8 @@ const REQUIRED_PYTHON_PACKAGES = [
   'pyasn1',
   'rsa',
   'dotenv',
-  'python_socks'
+  'python_socks',
+  'async_timeout'
 ]
 
 const PINNED_DISTRIBUTIONS = [
@@ -87,6 +88,13 @@ const PINNED_DISTRIBUTIONS = [
     packageName: 'python-socks',
     version: '2.4.4',
     targets: [{ type: 'dir', name: 'python_socks' }],
+    optional: false,
+    artifactPattern: /py3-none-any\.whl$/i
+  },
+  {
+    packageName: 'async-timeout',
+    version: '5.0.1',
+    targets: [{ type: 'dir', name: 'async_timeout' }],
     optional: false,
     artifactPattern: /py3-none-any\.whl$/i
   },

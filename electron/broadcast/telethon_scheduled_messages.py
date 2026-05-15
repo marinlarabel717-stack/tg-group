@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from telethon import TelegramClient as TelethonClient
-from telethon import functions, types, utils
+from telethon import functions, types, utils, helpers
 
 DEFAULT_API_ID = int(os.getenv('ACCOUNT_CHECK_API_ID', '2040') or '2040')
 DEFAULT_API_HASH = os.getenv('ACCOUNT_CHECK_API_HASH', 'b18441a1ff607e10a989891a5462e627').strip() or 'b18441a1ff607e10a989891a5462e627'
@@ -329,7 +329,7 @@ async def _push_scheduled_message(client: Any, command: Dict[str, Any], target_i
             from_peer=source_input,
             id=[parsed['message_id']],
             to_peer=target_input,
-            random_id=[utils.generate_random_long()],
+            random_id=[helpers.generate_random_long()],
             schedule_date=schedule_date,
             schedule_repeat_period=repeat_period if repeat_period > 0 else None,
             drop_author=False
@@ -345,7 +345,7 @@ async def _push_scheduled_message(client: Any, command: Dict[str, Any], target_i
                 peer=target_input,
                 media=input_media,
                 message=message_text,
-                random_id=utils.generate_random_long(),
+                random_id=helpers.generate_random_long(),
                 schedule_date=schedule_date,
                 schedule_repeat_period=repeat_period if repeat_period > 0 else None
             ))
@@ -353,7 +353,7 @@ async def _push_scheduled_message(client: Any, command: Dict[str, Any], target_i
             await client(functions.messages.SendMessageRequest(
                 peer=target_input,
                 message=message_text,
-                random_id=utils.generate_random_long(),
+                random_id=helpers.generate_random_long(),
                 schedule_date=schedule_date,
                 schedule_repeat_period=repeat_period if repeat_period > 0 else None
             ))

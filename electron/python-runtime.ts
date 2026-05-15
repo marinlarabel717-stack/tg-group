@@ -11,7 +11,8 @@ const REQUIRED_BUNDLED_RUNTIME_FILES = [
   ['Lib', 'site-packages', 'pyasn1', '__init__.py'],
   ['Lib', 'site-packages', 'rsa', '__init__.py'],
   ['Lib', 'site-packages', 'dotenv', '__init__.py'],
-  ['Lib', 'site-packages', 'python_socks', '__init__.py']
+  ['Lib', 'site-packages', 'python_socks', '__init__.py'],
+  ['Lib', 'site-packages', 'async_timeout', '__init__.py']
 ]
 
 export interface BundledPythonRuntimeCheckResult {
