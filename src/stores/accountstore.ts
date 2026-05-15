@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { formatCountryDisplay } from '../lib/ui-text'
-import type { AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload } from '../types'
+import type { AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload, ProfileOperationProgressState, TwoFactorProgressState } from '../types'
 
 export type AccountStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
 
@@ -90,6 +90,41 @@ function createEmptyCheckState(): CheckQueueState {
   }
 }
 
+function createEmptyTwoFactorState(): TwoFactorProgressState {
+  return {
+    running: false,
+    stopRequested: false,
+    action: null,
+    phase: 'apply',
+    concurrency: 1,
+    total: 0,
+    completed: 0,
+    successCount: 0,
+    failedCount: 0,
+    currentAccountId: null,
+    currentPhone: null,
+    logs: [],
+    lastUpdatedAt: null
+  }
+}
+
+function createEmptyProfileOperationState(): ProfileOperationProgressState {
+  return {
+    running: false,
+    stopRequested: false,
+    action: null,
+    concurrency: 1,
+    total: 0,
+    completed: 0,
+    successCount: 0,
+    failedCount: 0,
+    currentAccountId: null,
+    currentPhone: null,
+    logs: [],
+    lastUpdatedAt: null
+  }
+}
+
 function applyAccountSnapshot(
   accounts: AccountRecord[],
   set: (partial: Partial<AccountStoreState>) => void,
@@ -138,6 +173,8 @@ interface AccountStoreState {
   selectedIds: number[]
   selectedProfileAccountId: number | null
   checkState: CheckQueueState
+  twoFactorState: TwoFactorProgressState
+  profileOperationState: ProfileOperationProgressState
   importProgress: ImportProgressPayload | null
   importResultDialog: ImportResultDialogState
   exportResultDialog: ExportResultDialogState
@@ -166,6 +203,10 @@ interface AccountStoreState {
   startSelectedCheck: (actions: CheckAction[]) => Promise<void>
   stopCheck: () => Promise<void>
   clearCheckLogs: () => Promise<void>
+  stopTwoFactorTask: () => Promise<void>
+  clearTwoFactorLogs: () => Promise<void>
+  stopProfileOperationTask: () => Promise<void>
+  clearProfileOperationLogs: () => Promise<void>
   revealPath: (targetPath: string) => Promise<void>
 }
 
@@ -176,8 +217,13 @@ async function syncAccounts(set: (partial: Partial<AccountStoreState>) => void, 
     return
   }
 
-  const [accounts, checkState] = await Promise.all([api.list(), api.getCheckState()])
-  applyAccountSnapshot(accounts, set, get, { checkState })
+  const [accounts, checkState, twoFactorState, profileOperationState] = await Promise.all([
+    api.list(),
+    api.getCheckState(),
+    api.getTwoFactorState ? api.getTwoFactorState() : Promise.resolve(createEmptyTwoFactorState()),
+    api.getProfileOperationState ? api.getProfileOperationState() : Promise.resolve(createEmptyProfileOperationState())
+  ])
+  applyAccountSnapshot(accounts, set, get, { checkState, twoFactorState, profileOperationState })
 }
 
 async function runBusyAction(
@@ -205,6 +251,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   selectedIds: [],
   selectedProfileAccountId: null,
   checkState: createEmptyCheckState(),
+  twoFactorState: createEmptyTwoFactorState(),
+  profileOperationState: createEmptyProfileOperationState(),
   importProgress: null,
   importResultDialog: {
     open: false,
@@ -283,6 +331,12 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           busy: importProgress.phase !== 'completed',
           lastActionMessage: importProgress.phase === 'completed' ? importProgress.message : get().lastActionMessage
         })
+      })
+      window.desktopAccounts?.onTwoFactorProgress?.((twoFactorState) => {
+        set({ twoFactorState })
+      })
+      window.desktopAccounts?.onProfileOperationProgress?.((profileOperationState) => {
+        set({ profileOperationState })
       })
       subscribed = true
     }
@@ -546,6 +600,30 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     const checkState = await getDesktopAccountsApi()?.clearCheckLogs()
     if (checkState) {
       set({ checkState, lastActionMessage: '检测日志已清空。' })
+    }
+  },
+  stopTwoFactorTask: async () => {
+    const result = await getDesktopAccountsApi()?.stopTwoFactor()
+    if (result) {
+      set({ lastActionMessage: result.message })
+    }
+  },
+  clearTwoFactorLogs: async () => {
+    const twoFactorState = await getDesktopAccountsApi()?.clearTwoFactorLogs?.()
+    if (twoFactorState) {
+      set({ twoFactorState, lastActionMessage: '2FA 日志已清空。' })
+    }
+  },
+  stopProfileOperationTask: async () => {
+    const result = await getDesktopAccountsApi()?.stopProfileOperation?.()
+    if (result) {
+      set({ lastActionMessage: result.message })
+    }
+  },
+  clearProfileOperationLogs: async () => {
+    const profileOperationState = await getDesktopAccountsApi()?.clearProfileOperationLogs?.()
+    if (profileOperationState) {
+      set({ profileOperationState, lastActionMessage: '个人资料日志已清空。' })
     }
   },
   revealPath: async (targetPath) => {

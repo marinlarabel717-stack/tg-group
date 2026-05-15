@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { CheckAction, CheckResultInput, ImportProgressPayload, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
+import type { CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
 import type { AppSettings } from '../app-settings-store'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
@@ -12,6 +12,7 @@ import type { TelegramWebService } from './telegram-web-service'
 import type { TelegramDesktopPremiumService } from './telegram-desktop-premium-service'
 import type { ProxyPoolService } from '../proxy-pool/service'
 import type { TelethonTwoFactorService } from './telethon-two-factor-service'
+import type { TelethonProfileService } from './telethon-profile-service'
 
 interface RegisterAccountIpcOptions {
   getMainWindow: () => BrowserWindow | null
@@ -24,6 +25,7 @@ interface RegisterAccountIpcOptions {
   telegramWebService: TelegramWebService
   telegramDesktopPremiumService: TelegramDesktopPremiumService
   telegramTwoFactorService: TelethonTwoFactorService
+  telegramProfileService: TelethonProfileService
   emitAccountsUpdated: (accounts: ReturnType<AccountRepository['list']>) => void
   withManagedSessionsWatcherSuspended: <T>(action: () => Promise<T>) => Promise<T>
 }
@@ -46,7 +48,32 @@ function createEmptyTwoFactorState(): TwoFactorProgressState {
   }
 }
 
+function createEmptyProfileOperationState(): ProfileOperationProgressState {
+  return {
+    running: false,
+    stopRequested: false,
+    action: null,
+    concurrency: 1,
+    total: 0,
+    completed: 0,
+    successCount: 0,
+    failedCount: 0,
+    currentAccountId: null,
+    currentPhone: null,
+    logs: [],
+    lastUpdatedAt: null
+  }
+}
+
 function createTwoFactorLogEntry(input: Omit<TwoFactorLogEntry, 'id' | 'createdAt'>): TwoFactorLogEntry {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: new Date().toISOString(),
+    ...input
+  }
+}
+
+function createProfileOperationLogEntry(input: Omit<ProfileOperationLogEntry, 'id' | 'createdAt'>): ProfileOperationLogEntry {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: new Date().toISOString(),
@@ -115,10 +142,44 @@ function buildProfileUpdateItemWithOptionalTwoFA(account: ReturnType<AccountRepo
   return buildProfileUpdateItem(account, nextTwoFA)
 }
 
+function buildProfileUpdateItemFromOperation(account: ReturnType<AccountRepository['getByIds']>[number], result: ProfileOperationResultItem): CheckResultInput {
+  const nextUsername = typeof result.username === 'string' ? result.username.trim() : ''
+  const nextFirstName = typeof result.firstName === 'string' ? result.firstName : null
+  const nextLastName = typeof result.lastName === 'string' ? result.lastName : null
+  const nextBio = typeof result.bio === 'string' ? result.bio : null
+  const nextAvatar = Object.prototype.hasOwnProperty.call(result, 'avatar') ? result.avatar ?? null : account.profile?.avatar ?? null
+  const nextHasProfilePhoto = typeof result.hasProfilePhoto === 'boolean'
+    ? result.hasProfilePhoto
+    : Boolean(account.profile?.has_profile_pic)
+
+  return {
+    id: account.id,
+    status: account.status,
+    phone: account.phone,
+    username: nextUsername ? (nextUsername.startsWith('@') ? nextUsername : `@${nextUsername}`) : '',
+    userId: account.userId,
+    country: account.country,
+    proxyDisplay: account.proxyDisplay ?? null,
+    lastCheckTime: account.lastCheckTime,
+    lastOnlineTime: account.lastOnlineTime,
+    profile: {
+      ...account.profile,
+      username: nextUsername || null,
+      first_name: nextFirstName,
+      last_name: nextLastName,
+      bio: nextBio,
+      avatar: nextAvatar,
+      has_profile_pic: nextHasProfilePhoto
+    }
+  }
+}
+
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
-  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, telegramTwoFactorService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
+  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, telegramTwoFactorService, telegramProfileService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
   let twoFactorState = createEmptyTwoFactorState()
   let twoFactorStopRequested = false
+  let profileOperationState = createEmptyProfileOperationState()
+  let profileOperationStopRequested = false
   let checkStateEmitTimer: NodeJS.Timeout | null = null
 
   const flushCheckState = () => {
@@ -167,6 +228,12 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     mainWindow.webContents.send('accounts:two-factor-progress', twoFactorState)
   }
 
+  const emitProfileOperationProgress = () => {
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('accounts:profile-operation-progress', profileOperationState)
+  }
+
   const updateTwoFactorState = (patch: Partial<TwoFactorProgressState>) => {
     twoFactorState = {
       ...twoFactorState,
@@ -194,6 +261,35 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       lastUpdatedAt: new Date().toISOString()
     }
     emitTwoFactorProgress()
+  }
+
+  const updateProfileOperationState = (patch: Partial<ProfileOperationProgressState>) => {
+    profileOperationState = {
+      ...profileOperationState,
+      ...patch,
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitProfileOperationProgress()
+  }
+
+  const bumpProfileOperationCounters = (kind: 'success' | 'failed') => {
+    profileOperationState = {
+      ...profileOperationState,
+      completed: profileOperationState.completed + 1,
+      successCount: profileOperationState.successCount + (kind === 'success' ? 1 : 0),
+      failedCount: profileOperationState.failedCount + (kind === 'failed' ? 1 : 0),
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitProfileOperationProgress()
+  }
+
+  const pushProfileOperationLog = (entry: Omit<ProfileOperationLogEntry, 'id' | 'createdAt'>) => {
+    profileOperationState = {
+      ...profileOperationState,
+      logs: [...profileOperationState.logs, createProfileOperationLogEntry(entry)].slice(-400),
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitProfileOperationProgress()
   }
 
   checkQueue.on('state', () => emitCheckState())
@@ -368,6 +464,31 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     return result
   })
 
+  ipcMain.handle('accounts:pick-profile-avatar', async () => {
+    const result = await showOpenDialog({
+      title: '选择头像图片',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Image Files', extensions: ['png', 'jpg', 'jpeg', 'webp'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    })
+
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('accounts:get-two-factor-state', () => twoFactorState)
+  ipcMain.handle('accounts:clear-two-factor-logs', () => {
+    twoFactorState = {
+      ...twoFactorState,
+      logs: [],
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitTwoFactorProgress()
+    return twoFactorState
+  })
+
   ipcMain.handle('accounts:stop-two-factor', async (): Promise<TwoFactorStopResult> => {
     if (!twoFactorState.running) {
       return {
@@ -395,6 +516,47 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     return {
       stopped: true,
       message: '已开始停止当前 2FA 任务。'
+    }
+  })
+
+  ipcMain.handle('accounts:get-profile-operation-state', () => profileOperationState)
+  ipcMain.handle('accounts:clear-profile-operation-logs', () => {
+    profileOperationState = {
+      ...profileOperationState,
+      logs: [],
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitProfileOperationProgress()
+    return profileOperationState
+  })
+
+  ipcMain.handle('accounts:stop-profile-operation', async (): Promise<ProfileOperationStopResult> => {
+    if (!profileOperationState.running) {
+      return {
+        stopped: false,
+        message: '当前没有正在执行的个人资料任务。'
+      }
+    }
+
+    if (profileOperationStopRequested || profileOperationState.stopRequested) {
+      return {
+        stopped: false,
+        message: '已经在停止当前个人资料任务了，请等已启动的账号先收尾。'
+      }
+    }
+
+    profileOperationStopRequested = true
+    updateProfileOperationState({ stopRequested: true })
+    pushProfileOperationLog({
+      accountId: null,
+      phone: '',
+      level: 'warning',
+      message: '已收到停止指令：不会再领取新账号，正在等待当前已启动的账号先收尾。'
+    })
+
+    return {
+      stopped: true,
+      message: '已开始停止当前个人资料任务。'
     }
   })
 
@@ -569,6 +731,167 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       total: orderedAccounts.length,
       successCount: twoFactorState.successCount,
       failedCount: twoFactorState.failedCount,
+      results,
+      message: finalMessage
+    }
+  })
+
+  ipcMain.handle('accounts:manage-profile-operation', async (_event, payload: ProfileOperationPayload): Promise<ProfileOperationResult> => {
+    const accountIds = Array.isArray(payload?.accountIds) ? payload.accountIds.filter((id) => Number.isFinite(id)) : []
+    const action = payload?.action
+
+    if (!action) {
+      throw new Error('个人资料操作类型不正确。')
+    }
+    if (accountIds.length === 0) {
+      throw new Error('请先选择要处理的账号。')
+    }
+    if (profileOperationState.running) {
+      throw new Error('当前已经有一个个人资料任务正在执行，请等它完成后再试。')
+    }
+
+    const accounts = accountRepository.getByIds(accountIds)
+    const accountMap = new Map(accounts.map((account) => [account.id, account]))
+    const orderedAccounts = accountIds
+      .map((id) => accountMap.get(id))
+      .filter((account): account is NonNullable<typeof account> => Boolean(account))
+
+    if (orderedAccounts.length === 0) {
+      throw new Error('没有找到可执行的账号。')
+    }
+
+    const runtimeConcurrency = Math.max(1, appSettingsStore.get().checkConcurrency)
+    const currentProxy = (() => {
+      if (!proxyPoolService.isEnabled()) return null
+      const proxy = proxyPoolService.getAccountCheckProxy()
+      if (!proxy) {
+        throw new Error('当前已开启全局代理，但没有可用代理，无法更新个人资料。请先导入代理或关闭全局代理后再试。')
+      }
+      return {
+        type: proxy.type,
+        ip: proxy.host,
+        port: proxy.port,
+        username: proxy.username ?? null,
+        password: proxy.password ?? null,
+        ipVersion: proxy.ipVersion
+      }
+    })()
+
+    profileOperationStopRequested = false
+    profileOperationState = {
+      running: true,
+      stopRequested: false,
+      action: action as ProfileOperationAction,
+      concurrency: Math.min(runtimeConcurrency, Math.max(1, orderedAccounts.length)),
+      total: orderedAccounts.length,
+      completed: 0,
+      successCount: 0,
+      failedCount: 0,
+      currentAccountId: null,
+      currentPhone: null,
+      logs: [],
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitProfileOperationProgress()
+
+    const results: ProfileOperationResultItem[] = []
+
+    try {
+      pushProfileOperationLog({
+        accountId: null,
+        phone: '',
+        level: 'info',
+        message: `已开始执行 ${orderedAccounts.length} 个账号的个人资料任务，当前按 ${profileOperationState.concurrency} 个并发执行。`
+      })
+
+      const pendingProfileUpdates: CheckResultInput[] = []
+      const queue = [...orderedAccounts]
+      const workerCount = Math.min(profileOperationState.concurrency, queue.length)
+
+      const runAccount = async (account: typeof orderedAccounts[number]) => {
+        updateProfileOperationState({
+          currentAccountId: account.id,
+          currentPhone: account.phone
+        })
+        pushProfileOperationLog({
+          accountId: account.id,
+          phone: account.phone,
+          level: 'info',
+          message: `开始处理 ${account.phone || `账号 #${account.id}`} 的个人资料。`
+        })
+
+        const result = await telegramProfileService.execute(account, payload, currentProxy)
+        results.push(result)
+
+        if (result.success) {
+          pendingProfileUpdates.push(buildProfileUpdateItemFromOperation(account, result))
+          pushProfileOperationLog({
+            accountId: account.id,
+            phone: account.phone,
+            level: 'success',
+            message: result.message
+          })
+          bumpProfileOperationCounters('success')
+          return
+        }
+
+        pushProfileOperationLog({
+          accountId: account.id,
+          phone: account.phone,
+          level: 'error',
+          message: result.message
+        })
+        bumpProfileOperationCounters('failed')
+      }
+
+      const workers = Array.from({ length: workerCount }, () => (async () => {
+        while (true) {
+          if (profileOperationStopRequested) {
+            return
+          }
+          const account = queue.shift()
+          if (!account) {
+            return
+          }
+          await runAccount(account)
+        }
+      })())
+
+      await Promise.all(workers)
+
+      if (pendingProfileUpdates.length > 0) {
+        const accountsSnapshot = accountRepository.applyCheckResults(pendingProfileUpdates)
+        emitAccountsUpdated(accountsSnapshot)
+      }
+    } finally {
+      updateProfileOperationState({
+        running: false,
+        stopRequested: profileOperationStopRequested,
+        currentAccountId: null,
+        currentPhone: null
+      })
+    }
+
+    pushProfileOperationLog({
+      accountId: null,
+      phone: '',
+      level: 'info',
+      message: profileOperationStopRequested
+        ? `个人资料任务已停止：成功 ${profileOperationState.successCount}，失败 ${profileOperationState.failedCount}，剩余 ${Math.max(0, orderedAccounts.length - profileOperationState.completed)} 个账号未继续执行。`
+        : `个人资料任务执行完成：成功 ${profileOperationState.successCount}，失败 ${profileOperationState.failedCount}。`
+    })
+
+    const finalMessage = profileOperationStopRequested
+      ? `个人资料任务已停止：成功 ${profileOperationState.successCount}，失败 ${profileOperationState.failedCount}，剩余 ${Math.max(0, orderedAccounts.length - profileOperationState.completed)} 个账号未继续执行。`
+      : `个人资料任务执行完成：成功 ${profileOperationState.successCount}，失败 ${profileOperationState.failedCount}。`
+
+    profileOperationStopRequested = false
+
+    return {
+      action: action as ProfileOperationAction,
+      total: orderedAccounts.length,
+      successCount: profileOperationState.successCount,
+      failedCount: profileOperationState.failedCount,
       results,
       message: finalMessage
     }

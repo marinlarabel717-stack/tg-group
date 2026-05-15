@@ -29,6 +29,18 @@ export type CheckLogLevel = 'info' | 'success' | 'warning' | 'error'
 export type CheckAction = 'account-status' | 'account-survival' | 'profile-refresh' | 'proxy-health'
 export type TwoFactorAction = 'change-2fa' | 'disable-2fa' | 'reset-2fa'
 export type TwoFactorOperationPhase = 'apply' | 'request-recovery' | 'confirm-recovery'
+export type ProfileOperationAction =
+  | 'random-avatar'
+  | 'random-nickname'
+  | 'random-username'
+  | 'random-bio'
+  | 'custom-avatar'
+  | 'custom-nickname'
+  | 'custom-username'
+  | 'custom-bio'
+  | 'remove-username'
+  | 'remove-bio'
+  | 'clear-all-profile'
 export type ProxyType = 'http' | 'https' | 'socks5'
 export type ProxyIpVersion = 'ipv4' | 'ipv6'
 export type ProxyStatus = 'idle' | 'checking' | 'alive' | 'dead'
@@ -274,6 +286,64 @@ export interface TwoFactorProgressState {
   lastUpdatedAt: string | null
 }
 
+export interface ProfileOperationPayload {
+  action: ProfileOperationAction
+  accountIds: number[]
+  value?: string
+  avatarPath?: string
+}
+
+export interface ProfileOperationResultItem {
+  accountId: number
+  phone: string
+  success: boolean
+  message: string
+  firstName?: string | null
+  lastName?: string | null
+  username?: string | null
+  bio?: string | null
+  avatar?: string | null
+  hasProfilePhoto?: boolean | null
+}
+
+export interface ProfileOperationResult {
+  action: ProfileOperationAction
+  total: number
+  successCount: number
+  failedCount: number
+  results: ProfileOperationResultItem[]
+  message?: string
+}
+
+export interface ProfileOperationStopResult {
+  stopped: boolean
+  message: string
+}
+
+export interface ProfileOperationLogEntry {
+  id: string
+  accountId: number | null
+  phone: string
+  level: CheckLogLevel
+  message: string
+  createdAt: string
+}
+
+export interface ProfileOperationProgressState {
+  running: boolean
+  stopRequested: boolean
+  action: ProfileOperationAction | null
+  concurrency: number
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  currentAccountId: number | null
+  currentPhone: string | null
+  logs: ProfileOperationLogEntry[]
+  lastUpdatedAt: string | null
+}
+
 export interface CheckLogEntry {
   id: string
   accountId: number | null
@@ -336,9 +406,17 @@ export interface DesktopAccountsApi {
   revealPath: (targetPath: string) => Promise<boolean>
   openTelegramWeb: (accountId: number) => Promise<boolean>
   readPremiumExpiryFromDesktop: (accountId: number) => Promise<PremiumExpiryReadResult>
+  pickProfileAvatar: () => Promise<string | null>
   manageTwoFactor: (payload: TwoFactorOperationPayload) => Promise<TwoFactorOperationResult>
   stopTwoFactor: () => Promise<TwoFactorStopResult>
+  getTwoFactorState: () => Promise<TwoFactorProgressState>
+  clearTwoFactorLogs: () => Promise<TwoFactorProgressState>
   onTwoFactorProgress: (callback: (state: TwoFactorProgressState) => void) => () => void
+  manageProfileOperation: (payload: ProfileOperationPayload) => Promise<ProfileOperationResult>
+  stopProfileOperation: () => Promise<ProfileOperationStopResult>
+  getProfileOperationState: () => Promise<ProfileOperationProgressState>
+  clearProfileOperationLogs: () => Promise<ProfileOperationProgressState>
+  onProfileOperationProgress: (callback: (state: ProfileOperationProgressState) => void) => () => void
 }
 
 export interface DesktopAppSettings {

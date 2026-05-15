@@ -3,12 +3,12 @@ import type { ModuleKey } from '../types'
 
 interface UIState {
   activeModule: ModuleKey
-  logsContext: 'accounts' | 'proxy-pool'
+  logsContext: 'accounts' | 'proxy-pool' | 'accounts-two-factor' | 'accounts-profile'
   notificationCount: number
   userName: string
   sidebarCollapsed: boolean
   setActiveModule: (module: ModuleKey) => void
-  setLogsContext: (context: 'accounts' | 'proxy-pool') => void
+  setLogsContext: (context: 'accounts' | 'proxy-pool' | 'accounts-two-factor' | 'accounts-profile') => void
   setNotificationCount: (count: number) => void
   toggleSidebar: () => void
 }

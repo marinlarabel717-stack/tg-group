@@ -5,7 +5,7 @@ import { useAutoJoinStore } from '../stores/autojoinstore'
 import { useBroadcastStore } from '../stores/broadcaststore'
 import { useDirectMessageStore } from '../stores/directmessagestore'
 
-export type AccountTaskKind = 'idle' | 'checking' | 'direct-message' | 'broadcast' | 'auto-join'
+export type AccountTaskKind = 'idle' | 'checking' | 'direct-message' | 'broadcast' | 'auto-join' | 'two-factor' | 'profile'
 
 export interface AccountTaskMeta {
   kind: AccountTaskKind
@@ -44,6 +44,18 @@ const ACCOUNT_TASK_META: Record<AccountTaskKind, AccountTaskMeta> = {
     label: '加群中',
     tone: 'border-violet-400/18 bg-violet-400/12 text-violet-200',
     occupied: true
+  },
+  'two-factor': {
+    kind: 'two-factor',
+    label: '2FA 中',
+    tone: 'border-fuchsia-400/18 bg-fuchsia-400/12 text-fuchsia-200',
+    occupied: true
+  },
+  profile: {
+    kind: 'profile',
+    label: '资料中',
+    tone: 'border-cyan-400/18 bg-cyan-400/12 text-cyan-200',
+    occupied: true
   }
 }
 
@@ -61,6 +73,8 @@ export function buildAccountTaskStatusMap(input: {
   directMessage: { sending: boolean; stopping: boolean; runningAccountIds: number[] }
   broadcast: { syncing: boolean; stopping: boolean; syncingAccountIds: number[] }
   autoJoin: { running: boolean; stopping: boolean; runningAccountIds: number[] }
+  twoFactor: { running: boolean; stopping: boolean; runningAccountIds: number[] }
+  profile: { running: boolean; stopping: boolean; runningAccountIds: number[] }
 }) {
   const map = new Map<number, AccountTaskKind>()
 
@@ -78,6 +92,14 @@ export function buildAccountTaskStatusMap(input: {
 
   if (input.autoJoin.running || input.autoJoin.stopping) {
     assignTask(map, input.autoJoin.runningAccountIds, 'auto-join')
+  }
+
+  if (input.twoFactor.running || input.twoFactor.stopping) {
+    assignTask(map, input.twoFactor.runningAccountIds, 'two-factor')
+  }
+
+  if (input.profile.running || input.profile.stopping) {
+    assignTask(map, input.profile.runningAccountIds, 'profile')
   }
 
   return map
@@ -102,6 +124,8 @@ export function useAccountTaskStatusMap() {
   const autoJoinRunning = useAutoJoinStore((state) => state.running)
   const autoJoinStopping = useAutoJoinStore((state) => state.stopping)
   const autoJoinRunningAccountIds = useAutoJoinStore((state) => state.runningAccountIds)
+  const twoFactorState = useAccountStore((state) => state.twoFactorState)
+  const profileOperationState = useAccountStore((state) => state.profileOperationState)
 
   return useMemo(() => buildAccountTaskStatusMap({
     checkState,
@@ -119,6 +143,16 @@ export function useAccountTaskStatusMap() {
       running: autoJoinRunning,
       stopping: autoJoinStopping,
       runningAccountIds: autoJoinRunningAccountIds
+    },
+    twoFactor: {
+      running: twoFactorState.running,
+      stopping: twoFactorState.stopRequested,
+      runningAccountIds: twoFactorState.currentAccountId ? [twoFactorState.currentAccountId] : []
+    },
+    profile: {
+      running: profileOperationState.running,
+      stopping: profileOperationState.stopRequested,
+      runningAccountIds: profileOperationState.currentAccountId ? [profileOperationState.currentAccountId] : []
     }
   }), [
     autoJoinRunning,
@@ -130,6 +164,8 @@ export function useAccountTaskStatusMap() {
     checkState,
     directMessageRunningAccountIds,
     directMessageSending,
-    directMessageStopping
+    directMessageStopping,
+    profileOperationState,
+    twoFactorState
   ])
 }
