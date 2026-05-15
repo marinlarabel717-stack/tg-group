@@ -4,6 +4,7 @@ import type { AccountRecord, PremiumExpiryReadResult } from './types'
 import { SessionLoader } from './check-engine/session-loader'
 import { TelegramClientManager } from './check-engine/telegram-client-manager'
 import { getTelegramModule } from './check-engine/gramjs-runtime'
+import { TelethonPremiumReader } from './telethon-premium-reader'
 
 function trimRawText(value?: string | null) {
   if (!value) return null
@@ -144,12 +145,20 @@ export class TelegramDesktopPremiumService {
   constructor(
     accountsRootPath: string,
     private readonly sessionLoader: SessionLoader,
-    private readonly clientManager: TelegramClientManager
+    private readonly clientManager: TelegramClientManager,
+    private readonly telethonPremiumReader: TelethonPremiumReader
   ) {
     this.debugDirectory = path.join(accountsRootPath, 'premium-promo-debug')
   }
 
   async readPremiumExpiry(account: AccountRecord): Promise<PremiumExpiryReadResult> {
+    if (this.telethonPremiumReader.isAvailable()) {
+      const telethonResult = await this.telethonPremiumReader.read(account)
+      if (telethonResult?.ok) {
+        return telethonResult
+      }
+    }
+
     const session = await this.sessionLoader.load(account.sessionPath)
     const client = this.clientManager.createClient(session)
 

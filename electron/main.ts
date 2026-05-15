@@ -22,6 +22,7 @@ import { FileScanner } from './accounts/services/file-scanner'
 import { JsonTemplateService } from './accounts/services/json-template-service'
 import { TelegramWebService } from './accounts/telegram-web-service'
 import { TelegramDesktopPremiumService } from './accounts/telegram-desktop-premium-service'
+import { TelethonPremiumReader } from './accounts/telethon-premium-reader'
 import { TelethonTwoFactorService } from './accounts/telethon-two-factor-service'
 import { AppSettingsStore } from './app-settings-store'
 import { ProxyPoolService } from './proxy-pool/service'
@@ -274,10 +275,12 @@ async function bootstrap() {
   const clientManager = new TelegramClientManager()
   const telegramWebPreloadPath = resolveRuntimeAssetPath('accounts', 'telegram-web-preload.cjs')
   const telegramWebService = new TelegramWebService(sessionLoader, clientManager, telegramWebPreloadPath, proxyPoolService)
+  const telethonPremiumReader = new TelethonPremiumReader()
   const telegramDesktopPremiumService = new TelegramDesktopPremiumService(
     accountsRootPath,
     sessionLoader,
-    clientManager
+    clientManager,
+    telethonPremiumReader
   )
   const telethonTwoFactorService = new TelethonTwoFactorService()
   const spamBotChecker = new SpamBotChecker()
