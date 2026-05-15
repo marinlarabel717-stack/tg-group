@@ -1,8 +1,8 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { resolveRuntimeAssetPath } from '../../runtime-paths'
+import { buildTelethonPythonEnv, resolvePythonExecutable } from '../../python-runtime'
 import { parseSpamBotReply } from './spam-bot-parser'
 import type { AccountStatus } from '../types'
 
@@ -39,16 +39,6 @@ interface TelethonSpamBotCheckRawResult {
   freeze_since_text?: string | null
   freeze_until_text?: string | null
   freeze_appeal_url?: string | null
-}
-
-function resolvePythonExecutable() {
-  const candidates = [
-    path.resolve(process.cwd(), '.venv', 'Scripts', 'python.exe'),
-    path.resolve(process.cwd(), '.venv', 'bin', 'python'),
-    'python'
-  ]
-
-  return candidates.find((candidate) => candidate === 'python' || fs.existsSync(candidate)) ?? 'python'
 }
 
 function resolveScriptPath() {
@@ -97,12 +87,7 @@ export class TelethonSpamBotChecker {
         windowsHide: true,
         timeout: Math.max(timeoutSeconds + 5, 10) * 1000,
         encoding: 'utf8',
-        env: {
-          ...process.env,
-          PYTHONIOENCODING: 'utf-8',
-          ACCOUNT_CHECK_API_ID: process.env.ACCOUNT_CHECK_API_ID || '2040',
-          ACCOUNT_CHECK_API_HASH: process.env.ACCOUNT_CHECK_API_HASH || 'b18441a1ff607e10a989891a5462e627'
-        }
+        env: buildTelethonPythonEnv()
       })
 
       const raw = JSON.parse(stdout.trim()) as TelethonSpamBotCheckRawResult

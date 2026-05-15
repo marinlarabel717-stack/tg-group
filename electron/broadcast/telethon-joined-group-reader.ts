@@ -3,6 +3,7 @@ import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { resolveRuntimeAssetPath } from '../runtime-paths'
+import { buildTelethonPythonEnv, resolvePythonExecutable } from '../python-runtime'
 import type { BroadcastJoinedGroup } from '../../src/types'
 
 const execFileAsync = promisify(execFile)
@@ -20,18 +21,6 @@ interface TelethonJoinedGroupRawResult {
     memberCount?: number | null
     type?: 'group' | 'supergroup' | null
   }> | null
-}
-
-function resolvePythonExecutable() {
-  const bundledRuntime = resolveRuntimeAssetPath('python', 'python.exe')
-  const candidates = [
-    bundledRuntime,
-    path.resolve(process.cwd(), '.venv', 'Scripts', 'python.exe'),
-    path.resolve(process.cwd(), '.venv', 'bin', 'python'),
-    'python'
-  ]
-
-  return candidates.find((candidate) => candidate === 'python' || fs.existsSync(candidate)) ?? 'python'
 }
 
 function resolveScriptPath() {
@@ -54,12 +43,7 @@ export class TelethonJoinedGroupReader {
       windowsHide: true,
       timeout: Math.max(timeoutSeconds + 5, 15) * 1000,
       encoding: 'utf8',
-      env: {
-        ...process.env,
-        PYTHONIOENCODING: 'utf-8',
-        ACCOUNT_CHECK_API_ID: process.env.ACCOUNT_CHECK_API_ID || '2040',
-        ACCOUNT_CHECK_API_HASH: process.env.ACCOUNT_CHECK_API_HASH || 'b18441a1ff607e10a989891a5462e627'
-      }
+      env: buildTelethonPythonEnv()
     })
 
     const raw = JSON.parse(stdout.trim()) as TelethonJoinedGroupRawResult
