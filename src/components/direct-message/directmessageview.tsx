@@ -94,6 +94,20 @@ function formatTimeOnly(value?: string | null) {
   }).format(date)
 }
 
+function formatDirectMessageLogLine(item: {
+  sentAt?: string | null
+  fallbackAt?: string | null
+  accountPhone: string
+  messageType: 'text' | 'channel_forward' | 'hidden_channel_forward' | 'postbot_code'
+  targetValue: string
+  status: 'sent' | 'failed' | 'queued'
+  message?: string
+}) {
+  const base = `[${formatTimeOnly(item.sentAt || item.fallbackAt)}] [${item.accountPhone}] - 通过${readMessageTypeLabel(item.messageType)} - 向${item.targetValue} - ${item.status === 'sent' ? '发送成功' : item.status === 'failed' ? '发送失败' : '等待发送'}`
+  if (item.status === 'failed' && item.message) return `${base} - ${item.message}`
+  return base
+}
+
 function readCustomRangeIds<T extends { id: number }>(accounts: T[], startInput: string, endInput: string) {
   const start = Number(startInput)
   const end = Number(endInput)
@@ -658,10 +672,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
 
   const exportLogs = () => {
     if (detailedItems.length === 0) return
-    const content = detailedItems.map((item) => {
-      const line = `[${formatTimeOnly(item.sentAt || item.fallbackAt)}] [${item.accountPhone}] - 通过${readMessageTypeLabel(item.messageType)} - 向${item.targetValue} - ${item.status === 'sent' ? '发送成功' : '发送失败'} -- ${item.sequence}`
-      return item.status === 'failed' ? `${line} (${item.message})` : line
-    }).join('\n')
+    const content = detailedItems.map((item) => formatDirectMessageLogLine(item)).join('\n')
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
@@ -737,23 +748,17 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       <div className="mt-4 space-y-3">
         {sending && liveItems.length > 0 ? liveItems.map((item) => (
           <div key={item.id} className={`rounded-[14px] px-4 py-3 ${item.status === 'sent' ? 'bg-emerald-400/8' : 'bg-rose-400/8'}`}>
-            <div className={`text-sm font-medium ${item.status === 'sent' ? 'text-emerald-300' : 'text-rose-300'}`}>
-              <span className="select-text">[{formatTimeOnly(item.sentAt || item.fallbackAt)}] [{item.accountPhone}] - 通过{readMessageTypeLabel(item.messageType)} - 向{item.targetValue} - {item.status === 'sent' ? '发送成功' : '发送失败'} -- {item.sequence}</span>
+            <div className={`select-text text-sm font-medium ${item.status === 'sent' ? 'text-emerald-300' : 'text-rose-300'}`}>
+              {formatDirectMessageLogLine(item)}
             </div>
-            {item.status === 'failed' && item.message ? (
-              <div className="mt-1 select-text text-xs text-rose-200">{item.message}</div>
-            ) : null}
           </div>
         )) : detailedItems.length === 0 ? (
           <div className="rounded-[16px] bg-panel/70 px-4 py-10 text-center text-sm text-textMuted">还没有发送记录</div>
         ) : detailedItems.map((item) => (
           <div key={item.id} className={`rounded-[14px] px-4 py-3 ${item.status === 'sent' ? 'bg-emerald-400/8' : 'bg-rose-400/8'}`}>
-            <div className={`text-sm font-medium ${item.status === 'sent' ? 'text-emerald-300' : 'text-rose-300'}`}>
-              <span className="select-text">[{formatTimeOnly(item.sentAt || item.fallbackAt)}] [{item.accountPhone}] - 通过{readMessageTypeLabel(item.messageType)} - 向{item.targetValue} - {item.status === 'sent' ? '发送成功' : '发送失败'} -- {item.sequence}</span>
+            <div className={`select-text text-sm font-medium ${item.status === 'sent' ? 'text-emerald-300' : 'text-rose-300'}`}>
+              {formatDirectMessageLogLine(item)}
             </div>
-            {item.status === 'failed' ? (
-              <div className="mt-1 select-text text-xs text-rose-200">{item.message}</div>
-            ) : null}
           </div>
         ))}
       </div>
