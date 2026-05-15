@@ -88,6 +88,7 @@ const twoFaMenuItems = [
 ] as const
 
 const profileMenuItems = [
+  { id: 'random-profile', label: '一键随机更换（头像 + 名称 + 简介）' },
   { id: 'random-avatar', label: '随机生成头像' },
   { id: 'random-nickname', label: '随机生成昵称' },
   { id: 'random-username', label: '随机生成用户名' },

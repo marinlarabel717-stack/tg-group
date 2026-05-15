@@ -20,6 +20,7 @@ export type CheckAction = 'account-status' | 'account-survival' | 'profile-refre
 export type TwoFactorAction = 'change-2fa' | 'disable-2fa' | 'reset-2fa'
 export type TwoFactorOperationPhase = 'apply' | 'request-recovery' | 'confirm-recovery'
 export type ProfileOperationAction =
+  | 'random-profile'
   | 'random-avatar'
   | 'random-nickname'
   | 'random-username'

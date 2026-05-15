@@ -69,6 +69,18 @@ async def _read_final_profile(client: TelegramClient):
 
 
 async def _apply_action(client: TelegramClient, action: str, value: str, avatar_path: str, first_name: str, last_name: str):
+    if action == 'random-profile':
+        resolved_first_name = (first_name or '').strip()
+        resolved_last_name = (last_name or '').strip()
+        await client(functions.account.UpdateProfileRequest(first_name=resolved_first_name, last_name=resolved_last_name, about=value))
+        avatar_file = Path(avatar_path)
+        if not avatar_file.exists():
+            raise FileNotFoundError('AVATAR_FILE_MISSING')
+        uploaded = await client.upload_file(str(avatar_file))
+        await client(functions.photos.UploadProfilePhotoRequest(file=uploaded))
+        full_name = f'{resolved_first_name} {resolved_last_name}'.strip()
+        return f'头像、名称、简介已随机更新为 {full_name}。'
+
     if action in {'random-nickname', 'custom-nickname'}:
         resolved_first_name = (first_name or value or '').strip()
         resolved_last_name = (last_name or '').strip()

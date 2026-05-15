@@ -5,6 +5,7 @@ import { ResultDialogShell, ResultHero } from './resultdialog'
 
 function readActionLabel(action: ProfileOperationAction | null) {
   switch (action) {
+    case 'random-profile': return '一键随机更换'
     case 'random-avatar': return '随机生成头像'
     case 'random-nickname': return '随机生成昵称'
     case 'random-username': return '随机生成用户名'
@@ -57,8 +58,10 @@ function readPlaceholder(action: ProfileOperationAction | null) {
 
 function readHint(action: ProfileOperationAction | null) {
   switch (action) {
+    case 'random-profile':
+      return '会一次性随机更换头像、名称和简介，并直接写到 Telegram。'
     case 'random-avatar':
-      return '会为每个账号生成一张新的随机色块头像，再直接上传到 Telegram。'
+      return '会为每个账号生成一张新的随机 emoji 头像，再直接上传到 Telegram。'
     case 'random-nickname':
       return '会按账号分别生成随机昵称，并在任务完成后统一回写到列表。'
     case 'random-username':

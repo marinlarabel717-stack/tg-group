@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { FileClock, KeyRound, ShieldCheck, ShieldX, UserRoundPen } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { CheckResultDialog } from '../accounts/checkresultdialog'
@@ -66,6 +66,7 @@ function readTwoFactorActionLabel(action: TwoFactorAction | null) {
 
 function readProfileActionLabel(action: ProfileOperationAction | null) {
   switch (action) {
+    case 'random-profile': return '一键随机更换'
     case 'random-avatar': return '随机生成头像'
     case 'random-nickname': return '随机生成昵称'
     case 'random-username': return '随机生成用户名'
@@ -190,12 +191,19 @@ const AccountOperationSummary = memo(function AccountOperationSummary({
   successCount: number
   failedCount: number
   concurrency: number
-  logs: Array<{ id: string; createdAt: string; message: string }>
+  logs: Array<{ id: string; createdAt: string; message: string; level: CheckLogLevel; accountId?: number | null }>
   onStop: () => void
   onClear: () => void
   lineClassResolver: (log: any) => string
   scrollContainerRef?: RefObject<HTMLDivElement | null>
 }) {
+  const [failedOnly, setFailedOnly] = useState(false)
+  const failedAccountIds = useMemo(() => new Set(logs.filter((log) => log.level === 'error' && typeof log.accountId === 'number').map((log) => log.accountId as number)), [logs])
+  const displayedLogs = useMemo(() => {
+    if (!failedOnly) return logs
+    return logs.filter((log) => log.level === 'error' || (typeof log.accountId === 'number' && failedAccountIds.has(log.accountId)))
+  }, [failedAccountIds, failedOnly, logs])
+
   return (
     <GlassPanel className="min-h-[520px] bg-card p-0">
       <div className="border-b border-white/5 px-5 py-4">
@@ -233,10 +241,15 @@ const AccountOperationSummary = memo(function AccountOperationSummary({
           <div className="text-xs tracking-[0.16em] text-emerald-300">成功</div>
           <div className="mt-2 text-2xl font-semibold text-white">{successCount}</div>
         </div>
-        <div className="rounded-[14px] bg-panel px-4 py-4">
+        <button
+          type="button"
+          onClick={() => setFailedOnly((value) => !value)}
+          className={`rounded-[14px] px-4 py-4 text-left transition ${failedOnly ? 'border border-rose-400/30 bg-rose-400/12' : 'bg-panel hover:bg-rose-400/8'}`}
+        >
           <div className="text-xs tracking-[0.16em] text-rose-300">失败</div>
           <div className="mt-2 text-2xl font-semibold text-white">{failedCount}</div>
-        </div>
+          <div className="mt-2 text-xs text-textMuted">{failedOnly ? '当前只看失败账号日志，点一下恢复全部' : '点这里只看失败账号日志'}</div>
+        </button>
         <div className="rounded-[14px] bg-panel px-4 py-4">
           <div className="text-xs tracking-[0.16em] text-violet-300">并发线程</div>
           <div className="mt-2 text-2xl font-semibold text-white">{concurrency}</div>
@@ -258,13 +271,13 @@ const AccountOperationSummary = memo(function AccountOperationSummary({
       </div>
 
       <div ref={scrollContainerRef as RefObject<HTMLDivElement> | undefined} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">
-        {logs.length === 0 ? (
+        {displayedLogs.length === 0 ? (
           <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center text-textMuted">
             <FileClock size={24} className="text-neonSoft" />
-            <div className="text-base font-medium text-white">暂无运行日志</div>
+            <div className="text-base font-medium text-white">{failedOnly ? '当前没有失败账号日志' : '暂无运行日志'}</div>
           </div>
         ) : (
-          <LogLines logs={logs} lineClassResolver={lineClassResolver} />
+          <LogLines logs={displayedLogs} lineClassResolver={lineClassResolver} />
         )}
       </div>
     </GlassPanel>

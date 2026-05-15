@@ -80,6 +80,10 @@ function toTitleCase(value: string) {
 }
 
 function createSvgAvatarMarkup(emoji: string, colors: readonly [string, string]) {
+  const escapedEmoji = Array.from(emoji)
+    .map((character) => `&#x${character.codePointAt(0)?.toString(16) ?? '2b50'};`)
+    .join('')
+
   return `
     <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
       <defs>
@@ -90,7 +94,25 @@ function createSvgAvatarMarkup(emoji: string, colors: readonly [string, string])
       </defs>
       <rect x="0" y="0" width="512" height="512" rx="156" fill="url(#bg)" />
       <circle cx="256" cy="256" r="190" fill="rgba(255,255,255,0.10)" />
-      <text x="256" y="284" text-anchor="middle" font-size="232" font-family="'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif">${emoji}</text>
+      <text x="256" y="284" text-anchor="middle" font-size="232" font-family="'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif">${escapedEmoji}</text>
+    </svg>
+  `.trim()
+}
+
+function createFallbackAvatarMarkup(colors: readonly [string, string]) {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${colors[0]}" />
+          <stop offset="100%" stop-color="${colors[1]}" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="512" height="512" rx="156" fill="url(#bg)" />
+      <circle cx="256" cy="256" r="156" fill="rgba(255,255,255,0.12)" />
+      <circle cx="212" cy="224" r="18" fill="rgba(255,255,255,0.88)" />
+      <circle cx="300" cy="224" r="18" fill="rgba(255,255,255,0.88)" />
+      <path d="M184 314c23 24 51 36 72 36s49-12 72-36" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="22" stroke-linecap="round" />
     </svg>
   `.trim()
 }
@@ -159,6 +181,9 @@ function formatProfileError(error: string) {
   if (upper.includes('PHOTO_INVALID') || upper.includes('IMAGE_PROCESS_FAILED')) {
     return '头像图片格式不对或 Telegram 无法处理这张图片。'
   }
+  if (upper.includes('RANDOM_AVATAR_RENDER_FAILED')) {
+    return '随机头像生成失败了，请稍后再试；如果还是不行，先用自定义头像。'
+  }
   if (upper.includes('FLOOD_WAIT')) {
     const match = upper.match(/FLOOD_WAIT_?(\d+)/)
     if (match?.[1]) {
@@ -189,12 +214,37 @@ export class TelethonProfileService {
 
   private async createRandomAvatarFile() {
     await ensureDirectory(this.tempDirectory)
-    const emoji = randomPick(RANDOM_AVATAR_EMOJIS)
     const colors = randomPick(RANDOM_AVATAR_BACKGROUNDS)
-    const svg = createSvgAvatarMarkup(emoji, colors)
-    const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`
-    const image = nativeImage.createFromDataURL(dataUrl)
-    const pngBuffer = image.toPNG()
+    let pngBuffer: Buffer | null = null
+
+    for (const emoji of [randomPick(RANDOM_AVATAR_EMOJIS), randomPick(RANDOM_AVATAR_EMOJIS)]) {
+      const svg = createSvgAvatarMarkup(emoji, colors)
+      const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`
+      const image = nativeImage.createFromDataURL(dataUrl)
+      if (!image.isEmpty()) {
+        const nextBuffer = image.toPNG()
+        if (nextBuffer.length > 1024) {
+          pngBuffer = nextBuffer
+          break
+        }
+      }
+    }
+
+    if (!pngBuffer) {
+      const fallbackSvg = createFallbackAvatarMarkup(colors)
+      const fallbackImage = nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(fallbackSvg, 'utf8').toString('base64')}`)
+      if (!fallbackImage.isEmpty()) {
+        const fallbackBuffer = fallbackImage.toPNG()
+        if (fallbackBuffer.length > 1024) {
+          pngBuffer = fallbackBuffer
+        }
+      }
+    }
+
+    if (!pngBuffer) {
+      throw new Error('RANDOM_AVATAR_RENDER_FAILED')
+    }
+
     const filePath = path.join(this.tempDirectory, `avatar-${Date.now()}-${randomInt(1000, 9999)}.png`)
     await fs.promises.writeFile(filePath, pngBuffer)
     return filePath
@@ -208,18 +258,22 @@ export class TelethonProfileService {
     let lastName = ''
     let avatarPath = typeof payload.avatarPath === 'string' ? payload.avatarPath.trim() : ''
 
-    if (action === 'random-nickname') {
+    if (action === 'random-profile' || action === 'random-nickname') {
       const generated = buildRandomNickname()
       value = generated.display
       firstName = generated.firstName
       lastName = generated.lastName
-    } else if (action === 'random-username') {
+    }
+
+    if (action === 'random-username') {
       value = buildRandomUsername()
-    } else if (action === 'random-bio') {
+    }
+
+    if (action === 'random-profile' || action === 'random-bio') {
       value = buildRandomBio()
     }
 
-    if (action === 'random-avatar') {
+    if (action === 'random-profile' || action === 'random-avatar') {
       avatarPath = await this.createRandomAvatarFile()
       cleanupPaths.push(avatarPath)
     }
@@ -314,7 +368,7 @@ export class TelethonProfileService {
         let avatar = typeof account.profile?.avatar === 'string' ? account.profile.avatar : null
         let hasProfilePhoto = typeof raw.has_profile_photo === 'boolean' ? raw.has_profile_photo : null
 
-        if (payload.action === 'custom-avatar' || payload.action === 'random-avatar') {
+        if (payload.action === 'custom-avatar' || payload.action === 'random-avatar' || payload.action === 'random-profile') {
           avatar = prepared.avatarPath ? await toAvatarDataUrl(prepared.avatarPath) : avatar
           hasProfilePhoto = true
         } else if (payload.action === 'clear-all-profile') {
