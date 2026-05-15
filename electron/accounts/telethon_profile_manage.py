@@ -1,14 +1,24 @@
 import asyncio
+import base64
 import json
 import os
+import random
 import sys
 from pathlib import Path
 
-from telethon import TelegramClient, functions, utils
+from telethon import TelegramClient, functions, types, utils
 from telethon.sessions import SQLiteSession
 
 API_ID = int(os.getenv('ACCOUNT_CHECK_API_ID', '2040'))
 API_HASH = os.getenv('ACCOUNT_CHECK_API_HASH', 'b18441a1ff607e10a989891a5462e627')
+DEFAULT_PROFILE_EMOJI_BACKGROUND_COLORS = [
+    [0x5B8CFF, 0x7A5CFA],
+    [0x2FB7A8, 0x0F9D8E],
+    [0xFF8A5B, 0xFF5E7A],
+    [0x5B6CFF, 0x3BA7FF],
+    [0xA35BFF, 0xEC5FA3],
+    [0x4AAE62, 0x9ED65D],
+]
 
 
 def _emit(payload: dict):
@@ -90,13 +100,39 @@ async def _read_final_profile(client: TelegramClient):
     full = await client(functions.users.GetFullUserRequest(id=utils.get_input_user(me)))
     full_user = getattr(full, 'full_user', None)
     about = getattr(full_user, 'about', None)
+    avatar_data_url = None
+
+    try:
+        downloaded_avatar = await client.download_profile_photo('me', file=bytes)
+        if isinstance(downloaded_avatar, (bytes, bytearray)) and downloaded_avatar:
+            avatar_data_url = f"data:image/jpeg;base64,{base64.b64encode(bytes(downloaded_avatar)).decode('ascii')}"
+    except Exception:
+        avatar_data_url = None
+
     return {
         'first_name': getattr(me, 'first_name', None),
         'last_name': getattr(me, 'last_name', None),
         'username': getattr(me, 'username', None),
         'bio': about,
         'has_profile_photo': bool(getattr(me, 'photo', None)),
+        'avatar_data_url': avatar_data_url,
     }
+
+
+async def _apply_random_emoji_profile_photo(client: TelegramClient):
+    emoji_list = await client(functions.account.GetDefaultProfilePhotoEmojisRequest(hash=0))
+    document_ids = list(getattr(emoji_list, 'document_id', None) or [])
+    if not document_ids:
+        raise RuntimeError('DEFAULT_PROFILE_PHOTO_EMOJIS_EMPTY')
+
+    emoji_id = int(random.choice(document_ids))
+    background_colors = random.choice(DEFAULT_PROFILE_EMOJI_BACKGROUND_COLORS)
+    await client(functions.photos.UploadProfilePhotoRequest(
+        video_emoji_markup=types.VideoSizeEmojiMarkup(
+            emoji_id=emoji_id,
+            background_colors=background_colors,
+        )
+    ))
 
 
 async def _apply_action(client: TelegramClient, action: str, value: str, avatar_path: str, first_name: str, last_name: str):
@@ -104,13 +140,9 @@ async def _apply_action(client: TelegramClient, action: str, value: str, avatar_
         resolved_first_name = (first_name or '').strip()
         resolved_last_name = (last_name or '').strip()
         await client(functions.account.UpdateProfileRequest(first_name=resolved_first_name, last_name=resolved_last_name, about=value))
-        avatar_file = Path(avatar_path)
-        if not avatar_file.exists():
-            raise FileNotFoundError('AVATAR_FILE_MISSING')
-        uploaded = await client.upload_file(str(avatar_file))
-        await client(functions.photos.UploadProfilePhotoRequest(file=uploaded))
+        await _apply_random_emoji_profile_photo(client)
         full_name = f'{resolved_first_name} {resolved_last_name}'.strip()
-        return f'头像、名称、简介已随机更新为 {full_name}。'
+        return f'官方 emoji 头像、名称、简介已随机更新为 {full_name}。'
 
     if action in {'random-nickname', 'custom-nickname'}:
         resolved_first_name = (first_name or value or '').strip()
@@ -137,6 +169,9 @@ async def _apply_action(client: TelegramClient, action: str, value: str, avatar_
         return '简介已删除。'
 
     if action in {'random-avatar', 'custom-avatar'}:
+        if action == 'random-avatar':
+            await _apply_random_emoji_profile_photo(client)
+            return '头像已更新为官方 emoji 头像。'
         avatar_file = Path(avatar_path)
         if not avatar_file.exists():
             raise FileNotFoundError('AVATAR_FILE_MISSING')

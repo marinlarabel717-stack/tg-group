@@ -48,6 +48,7 @@ interface TelethonProfileRawResult {
   username?: string | null
   bio?: string | null
   has_profile_photo?: boolean | null
+  avatar_data_url?: string | null
 }
 
 interface RgbaColor {
@@ -382,6 +383,9 @@ function formatProfileError(error: string) {
   if (upper.includes('PHOTO_INVALID') || upper.includes('IMAGE_PROCESS_FAILED')) {
     return '头像图片格式不对或 Telegram 无法处理这张图片。'
   }
+  if (upper.includes('DEFAULT_PROFILE_PHOTO_EMOJIS_EMPTY')) {
+    return 'Telegram 当前没有返回可用的官方 emoji 头像列表，请稍后再试。'
+  }
   if (upper.includes('RANDOM_AVATAR_RENDER_FAILED')) {
     return '随机头像生成失败了，请稍后再试；如果还是不行，先用自定义头像。'
   }
@@ -550,8 +554,7 @@ export class TelethonProfileService {
     }
 
     if (action === 'random-profile' || action === 'random-avatar') {
-      avatarPath = await this.createRandomAvatarFile()
-      cleanupPaths.push(avatarPath)
+      avatarPath = ''
     }
 
     if ((action === 'custom-nickname' || action === 'custom-username' || action === 'custom-bio') && !value) {
@@ -630,7 +633,9 @@ export class TelethonProfileService {
         let hasProfilePhoto = typeof raw.has_profile_photo === 'boolean' ? raw.has_profile_photo : null
 
         if (payload.action === 'custom-avatar' || payload.action === 'random-avatar' || payload.action === 'random-profile') {
-          avatar = prepared.avatarPath ? await toAvatarDataUrl(prepared.avatarPath) : avatar
+          avatar = typeof raw.avatar_data_url === 'string' && raw.avatar_data_url.trim()
+            ? raw.avatar_data_url.trim()
+            : (prepared.avatarPath ? await toAvatarDataUrl(prepared.avatarPath) : avatar)
           hasProfilePhoto = true
         } else if (payload.action === 'clear-all-profile') {
           avatar = null
