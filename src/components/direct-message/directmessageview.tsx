@@ -367,6 +367,7 @@ const SendWorkbench = memo(function SendWorkbench() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-base font-semibold text-white">发送目标</div>
               <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => importTargets(targetInput, { mode: 'replace', source: 'manual' })} disabled={!targetInput.trim()} className="inline-flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-3 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14} /> 整理名单</button>
                 <button type="button" onClick={copyTargets} className="inline-flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]"><Copy size={14} /> 直接复制</button>
                 <button type="button" onClick={exportTargetsAsTxt} className="inline-flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]"><Download size={14} /> TXT导出</button>
                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">
@@ -393,7 +394,8 @@ const SendWorkbench = memo(function SendWorkbench() {
                 className="w-full rounded-[16px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none focus:border-white/[0.12]"
               />
               <div className="mt-3 flex flex-wrap gap-2">
-                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300">复制进来会自动清理重复和格式错误</div>
+                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300">大名单先粘贴，再点“整理名单”；5 万级名单不会再一直挂在输入框里拖慢页面。</div>
+                {effectiveTargets.length > 2000 && !targetInput.trim() ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-textMuted">当前已导入大名单，为了避免卡顿，输入框内容已自动收起。</div> : null}
               </div>
             </div>
 

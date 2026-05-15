@@ -105,6 +105,8 @@ const EMPTY_TARGET_SUMMARY: DirectMessageTargetSummary = {
   duplicate: 0
 }
 
+const LARGE_TARGET_TEXTAREA_LIMIT = 2000
+
 interface DirectMessageState {
   activeTab: DirectMessageTabKey
   sendMode: DirectMessageSendMode
@@ -260,6 +262,18 @@ function rebuildTargetRecords(records: Array<{ value: string; source: 'manual' |
   }
 }
 
+function buildTargetTextareaValue(targets: DirectMessageTargetRecord[]) {
+  if (targets.length === 0) return ''
+  if (targets.length > LARGE_TARGET_TEXTAREA_LIMIT) return ''
+  return targets.map((item) => item.value).join('\n')
+}
+
+function readTargetImportMessage(summary: DirectMessageTargetSummary, options?: { collapsedInput?: boolean }) {
+  if (summary.valid === 0) return '没有识别到可用目标。'
+  const suffix = options?.collapsedInput ? ' 名单太大，输入框已自动清空，避免页面继续卡顿。' : ''
+  return `已自动整理 ${summary.total} 个目标，可发送 ${summary.valid} 个，清掉重复 ${summary.duplicate} 个、格式不对 ${summary.invalid} 个。${suffix}`
+}
+
 function readAccountLabel(account: { id: number; username?: string; phone?: string; profile?: Record<string, unknown> }) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
   const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
@@ -398,20 +412,21 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       setSendMode: (mode) => set({ sendMode: mode }),
       setCollectorMode: (mode) => set({ collectorMode: mode }),
       setMessageType: (value) => set({ messageType: value }),
-      setTargetInput: (value) => {
-        const incoming = tokenizeText(value).map((item) => ({ value: item, source: 'manual' as const }))
-        const { targets, summary } = rebuildTargetRecords(incoming)
-        set({
-          targetInput: targets.map((item) => item.value).join('\n'),
-          targetSummary: summary,
-          targets,
-          dedupeEnabled: true,
-          previewItems: [],
-          lastActionMessage: targets.length === 0
-            ? '没有识别到可用目标。'
-            : `已自动整理 ${summary.total} 个目标，可发送 ${summary.valid} 个，清掉重复 ${summary.duplicate} 个、格式不对 ${summary.invalid} 个。`
-        })
-      },
+      setTargetInput: (value) => set((state) => ({
+        targetInput: value,
+        ...(value.trim()
+          ? {
+              targets: state.targets,
+              targetSummary: state.targetSummary,
+              lastActionMessage: state.lastActionMessage
+            }
+          : {
+              targets: [],
+              targetSummary: EMPTY_TARGET_SUMMARY,
+              lastActionMessage: '目标用户已清空。'
+            }),
+        previewItems: []
+      })),
       setCollectorInput: (value) => set({ collectorInput: value }),
       setMessageText: (value) => set({ messageText: value }),
       setImagePayload: ({ url, name }) => set({ imageUrl: url, imageName: name || '', previewItems: [] }),
@@ -453,19 +468,20 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         const current = mode === 'append' ? get().targets.map((item) => ({ value: item.value, source: item.source })) : []
         const incoming = tokens.map((value) => ({ value, source }))
         const { targets, summary } = rebuildTargetRecords([...current, ...incoming])
+        const nextTargetInput = buildTargetTextareaValue(targets)
         set({
           targets,
           targetSummary: summary,
-          targetInput: targets.map((item) => item.value).join('\n'),
+          targetInput: nextTargetInput,
           dedupeEnabled: true,
           previewItems: [],
-          lastActionMessage: targets.length === 0 ? '没有识别到可用目标。' : `已自动整理 ${summary.total} 个目标，可发送 ${summary.valid} 个，清掉重复 ${summary.duplicate} 个、格式不对 ${summary.invalid} 个。`
+          lastActionMessage: readTargetImportMessage(summary, { collapsedInput: targets.length > LARGE_TARGET_TEXTAREA_LIMIT })
         })
         return summary
       },
       removeTarget: (targetId) => set((state) => {
         const { targets, summary } = rebuildTargetRecords(state.targets.filter((item) => item.id !== targetId).map((item) => ({ value: item.value, source: item.source })))
-        return { targets, targetSummary: summary, targetInput: targets.map((item) => item.value).join('\n'), previewItems: [] }
+        return { targets, targetSummary: summary, targetInput: buildTargetTextareaValue(targets), previewItems: [] }
       }),
       clearTargets: () => set({ targets: [], targetSummary: EMPTY_TARGET_SUMMARY, targetInput: '', previewItems: [], lastActionMessage: '目标用户已清空。' }),
       collectUsers: (text, sourceLabel) => {
@@ -546,11 +562,11 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         set({
           targets,
           targetSummary: summary,
-          targetInput: targets.map((item) => item.value).join('\n'),
+          targetInput: buildTargetTextareaValue(targets),
           dedupeEnabled: true,
           previewItems: [],
           activeTab: 'send',
-          lastActionMessage: `已把 ${state.collectedUsers.length} 个采集用户加入发送目标。`
+          lastActionMessage: `已把 ${state.collectedUsers.length} 个采集用户加入发送目标。${targets.length > LARGE_TARGET_TEXTAREA_LIMIT ? ' 名单太大，输入框已自动清空，避免页面继续卡顿。' : ''}`
         })
       },
       clearCollectedUsers: () => set({ collectedUsers: [], collectorInput: '', lastActionMessage: '采集结果已清空。' }),
@@ -669,7 +685,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
                   return {
                     targets: next.targets,
                     targetSummary: next.summary,
-                    targetInput: next.targets.map((target) => target.value).join('\n')
+                    targetInput: buildTargetTextareaValue(next.targets)
                   }
                 })()
               : {
@@ -796,18 +812,14 @@ export const useDirectMessageStore = create<DirectMessageState>()(
     }),
     {
       name: 'tg-group-direct-message-store',
-      version: 7,
+      version: 8,
       storage: createJSONStorage(() => window.localStorage),
       partialize: (state) => ({
         activeTab: state.activeTab,
         sendMode: state.sendMode,
         messageType: state.messageType,
         collectorMode: state.collectorMode,
-        targetInput: state.targetInput,
-        targetSummary: state.targetSummary,
         collectorInput: state.collectorInput,
-        targets: state.targets,
-        collectedUsers: state.collectedUsers,
         messageText: state.messageText,
         imageUrl: state.imageUrl,
         imageName: state.imageName,
@@ -826,8 +838,6 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         intervalSeconds: state.intervalSeconds,
         dedupeEnabled: state.dedupeEnabled,
         autoReplyEnabled: state.autoReplyEnabled,
-        previewItems: state.previewItems,
-        runs: state.runs,
         autoReplyRules: state.autoReplyRules,
         lastActionMessage: state.lastActionMessage,
         autoReplyState: state.autoReplyState,
@@ -835,7 +845,6 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       }),
       migrate: (persistedState) => {
         const state = persistedState as Partial<DirectMessageState> | undefined
-        const rebuiltTargets = rebuildTargetRecords((state?.targets || []).map((item) => ({ value: item.value, source: item.source })))
         return {
           activeTab: state?.activeTab || 'send',
           sendMode: state?.sendMode || 'username',
@@ -843,11 +852,11 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           collectorMode: state?.collectorMode || 'manual',
           selectedAccountIds: [],
           selectedAccountId: null,
-          targetInput: rebuiltTargets.targets.map((item) => item.value).join('\n'),
-          targetSummary: rebuiltTargets.summary,
+          targetInput: '',
+          targetSummary: EMPTY_TARGET_SUMMARY,
           collectorInput: state?.collectorInput || '',
-          targets: rebuiltTargets.targets,
-          collectedUsers: state?.collectedUsers || [],
+          targets: [],
+          collectedUsers: [],
           messageText: state?.messageText || '',
           imageUrl: state?.imageUrl || '',
           imageName: state?.imageName || '',
@@ -866,15 +875,8 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           intervalSeconds: state?.intervalSeconds || 25,
           dedupeEnabled: true,
           autoReplyEnabled: typeof state?.autoReplyEnabled === 'boolean' ? state.autoReplyEnabled : false,
-          previewItems: (state?.previewItems || []).map((item) => ({
-            ...item,
-            accountPhone: item.accountPhone || '未识别手机号',
-            status: item.status === 'failed' ? 'failed' : item.status === 'sent' ? 'sent' : 'queued',
-            errorMessage: item.errorMessage || '',
-            remoteMessageId: item.remoteMessageId ?? null,
-            sentAt: item.sentAt ?? null
-          })),
-          runs: state?.runs || [],
+          previewItems: [],
+          runs: [],
           autoReplyRules: state?.autoReplyRules || [createDefaultAutoReplyRule()],
           autoReplyState: EMPTY_AUTO_REPLY_STATE,
           autoReplyEvents: [],
