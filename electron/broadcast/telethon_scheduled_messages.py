@@ -26,6 +26,24 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _read_required_wait_seconds(error: Any) -> Optional[int]:
+    message = str(error or '').strip()
+    if not message:
+        return None
+
+    for pattern in (
+        r'A wait of (\d+) seconds is required',
+        r'FLOOD_WAIT_(\d+)',
+        r'SLOWMODE_WAIT_(\d+)'
+    ):
+        matched = re.search(pattern, message, re.IGNORECASE)
+        if matched:
+            seconds = _safe_int(matched.group(1), 0)
+            if seconds > 0:
+                return seconds
+    return None
+
+
 def _to_iso_datetime(value: Any) -> Optional[str]:
     if value is None:
         return None
@@ -397,12 +415,66 @@ async def _push_scheduled_message(client: Any, command: Dict[str, Any], target_i
     return message_id
 
 
+async def _push_scheduled_message_batch(client: Any, command: Dict[str, Any]):
+    items = command.get('items') if isinstance(command.get('items'), list) else []
+    entity_cache: Dict[str, Any] = {}
+    input_cache: Dict[str, Any] = {}
+    results: List[Dict[str, Any]] = []
+
+    async def _get_target_input(group_ref: str):
+        cache_key = str(group_ref or '').strip()
+        if cache_key in input_cache:
+            return input_cache[cache_key]
+
+        entity = entity_cache.get(cache_key)
+        if entity is None:
+            entity = await _resolve_group_entity(client, cache_key)
+            entity_cache[cache_key] = entity
+
+        target_input = await client.get_input_entity(entity)
+        input_cache[cache_key] = target_input
+        return target_input
+
+    for item in items:
+        preview_item_id = str(item.get('previewItemId') or '').strip()
+        group_ref = str(item.get('groupRef') or '').strip()
+        attempt = 0
+
+        while True:
+            attempt += 1
+            try:
+                target_input = await _get_target_input(group_ref)
+                message_id = await _push_scheduled_message(client, item, target_input)
+                results.append({
+                    'previewItemId': preview_item_id,
+                    'ok': True,
+                    'reason': '',
+                    'messageId': message_id
+                })
+                break
+            except Exception as exc:
+                wait_seconds = _read_required_wait_seconds(exc)
+                if wait_seconds and attempt <= 3:
+                    await asyncio.sleep(wait_seconds)
+                    continue
+
+                results.append({
+                    'previewItemId': preview_item_id,
+                    'ok': False,
+                    'reason': str(exc) or exc.__class__.__name__,
+                    'messageId': None
+                })
+                break
+
+    return results
+
+
 async def _run(command: Dict[str, Any]) -> Dict[str, Any]:
     action = str(command.get('action') or '').strip().lower()
     session_path = str(command.get('sessionPath') or '').strip()
     timeout_seconds = max(15, _safe_int(command.get('timeoutSeconds'), 30))
 
-    if action not in {'list', 'push', 'delete'}:
+    if action not in {'list', 'push', 'push_batch', 'delete'}:
         return {'ok': False, 'reason': 'UNKNOWN_ACTION'}
     if not session_path or not Path(session_path).exists():
         return {'ok': False, 'reason': 'AUTH_KEY_UNREGISTERED'}
@@ -427,10 +499,9 @@ async def _run(command: Dict[str, Any]) -> Dict[str, Any]:
         if not authorized:
             return {'ok': False, 'reason': 'AUTH_KEY_UNREGISTERED'}
 
-        entity = await _resolve_group_entity(client, str(command.get('groupRef') or ''))
-        target_input = await client.get_input_entity(entity)
-
         if action == 'list':
+            entity = await _resolve_group_entity(client, str(command.get('groupRef') or ''))
+            target_input = await client.get_input_entity(entity)
             _, serialized = await asyncio.wait_for(_get_scheduled_history(client, target_input), timeout=timeout_seconds)
             return {
                 'ok': True,
@@ -439,6 +510,8 @@ async def _run(command: Dict[str, Any]) -> Dict[str, Any]:
             }
 
         if action == 'delete':
+            entity = await _resolve_group_entity(client, str(command.get('groupRef') or ''))
+            target_input = await client.get_input_entity(entity)
             deleted_count = await asyncio.wait_for(_delete_scheduled_messages(client, target_input, list(command.get('messageIds') or [])), timeout=timeout_seconds)
             return {
                 'ok': True,
@@ -446,6 +519,16 @@ async def _run(command: Dict[str, Any]) -> Dict[str, Any]:
                 'summary': f'已删除 {deleted_count} 条定时内容。'
             }
 
+        if action == 'push_batch':
+            batch_items = await asyncio.wait_for(_push_scheduled_message_batch(client, command), timeout=max(timeout_seconds, 20))
+            return {
+                'ok': True,
+                'summary': f'已批量处理 {len(batch_items)} 条定时写入。',
+                'batchItems': batch_items
+            }
+
+        entity = await _resolve_group_entity(client, str(command.get('groupRef') or ''))
+        target_input = await client.get_input_entity(entity)
         message_id = await asyncio.wait_for(_push_scheduled_message(client, command, target_input), timeout=max(timeout_seconds, 20))
         return {
             'ok': True,

@@ -7,12 +7,22 @@ import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
-import type { BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastScheduledMessageItem, BroadcastScheduledMessageListResult, BroadcastStopResult } from '../../src/types'
+import type { BroadcastCreativePayload, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastScheduledMessageItem, BroadcastScheduledMessageListResult, BroadcastStopResult } from '../../src/types'
 import { TelethonJoinedGroupReader } from './telethon-joined-group-reader'
 import { TelethonScheduledMessageService } from './telethon-scheduled-message-service'
 
 const MIN_SCHEDULE_AHEAD_MS = 60_000
 const TELEGRAM_SCHEDULE_QUEUE_LIMIT = 100
+const TELETHON_SCHEDULE_PUSH_BATCH_SIZE = 5
+
+function chunkItems<T>(items: T[], size: number) {
+  const chunkSize = Math.max(1, Math.floor(size) || 1)
+  const chunks: T[][] = []
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize))
+  }
+  return chunks
+}
 
 function readRequiredWaitSeconds(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
@@ -704,34 +714,46 @@ export class BroadcastService {
         const account = accountsById.get(accountId)
         if (!account) return
 
-        for (const item of items) {
+        for (const itemChunk of chunkItems(items, TELETHON_SCHEDULE_PUSH_BATCH_SIZE)) {
           if (task.cancelled) break
-          const creative = item.creativeId ? creativesById.get(item.creativeId) : null
-          const group = groupsById.get(item.groupId)
-          const scheduledAt = new Date(item.scheduledAt)
 
-          if (!creative || !group) {
-            const resultItem = this.createFailedItem(item, !group ? '目标群不存在，请重新生成预览' : '文案不存在，请重新生成预览')
-            results.push(resultItem)
-            reportProgress(resultItem)
-            continue
-          }
+          const proxy = this.getCurrentProxy()
+          const batchPayloadItems: Array<{
+            previewItemId: string
+            groupRef: string
+            creative: BroadcastCreativePayload
+            scheduledAt: string
+            repeatPeriodSeconds: number
+          }> = []
+          const chunkMeta = new Map<string, {
+            item: typeof itemChunk[number]
+            entityKey: string
+          }>()
 
-          const groupRef = normalizeGroupRef(group.targetRef || group.username)
-          if (!groupRef) {
-            const resultItem = this.createFailedItem(item, `目标群 ${group.title} 缺少可用的 @username、私密链接或群链接`)
-            results.push(resultItem)
-            reportProgress(resultItem)
-            continue
-          }
+          for (const item of itemChunk) {
+            const creative = item.creativeId ? creativesById.get(item.creativeId) : null
+            const group = groupsById.get(item.groupId)
+            const scheduledAt = new Date(item.scheduledAt)
 
-          let finished = false
-          while (!finished && !task.cancelled) {
+            if (!creative || !group) {
+              const resultItem = this.createFailedItem(item, !group ? '目标群不存在，请重新生成预览' : '文案不存在，请重新生成预览')
+              results.push(resultItem)
+              reportProgress(resultItem)
+              continue
+            }
+
+            const groupRef = normalizeGroupRef(group.targetRef || group.username)
+            if (!groupRef) {
+              const resultItem = this.createFailedItem(item, `目标群 ${group.title} 缺少可用的 @username、私密链接或群链接`)
+              results.push(resultItem)
+              reportProgress(resultItem)
+              continue
+            }
+
+            const normalizedGroupRef = group.targetRef || group.username
+            const entityKey = `${account.id}:${groupRef.kind}:${String(groupRef.value)}`
+
             try {
-              const proxy = this.getCurrentProxy()
-              const normalizedGroupRef = group.targetRef || group.username
-              const entityKey = `${account.id}:${groupRef.kind}:${String(groupRef.value)}`
-
               let scheduledCount = scheduledCountCache.get(entityKey)
               if (typeof scheduledCount !== 'number') {
                 const scheduledMessages = await this.telethonScheduledMessageService.list({
@@ -754,52 +776,88 @@ export class BroadcastService {
                 }
               }
 
-              const pushResult = await this.telethonScheduledMessageService.push({
-                sessionPath: account.sessionPath,
+              batchPayloadItems.push({
+                previewItemId: item.id,
                 groupRef: normalizedGroupRef,
                 creative,
                 scheduledAt: scheduledAt.toISOString(),
-                repeatPeriodSeconds: item.repeatPeriodSeconds ?? 0,
-                proxy,
-                timeoutSeconds: creative.kind === 'channel_forward' ? 45 : 60
+                repeatPeriodSeconds: item.repeatPeriodSeconds ?? 0
               })
-
-              const resultItem: BroadcastPushScheduleResultItem = {
-                previewItemId: item.id,
-                status: 'scheduled',
-                errorMessage: '',
-                remoteMessageId: pushResult.messageId,
-                syncedAt: new Date().toISOString(),
-                accountId: item.accountId,
-                groupId: item.groupId,
-                creativeId: item.creativeId
-              }
-              results.push(resultItem)
-              reportProgress(resultItem)
+              chunkMeta.set(item.id, { item, entityKey })
               scheduledCountCache.set(entityKey, scheduledCount + 1)
-              finished = true
             } catch (error) {
-              if (task.cancelled) break
-
-              const waitSeconds = readRequiredWaitSeconds(error)
-              if (waitSeconds) {
-                this.emitNoticeProgress(
-                  payload.items.length,
-                  completedCount,
-                  successCount,
-                  failedCount,
-                  item,
-                  `当前账号发得有点快了，Telegram 要求先等 ${waitSeconds} 秒，时间到了会自动继续。`,
-                  onProgress
-                )
-                await this.sleepWithCancel(waitSeconds * 1000, task)
-                continue
-              }
-
               const resultItem = this.createFailedItem(item, formatBroadcastError(error))
               results.push(resultItem)
               reportProgress(resultItem)
-              finished = true
+            }
+          }
+
+          if (!batchPayloadItems.length || task.cancelled) {
+            continue
+          }
+
+          try {
+            const batchResult = await this.telethonScheduledMessageService.pushBatch({
+              sessionPath: account.sessionPath,
+              proxy,
+              timeoutSeconds: Math.max(60, batchPayloadItems.length * 45),
+              items: batchPayloadItems
+            })
+
+            const handledIds = new Set<string>()
+            for (const batchItem of batchResult.items) {
+              handledIds.add(batchItem.previewItemId)
+              const meta = chunkMeta.get(batchItem.previewItemId)
+              if (!meta) continue
+
+              if (batchItem.ok) {
+                const resultItem: BroadcastPushScheduleResultItem = {
+                  previewItemId: meta.item.id,
+                  status: 'scheduled',
+                  errorMessage: '',
+                  remoteMessageId: batchItem.messageId,
+                  syncedAt: new Date().toISOString(),
+                  accountId: meta.item.accountId,
+                  groupId: meta.item.groupId,
+                  creativeId: meta.item.creativeId
+                }
+                results.push(resultItem)
+                reportProgress(resultItem)
+                continue
+              }
+
+              const currentCount = scheduledCountCache.get(meta.entityKey)
+              if (typeof currentCount === 'number' && currentCount > 0) {
+                scheduledCountCache.set(meta.entityKey, currentCount - 1)
+              }
+              const resultItem = this.createFailedItem(meta.item, formatBroadcastError(batchItem.reason))
+              results.push(resultItem)
+              reportProgress(resultItem)
+            }
+
+            for (const pendingItem of batchPayloadItems) {
+              if (handledIds.has(pendingItem.previewItemId)) continue
+              const meta = chunkMeta.get(pendingItem.previewItemId)
+              if (!meta) continue
+              const currentCount = scheduledCountCache.get(meta.entityKey)
+              if (typeof currentCount === 'number' && currentCount > 0) {
+                scheduledCountCache.set(meta.entityKey, currentCount - 1)
+              }
+              const resultItem = this.createFailedItem(meta.item, '这条定时写入没有拿到返回结果，请直接重试一次。')
+              results.push(resultItem)
+              reportProgress(resultItem)
+            }
+          } catch (error) {
+            for (const pendingItem of batchPayloadItems) {
+              const meta = chunkMeta.get(pendingItem.previewItemId)
+              if (!meta) continue
+              const currentCount = scheduledCountCache.get(meta.entityKey)
+              if (typeof currentCount === 'number' && currentCount > 0) {
+                scheduledCountCache.set(meta.entityKey, currentCount - 1)
+              }
+              const resultItem = this.createFailedItem(meta.item, formatBroadcastError(error))
+              results.push(resultItem)
+              reportProgress(resultItem)
             }
           }
         }

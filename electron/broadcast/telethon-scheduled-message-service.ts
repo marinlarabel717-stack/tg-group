@@ -15,6 +15,12 @@ interface TelethonScheduledMessageRawResult {
   messageId?: number | null
   items?: BroadcastScheduledMessageItem[] | null
   deletedCount?: number | null
+  batchItems?: Array<{
+    previewItemId?: string | null
+    ok?: boolean
+    reason?: string | null
+    messageId?: number | null
+  }> | null
 }
 
 interface TelethonScheduledMessageBasePayload {
@@ -32,6 +38,16 @@ interface TelethonScheduledMessagePushPayload extends TelethonScheduledMessageBa
   creative: BroadcastCreativePayload
   scheduledAt: string
   repeatPeriodSeconds?: number | null
+}
+
+interface TelethonScheduledMessageBatchPushPayload extends TelethonScheduledMessageBasePayload {
+  items: Array<{
+    previewItemId: string
+    groupRef: string
+    creative: BroadcastCreativePayload
+    scheduledAt: string
+    repeatPeriodSeconds?: number | null
+  }>
 }
 
 interface TelethonScheduledMessageDeletePayload extends TelethonScheduledMessageBasePayload {
@@ -87,6 +103,21 @@ export class TelethonScheduledMessageService {
     }
   }
 
+  async pushBatch(payload: TelethonScheduledMessageBatchPushPayload) {
+    const itemCount = Array.isArray(payload.items) ? payload.items.length : 0
+    const raw = await this.runAction('push_batch', payload, Math.max(40, payload.timeoutSeconds ?? (20 + itemCount * 45)))
+    const batchItems = Array.isArray(raw.batchItems)
+      ? raw.batchItems.map((item) => ({
+          previewItemId: typeof item?.previewItemId === 'string' ? item.previewItemId : '',
+          ok: Boolean(item?.ok),
+          reason: typeof item?.reason === 'string' ? item.reason : '',
+          messageId: typeof item?.messageId === 'number' && Number.isFinite(item.messageId) ? item.messageId : null
+        })).filter((item) => item.previewItemId)
+      : []
+
+    return { items: batchItems }
+  }
+
   async delete(payload: TelethonScheduledMessageDeletePayload) {
     const raw = await this.runAction('delete', payload, Math.max(20, payload.timeoutSeconds ?? 30))
     const deletedCount = typeof raw.deletedCount === 'number' && Number.isFinite(raw.deletedCount) ? raw.deletedCount : 0
@@ -98,7 +129,7 @@ export class TelethonScheduledMessageService {
     }
   }
 
-  private async runAction(action: 'list' | 'push' | 'delete', payload: object, timeoutSeconds: number) {
+  private async runAction(action: 'list' | 'push' | 'push_batch' | 'delete', payload: object, timeoutSeconds: number) {
     if (!this.isAvailable()) {
       throw new Error('TELETHON_SCHEDULED_MESSAGE_SERVICE_UNAVAILABLE')
     }
