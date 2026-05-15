@@ -9,6 +9,7 @@ import { StatusResolver } from './status-resolver'
 import { type AccountClientProxyOptions, TelegramClientManager } from './telegram-client-manager'
 import { TelethonFreezeChecker } from './telethon-freeze-checker'
 import { TelethonSpamBotChecker } from './telethon-spambot-checker'
+import { TelethonPremiumReader } from '../telethon-premium-reader'
 import { readPremiumExpiryViaClient } from '../telegram-desktop-premium-service'
 import { type AccountCheckProxy, ProxyPoolService } from '../../proxy-pool/service'
 import type { TelethonFreezeCheckResult } from './telethon-freeze-checker'
@@ -92,6 +93,7 @@ export class AccountCheckEngine {
     private readonly sessionLoader: SessionLoader,
     private readonly telethonFreezeChecker: TelethonFreezeChecker,
     private readonly telethonSpamBotChecker: TelethonSpamBotChecker,
+    private readonly telethonPremiumReader: TelethonPremiumReader,
     private readonly clientManager: TelegramClientManager,
     private readonly spamBotChecker: SpamBotChecker,
     private readonly statusResolver: StatusResolver,
@@ -244,6 +246,27 @@ export class AccountCheckEngine {
         premiumExpiry: null,
         premiumExpirySource: null,
         premiumExpirySyncedAt: null
+      }
+    }
+
+    if (this.telethonPremiumReader.isAvailable()) {
+      const telethonResult = await withStepTimeout(
+        this.telethonPremiumReader.read(account),
+        this.timeoutMs,
+        'Telethon 会员到期时间读取'
+      )
+
+      if (telethonResult?.ok && telethonResult.premiumExpiry) {
+        probes.push('Telethon Premium 到期时间读取成功')
+        return {
+          premiumExpiry: telethonResult.premiumExpiry,
+          premiumExpirySource: 'mtproto-premium-promo',
+          premiumExpirySyncedAt: new Date().toISOString()
+        }
+      }
+
+      if (telethonResult?.message) {
+        probes.push(`Telethon Premium 未命中:${telethonResult.message}`)
       }
     }
 

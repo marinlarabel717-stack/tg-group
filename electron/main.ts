@@ -302,6 +302,7 @@ async function bootstrap() {
     sessionLoader,
     telethonFreezeChecker,
     telethonSpamBotChecker,
+    telethonPremiumReader,
     clientManager,
     spamBotChecker,
     statusResolver,
