@@ -14,6 +14,41 @@ DEFAULT_API_HASH = os.getenv('ACCOUNT_CHECK_API_HASH', 'b18441a1ff607e10a989891a
 DEFAULT_TIMEOUT_SECONDS = max(5, int(os.getenv('ACCOUNT_CHECK_TIMEOUT_SECONDS', '25') or '25'))
 
 
+def _parse_proxy(raw_value: str):
+    if not raw_value:
+        return None
+
+    try:
+        payload = json.loads(raw_value)
+    except Exception as exc:
+        raise ValueError(f'INVALID_PROXY_PAYLOAD:{exc}') from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError('INVALID_PROXY_PAYLOAD')
+
+    proxy_type = str(payload.get('type') or '').strip().lower()
+    if proxy_type == 'https':
+        raise ValueError('UNSUPPORTED_PROXY_TYPE_HTTPS')
+    if proxy_type not in ('http', 'socks5'):
+        raise ValueError(f'UNSUPPORTED_PROXY_TYPE:{proxy_type or "unknown"}')
+
+    host = str(payload.get('host') or '').strip()
+    port = _safe_int(payload.get('port'))
+    if not host or port <= 0:
+        raise ValueError('INVALID_PROXY_ENDPOINT')
+
+    username = str(payload.get('username') or '').strip() or None
+    password = str(payload.get('password') or '').strip() or None
+    return {
+        'proxy_type': proxy_type,
+        'addr': host,
+        'port': port,
+        'username': username,
+        'password': password,
+        'rdns': True,
+    }
+
+
 def _json_value_to_python(value: Any):
     if value is None:
         return None
@@ -113,8 +148,8 @@ async def _detect_frozen_status(client: Any, timeout_seconds: int) -> Dict[str, 
         raise
 
 
-async def _probe_session(session_path: str, timeout_seconds: int) -> Dict[str, Any]:
-    client = TelethonClient(session_path, DEFAULT_API_ID, DEFAULT_API_HASH, receive_updates=False)
+async def _probe_session(session_path: str, timeout_seconds: int, proxy: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    client = TelethonClient(session_path, DEFAULT_API_ID, DEFAULT_API_HASH, receive_updates=False, proxy=proxy)
     try:
         await asyncio.wait_for(client.connect(), timeout=timeout_seconds)
         authorized = await asyncio.wait_for(client.is_user_authorized(), timeout=timeout_seconds)
@@ -174,13 +209,14 @@ async def _main():
 
     session_path = sys.argv[1] if len(sys.argv) > 1 else ''
     timeout_seconds = max(5, int(sys.argv[2])) if len(sys.argv) > 2 else DEFAULT_TIMEOUT_SECONDS
+    proxy = _parse_proxy(sys.argv[3]) if len(sys.argv) > 3 else None
 
     if not session_path or not Path(session_path).exists():
         print(json.dumps({'status': 'unknown', 'reason': 'session_file_missing'}, ensure_ascii=False))
         return
 
     try:
-        result = await _probe_session(session_path, timeout_seconds)
+        result = await _probe_session(session_path, timeout_seconds, proxy)
     except Exception as exc:
         result = {
             'status': 'unknown',

@@ -4,6 +4,8 @@ import { promisify } from 'node:util'
 import { resolveRuntimeAssetPath } from '../runtime-paths'
 import { buildTelethonPythonEnv, resolvePythonExecutable } from '../python-runtime'
 import type { AccountRecord, PremiumExpiryReadResult } from './types'
+import type { AccountClientProxyOptions } from './check-engine/telegram-client-manager'
+import { serializeTelethonProxy, supportsTelethonProxy } from './check-engine/telethon-proxy'
 
 const execFileAsync = promisify(execFile)
 
@@ -107,14 +109,17 @@ export class TelethonPremiumReader {
     return fs.existsSync(this.scriptPath)
   }
 
-  async read(account: AccountRecord): Promise<PremiumExpiryReadResult | null> {
+  async read(account: AccountRecord, proxy?: AccountClientProxyOptions | null): Promise<PremiumExpiryReadResult | null> {
     if (!this.isAvailable()) return null
+    if (!supportsTelethonProxy(proxy)) return null
 
     try {
+      const proxyPayload = serializeTelethonProxy(proxy)
       const { stdout } = await execFileAsync(this.pythonExecutable, [
         this.scriptPath,
         JSON.stringify({
-          sessionPath: account.sessionPath
+          sessionPath: account.sessionPath,
+          proxy: proxyPayload ? JSON.parse(proxyPayload) : null
         })
       ], {
         cwd: process.cwd(),

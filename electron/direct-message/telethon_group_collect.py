@@ -25,6 +25,26 @@ def _extract_invite_hash(raw: str) -> str:
     return matched.group(1).strip() if matched else ''
 
 
+def _parse_message_link(raw: str) -> Dict[str, Any]:
+    private_matched = re.search(r'(?:https?://)?t\.me/c/(\d+)/(\d+)(?:\?.*)?$', raw, re.I)
+    if private_matched:
+        return {
+            'kind': 'private',
+            'channel_id': _safe_int(private_matched.group(1), 0),
+            'message_id': _safe_int(private_matched.group(2), 0),
+        }
+
+    public_matched = re.search(r'(?:https?://)?t\.me/(?:(?:s|a)/)?([A-Za-z0-9_]{3,})/(\d+)(?:\?.*)?$', raw, re.I)
+    if public_matched:
+        return {
+            'kind': 'public',
+            'peer_ref': public_matched.group(1).strip(),
+            'message_id': _safe_int(public_matched.group(2), 0),
+        }
+
+    return {}
+
+
 def _normalize_status(user: Any) -> Dict[str, str]:
     status = getattr(user, 'status', None)
     if isinstance(status, types.UserStatusOnline):
@@ -82,6 +102,29 @@ async def _resolve_entity(client: Any, source: str):
         return await client.get_entity(f'https://t.me/{username}')
 
 
+async def _resolve_message_entity(client: Any, source: str):
+    parsed = _parse_message_link(source)
+    message_id = _safe_int(parsed.get('message_id'), 0)
+    if message_id <= 0:
+        raise RuntimeError('SOURCE_MESSAGE_LINK_INVALID')
+
+    if parsed.get('kind') == 'public':
+        peer_ref = str(parsed.get('peer_ref') or '').strip()
+        if not peer_ref:
+            raise RuntimeError('SOURCE_MESSAGE_LINK_INVALID')
+        entity = await client.get_entity(f'@{peer_ref.replace("@", "")}')
+        return entity, message_id
+
+    if parsed.get('kind') == 'private':
+        channel_id = _safe_int(parsed.get('channel_id'), 0)
+        if channel_id <= 0:
+            raise RuntimeError('SOURCE_MESSAGE_LINK_INVALID')
+        entity = await client.get_entity(types.PeerChannel(channel_id))
+        return entity, message_id
+
+    raise RuntimeError('SOURCE_MESSAGE_LINK_INVALID')
+
+
 async def _ensure_joined(client: Any, entity: Any):
     if isinstance(entity, types.Channel):
         try:
@@ -127,6 +170,23 @@ def _serialize_user(user: Any, role_map: Dict[int, str]) -> Dict[str, Any]:
     }
 
 
+def _normalize_limit(raw_limit: int, default: int = 100, max_limit: int = 300) -> int:
+    limit = _safe_int(raw_limit, default)
+    if limit <= 0:
+        limit = default
+    return max(1, min(limit, max_limit))
+
+
+async def _collect_contacts(client: Any, limit: int) -> List[Dict[str, Any]]:
+    response = await client(functions.contacts.GetContactsRequest(hash=0))
+    users = getattr(response, 'users', None) or []
+    output: List[Dict[str, Any]] = []
+    for user in users[:limit]:
+        if isinstance(user, types.User):
+            output.append(_serialize_user(user, {}))
+    return output
+
+
 async def _collect_public_members(client: Any, entity: Any, participant_limit: int, role_map: Dict[int, str]) -> List[Dict[str, Any]]:
     limit = max(1, participant_limit) if participant_limit > 0 else None
     users: List[Dict[str, Any]] = []
@@ -136,6 +196,67 @@ async def _collect_public_members(client: Any, entity: Any, participant_limit: i
         users.append(_serialize_user(user, role_map))
         collected += 1
         if limit is not None and collected >= limit:
+            break
+
+    return users
+
+
+async def _collect_comment_users(client: Any, entity: Any, message_id: int, limit: int) -> List[Dict[str, Any]]:
+    response = await client(functions.messages.GetRepliesRequest(
+        peer=entity,
+        msg_id=message_id,
+        offset_id=0,
+        offset_date=None,
+        add_offset=0,
+        limit=limit,
+        max_id=0,
+        min_id=0,
+        hash=0,
+    ))
+
+    users_by_id: Dict[int, Any] = {}
+    for user in getattr(response, 'users', None) or []:
+        user_id = getattr(user, 'id', None)
+        if isinstance(user, types.User) and user_id is not None:
+            users_by_id[int(user_id)] = user
+
+    collected: Dict[int, Dict[str, Any]] = {}
+    for message in getattr(response, 'messages', None) or []:
+        sender_id = getattr(message, 'sender_id', None)
+        if isinstance(sender_id, types.PeerUser):
+            user_id = getattr(sender_id, 'user_id', None)
+        else:
+            user_id = getattr(sender_id, 'user_id', None) or sender_id
+        if user_id is None:
+            continue
+        user_id = _safe_int(user_id, 0)
+        if user_id <= 0 or user_id in collected:
+            continue
+        user = users_by_id.get(user_id)
+        if not isinstance(user, types.User):
+            continue
+        collected[user_id] = _serialize_user(user, {})
+        if len(collected) >= limit:
+            break
+
+    return list(collected.values())
+
+
+async def _collect_reaction_users(client: Any, entity: Any, message_id: int, limit: int) -> List[Dict[str, Any]]:
+    response = await client(functions.messages.GetMessageReactionsListRequest(
+        peer=entity,
+        id=message_id,
+        limit=limit,
+        reaction=None,
+        offset='',
+    ))
+
+    users: List[Dict[str, Any]] = []
+    for user in getattr(response, 'users', None) or []:
+        if not isinstance(user, types.User):
+            continue
+        users.append(_serialize_user(user, {}))
+        if len(users) >= limit:
             break
 
     return users
@@ -171,6 +292,7 @@ async def _collect_history_users(client: Any, entity: Any, history_limit: int, h
 async def _run(session_path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     source = str(payload.get('source') or '').strip()
     mode = str(payload.get('mode') or 'public_members').strip() or 'public_members'
+    limit = _normalize_limit(_safe_int(payload.get('limit'), 100), 100, 300)
     participant_limit = _safe_int(payload.get('participantLimit'), 0)
     history_limit = _safe_int(payload.get('historyLimit'), 5000)
     history_days = _safe_int(payload.get('historyDays'), 0)
@@ -183,14 +305,28 @@ async def _run(session_path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if not authorized:
             return {'ok': False, 'reason': 'AUTH_KEY_UNREGISTERED'}
 
-        entity = await asyncio.wait_for(_resolve_entity(client, source), timeout=timeout_seconds)
-        entity = await asyncio.wait_for(_ensure_joined(client, entity), timeout=timeout_seconds)
-        role_map = await asyncio.wait_for(_load_admin_roles(client, entity), timeout=timeout_seconds)
-
-        if mode == 'hidden_history':
-            users = await asyncio.wait_for(_collect_history_users(client, entity, history_limit, history_days, role_map), timeout=timeout_seconds)
+        if mode == 'contact':
+            users = await asyncio.wait_for(_collect_contacts(client, limit), timeout=timeout_seconds)
+        elif mode == 'group_members':
+            entity = await asyncio.wait_for(_resolve_entity(client, source), timeout=timeout_seconds)
+            entity = await asyncio.wait_for(_ensure_joined(client, entity), timeout=timeout_seconds)
+            role_map = await asyncio.wait_for(_load_admin_roles(client, entity), timeout=timeout_seconds)
+            users = await asyncio.wait_for(_collect_public_members(client, entity, limit, role_map), timeout=timeout_seconds)
+        elif mode == 'comment_users':
+            entity, message_id = await asyncio.wait_for(_resolve_message_entity(client, source), timeout=timeout_seconds)
+            users = await asyncio.wait_for(_collect_comment_users(client, entity, message_id, limit), timeout=timeout_seconds)
+        elif mode == 'react_users':
+            entity, message_id = await asyncio.wait_for(_resolve_message_entity(client, source), timeout=timeout_seconds)
+            users = await asyncio.wait_for(_collect_reaction_users(client, entity, message_id, limit), timeout=timeout_seconds)
         else:
-            users = await asyncio.wait_for(_collect_public_members(client, entity, participant_limit, role_map), timeout=timeout_seconds)
+            entity = await asyncio.wait_for(_resolve_entity(client, source), timeout=timeout_seconds)
+            entity = await asyncio.wait_for(_ensure_joined(client, entity), timeout=timeout_seconds)
+            role_map = await asyncio.wait_for(_load_admin_roles(client, entity), timeout=timeout_seconds)
+
+            if mode == 'hidden_history':
+                users = await asyncio.wait_for(_collect_history_users(client, entity, history_limit, history_days, role_map), timeout=timeout_seconds)
+            else:
+                users = await asyncio.wait_for(_collect_public_members(client, entity, participant_limit, role_map), timeout=timeout_seconds)
 
         return {
             'ok': True,

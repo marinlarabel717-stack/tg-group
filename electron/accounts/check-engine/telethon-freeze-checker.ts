@@ -3,6 +3,8 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { resolveRuntimeAssetPath } from '../../runtime-paths'
 import { buildTelethonPythonEnv, resolvePythonExecutable } from '../../python-runtime'
+import type { AccountClientProxyOptions } from './telegram-client-manager'
+import { serializeTelethonProxy, supportsTelethonProxy } from './telethon-proxy'
 
 const execFileAsync = promisify(execFile)
 
@@ -33,11 +35,16 @@ export class TelethonFreezeChecker {
     return fs.existsSync(this.scriptPath)
   }
 
-  async check(sessionPath: string, timeoutSeconds = 25): Promise<TelethonFreezeCheckResult | null> {
+  async check(sessionPath: string, timeoutSeconds = 25, proxy?: AccountClientProxyOptions | null): Promise<TelethonFreezeCheckResult | null> {
     if (!this.isAvailable()) return null
+    if (!supportsTelethonProxy(proxy)) return null
 
     try {
-      const { stdout } = await execFileAsync(this.pythonExecutable, [this.scriptPath, sessionPath, String(timeoutSeconds)], {
+      const args = [this.scriptPath, sessionPath, String(timeoutSeconds)]
+      const proxyArg = serializeTelethonProxy(proxy)
+      if (proxyArg) args.push(proxyArg)
+
+      const { stdout } = await execFileAsync(this.pythonExecutable, args, {
         cwd: process.cwd(),
         windowsHide: true,
         timeout: Math.max(timeoutSeconds + 5, 10) * 1000,

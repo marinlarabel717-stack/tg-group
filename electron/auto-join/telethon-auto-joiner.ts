@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { resolveRuntimeAssetPath } from '../runtime-paths'
 import { buildTelethonPythonEnv, resolvePythonExecutable } from '../python-runtime'
+import type { AccountCheckProxy } from '../proxy-pool/service'
 import type { AutoJoinPayloadItem } from '../../src/types'
 
 const execFileAsync = promisify(execFile)
@@ -31,7 +32,7 @@ export class TelethonAutoJoiner {
     return fs.existsSync(this.scriptPath)
   }
 
-  async join(sessionPath: string, item: AutoJoinPayloadItem, timeoutSeconds = 40): Promise<TelethonAutoJoinResult | null> {
+  async join(sessionPath: string, item: AutoJoinPayloadItem, timeoutSeconds = 40, proxy?: AccountCheckProxy | null): Promise<TelethonAutoJoinResult | null> {
     if (!this.isAvailable()) return null
 
     const { stdout } = await execFileAsync(this.pythonExecutable, [
@@ -39,7 +40,8 @@ export class TelethonAutoJoiner {
       JSON.stringify({
         sessionPath,
         item,
-        timeoutSeconds
+        timeoutSeconds,
+        proxy: proxy ?? null
       })
     ], {
       cwd: process.cwd(),

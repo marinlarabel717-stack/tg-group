@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { resolveRuntimeAssetPath } from '../runtime-paths'
 import { buildTelethonPythonEnv, resolvePythonExecutable } from '../python-runtime'
-import type { GroupCollectorMode, GroupCollectorRole } from '../../src/types'
+import type { DirectMessageCollectPayload, GroupCollectorMode, GroupCollectorRole } from '../../src/types'
 
 const execFileAsync = promisify(execFile)
 
@@ -54,7 +54,8 @@ export interface TelethonGroupCollectorResult {
 interface TelethonGroupCollectorPayload {
   sessionPath: string
   source: string
-  mode: GroupCollectorMode
+  mode: GroupCollectorMode | DirectMessageCollectPayload['mode']
+  limit?: number
   participantLimit?: number
   historyLimit?: number
   historyDays?: number
@@ -83,6 +84,7 @@ export class TelethonGroupCollector {
       JSON.stringify({
         source: payload.source,
         mode: payload.mode,
+        limit: payload.limit ?? null,
         participantLimit: payload.participantLimit ?? null,
         historyLimit: payload.historyLimit ?? null,
         historyDays: payload.historyDays ?? null,

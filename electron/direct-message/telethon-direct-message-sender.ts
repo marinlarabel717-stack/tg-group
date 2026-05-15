@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { resolveRuntimeAssetPath } from '../runtime-paths'
 import { buildTelethonPythonEnv, resolvePythonExecutable } from '../python-runtime'
+import type { AccountCheckProxy } from '../proxy-pool/service'
 import type { DirectMessageSendPayload } from '../../src/types'
 
 const execFileAsync = promisify(execFile)
@@ -13,31 +14,29 @@ interface TelethonDirectMessageRawResult {
   messageId?: number | null
 }
 
-interface TelethonDirectMessageSendPayload {
+interface TelethonDirectMessageBasePayload {
   sessionPath: string
   targetValue: string
+  timeoutSeconds?: number
+  proxy?: AccountCheckProxy | null
+}
+
+interface TelethonDirectMessageSendPayload extends TelethonDirectMessageBasePayload {
   messageType: DirectMessageSendPayload['messageType']
   messageText: string
   randomEmojiEnabled?: boolean
   imageUrl: string
   sourceLink: string
   postbotCode: string
-  timeoutSeconds?: number
 }
 
-interface TelethonDirectMessagePinPayload {
-  sessionPath: string
-  targetValue: string
+interface TelethonDirectMessagePinPayload extends TelethonDirectMessageBasePayload {
   messageId: number
-  timeoutSeconds?: number
 }
 
-interface TelethonDirectMessageDeletePayload {
-  sessionPath: string
-  targetValue: string
+interface TelethonDirectMessageDeletePayload extends TelethonDirectMessageBasePayload {
   messageId: number
   deleteMode: DirectMessageSendPayload['deleteMode']
-  timeoutSeconds?: number
 }
 
 function resolveScriptPath() {

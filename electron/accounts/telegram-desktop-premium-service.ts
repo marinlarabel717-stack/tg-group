@@ -2,9 +2,10 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { AccountRecord, PremiumExpiryReadResult } from './types'
 import { SessionLoader } from './check-engine/session-loader'
-import { TelegramClientManager } from './check-engine/telegram-client-manager'
+import { TelegramClientManager, type AccountClientProxyOptions } from './check-engine/telegram-client-manager'
 import { getTelegramModule } from './check-engine/gramjs-runtime'
 import { TelethonPremiumReader } from './telethon-premium-reader'
+import { ProxyPoolService } from '../proxy-pool/service'
 
 function trimRawText(value?: string | null) {
   if (!value) return null
@@ -146,21 +147,44 @@ export class TelegramDesktopPremiumService {
     accountsRootPath: string,
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
-    private readonly telethonPremiumReader: TelethonPremiumReader
+    private readonly telethonPremiumReader: TelethonPremiumReader,
+    private readonly proxyPoolService: ProxyPoolService
   ) {
     this.debugDirectory = path.join(accountsRootPath, 'premium-promo-debug')
   }
 
+  private getCurrentProxy(): AccountClientProxyOptions | null {
+    if (!this.proxyPoolService.isEnabled()) {
+      return null
+    }
+
+    const proxy = this.proxyPoolService.getAccountCheckProxy()
+    if (!proxy) {
+      throw new Error('GLOBAL_PROXY_REQUIRED')
+    }
+
+    return {
+      type: proxy.type,
+      ip: proxy.host,
+      port: proxy.port,
+      username: proxy.username ?? null,
+      password: proxy.password ?? null,
+      ipVersion: proxy.ipVersion
+    }
+  }
+
   async readPremiumExpiry(account: AccountRecord): Promise<PremiumExpiryReadResult> {
+    const proxy = this.getCurrentProxy()
+
     if (this.telethonPremiumReader.isAvailable()) {
-      const telethonResult = await this.telethonPremiumReader.read(account)
-      if (telethonResult?.ok) {
+      const telethonResult = await this.telethonPremiumReader.read(account, proxy)
+      if (telethonResult) {
         return telethonResult
       }
     }
 
     const session = await this.sessionLoader.load(account.sessionPath)
-    const client = this.clientManager.createClient(session)
+    const client = this.clientManager.createClient(session, { proxy })
 
     try {
       await client.connect()

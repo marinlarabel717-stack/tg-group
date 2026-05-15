@@ -28,6 +28,17 @@ interface ProxyUsageMeta {
   proxyDisplay: string | null
 }
 
+interface CheckFailureMeta {
+  status: AccountCheckResult['status']
+  errorMessage: string
+  retryable: boolean
+}
+
+interface TelethonCheckOutcome {
+  result: AccountCheckResult | null
+  failure?: CheckFailureMeta | null
+}
+
 function withStepTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`${label} 超时（${timeoutMs}ms）`)), timeoutMs)
@@ -144,6 +155,10 @@ export class AccountCheckEngine {
     }
   }
 
+  private shouldRetryWithNextProxy(index: number, proxyAttempts: Array<AccountCheckProxy | null>, proxyMeta: ProxyUsageMeta, retryable: boolean) {
+    return proxyMeta.proxyUsed && index === 0 && proxyAttempts.length > 1 && retryable
+  }
+
   private pickProxyAttempts() {
     const first = this.proxyPoolService.getAccountCheckProxy()
     if (!first) return [null]
@@ -239,7 +254,13 @@ export class AccountCheckEngine {
     }
   }
 
-  private async readPremiumExpiryForPremiumAccount(account: AccountRecord, client: TelegramClient, liveUser: unknown, probes: string[]) {
+  private async readPremiumExpiryForPremiumAccount(
+    account: AccountRecord,
+    client: TelegramClient | null,
+    liveUser: unknown,
+    probes: string[],
+    proxy?: AccountClientProxyOptions | null
+  ) {
     const liveUserRecord = typeof liveUser === 'object' && liveUser ? liveUser as { premium?: unknown } : null
     const isPremium = Boolean(liveUserRecord?.premium ?? account.profile.is_premium)
 
@@ -253,7 +274,7 @@ export class AccountCheckEngine {
 
     if (this.telethonPremiumReader.isAvailable()) {
       const telethonResult = await withStepTimeout(
-        this.telethonPremiumReader.read(account),
+        this.telethonPremiumReader.read(account, proxy),
         this.timeoutMs,
         'Telethon 会员到期时间读取'
       )
@@ -269,6 +290,15 @@ export class AccountCheckEngine {
 
       if (telethonResult?.message) {
         probes.push(`Telethon Premium 未命中:${telethonResult.message}`)
+      }
+    }
+
+    if (!client) {
+      probes.push('Premium 到期时间未命中:当前链路未持有 GramJS Client')
+      return {
+        premiumExpiry: null,
+        premiumExpirySource: null,
+        premiumExpirySyncedAt: null
       }
     }
 
@@ -295,10 +325,11 @@ export class AccountCheckEngine {
     startedAt: number,
     proxyMeta: ProxyUsageMeta,
     probes: string[],
-    source: string
+    source: string,
+    proxy?: AccountClientProxyOptions | null
   ): Promise<AccountCheckResult> {
     const telethonResult = await withStepTimeout(
-      this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)),
+      this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000), proxy),
       this.timeoutMs,
       'Telethon 状态兜底'
     )
@@ -336,24 +367,112 @@ export class AccountCheckEngine {
     liveUser: unknown,
     startedAt: number,
     proxyMeta: ProxyUsageMeta,
-    probes: string[]
+    probes: string[],
+    proxy?: AccountClientProxyOptions | null
   ): Promise<AccountCheckResult> {
     const telethonSpamBot = await withStepTimeout(
-      this.telethonSpamBotChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)),
+      this.telethonSpamBotChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000), proxy),
       this.timeoutMs,
       'Telethon SpamBot 检测'
     )
 
     if (!telethonSpamBot) {
-      return this.persistFailure(
-        account,
-        'unknown',
-        'Telethon SpamBot 检测未返回结果，当前无法判断双向状态',
-        Date.now() - startedAt,
-        false,
-        'account-status',
-        proxyMeta
-      )
+      probes.push('Telethon SpamBot 未返回结果，回退 GramJS SpamBot')
+
+      try {
+        const gramJsSpamBot = await withStepTimeout(this.spamBotChecker.check(client), this.timeoutMs, 'GramJS SpamBot 检测')
+        probes.push(`GramJS SpamBot:${gramJsSpamBot.status}`)
+        if (gramJsSpamBot.replyText) {
+          probes.push(`GramJS Reply:${buildReplySnippet(gramJsSpamBot.replyText)}`)
+        }
+
+        if (gramJsSpamBot.status === 'frozen') {
+          return this.buildFrozenResultFromTelethon(account, {
+            status: 'frozen',
+            reason: gramJsSpamBot.summary,
+            user_id: typeof liveUser === 'object' && liveUser && 'id' in (liveUser as Record<string, unknown>)
+              ? (liveUser as { id?: number | string | null }).id ?? null
+              : null,
+            first_name: typeof liveUser === 'object' && liveUser && 'firstName' in (liveUser as Record<string, unknown>)
+              ? (liveUser as { firstName?: string | null }).firstName ?? null
+              : null,
+            last_name: typeof liveUser === 'object' && liveUser && 'lastName' in (liveUser as Record<string, unknown>)
+              ? (liveUser as { lastName?: string | null }).lastName ?? null
+              : null,
+            username: typeof liveUser === 'object' && liveUser && 'username' in (liveUser as Record<string, unknown>)
+              ? (liveUser as { username?: string | null }).username ?? null
+              : null,
+            phone: typeof liveUser === 'object' && liveUser && 'phone' in (liveUser as Record<string, unknown>)
+              ? (liveUser as { phone?: string | null }).phone ?? null
+              : null,
+            freeze_since_text: gramJsSpamBot.freezeSince,
+            freeze_until_text: gramJsSpamBot.freezeUntil,
+            freeze_appeal_url: gramJsSpamBot.freezeAppealUrl,
+          }, startedAt, proxyMeta, 'GramJS SpamBot 检测')
+        }
+
+        const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes, proxy)
+        const updated = await this.updateService.buildSuccessProfile({
+          account,
+          client,
+          liveUser,
+          fullUser: null,
+          spambotReply: gramJsSpamBot.replyText,
+          status: gramJsSpamBot.status,
+          checkMode: 'account-status',
+          premiumExpiryOverride: premiumExpiryMeta.premiumExpiry,
+          premiumExpirySource: premiumExpiryMeta.premiumExpirySource,
+          premiumExpirySyncedAt: premiumExpiryMeta.premiumExpirySyncedAt,
+          proxyUsed: proxyMeta.proxyUsed,
+          proxyDisplay: proxyMeta.proxyDisplay,
+          durationMs: Date.now() - startedAt
+        })
+
+        const payload: CheckResultInput = {
+          id: account.id,
+          profile: updated.profile,
+          status: gramJsSpamBot.status,
+          phone: updated.phone,
+          username: updated.username,
+          userId: updated.userId,
+          country: updated.country,
+          proxyDisplay: updated.proxyDisplay,
+          lastCheckTime: updated.lastCheckTime,
+          lastOnlineTime: updated.lastOnlineTime
+        }
+
+        this.resultWriter.write(payload)
+
+        return {
+          accountId: account.id,
+          status: gramJsSpamBot.status,
+          profile: updated.profile,
+          phone: updated.phone,
+          username: updated.username,
+          userId: updated.userId,
+          country: updated.country,
+          proxyDisplay: updated.proxyDisplay,
+          lastCheckTime: updated.lastCheckTime,
+          lastOnlineTime: updated.lastOnlineTime,
+          durationMs: Date.now() - startedAt,
+          retryable: false
+        }
+      } catch (error) {
+        if (isGramJsMessageConstructorError(error)) {
+          return this.runTelethonFallbackStatusCheck(account, startedAt, proxyMeta, probes, 'GramJS SpamBot 检测', proxy)
+        }
+
+        const failure = this.createFailureResult(account, error, Date.now() - startedAt, 'account-status', probes, proxyMeta)
+        return this.persistFailure(
+          account,
+          failure.status,
+          failure.errorMessage,
+          Date.now() - startedAt,
+          failure.retryable,
+          'account-status',
+          proxyMeta
+        )
+      }
     }
 
     probes.push(`Telethon SpamBot:${telethonSpamBot.status}${telethonSpamBot.reason ? `:${telethonSpamBot.reason}` : ''}`)
@@ -399,7 +518,7 @@ export class AccountCheckEngine {
       )
     }
 
-    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes)
+    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes, proxy)
     const updated = await this.updateService.buildSuccessProfile({
       account,
       client,
@@ -452,7 +571,8 @@ export class AccountCheckEngine {
     client: TelegramClient,
     startedAt: number,
     logger: CheckLogger,
-    proxyMeta: ProxyUsageMeta
+    proxyMeta: ProxyUsageMeta,
+    proxy?: AccountClientProxyOptions | null
   ): Promise<AccountCheckResult> {
     const probes: string[] = ['账号存活模式']
     if (proxyMeta.proxyDisplay) probes.push(`代理:${proxyMeta.proxyDisplay}`)
@@ -478,7 +598,7 @@ export class AccountCheckEngine {
 
     const ttlDays = await withStepTimeout(this.applyAccountSurvivalTtl(client), this.timeoutMs, '账号存活检测')
     probes.push(`自动注销期限已改为 ${ttlDays} 天`)
-    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes)
+    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, client, liveUser, probes, proxy)
 
     const updated = await this.updateService.buildSuccessProfile({
       account,
@@ -538,7 +658,8 @@ export class AccountCheckEngine {
     client: TelegramClient,
     startedAt: number,
     logger: CheckLogger,
-    proxyMeta: ProxyUsageMeta
+    proxyMeta: ProxyUsageMeta,
+    proxy?: AccountClientProxyOptions | null
   ): Promise<AccountCheckResult> {
     const probes: string[] = []
     if (proxyMeta.proxyDisplay) probes.push(`代理:${proxyMeta.proxyDisplay}`)
@@ -561,40 +682,45 @@ export class AccountCheckEngine {
       : account.phone) || `账号#${account.id}`)
     logger({ type: 'login_success', phone: loginPhone })
 
-    return this.buildResultFromTelethonSpamBot(account, client, liveUser, startedAt, proxyMeta, probes)
+    return this.buildResultFromTelethonSpamBot(account, client, liveUser, startedAt, proxyMeta, probes, proxy)
   }
 
   private async runAccountSurvivalCheckViaTelethon(
     account: AccountRecord,
     startedAt: number,
     logger: CheckLogger,
-    proxyMeta: ProxyUsageMeta
-  ): Promise<AccountCheckResult | null> {
+    proxyMeta: ProxyUsageMeta,
+    proxy?: AccountClientProxyOptions | null
+  ): Promise<TelethonCheckOutcome> {
     const probes: string[] = ['账号存活模式', 'Telethon 主链']
     const result = await withStepTimeout(
-      this.telethonAccountSurvivalService.run(account.sessionPath, Math.ceil(this.timeoutMs / 1000)),
+      this.telethonAccountSurvivalService.run(account.sessionPath, Math.ceil(this.timeoutMs / 1000), proxy),
       this.timeoutMs,
       'Telethon 账号存活检测'
     )
 
-    if (!result) return null
+    if (!result) return { result: null }
 
     if (result.status === 'not_logged_in') {
       const failedPhone = account.phone || account.profile.phone || `账号#${account.id}`
       logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session 未登录' })
-      return this.persistFailure(account, 'banned', '账号存活检测失败：Session 未登录', Date.now() - startedAt, false, 'account-survival', proxyMeta)
+      return {
+        result: null,
+        failure: {
+          status: 'banned',
+          errorMessage: '账号存活检测失败：Session 未登录',
+          retryable: false
+        }
+      }
     }
 
     if (result.status !== 'ok') {
-      return this.persistFailure(
-        account,
-        'unknown',
-        `Telethon 账号存活检测失败：${result.reason || '未知错误'}`,
-        Date.now() - startedAt,
-        false,
-        'account-survival',
-        proxyMeta
-      )
+      const errorMessage = `Telethon 账号存活检测失败：${result.reason || '未知错误'}`
+      const failure = this.createFailureResult(account, errorMessage, Date.now() - startedAt, 'account-survival', probes, proxyMeta)
+      return {
+        result: null,
+        failure
+      }
     }
 
     const liveUser = {
@@ -612,7 +738,7 @@ export class AccountCheckEngine {
 
     const ttlDays = Number(result.ttl_days ?? 730) || 730
     probes.push(`自动注销期限已改为 ${ttlDays} 天`)
-    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, null as unknown as TelegramClient, liveUser, probes)
+    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, null, liveUser, probes, proxy)
 
     const updated = await this.updateService.buildSuccessProfile({
       account,
@@ -652,6 +778,7 @@ export class AccountCheckEngine {
     this.resultWriter.write(payload)
 
     return {
+      result: {
       accountId: account.id,
       status: 'alive',
       profile,
@@ -664,6 +791,7 @@ export class AccountCheckEngine {
       lastOnlineTime: updated.lastOnlineTime,
       durationMs: Date.now() - startedAt,
       retryable: false
+      }
     }
   }
 
@@ -671,55 +799,65 @@ export class AccountCheckEngine {
     account: AccountRecord,
     startedAt: number,
     logger: CheckLogger,
-    proxyMeta: ProxyUsageMeta
-  ): Promise<AccountCheckResult | null> {
+    proxyMeta: ProxyUsageMeta,
+    proxy?: AccountClientProxyOptions | null
+  ): Promise<TelethonCheckOutcome> {
     const probes: string[] = ['Telethon 状态主链']
     const telethonSpamBot = await withStepTimeout(
-      this.telethonSpamBotChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)),
+      this.telethonSpamBotChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000), proxy),
       this.timeoutMs,
       'Telethon SpamBot 检测'
     )
 
-    if (!telethonSpamBot) return null
+    if (!telethonSpamBot) return { result: null }
 
     probes.push(`Telethon SpamBot:${telethonSpamBot.status}${telethonSpamBot.reason ? `:${telethonSpamBot.reason}` : ''}`)
 
     if (telethonSpamBot.status === 'not_logged_in') {
       const failedPhone = account.phone || account.profile.phone || `账号#${account.id}`
       logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session 未登录' })
-      return this.persistFailure(account, 'not_logged_in', 'Telethon SpamBot 检测判定 Session 未登录', Date.now() - startedAt, false, 'account-status', proxyMeta)
+      return {
+        result: null,
+        failure: {
+          status: 'not_logged_in',
+          errorMessage: 'Telethon SpamBot 检测判定 Session 未登录',
+          retryable: false
+        }
+      }
     }
 
     const loginPhone = String(telethonSpamBot.phone || account.phone || `账号#${account.id}`)
     logger({ type: 'login_success', phone: loginPhone })
 
     if (telethonSpamBot.status === 'frozen') {
-      return this.buildFrozenResultFromTelethon(account, {
-        status: 'frozen',
-        reason: telethonSpamBot.reason,
-        user_id: telethonSpamBot.user_id,
-        first_name: telethonSpamBot.first_name,
-        last_name: telethonSpamBot.last_name,
-        username: telethonSpamBot.username,
-        phone: telethonSpamBot.phone,
-        freeze_since_date: telethonSpamBot.freeze_since_date,
-        freeze_until_date: telethonSpamBot.freeze_until_date,
-        freeze_since_text: telethonSpamBot.freeze_since_text,
-        freeze_until_text: telethonSpamBot.freeze_until_text,
-        freeze_appeal_url: telethonSpamBot.freeze_appeal_url,
-      }, startedAt, proxyMeta, 'Telethon SpamBot 检测')
+      return {
+        result: await this.buildFrozenResultFromTelethon(account, {
+          status: 'frozen',
+          reason: telethonSpamBot.reason,
+          user_id: telethonSpamBot.user_id,
+          first_name: telethonSpamBot.first_name,
+          last_name: telethonSpamBot.last_name,
+          username: telethonSpamBot.username,
+          phone: telethonSpamBot.phone,
+          freeze_since_date: telethonSpamBot.freeze_since_date,
+          freeze_until_date: telethonSpamBot.freeze_until_date,
+          freeze_since_text: telethonSpamBot.freeze_since_text,
+          freeze_until_text: telethonSpamBot.freeze_until_text,
+          freeze_appeal_url: telethonSpamBot.freeze_appeal_url,
+        }, startedAt, proxyMeta, 'Telethon SpamBot 检测')
+      }
     }
 
     if (telethonSpamBot.status === 'timeout' || telethonSpamBot.status === 'unknown') {
-      return this.persistFailure(
-        account,
-        telethonSpamBot.status,
-        `${telethonSpamBot.summary}${telethonSpamBot.reason ? `：${telethonSpamBot.reason}` : ''}`,
-        Date.now() - startedAt,
-        false,
-        'account-status',
-        proxyMeta
-      )
+      const errorMessage = `${telethonSpamBot.summary}${telethonSpamBot.reason ? `：${telethonSpamBot.reason}` : ''}`
+      const failure = this.createFailureResult(account, errorMessage, Date.now() - startedAt, 'account-status', probes, proxyMeta)
+      return {
+        result: null,
+        failure: {
+          ...failure,
+          status: telethonSpamBot.status === 'timeout' ? 'timeout' : failure.status
+        }
+      }
     }
 
     const liveUser = {
@@ -731,7 +869,7 @@ export class AccountCheckEngine {
       premium: telethonSpamBot.premium ?? account.profile.is_premium,
     }
 
-    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, null as unknown as TelegramClient, liveUser, probes)
+    const premiumExpiryMeta = await this.readPremiumExpiryForPremiumAccount(account, null, liveUser, probes, proxy)
     const updated = await this.updateService.buildSuccessProfile({
       account,
       client: null,
@@ -764,6 +902,7 @@ export class AccountCheckEngine {
     this.resultWriter.write(payload)
 
     return {
+      result: {
       accountId: account.id,
       status: telethonSpamBot.status,
       profile: updated.profile,
@@ -776,6 +915,7 @@ export class AccountCheckEngine {
       lastOnlineTime: updated.lastOnlineTime,
       durationMs: Date.now() - startedAt,
       retryable: false
+      }
     }
   }
 
@@ -801,53 +941,108 @@ export class AccountCheckEngine {
     }
 
     const proxyAttempts = this.pickProxyAttempts()
-    let finalFailure: ReturnType<AccountCheckEngine['createFailureResult']> | null = null
+    const directOnly = proxyAttempts.length === 1 && proxyAttempts[0] === null
+    let finalFailure: CheckFailureMeta | null = null
     let finalProxyMeta: ProxyUsageMeta = { proxyUsed: false, proxyDisplay: null }
 
-    try {
-      const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结预检查')
-      if (telethonFrozen?.status === 'frozen') {
-        return this.buildFrozenResultFromTelethon(account, telethonFrozen, startedAt, finalProxyMeta, 'Telethon 冻结预检查', mode)
+    if (directOnly) {
+      try {
+        const telethonFrozen = await withStepTimeout(this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000)), this.timeoutMs, 'Telethon 冻结预检查')
+        if (telethonFrozen?.status === 'frozen') {
+          return this.buildFrozenResultFromTelethon(account, telethonFrozen, startedAt, finalProxyMeta, 'Telethon 冻结预检查', mode)
+        }
+      } catch {
+        // ignore precheck failure and continue with main mtproto flow
       }
-    } catch {
-      // ignore precheck failure and continue with main mtproto flow
-    }
 
-    const directProxyMeta: ProxyUsageMeta = { proxyUsed: false, proxyDisplay: null }
-    if (proxyAttempts.length === 1 && proxyAttempts[0] === null) {
+      const directProxyMeta: ProxyUsageMeta = { proxyUsed: false, proxyDisplay: null }
       if (mode === 'account-survival') {
         const telethonSurvivalResult = await this.runAccountSurvivalCheckViaTelethon(account, startedAt, logger, directProxyMeta)
-        if (telethonSurvivalResult) {
-          return telethonSurvivalResult
+        if (telethonSurvivalResult.result) {
+          return telethonSurvivalResult.result
+        }
+        if (telethonSurvivalResult.failure) {
+          return this.persistFailure(
+            account,
+            telethonSurvivalResult.failure.status,
+            telethonSurvivalResult.failure.errorMessage,
+            Date.now() - startedAt,
+            telethonSurvivalResult.failure.retryable,
+            mode,
+            directProxyMeta
+          )
         }
       } else {
         const telethonStatusResult = await this.runAccountStatusCheckViaTelethon(account, startedAt, logger, directProxyMeta)
-        if (telethonStatusResult) {
-          return telethonStatusResult
+        if (telethonStatusResult.result) {
+          return telethonStatusResult.result
+        }
+        if (telethonStatusResult.failure) {
+          return this.persistFailure(
+            account,
+            telethonStatusResult.failure.status,
+            telethonStatusResult.failure.errorMessage,
+            Date.now() - startedAt,
+            telethonStatusResult.failure.retryable,
+            mode,
+            directProxyMeta
+          )
         }
       }
     }
 
-    let session
-    try {
-      session = await withStepTimeout(this.sessionLoader.load(account.sessionPath), this.timeoutMs, 'Session 加载')
-    } catch (error) {
-      const failure = this.createFailureResult(account, error, Date.now() - startedAt, mode, [], { proxyUsed: false, proxyDisplay: null })
-      return this.persistFailure(
-        account,
-        failure.status,
-        failure.errorMessage,
-        Date.now() - startedAt,
-        failure.retryable,
-        mode,
-        { proxyUsed: false, proxyDisplay: null }
-      )
-    }
+    let session: Awaited<ReturnType<SessionLoader['load']>> | null = null
 
     for (let index = 0; index < proxyAttempts.length; index += 1) {
       const proxy = proxyAttempts[index]
       const proxyMeta = this.buildProxyUsageMeta(proxy)
+      const clientProxy = proxy ? this.toClientProxyOptions(proxy) : null
       let client: TelegramClient | null = null
+
+      const telethonOutcome = mode === 'account-survival'
+        ? await this.runAccountSurvivalCheckViaTelethon(account, startedAt, logger, proxyMeta, clientProxy)
+        : await this.runAccountStatusCheckViaTelethon(account, startedAt, logger, proxyMeta, clientProxy)
+
+      if (telethonOutcome.result) {
+        return telethonOutcome.result
+      }
+
+      if (telethonOutcome.failure) {
+        finalFailure = telethonOutcome.failure
+        finalProxyMeta = proxyMeta
+
+        if (this.shouldRetryWithNextProxy(index, proxyAttempts, proxyMeta, telethonOutcome.failure.retryable)) {
+          continue
+        }
+
+        return this.persistFailure(
+          account,
+          telethonOutcome.failure.status,
+          telethonOutcome.failure.errorMessage,
+          Date.now() - startedAt,
+          telethonOutcome.failure.retryable,
+          mode,
+          proxyMeta
+        )
+      }
+
+      if (!session) {
+        try {
+          session = await withStepTimeout(this.sessionLoader.load(account.sessionPath), this.timeoutMs, 'Session 加载')
+        } catch (error) {
+          const failure = this.createFailureResult(account, error, Date.now() - startedAt, mode, [], { proxyUsed: false, proxyDisplay: null })
+          return this.persistFailure(
+            account,
+            failure.status,
+            failure.errorMessage,
+            Date.now() - startedAt,
+            failure.retryable,
+            mode,
+            { proxyUsed: false, proxyDisplay: null }
+          )
+        }
+      }
+
       const probes: string[] = ['Session 加载成功']
       if (proxyMeta.proxyDisplay) {
         probes.push(`已分配代理:${proxyMeta.proxyDisplay}`)
@@ -857,28 +1052,23 @@ export class AccountCheckEngine {
 
       try {
         client = this.clientManager.createClient(session, {
-          proxy: proxy ? this.toClientProxyOptions(proxy) : null
+          proxy: clientProxy
         })
 
         await withStepTimeout(client.connect(), this.timeoutMs, 'Telegram 连接')
         probes.push('Telegram 连接成功')
 
         if (mode === 'account-survival') {
-          return await this.runAccountSurvivalCheck(account, client, startedAt, logger, proxyMeta)
+          return await this.runAccountSurvivalCheck(account, client, startedAt, logger, proxyMeta, clientProxy)
         }
 
-        return await this.runAccountStatusCheck(account, client, startedAt, logger, proxyMeta)
+        return await this.runAccountStatusCheck(account, client, startedAt, logger, proxyMeta, clientProxy)
       } catch (error) {
         const failure = this.createFailureResult(account, error, Date.now() - startedAt, mode, probes, proxyMeta)
         finalFailure = failure
         finalProxyMeta = proxyMeta
 
-        const canRetryWithNextProxy = proxyMeta.proxyUsed
-          && index === 0
-          && proxyAttempts.length > 1
-          && failure.retryable
-
-        if (!canRetryWithNextProxy) {
+        if (!this.shouldRetryWithNextProxy(index, proxyAttempts, proxyMeta, failure.retryable)) {
           return this.persistFailure(
             account,
             failure.status,

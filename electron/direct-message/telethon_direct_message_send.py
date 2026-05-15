@@ -28,6 +28,29 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _build_proxy_config(command: Dict[str, Any]):
+    proxy = command.get('proxy')
+    if not isinstance(proxy, dict):
+        return None
+    host = str(proxy.get('host') or '').strip()
+    port = _safe_int(proxy.get('port'), 0)
+    proxy_type = str(proxy.get('type') or '').strip().lower()
+    if not host or port <= 0 or proxy_type not in {'http', 'https', 'socks5'}:
+        return None
+    if proxy_type == 'https':
+        proxy_type = 'http'
+    username = str(proxy.get('username') or '').strip() or None
+    password = str(proxy.get('password') or '').strip() or None
+    return {
+        'proxy_type': proxy_type,
+        'addr': host,
+        'port': port,
+        'username': username,
+        'password': password,
+        'rdns': True
+    }
+
+
 def _build_random_emoji_suffix(enabled: Any) -> str:
     if not bool(enabled):
         return ''
@@ -255,7 +278,8 @@ async def _run(command: Dict[str, Any]) -> Dict[str, Any]:
     if action not in {'send', 'pin', 'delete'}:
         return {'ok': False, 'reason': 'UNKNOWN_ACTION'}
 
-    client = TelethonClient(session_path, DEFAULT_API_ID, DEFAULT_API_HASH, receive_updates=False)
+    proxy = _build_proxy_config(command)
+    client = TelethonClient(session_path, DEFAULT_API_ID, DEFAULT_API_HASH, receive_updates=False, proxy=proxy)
     cleanup = None
     try:
         await asyncio.wait_for(client.connect(), timeout=timeout_seconds)

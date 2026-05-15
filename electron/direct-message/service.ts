@@ -44,6 +44,7 @@ function formatDirectMessageError(error: unknown) {
   const waitMatched = normalized.match(/A wait of (\d+) seconds is required/i)
   if (waitMatched?.[1]) return `操作太快了，Telegram 要求先等 ${waitMatched[1]} 秒再继续。`
   if (/PEER_FLOOD/i.test(normalized)) return '这个账号触发 Telegram 私信风控了，先暂停一会再发。'
+  if (/No module named 'python_socks'|No module named 'socks'/i.test(normalized)) return '当前软件包里的代理运行环境不完整，私信功能没法通过 Telethon 走代理。请重新下载完整包后再试。'
   if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '全局代理已开启，但当前没有可用代理，所以这次没有继续走本地直连。先把可用代理补上再试。'
   if (/FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(normalized)) return '这个账号已经冻结了，当前私信功能用不了，系统会自动停掉这个账号。'
   if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(normalized)) return '这个账号已经被封了，不能继续私信，系统会自动停掉这个账号。'
@@ -180,6 +181,53 @@ function normalizeTargetValue(input: string) {
   if (!value) return ''
   if (/^@?[a-zA-Z0-9_]{5,}$/i.test(value)) return `@${value.replace(/^@+/, '').toLowerCase()}`
   return value.toLowerCase()
+}
+
+function resolveDirectCollectSourceLabel(mode: DirectMessageCollectPayload['mode']) {
+  if (mode === 'contact') return '联系人'
+  if (mode === 'group_members') return '群成员'
+  if (mode === 'comment_users') return '评论用户'
+  return '反应用户'
+}
+
+function buildDirectCollectResult(
+  rawUsers: Array<{ id?: unknown; username?: string | null; phone?: string | null }>,
+  mode: DirectMessageCollectPayload['mode']
+): DirectMessageCollectResult {
+  const resultItems: DirectMessageCollectedUserPayload[] = []
+  const seen = new Set<string>()
+  let skipped = 0
+  const sourceLabel = resolveDirectCollectSourceLabel(mode)
+
+  for (const user of rawUsers) {
+    const value = normalizeCollectedValue(user)
+    if (!value) {
+      skipped += 1
+      continue
+    }
+    const normalizedValue = normalizeTargetValue(value)
+    if (!normalizedValue || seen.has(normalizedValue)) {
+      skipped += 1
+      continue
+    }
+    seen.add(normalizedValue)
+    resultItems.push({
+      value,
+      normalizedValue,
+      sourceLabel,
+      userId: typeof user.id === 'bigint' ? user.id.toString() : String(user.id ?? ''),
+      username: typeof user.username === 'string' ? user.username : '',
+      phone: typeof user.phone === 'string' ? user.phone : ''
+    })
+  }
+
+  return {
+    total: rawUsers.length,
+    added: resultItems.length,
+    skipped,
+    items: resultItems,
+    message: resultItems.length > 0 ? `已采集 ${resultItems.length} 个可用用户。` : '没有采集到可直接发送的用户。'
+  }
 }
 
 function parseTelegramMessageLink(input: string) {
@@ -772,8 +820,21 @@ export class DirectMessageService {
     private readonly telethonDirectMessageSender: TelethonDirectMessageSender
   ) {}
 
+  private getCurrentProxy() {
+    if (!this.proxyPoolService.isEnabled()) {
+      return null
+    }
+
+    const proxy = this.proxyPoolService.getAccountCheckProxy()
+    if (!proxy) {
+      throw new Error('GLOBAL_PROXY_REQUIRED')
+    }
+
+    return proxy
+  }
+
   private shouldUseTelethonDirectMessagePrimary() {
-    return !this.proxyPoolService.isEnabled() && this.telethonDirectMessageSender.isAvailable()
+    return this.telethonDirectMessageSender.isAvailable()
   }
 
   private async sendViaTelethon(
@@ -793,7 +854,8 @@ export class DirectMessageService {
         imageUrl: '',
         sourceLink: '',
         postbotCode: '',
-        timeoutSeconds: 35
+        timeoutSeconds: 35,
+        proxy: this.getCurrentProxy()
       })
       actionNotes.push('已先发送欢迎帖')
 
@@ -815,7 +877,8 @@ export class DirectMessageService {
       imageUrl: payload.imageUrl,
       sourceLink: payload.sourceLink,
       postbotCode: payload.postbotCode,
-      timeoutSeconds: payload.messageType === 'postbot_code' ? 45 : 35
+      timeoutSeconds: payload.messageType === 'postbot_code' ? 45 : 35,
+      proxy: this.getCurrentProxy()
     })
 
     return {
@@ -829,7 +892,8 @@ export class DirectMessageService {
       sessionPath: account.sessionPath,
       targetValue: item.targetValue,
       messageId,
-      timeoutSeconds: 25
+      timeoutSeconds: 25,
+      proxy: this.getCurrentProxy()
     })
   }
 
@@ -844,7 +908,8 @@ export class DirectMessageService {
       targetValue: item.targetValue,
       messageId,
       deleteMode: mode,
-      timeoutSeconds: 25
+      timeoutSeconds: 25,
+      proxy: this.getCurrentProxy()
     })
   }
 
@@ -1353,11 +1418,36 @@ export class DirectMessageService {
     const account = this.accountRepository.getByIds([payload.accountId])[0]
     if (!account) throw new Error('账号不存在')
 
+    const limit = Math.max(1, Math.min(payload.limit ?? 100, 300))
+
+    if (this.telethonGroupCollector.isAvailable()) {
+      try {
+        const telethonResult = await this.telethonGroupCollector.collect({
+          sessionPath: account.sessionPath,
+          source: payload.source,
+          mode: payload.mode,
+          limit,
+          timeoutSeconds: payload.mode === 'contact' ? 30 : 45
+        })
+
+        if (!telethonResult) {
+          throw new Error('TELETHON_GROUP_COLLECTOR_UNAVAILABLE')
+        }
+
+        return buildDirectCollectResult(telethonResult.users.map((user) => ({
+          id: user.id,
+          username: user.username,
+          phone: user.phone
+        })), payload.mode)
+      } catch (error) {
+        throw new Error(formatDirectMessageError(error))
+      }
+    }
+
     const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
 
     try {
       let rawUsers: Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null }> = []
-      const limit = Math.max(1, Math.min(payload.limit ?? 100, 300))
 
       if (payload.mode === 'contact') {
         const contacts = await client.invoke(new Api.contacts.GetContacts({ hash: bigInt.zero }))
@@ -1408,39 +1498,7 @@ export class DirectMessageService {
           : []
       }
 
-      const resultItems: DirectMessageCollectedUserPayload[] = []
-      const seen = new Set<string>()
-      let skipped = 0
-
-      for (const user of rawUsers) {
-        const value = normalizeCollectedValue(user)
-        if (!value) {
-          skipped += 1
-          continue
-        }
-        const normalizedValue = normalizeTargetValue(value)
-        if (!normalizedValue || seen.has(normalizedValue)) {
-          skipped += 1
-          continue
-        }
-        seen.add(normalizedValue)
-        resultItems.push({
-          value,
-          normalizedValue,
-          sourceLabel: payload.mode === 'contact' ? '联系人' : payload.mode === 'group_members' ? '群成员' : payload.mode === 'comment_users' ? '评论用户' : '反应用户',
-          userId: typeof user.id === 'bigint' ? user.id.toString() : String(user.id ?? ''),
-          username: typeof user.username === 'string' ? user.username : '',
-          phone: typeof user.phone === 'string' ? user.phone : ''
-        })
-      }
-
-      return {
-        total: rawUsers.length,
-        added: resultItems.length,
-        skipped,
-        items: resultItems,
-        message: resultItems.length > 0 ? `已采集 ${resultItems.length} 个可用用户。` : '没有采集到可直接发送的用户。'
-      }
+      return buildDirectCollectResult(rawUsers, payload.mode)
     } catch (error) {
       throw new Error(formatDirectMessageError(error))
     } finally {

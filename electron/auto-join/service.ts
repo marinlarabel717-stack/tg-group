@@ -127,6 +127,7 @@ function formatAutoJoinError(error: unknown) {
   if (/USER_BANNED_IN_CHANNEL/i.test(normalized)) return '这个账号在目标群里被限制了'
   if (/USER_ALREADY_PARTICIPANT/i.test(normalized)) return '这个账号本来就在群里'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号登录状态失效了，需要重新登录'
+  if (/No module named 'python_socks'|No module named 'socks'/i.test(normalized)) return '当前软件包里的代理运行环境不完整，自动加群没法通过 Telethon 走代理。请重新下载完整包后再试。'
   if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '全局代理已开启，但当前没有可用代理，所以这次没有继续走本地直连。先把可用代理补上再试。'
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '这个群限制加入，当前账号没法直接进'
   if (/INVITE_REQUEST_SENT/i.test(normalized)) return '这个群需要审核，已经提交申请了'
@@ -287,6 +288,19 @@ async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadIte
 export class AutoJoinService {
   private activeTask: ActiveAutoJoinTask | null = null
 
+  private getCurrentProxy() {
+    if (!this.proxyPoolService.isEnabled()) {
+      return null
+    }
+
+    const proxy = this.proxyPoolService.getAccountCheckProxy()
+    if (!proxy) {
+      throw new Error('GLOBAL_PROXY_REQUIRED')
+    }
+
+    return proxy
+  }
+
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
@@ -338,7 +352,7 @@ export class AutoJoinService {
 
     const task: ActiveAutoJoinTask = { id: payload.taskId, cancelled: false }
     this.activeTask = task
-    const useTelethonPrimary = this.telethonAutoJoiner.isAvailable() && !this.proxyPoolService.isEnabled()
+    const useTelethonPrimary = this.telethonAutoJoiner.isAvailable()
 
     const clients = new Map<number, TelegramClient>()
     const results: AutoJoinResultItem[] = []
@@ -485,7 +499,7 @@ export class AutoJoinService {
           const attempt = next.attempts + 1
           try {
             const joined = useTelethonPrimary
-              ? await this.telethonAutoJoiner.join(account.sessionPath, next, 40)
+              ? await this.telethonAutoJoiner.join(account.sessionPath, next, 40, this.getCurrentProxy())
               : await joinSingleTarget(client as TelegramClient, next)
 
             if (!joined) {

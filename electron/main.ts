@@ -289,7 +289,8 @@ async function bootstrap() {
     accountsRootPath,
     sessionLoader,
     clientManager,
-    telethonPremiumReader
+    telethonPremiumReader,
+    proxyPoolService
   )
   const telethonTwoFactorService = new TelethonTwoFactorService()
   const spamBotChecker = new SpamBotChecker()
