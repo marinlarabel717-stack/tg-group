@@ -16,10 +16,8 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
   const errorMessage = useLicenseStore((store) => store.errorMessage)
   const devBypass = useLicenseStore((store) => store.devBypass)
   const [cardKey, setCardKey] = useState('')
-  const [sessionUnlocked, setSessionUnlocked] = useState(false)
 
   useEffect(() => {
-    setSessionUnlocked(false)
     void window.desktopWindow?.setMode('license')
     void init()
   }, [init])
@@ -28,7 +26,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
     setCardKey(state.rememberedCardKey || '')
   }, [state.rememberedCardKey])
 
-  const canEnter = sessionUnlocked && (state.canEnter || devBypass)
+  const canEnter = state.canEnter || devBypass
 
   useEffect(() => {
     void window.desktopWindow?.setMode(canEnter ? 'app' : 'license')
@@ -65,14 +63,14 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
     if (!normalized) {
       const result = await activate('')
       if (result?.ok) {
-        setSessionUnlocked(true)
+        return
       }
       return
     }
 
     const result = await activate(normalized)
     if (result?.ok) {
-      setSessionUnlocked(true)
+      return
     }
   }
 
