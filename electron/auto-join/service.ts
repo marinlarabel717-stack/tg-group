@@ -163,6 +163,7 @@ function formatAutoJoinError(error: unknown) {
   if (/FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(normalized)) return '这个账号已经冻结了，没法继续加群'
   if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(normalized)) return '这个账号已经被封了，没法继续加群'
   if (/ACCOUNT_RESTRICTED/i.test(normalized)) return '这个账号当前被限制了，没法继续加群'
+  if (/AUTO_JOIN_STOPPED_BY_USER/i.test(normalized)) return '任务已停止'
   const wait = readRequiredWaitSeconds(error)
   if (wait) return `Telegram 要求先等 ${wait} 秒`
   return `加入时出了点问题：${normalized}`

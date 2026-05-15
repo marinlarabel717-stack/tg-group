@@ -40,34 +40,42 @@ export class TelethonAutoJoiner {
 
     const timeoutSeconds = options.timeoutSeconds ?? 40
 
-    const stdout = await new Promise<string>((resolve, reject) => {
-      const child = execFile(this.pythonExecutable, [
-        this.scriptPath,
-        JSON.stringify({
-          sessionPath,
-          item,
-          timeoutSeconds,
-          proxy: options.proxy ?? null
+    let stdout: string
+    try {
+      stdout = await new Promise<string>((resolve, reject) => {
+        const child = execFile(this.pythonExecutable, [
+          this.scriptPath,
+          JSON.stringify({
+            sessionPath,
+            item,
+            timeoutSeconds,
+            proxy: options.proxy ?? null
+          })
+        ], {
+          cwd: process.cwd(),
+          windowsHide: true,
+          timeout: Math.max(timeoutSeconds + 5, 20) * 1000,
+          encoding: 'utf8',
+          env: buildTelethonPythonEnv(),
+          signal: options.signal
+        }, (error, childStdout) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve(childStdout)
         })
-      ], {
-        cwd: process.cwd(),
-        windowsHide: true,
-        timeout: Math.max(timeoutSeconds + 5, 20) * 1000,
-        encoding: 'utf8',
-        env: buildTelethonPythonEnv(),
-        signal: options.signal
-      }, (error, childStdout) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve(childStdout)
-      })
 
-      if (options.signal?.aborted) {
-        child.kill()
+        if (options.signal?.aborted) {
+          child.kill()
+        }
+      })
+    } catch (error) {
+      if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw new Error('AUTO_JOIN_STOPPED_BY_USER')
       }
-    })
+      throw error
+    }
 
     const raw = JSON.parse(stdout.trim()) as TelethonAutoJoinRawResult
     if (!raw?.ok) {

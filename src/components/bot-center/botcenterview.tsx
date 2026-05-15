@@ -528,16 +528,16 @@ export default memo(function BotCenterView() {
               </div>
             </div>
 
-            {activeBot.lastActionMessage ? <div className="mt-4 rounded-[12px] bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{activeBot.lastActionMessage}</div> : null}
-            {activeBot.lastError ? <div className="mt-4 rounded-[12px] bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{activeBot.lastError}</div> : null}
+            {activeBot.lastActionMessage ? <div className="mt-4 rounded-[12px] bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200 select-text cursor-text">{activeBot.lastActionMessage}</div> : null}
+            {activeBot.lastError ? <div className="mt-4 rounded-[12px] bg-rose-400/10 px-4 py-3 text-sm text-rose-200 select-text cursor-text">{activeBot.lastError}</div> : null}
 
-            <div className="mt-4 max-h-[420px] space-y-2 overflow-auto pr-1">
+            <div className="mt-4 max-h-[420px] space-y-2 overflow-auto pr-1 select-text">
               {activeBot.logs.length === 0 ? (
                 <div className="rounded-[14px] bg-black/10 px-4 py-10 text-center text-sm text-textMuted">还没有日志。先保存 Token，再检查 Guest Mode，最后启动监听。</div>
               ) : activeBot.logs.map((log) => (
-                <div key={log.id} className={`rounded-[12px] px-4 py-3 text-sm ${log.level === 'error' ? 'bg-rose-400/10 text-rose-200' : log.level === 'warning' ? 'bg-amber-400/10 text-amber-100' : log.level === 'success' ? 'bg-emerald-400/10 text-emerald-200' : 'bg-black/10 text-slate-200'}`}>
-                  <div className="mb-1 text-[11px] text-white/45">{formatDateTimeFull(log.createdAt)}</div>
-                  <div className="leading-6">{log.message}</div>
+                <div key={log.id} className={`rounded-[12px] px-4 py-3 text-sm cursor-text select-text ${log.level === 'error' ? 'bg-rose-400/10 text-rose-200' : log.level === 'warning' ? 'bg-amber-400/10 text-amber-100' : log.level === 'success' ? 'bg-emerald-400/10 text-emerald-200' : 'bg-black/10 text-slate-200'}`}>
+                  <div className="mb-1 text-[11px] text-white/45 select-text">{formatDateTimeFull(log.createdAt)}</div>
+                  <div className="leading-6 select-text">{log.message}</div>
                 </div>
               ))}
             </div>

@@ -39,6 +39,12 @@ textarea,
   user-select: text;
 }
 
+.select-text,
+.select-text * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

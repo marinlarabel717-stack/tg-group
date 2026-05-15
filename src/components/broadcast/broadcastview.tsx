@@ -1621,7 +1621,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
         </div>
       ) : null}
 
-      <div className="mt-4 max-h-[820px] space-y-3 overflow-y-auto pr-1">
+      <div className="mt-4 max-h-[820px] space-y-3 overflow-y-auto pr-1 select-text">
         {filteredPreview.length === 0 ? (
           <div className="flex min-h-[260px] items-center justify-center rounded-[18px] bg-panel text-sm text-textMuted">还没有发送日志，先去“定时群发”页预览或开始发送。</div>
         ) : completedPreview.length === 0 ? (
@@ -1640,12 +1640,12 @@ const LogsWorkbench = memo(function LogsWorkbench() {
           const group = groups.find((entry) => entry.id === item.groupId)
           const account = accounts.find((entry) => entry.id === item.accountId)
           return (
-            <div key={item.id} className="rounded-[16px] bg-panel p-4">
+            <div key={item.id} className="rounded-[16px] bg-panel p-4 select-text cursor-text">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-white">{formatDateTimeFull(item.scheduledAt)}</div>
+                <div className="text-sm font-semibold text-white select-text">{formatDateTimeFull(item.scheduledAt)}</div>
                 <div className={`rounded-full px-2.5 py-1 text-[11px] ${getPreviewTone(item.status)}`}>{item.status === 'scheduled' ? '已写入' : item.status === 'failed' ? '没发进去' : '待发送'}</div>
               </div>
-              <div className="mt-3 space-y-1 text-sm text-slate-200">
+              <div className="mt-3 space-y-1 text-sm text-slate-200 select-text">
                 <div>群组：{group?.title || '未匹配群组'}</div>
                 <div>账号：{account?.username || account?.phone || '未分配账号'}</div>
                 <div>文案：{creative ? readCreativeTitle(creative) : '未匹配文案'}</div>
@@ -1653,7 +1653,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
                 {item.remoteMessageId ? <div>消息 ID：{item.remoteMessageId}</div> : null}
                 {item.syncedAt ? <div>写入时间：{formatDateTimeFull(item.syncedAt)}</div> : null}
               </div>
-              {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200">{explainPreviewError(item.errorMessage)}</div> : null}
+              {item.errorMessage ? <div className="mt-3 rounded-[12px] border border-rose-400/15 bg-rose-400/8 px-3 py-2 text-xs text-rose-200 select-text cursor-text">{explainPreviewError(item.errorMessage)}</div> : null}
             </div>
           )
             })}

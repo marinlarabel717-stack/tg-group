@@ -558,10 +558,10 @@ const LogsWorkbench = memo(function LogsWorkbench() {
         ) : null}
       </div>
 
-      <div className="mt-4 space-y-2 font-mono text-sm">
+      <div className="mt-4 space-y-2 font-mono text-sm select-text">
         {logs.length === 0 ? <div className="text-sm text-textMuted">还没有加群日志。</div> : null}
         {logs.map((log) => (
-          <div key={log.id} className={`${getLogTone(log)} break-all`}>
+          <div key={log.id} className={`${getLogTone(log)} break-all cursor-text select-text`}>
             [{formatLogTime(log.createdAt)}] [{log.accountLabel || '系统'}] - {log.message}
           </div>
         ))}
@@ -601,7 +601,7 @@ const LinksWorkbench = memo(function LinksWorkbench() {
           </div>
           <div className="mt-4 rounded-[14px] bg-panel/80 p-4">
             <div className="text-sm font-medium text-white">有效链接</div>
-            <div className="mt-3 max-h-[220px] overflow-auto whitespace-pre-wrap text-sm text-slate-200">{cleaned || '还没有可用的群链接。'}</div>
+            <div className="mt-3 max-h-[220px] overflow-auto whitespace-pre-wrap text-sm text-slate-200 select-text cursor-text">{cleaned || '还没有可用的群链接。'}</div>
           </div>
         </GlassPanel>
 
@@ -609,11 +609,11 @@ const LinksWorkbench = memo(function LinksWorkbench() {
           <div className="space-y-4 text-sm">
             <div>
               <div className="mb-2 text-xs tracking-[0.18em] text-textMuted">重复目标</div>
-              <div className="max-h-[120px] overflow-auto whitespace-pre-wrap text-amber-200">{summary.duplicates.join('\n') || '没有重复项。'}</div>
+              <div className="max-h-[120px] overflow-auto whitespace-pre-wrap text-amber-200 select-text cursor-text">{summary.duplicates.join('\n') || '没有重复项。'}</div>
             </div>
             <div>
               <div className="mb-2 text-xs tracking-[0.18em] text-textMuted">无效目标</div>
-              <div className="max-h-[120px] overflow-auto whitespace-pre-wrap text-rose-200">{summary.invalids.join('\n') || '没有无效项。'}</div>
+              <div className="max-h-[120px] overflow-auto whitespace-pre-wrap text-rose-200 select-text cursor-text">{summary.invalids.join('\n') || '没有无效项。'}</div>
             </div>
           </div>
         </GlassPanel>

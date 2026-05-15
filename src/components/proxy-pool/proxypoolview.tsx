@@ -255,11 +255,11 @@ export default memo(function ProxyPoolView() {
                 </div>
                 <Shuffle size={18} className="text-neonSoft" />
               </div>
-              <div className="mt-4 space-y-2">
+              <div className="mt-4 space-y-2 select-text">
                 {recentLogs.length === 0 ? (
                   <div className="rounded-[14px] border border-dashed border-white/10 px-4 py-8 text-center text-sm text-textMuted">暂无代理检查日志</div>
                 ) : recentLogs.map((log) => (
-                  <div key={log.id} className={`rounded-[12px] px-3 py-2 text-sm ${log.level === 'success'
+                  <div key={log.id} className={`rounded-[12px] px-3 py-2 text-sm cursor-text select-text ${log.level === 'success'
                     ? 'bg-emerald-400/10 text-emerald-200'
                     : log.level === 'error'
                       ? 'bg-rose-400/10 text-rose-200'
