@@ -23,6 +23,7 @@ import { JsonTemplateService } from './accounts/services/json-template-service'
 import { TelegramWebService } from './accounts/telegram-web-service'
 import { TelegramDesktopPremiumService } from './accounts/telegram-desktop-premium-service'
 import { TelethonPremiumReader } from './accounts/telethon-premium-reader'
+import { TelethonWebStateReader } from './accounts/telethon-web-state-reader'
 import { TelethonTwoFactorService } from './accounts/telethon-two-factor-service'
 import { AppSettingsStore } from './app-settings-store'
 import { ProxyPoolService } from './proxy-pool/service'
@@ -274,7 +275,8 @@ async function bootstrap() {
   const telethonSpamBotChecker = new TelethonSpamBotChecker()
   const clientManager = new TelegramClientManager()
   const telegramWebPreloadPath = resolveRuntimeAssetPath('accounts', 'telegram-web-preload.cjs')
-  const telegramWebService = new TelegramWebService(sessionLoader, clientManager, telegramWebPreloadPath, proxyPoolService)
+  const telethonWebStateReader = new TelethonWebStateReader()
+  const telegramWebService = new TelegramWebService(sessionLoader, clientManager, telegramWebPreloadPath, proxyPoolService, telethonWebStateReader)
   const telethonPremiumReader = new TelethonPremiumReader()
   const telegramDesktopPremiumService = new TelegramDesktopPremiumService(
     accountsRootPath,

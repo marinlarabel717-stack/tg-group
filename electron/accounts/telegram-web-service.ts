@@ -3,14 +3,7 @@ import type { AccountRecord } from './types'
 import { SessionLoader } from './check-engine/session-loader'
 import { type AccountClientProxyOptions, TelegramClientManager } from './check-engine/telegram-client-manager'
 import { type AccountCheckProxy, ProxyPoolService } from '../proxy-pool/service'
-
-interface TelegramWebAccountState {
-  userId: string
-  authKeyHex: string
-  authKeyFingerprint: string
-  dcId: number
-  date: number
-}
+import { TelethonWebStateReader, type TelegramWebAccountState } from './telethon-web-state-reader'
 
 interface WindowProbeResult {
   hasAuthForm: boolean
@@ -77,7 +70,8 @@ export class TelegramWebService {
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
     private readonly preloadPath: string,
-    private readonly proxyPoolService: ProxyPoolService
+    private readonly proxyPoolService: ProxyPoolService,
+    private readonly telethonWebStateReader: TelethonWebStateReader
   ) {}
 
   async openAccountWeb(account: AccountRecord) {
@@ -207,6 +201,13 @@ export class TelegramWebService {
   }
 
   private async buildWebAccountState(account: AccountRecord, proxy: AccountCheckProxy | null): Promise<TelegramWebAccountState> {
+    if (this.telethonWebStateReader.isAvailable()) {
+      const telethonState = await this.telethonWebStateReader.read(account)
+      if (telethonState) {
+        return telethonState
+      }
+    }
+
     const sourceSession = await this.sessionLoader.load(account.sessionPath)
     const sourceClient = this.clientManager.createClient(sourceSession, {
       proxy: this.toClientProxy(proxy)
