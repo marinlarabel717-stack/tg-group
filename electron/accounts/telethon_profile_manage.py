@@ -40,18 +40,49 @@ def _build_proxy_config(raw_proxy):
     }
 
 
+def _is_benign_profile_clear_error(error: Exception) -> bool:
+    message = str(error or '').strip().upper()
+    return any(token in message for token in [
+        'USERNAME_NOT_MODIFIED',
+        'ABOUT_NOT_MODIFIED',
+        'NO PHOTO',
+        'PHOTO_ID_INVALID',
+        'PHOTO_INVALID'
+    ])
+
+
+async def _safe_clear_username(client: TelegramClient):
+    try:
+        await client(functions.account.UpdateUsernameRequest(username=''))
+    except Exception as error:
+        if not _is_benign_profile_clear_error(error):
+            raise
+
+
+async def _safe_clear_bio(client: TelegramClient):
+    try:
+        await client(functions.account.UpdateProfileRequest(about=''))
+    except Exception as error:
+        if not _is_benign_profile_clear_error(error):
+            raise
+
+
 async def _delete_profile_photos(client: TelegramClient):
-    photos = await client(functions.photos.GetUserPhotosRequest(user_id='me', offset=0, max_id=0, limit=100))
-    input_photos = []
-    for photo in getattr(photos, 'photos', []) or []:
-      try:
-        input_photo = utils.get_input_photo(photo)
-        if input_photo:
-          input_photos.append(input_photo)
-      except Exception:
-        continue
-    if input_photos:
-      await client(functions.photos.DeletePhotosRequest(id=input_photos))
+    try:
+        photos = await client(functions.photos.GetUserPhotosRequest(user_id='me', offset=0, max_id=0, limit=100))
+        input_photos = []
+        for photo in getattr(photos, 'photos', []) or []:
+          try:
+            input_photo = utils.get_input_photo(photo)
+            if input_photo:
+              input_photos.append(input_photo)
+          except Exception:
+            continue
+        if input_photos:
+          await client(functions.photos.DeletePhotosRequest(id=input_photos))
+    except Exception as error:
+        if not _is_benign_profile_clear_error(error):
+            raise
 
 
 async def _read_final_profile(client: TelegramClient):
@@ -98,11 +129,11 @@ async def _apply_action(client: TelegramClient, action: str, value: str, avatar_
         return '简介已更新。'
 
     if action == 'remove-username':
-        await client(functions.account.UpdateUsernameRequest(username=''))
+        await _safe_clear_username(client)
         return '用户名已删除。'
 
     if action == 'remove-bio':
-        await client(functions.account.UpdateProfileRequest(about=''))
+        await _safe_clear_bio(client)
         return '简介已删除。'
 
     if action in {'random-avatar', 'custom-avatar'}:
@@ -114,8 +145,8 @@ async def _apply_action(client: TelegramClient, action: str, value: str, avatar_
         return '头像已更新。'
 
     if action == 'clear-all-profile':
-        await client(functions.account.UpdateUsernameRequest(username=''))
-        await client(functions.account.UpdateProfileRequest(about=''))
+        await _safe_clear_username(client)
+        await _safe_clear_bio(client)
         await _delete_profile_photos(client)
         return '用户名、简介、头像已清空。'
 
