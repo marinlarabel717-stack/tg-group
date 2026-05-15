@@ -212,20 +212,21 @@ function normalizeGroupUsername(value: string) {
   return trimmed ? `@${trimmed.replace(/^@+/, '').toLowerCase()}` : ''
 }
 
+function buildGroupRefLookupKey(group: { title?: string; username?: string; targetRef?: string }) {
+  const targetRef = normalizeGroupRefValue(group.targetRef || '')
+  if (targetRef) return `ref:${targetRef}`
+
+  const username = normalizeGroupUsername(group.username || '')
+  if (username) return `username:${username}`
+
+  const title = String(group.title || '').trim().toLowerCase()
+  return title ? `title:${title}` : ''
+}
+
 function isSameGroupRef(left: { title?: string; username?: string; targetRef?: string }, right: { title?: string; username?: string; targetRef?: string }) {
-  const leftTargetRef = normalizeGroupRefValue(left.targetRef || '')
-  const rightTargetRef = normalizeGroupRefValue(right.targetRef || '')
-  if (leftTargetRef || rightTargetRef) {
-    return Boolean(leftTargetRef && rightTargetRef && leftTargetRef === rightTargetRef)
-  }
-
-  const leftUsername = normalizeGroupUsername(left.username || '')
-  const rightUsername = normalizeGroupUsername(right.username || '')
-  if (leftUsername || rightUsername) {
-    return Boolean(leftUsername && rightUsername && leftUsername === rightUsername)
-  }
-
-  return String(left.title || '').trim() !== '' && String(left.title || '').trim() === String(right.title || '').trim()
+  const leftKey = buildGroupRefLookupKey(left)
+  const rightKey = buildGroupRefLookupKey(right)
+  return Boolean(leftKey && rightKey && leftKey === rightKey)
 }
 
 function readCustomRangeIds<T extends { id: number }>(accounts: T[], startInput: string, endInput: string) {
@@ -835,6 +836,19 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const [showOnlyCheckedGroups, setShowOnlyCheckedGroups] = useState(false)
 
   const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? tasks[0] ?? null, [selectedTaskId, tasks])
+  const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts])
+  const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups])
+  const creativeById = useMemo(() => new Map(creatives.map((creative) => [creative.id, creative])), [creatives])
+  const groupByRefKey = useMemo(() => {
+    const map = new Map<string, typeof groups[number]>()
+    for (const group of groups) {
+      const key = buildGroupRefLookupKey(group)
+      if (key && !map.has(key)) {
+        map.set(key, group)
+      }
+    }
+    return map
+  }, [groups])
 
   useEffect(() => {
     if (!selectedTaskId && tasks[0]) {
@@ -865,13 +879,18 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   }, [accounts, groups, selectedTargetAccountId, setSelectedTargetAccountId, tasks, updateGroup, updateTask])
 
   const selectedAccountIds = selectedTask?.accountIds ?? []
-  const selectedAccounts = useMemo(() => accounts.filter((item) => selectedAccountIds.includes(item.id)), [accounts, selectedAccountIds])
+  const selectedAccounts = useMemo(
+    () => selectedAccountIds
+      .map((accountId) => accountById.get(accountId))
+      .filter((account): account is NonNullable<ReturnType<typeof accountById.get>> => Boolean(account)),
+    [accountById, selectedAccountIds]
+  )
   const occupiedSelectedAccounts = useMemo(
     () => selectedAccounts.filter((account) => getAccountTaskMeta(accountTaskStatusMap, account.id).occupied),
     [accountTaskStatusMap, selectedAccounts]
   )
   const selectedAccountId = selectedTargetAccountId ?? selectedTask?.accountIds[0] ?? null
-  const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedAccountId) ?? null, [accounts, selectedAccountId])
+  const selectedAccount = useMemo(() => (selectedAccountId == null ? null : accountById.get(selectedAccountId) ?? null), [accountById, selectedAccountId])
   const selectedAllPremium = selectedAccounts.length > 0 && selectedAccounts.every((account) => Boolean(account.profile?.is_premium))
   const selectedTaskCreatives = useMemo(() => creatives.filter((item) => selectedTask?.creativeIds.includes(item.id)), [creatives, selectedTask])
   const hasSelectedChannelForwardCreative = useMemo(() => selectedTaskCreatives.some((item) => item.kind === 'channel_forward' && item.enabled), [selectedTaskCreatives])
@@ -887,10 +906,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     const expiredCount = failedItems.filter((item) => item.errorMessage.includes('排程时间太近') || item.errorMessage.includes('已过期')).length
     const unboundGroupNames = Array.from(new Set(failedItems
       .filter((item) => item.errorMessage.includes('目标群内没有已加入且可发送的账号'))
-      .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
+      .map((item) => groupById.get(item.groupId)?.title || '未命名群组')))
     const invalidRefGroupNames = Array.from(new Set(failedItems
       .filter((item) => item.errorMessage.includes('缺少可用的 @username') || item.errorMessage.includes('缺少可用的 @username、私密链接或群链接') || item.errorMessage.includes('无法识别这个群'))
-      .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
+      .map((item) => groupById.get(item.groupId)?.title || '未命名群组')))
     const orderedPreview = [...selectedPreview].sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime())
     const firstItem = orderedPreview[0] ?? null
     const lastItem = orderedPreview[orderedPreview.length - 1] ?? null
@@ -905,12 +924,12 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       firstScheduledAt: firstItem?.scheduledAt ?? '',
       lastScheduledAt: lastItem?.scheduledAt ?? ''
     }
-  }, [groups, selectedPreview])
+  }, [groupById, selectedPreview])
   const filteredJoinedGroups = useMemo(() => {
     const keyword = groupSearch.trim().toLowerCase()
     return joinedGroups.filter((group) => {
       const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
-      const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+      const matchedGroup = groupByRefKey.get(buildGroupRefLookupKey({ title: group.title, username: group.username, targetRef: incomingTargetRef }))
       const checked = Boolean(matchedGroup && selectedTask?.groupIds.includes(matchedGroup.id))
       if (showOnlyCheckedGroups && !checked) return false
       if (!keyword) return true
@@ -918,7 +937,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
         || String(group.username || '').toLowerCase().includes(keyword)
         || String(group.targetRef || '').toLowerCase().includes(keyword)
     })
-  }, [groupSearch, groups, joinedGroups, selectedTask, showOnlyCheckedGroups])
+  }, [groupByRefKey, groupSearch, joinedGroups, selectedTask, showOnlyCheckedGroups])
   const visibleJoinedGroups = useMemo(() => {
     if (groupListExpanded) return joinedGroups
     return filteredJoinedGroups.slice(0, DEFAULT_VISIBLE_JOINED_GROUPS)
@@ -1003,11 +1022,11 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     if (!selectedTask || !selectedAccount) return
 
     const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
-    let matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+    let matchedGroup = groupByRefKey.get(buildGroupRefLookupKey({ title: group.title, username: group.username, targetRef: incomingTargetRef }))
 
     if (!matchedGroup || !matchedGroup.accountIds.includes(selectedAccount.id)) {
       attachJoinedGroupToAccount(selectedAccount.id, group)
-      matchedGroup = useBroadcastStore.getState().groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+      matchedGroup = useBroadcastStore.getState().groups.find((item) => buildGroupRefLookupKey(item) === buildGroupRefLookupKey({ title: group.title, username: group.username, targetRef: incomingTargetRef }))
     }
 
     if (!matchedGroup) return
@@ -1025,7 +1044,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
 
     for (const group of joinedGroups) {
       const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
-      const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+        const matchedGroup = groupByRefKey.get(buildGroupRefLookupKey({ title: group.title, username: group.username, targetRef: incomingTargetRef }))
       if (!matchedGroup || !matchedGroup.accountIds.includes(selectedAccount.id)) {
         attachJoinedGroupToAccount(selectedAccount.id, group)
       }
@@ -1034,7 +1053,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     const latestGroups = useBroadcastStore.getState().groups
     const joinedGroupIds = joinedGroups.map((group) => {
       const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
-      const matchedGroup = latestGroups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+      const matchedGroup = latestGroups.find((item) => buildGroupRefLookupKey(item) === buildGroupRefLookupKey({ title: group.title, username: group.username, targetRef: incomingTargetRef }))
       return matchedGroup?.id || ''
     }).filter(Boolean)
 
@@ -1199,7 +1218,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   <div className="px-4 py-12 text-center text-sm text-textMuted">没找到符合条件的群，换个关键词试试，或者取消“只看已勾选”。</div>
                 ) : visibleJoinedGroups.map((group) => {
                   const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
-                  const matchedGroup = groups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
+                    const matchedGroup = groupByRefKey.get(buildGroupRefLookupKey({ title: group.title, username: group.username, targetRef: incomingTargetRef }))
                   const checked = Boolean(matchedGroup && selectedTask.groupIds.includes(matchedGroup.id))
                   return (
                     <label key={`${group.peerId}:${group.username || group.title}`} className={`grid cursor-pointer grid-cols-[56px_minmax(0,1.2fr)_minmax(0,1fr)_110px] items-center gap-3 border-b border-white/6 px-4 py-3 text-sm transition last:border-b-0 ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.04]'}`}>
@@ -1483,19 +1502,22 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const syncing = useBroadcastStore((state) => state.syncing)
   const stopping = useBroadcastStore((state) => state.stopping)
   const [accountFilter, setAccountFilter] = useState<'all' | string>('all')
+  const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts])
+  const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups])
+  const creativeById = useMemo(() => new Map(creatives.map((creative) => [creative.id, creative])), [creatives])
 
   const selectedTask = useMemo(() => tasks.find((item) => item.id === selectedTaskId) ?? tasks[0] ?? null, [selectedTaskId, tasks])
   const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTask?.id), [previewItems, selectedTask])
   const accountFilterOptions = useMemo(() => {
     const ids = Array.from(new Set(selectedPreview.map((item) => item.accountId).filter((item): item is number => typeof item === 'number')))
     return ids.map((accountId) => {
-      const account = accounts.find((item) => item.id === accountId)
+      const account = accountById.get(accountId)
       return {
         id: String(accountId),
         label: account?.username || account?.phone || `账号#${accountId}`
       }
     })
-  }, [accounts, selectedPreview])
+  }, [accountById, selectedPreview])
 
   useEffect(() => {
     if (accountFilter === 'all') return
@@ -1526,10 +1548,10 @@ const LogsWorkbench = memo(function LogsWorkbench() {
     const expiredCount = failedItems.filter((item) => item.errorMessage.includes('排程时间太近') || item.errorMessage.includes('已过期')).length
     const unboundGroupNames = Array.from(new Set(failedItems
       .filter((item) => item.errorMessage.includes('目标群内没有已加入且可发送的账号'))
-      .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
+      .map((item) => groupById.get(item.groupId)?.title || '未命名群组')))
     const invalidRefGroupNames = Array.from(new Set(failedItems
       .filter((item) => item.errorMessage.includes('缺少可用的 @username') || item.errorMessage.includes('缺少可用的 @username、私密链接或群链接') || item.errorMessage.includes('无法识别这个群'))
-      .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
+      .map((item) => groupById.get(item.groupId)?.title || '未命名群组')))
     return {
       total: items.length,
       successCount,
@@ -1541,8 +1563,8 @@ const LogsWorkbench = memo(function LogsWorkbench() {
     }
   }
 
-  const previewSummary = useMemo(() => buildSummary(selectedPreview), [groups, selectedPreview])
-  const filteredSummary = useMemo(() => buildSummary(filteredPreview), [groups, filteredPreview])
+  const previewSummary = useMemo(() => buildSummary(selectedPreview), [groupById, selectedPreview])
+  const filteredSummary = useMemo(() => buildSummary(filteredPreview), [groupById, filteredPreview])
   const visiblePreview = useMemo(() => {
     if (completedPreview.length <= MAX_VISIBLE_LOG_ITEMS) return completedPreview
     return completedPreview.slice(0, MAX_VISIBLE_LOG_ITEMS)
@@ -1633,9 +1655,9 @@ const LogsWorkbench = memo(function LogsWorkbench() {
               </div>
             ) : null}
             {visiblePreview.map((item) => {
-          const creative = creatives.find((entry) => entry.id === item.creativeId)
-          const group = groups.find((entry) => entry.id === item.groupId)
-          const account = accounts.find((entry) => entry.id === item.accountId)
+            const creative = item.creativeId ? creativeById.get(item.creativeId) : null
+            const group = groupById.get(item.groupId)
+            const account = item.accountId == null ? null : accountById.get(item.accountId)
           return (
             <div key={item.id} className="rounded-[16px] bg-panel p-4 select-text cursor-text">
               <div className="flex items-center justify-between gap-3">
