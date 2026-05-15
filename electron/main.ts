@@ -187,14 +187,12 @@ async function withManagedSessionsWatcherSuspended<T>(action: () => Promise<T>) 
 
 function bindManagedSessionsWatcher(importService: AccountImportService, repository: AccountRepository, managedSessionsDirectory: string) {
   managedSessionsWatcher?.close()
-  managedSessionsWatcher = fs.watch(managedSessionsDirectory, { persistent: false }, (eventType, filename) => {
+  managedSessionsWatcher = fs.watch(managedSessionsDirectory, { persistent: false }, (_eventType, filename) => {
     if (managedSessionsWatcherSuspendCount > 0) return
 
-    if (eventType === 'change') {
-      const lowerName = typeof filename === 'string' ? filename.toLowerCase() : ''
-      if (!lowerName || lowerName.endsWith('.session') || lowerName.endsWith('.json')) {
-        return
-      }
+    const lowerName = typeof filename === 'string' ? filename.toLowerCase() : ''
+    if (!lowerName || /\.(json|session(?:-journal|-wal|-shm)?)$/i.test(lowerName)) {
+      return
     }
 
     if (managedSessionsSyncTimer) {
