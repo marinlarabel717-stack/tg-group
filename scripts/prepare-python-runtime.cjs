@@ -28,7 +28,7 @@ const PYTHON_INFO_SCRIPT = [
   '  "prefix": sys.prefix,',
   '  "site_packages": candidates',
   '}))'
-].join('; ')
+].join('\n')
 
 const REQUIRED_PYTHON_PACKAGES = [
   'telethon',
