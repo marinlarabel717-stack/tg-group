@@ -5,7 +5,7 @@ const DEFAULT_STATE: DesktopLicenseState = {
   status: 'missing',
   canEnter: false,
   machineId: '',
-  appVersion: window.desktopInfo?.version || '0.0.48',
+  appVersion: window.desktopInfo?.version || '0.0.0',
   isPackaged: false,
   devBypassAvailable: true,
   apiConfigured: false,

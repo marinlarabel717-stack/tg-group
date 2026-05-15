@@ -206,6 +206,10 @@ function bindManagedSessionsWatcher(importService: AccountImportService, reposit
 }
 
 function bindWindowControls() {
+  ipcMain.on('desktop-info:get-version', (event) => {
+    event.returnValue = app.getVersion()
+  })
+
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize()
   })
