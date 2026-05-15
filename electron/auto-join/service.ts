@@ -11,15 +11,43 @@ import type { AutoJoinPayload, AutoJoinPayloadItem, AutoJoinProgress, AutoJoinRe
 interface ActiveAutoJoinTask {
   id: string
   cancelled: boolean
+  clients: Map<number, TelegramClient>
+  wakeWaiters: Set<() => void>
+  joinAbortControllers: Set<AbortController>
 }
 
 interface PendingJoinItem extends AutoJoinPayloadItem {
   attempts: number
 }
 
-function sleep(ms: number) {
-  if (ms <= 0) return Promise.resolve()
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function wakeTaskWaiters(task: ActiveAutoJoinTask) {
+  for (const wake of Array.from(task.wakeWaiters)) {
+    try {
+      wake()
+    } catch {
+      // ignore wake failures
+    }
+  }
+  task.wakeWaiters.clear()
+}
+
+async function sleepForTask(task: ActiveAutoJoinTask, ms: number) {
+  if (ms <= 0 || task.cancelled) return
+
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(() => {
+      task.wakeWaiters.delete(wake)
+      resolve()
+    }, ms)
+
+    const wake = () => {
+      clearTimeout(timeout)
+      task.wakeWaiters.delete(wake)
+      resolve()
+    }
+
+    task.wakeWaiters.add(wake)
+  })
 }
 
 function randomInt(min: number, max: number) {
@@ -318,9 +346,16 @@ export class AutoJoinService {
     }
 
     this.activeTask.cancelled = true
+    wakeTaskWaiters(this.activeTask)
+    for (const controller of Array.from(this.activeTask.joinAbortControllers)) {
+      controller.abort()
+    }
+    this.activeTask.joinAbortControllers.clear()
+    await Promise.all(Array.from(this.activeTask.clients.values()).map((client) => this.clientManager.destroyClient(client).catch(() => undefined)))
+    this.activeTask.clients.clear()
     return {
       stopped: true,
-      message: '自动加群任务正在停止，已不再接新目标。'
+      message: '自动加群任务正在停止，等待中的间隔和当前加群动作都会尽快中断。'
     }
   }
 
@@ -350,11 +385,16 @@ export class AutoJoinService {
       }
     }
 
-    const task: ActiveAutoJoinTask = { id: payload.taskId, cancelled: false }
+    const clients = new Map<number, TelegramClient>()
+    const task: ActiveAutoJoinTask = {
+      id: payload.taskId,
+      cancelled: false,
+      clients,
+      wakeWaiters: new Set(),
+      joinAbortControllers: new Set()
+    }
     this.activeTask = task
     const useTelethonPrimary = this.telethonAutoJoiner.isAvailable()
-
-    const clients = new Map<number, TelegramClient>()
     const results: AutoJoinResultItem[] = []
     const accountLabelById = new Map(accounts.map((item) => [item.id, readAccountLogLabel(item)]))
     const sharedQueue = payload.repeatJoinEnabled ? null : createPendingItems(payload.items, payload.dispatchMode)
@@ -489,21 +529,41 @@ export class AutoJoinService {
           const cooldown = cooldownUntil.get(account.id) ?? 0
           const waitMs = cooldown - Date.now()
           if (waitMs > 0) {
-            await sleep(Math.min(waitMs, 1000))
+            await sleepForTask(task, Math.min(waitMs, 1000))
             continue
           }
 
           const next = takeNextItem(account.id)
           if (!next) return
+          if (task.cancelled) {
+            pushBackItem(account.id, next)
+            return
+          }
 
           const attempt = next.attempts + 1
           try {
             const joined = useTelethonPrimary
-              ? await this.telethonAutoJoiner.join(account.sessionPath, next, 40, this.getCurrentProxy())
+              ? await (async () => {
+                  const controller = new AbortController()
+                  task.joinAbortControllers.add(controller)
+                  try {
+                    return await this.telethonAutoJoiner.join(account.sessionPath, next, {
+                      timeoutSeconds: 40,
+                      proxy: this.getCurrentProxy(),
+                      signal: controller.signal
+                    })
+                  } finally {
+                    task.joinAbortControllers.delete(controller)
+                  }
+                })()
               : await joinSingleTarget(client as TelegramClient, next)
 
             if (!joined) {
               throw new Error('TELETHON_AUTO_JOINER_UNAVAILABLE')
+            }
+
+            if (task.cancelled) {
+              return
             }
 
             finalizeResult({
@@ -529,9 +589,13 @@ export class AutoJoinService {
               const joinDelay = pickDelayMs(payload.joinIntervalMin, payload.joinIntervalMax)
               const totalWaitSeconds = Math.max(1, Math.ceil((baseDelay + joinDelay) / 1000))
               emit(`${accountLabel} 等待 ${totalWaitSeconds} 秒后，继续加入下一个。`, null, totalWaitSeconds, true)
-              await sleep(baseDelay + joinDelay)
+              await sleepForTask(task, baseDelay + joinDelay)
             }
           } catch (error) {
+            if (task.cancelled) {
+              return
+            }
+
             const waitSeconds = readRequiredWaitSeconds(error)
             if (waitSeconds && payload.autoRetryOnFloodWait && attempt <= Math.max(1, payload.retryLimit + 1)) {
               const configuredRestMs = pickDelayMs(payload.floodRestMin, payload.floodRestMax)
@@ -566,7 +630,7 @@ export class AutoJoinService {
               const waitMs = pickDelayMs(payload.accountIntervalMin, payload.accountIntervalMax)
               const waitSeconds = Math.max(1, Math.ceil(waitMs / 1000))
               emit(`${accountLabel} 等待 ${waitSeconds} 秒后，继续加入下一个。`, null, waitSeconds, true)
-              await sleep(waitMs)
+              await sleepForTask(task, waitMs)
             }
           }
         }
@@ -638,6 +702,11 @@ export class AutoJoinService {
         stopped: task.cancelled
       }
     } finally {
+      wakeTaskWaiters(task)
+      for (const controller of Array.from(task.joinAbortControllers)) {
+        controller.abort()
+      }
+      task.joinAbortControllers.clear()
       await Promise.all(Array.from(clients.values()).map((client) => this.clientManager.destroyClient(client).catch(() => undefined)))
       if (this.activeTask?.id === task.id) {
         this.activeTask = null

@@ -509,21 +509,10 @@ export const useAutoJoinStore = create<AutoJoinState>()(
         set({ stopping: true, lastActionMessage: '正在停止自动加群任务…' })
         try {
           const result = await api.stop()
-          set((state) => ({
-            running: false,
-            stopping: false,
-            runningAccountIds: [],
-            currentTaskId: null,
-            tasks: state.currentTaskId
-              ? upsertTask(state.tasks, {
-                  ...(state.tasks.find((item) => item.id === state.currentTaskId) ?? createTaskRecord({ id: state.currentTaskId, name: '自动加群任务', total: 0 })),
-                  status: 'stopped',
-                  finishedAt: new Date().toISOString(),
-                  lastMessage: result.message
-                })
-              : state.tasks,
+          set({
+            stopping: true,
             lastActionMessage: result.message
-          }))
+          })
         } catch (error) {
           set({
             stopping: false,

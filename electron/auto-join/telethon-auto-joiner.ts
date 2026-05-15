@@ -1,12 +1,9 @@
 import fs from 'node:fs'
 import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import { resolveRuntimeAssetPath } from '../runtime-paths'
 import { buildTelethonPythonEnv, resolvePythonExecutable } from '../python-runtime'
 import type { AccountCheckProxy } from '../proxy-pool/service'
 import type { AutoJoinPayloadItem } from '../../src/types'
-
-const execFileAsync = promisify(execFile)
 
 interface TelethonAutoJoinRawResult {
   ok?: boolean
@@ -24,6 +21,12 @@ export interface TelethonAutoJoinResult {
   groupTitle: string
 }
 
+interface TelethonAutoJoinOptions {
+  timeoutSeconds?: number
+  proxy?: AccountCheckProxy | null
+  signal?: AbortSignal
+}
+
 export class TelethonAutoJoiner {
   private readonly pythonExecutable = resolvePythonExecutable()
   private readonly scriptPath = resolveScriptPath()
@@ -32,23 +35,38 @@ export class TelethonAutoJoiner {
     return fs.existsSync(this.scriptPath)
   }
 
-  async join(sessionPath: string, item: AutoJoinPayloadItem, timeoutSeconds = 40, proxy?: AccountCheckProxy | null): Promise<TelethonAutoJoinResult | null> {
+  async join(sessionPath: string, item: AutoJoinPayloadItem, options: TelethonAutoJoinOptions = {}): Promise<TelethonAutoJoinResult | null> {
     if (!this.isAvailable()) return null
 
-    const { stdout } = await execFileAsync(this.pythonExecutable, [
-      this.scriptPath,
-      JSON.stringify({
-        sessionPath,
-        item,
-        timeoutSeconds,
-        proxy: proxy ?? null
+    const timeoutSeconds = options.timeoutSeconds ?? 40
+
+    const stdout = await new Promise<string>((resolve, reject) => {
+      const child = execFile(this.pythonExecutable, [
+        this.scriptPath,
+        JSON.stringify({
+          sessionPath,
+          item,
+          timeoutSeconds,
+          proxy: options.proxy ?? null
+        })
+      ], {
+        cwd: process.cwd(),
+        windowsHide: true,
+        timeout: Math.max(timeoutSeconds + 5, 20) * 1000,
+        encoding: 'utf8',
+        env: buildTelethonPythonEnv(),
+        signal: options.signal
+      }, (error, childStdout) => {
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve(childStdout)
       })
-    ], {
-      cwd: process.cwd(),
-      windowsHide: true,
-      timeout: Math.max(timeoutSeconds + 5, 20) * 1000,
-      encoding: 'utf8',
-      env: buildTelethonPythonEnv()
+
+      if (options.signal?.aborted) {
+        child.kill()
+      }
     })
 
     const raw = JSON.parse(stdout.trim()) as TelethonAutoJoinRawResult
