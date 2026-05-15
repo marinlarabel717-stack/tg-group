@@ -264,7 +264,7 @@ const AccountOperationSummary = memo(function AccountOperationSummary({
           </div>
           <div className={`mt-3 rounded-[12px] px-3 py-3 ${stopRequested ? 'border border-amber-400/15 bg-amber-400/10 text-amber-100' : 'bg-white/[0.03]'}`}>
             {stopRequested
-              ? '已收到停止指令：不会再领取新账号，正在等待当前已启动的账号先收尾。'
+              ? '已收到停止指令：不会再领取新账号，并会立即终止当前仍在执行的账号。'
               : '执行过程中会统一把进度写进日志中心，任务结束后再同步最新资料到账号列表。'}
           </div>
         </div>

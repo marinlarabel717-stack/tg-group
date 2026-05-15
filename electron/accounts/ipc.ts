@@ -505,17 +505,18 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }
 
     twoFactorStopRequested = true
+    telegramTwoFactorService.cancelActiveOperations()
     updateTwoFactorState({ stopRequested: true })
     pushTwoFactorLog({
       accountId: null,
       phone: '',
       level: 'warning',
-      message: '已收到停止指令：不会再领取新账号，正在等待当前已启动的账号先收尾。'
+      message: '已收到停止指令：不会再领取新账号，并会立即终止当前仍在执行的账号。'
     })
 
     return {
       stopped: true,
-      message: '已开始停止当前 2FA 任务。'
+      message: '已开始停止当前 2FA 任务，并正在中断已启动的账号。'
     }
   })
 
@@ -546,17 +547,18 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }
 
     profileOperationStopRequested = true
+    telegramProfileService.cancelActiveOperations()
     updateProfileOperationState({ stopRequested: true })
     pushProfileOperationLog({
       accountId: null,
       phone: '',
       level: 'warning',
-      message: '已收到停止指令：不会再领取新账号，正在等待当前已启动的账号先收尾。'
+      message: '已收到停止指令：不会再领取新账号，并会立即终止当前仍在执行的账号。'
     })
 
     return {
       stopped: true,
-      message: '已开始停止当前个人资料任务。'
+      message: '已开始停止当前个人资料任务，并正在中断已启动的账号。'
     }
   })
 
@@ -601,6 +603,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     const runtimeConcurrency = Math.max(1, appSettingsStore.get().checkConcurrency)
 
     twoFactorStopRequested = false
+    telegramTwoFactorService.cancelActiveOperations()
     twoFactorState = {
       running: true,
       stopRequested: false,
@@ -778,6 +781,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     })()
 
     profileOperationStopRequested = false
+    telegramProfileService.cancelActiveOperations()
     profileOperationState = {
       running: true,
       stopRequested: false,

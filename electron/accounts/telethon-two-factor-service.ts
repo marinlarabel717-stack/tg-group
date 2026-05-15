@@ -1,11 +1,8 @@
 import fs from 'node:fs'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
+import { execFile, type ChildProcess } from 'node:child_process'
 import type { AccountRecord, TwoFactorAction, TwoFactorOperationPhase, TwoFactorOperationPayload, TwoFactorOperationResultItem } from './types'
 import { resolveRuntimeAssetPath } from '../runtime-paths'
 import { buildTelethonPythonEnv, resolvePythonExecutable } from '../python-runtime'
-
-const execFileAsync = promisify(execFile)
 
 interface TelethonTwoFactorRawResult {
   ok?: boolean
@@ -30,6 +27,10 @@ function formatTwoFactorError(error: string) {
   const normalized = error.trim()
   const upper = normalized.toUpperCase()
   const lower = normalized.toLowerCase()
+
+  if (upper.includes('TWO_FACTOR_OPERATION_ABORTED_BY_USER')) {
+    return '已按停止指令中断当前账号处理。'
+  }
 
   if (lower.includes('session_not_authorized') || upper.includes('AUTH_KEY_UNREGISTERED') || upper.includes('SESSION_REVOKED') || upper.includes('SESSION_EXPIRED')) {
     return '当前账号 Session 已失效或未登录，无法执行 2FA 操作。'
@@ -76,9 +77,80 @@ function formatTwoFactorError(error: string) {
 export class TelethonTwoFactorService {
   private readonly pythonExecutable = resolvePythonExecutable()
   private readonly scriptPath = resolveScriptPath()
+  private readonly runningProcesses = new Map<number, ChildProcess>()
+  private readonly cancelledAccountIds = new Set<number>()
 
   isAvailable() {
     return fs.existsSync(this.scriptPath)
+  }
+
+  cancelActiveOperations() {
+    for (const [accountId, childProcess] of this.runningProcesses.entries()) {
+      this.cancelledAccountIds.add(accountId)
+      this.terminateChildProcess(childProcess)
+    }
+  }
+
+  private terminateChildProcess(childProcess: ChildProcess) {
+    try {
+      if (!childProcess.killed) {
+        childProcess.kill()
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private async runScript(accountId: number, payload: Record<string, unknown>) {
+    return await new Promise<TelethonTwoFactorRawResult>((resolve, reject) => {
+      let settled = false
+      let timedOut = false
+      const childProcess = execFile(
+        this.pythonExecutable,
+        [this.scriptPath, JSON.stringify(payload)],
+        {
+          cwd: process.cwd(),
+          windowsHide: true,
+          encoding: 'utf8',
+          env: buildTelethonPythonEnv(),
+          maxBuffer: 8 * 1024 * 1024
+        },
+        (error, stdout, stderr) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timeoutId)
+          this.runningProcesses.delete(accountId)
+          const cancelled = this.cancelledAccountIds.delete(accountId)
+
+          if (error) {
+            if (cancelled) {
+              reject(new Error('TWO_FACTOR_OPERATION_ABORTED_BY_USER'))
+              return
+            }
+            if (timedOut) {
+              reject(new Error('timeout'))
+              return
+            }
+            const reason = String(stderr || stdout || error.message || 'TWO_FACTOR_OPERATION_FAILED').trim()
+            reject(new Error(reason))
+            return
+          }
+
+          try {
+            resolve(JSON.parse(String(stdout).trim()) as TelethonTwoFactorRawResult)
+          } catch (parseError) {
+            reject(parseError instanceof Error ? parseError : new Error(String(parseError)))
+          }
+        }
+      )
+
+      this.runningProcesses.set(accountId, childProcess)
+
+      const timeoutId = setTimeout(() => {
+        timedOut = true
+        this.terminateChildProcess(childProcess)
+      }, 120000)
+    })
   }
 
   async execute(account: AccountRecord, payload: TwoFactorOperationPayload): Promise<TwoFactorOperationResultItem> {
@@ -94,27 +166,15 @@ export class TelethonTwoFactorService {
     }
 
     try {
-      const { stdout } = await execFileAsync(
-        this.pythonExecutable,
-        [this.scriptPath, JSON.stringify({
-          action: payload.action,
-          phase: payload.phase,
-          sessionPath: account.sessionPath,
-          currentPassword: payload.currentPassword ?? '',
-          newPassword: payload.newPassword ?? '',
-          hint: payload.hint ?? '',
-          recoveryCode: payload.recoveryCode ?? ''
-        })],
-        {
-          cwd: process.cwd(),
-          windowsHide: true,
-          timeout: 120000,
-          encoding: 'utf8',
-          env: buildTelethonPythonEnv()
-        }
-      )
-
-      const raw = JSON.parse(stdout.trim()) as TelethonTwoFactorRawResult
+      const raw = await this.runScript(account.id, {
+        action: payload.action,
+        phase: payload.phase,
+        sessionPath: account.sessionPath,
+        currentPassword: payload.currentPassword ?? '',
+        newPassword: payload.newPassword ?? '',
+        hint: payload.hint ?? '',
+        recoveryCode: payload.recoveryCode ?? ''
+      })
       const ok = Boolean(raw.ok)
       const emailPattern = typeof raw.email_pattern === 'string' && raw.email_pattern.trim() ? raw.email_pattern.trim() : null
       const nextTwoFA = Object.prototype.hasOwnProperty.call(raw, 'next_two_fa')
