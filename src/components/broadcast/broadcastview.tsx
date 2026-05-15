@@ -957,20 +957,8 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     clearPreview()
   }, [clearPreview, selectedAllPremium, selectedTask, updateTask])
 
-  const syncTaskGroupsForAccount = (accountId: number | null) => {
-    if (!selectedTask) return
-    const nextGroupIds = accountId == null
-      ? []
-      : selectedTask.groupIds.filter((groupId) => groups.some((group) => group.id === groupId && group.accountIds.includes(accountId)))
-
-    if (nextGroupIds.length !== selectedTask.groupIds.length) {
-      updateTask(selectedTask.id, { groupIds: nextGroupIds })
-    }
-  }
-
   const handleSwitchAccount = async (accountId: number) => {
     setSelectedTargetAccountId(accountId)
-    syncTaskGroupsForAccount(accountId)
     clearPreview()
     await loadJoinedGroupsForAccount(accountId)
   }
@@ -990,10 +978,11 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     }
 
     const nextAccountIds = draftAccountIds.filter((accountId) => !getAccountTaskMeta(accountTaskStatusMap, accountId).occupied)
+    const nextAccountIdSet = new Set(nextAccountIds)
     const nextActive = nextAccountIds.includes(selectedAccountId ?? -1) ? selectedAccountId : (nextAccountIds[0] ?? null)
-    const nextGroupIds = nextActive == null
+    const nextGroupIds = nextAccountIdSet.size === 0
       ? []
-      : selectedTask.groupIds.filter((groupId) => groups.some((group) => group.id === groupId && group.accountIds.includes(nextActive)))
+      : selectedTask.groupIds.filter((groupId) => groups.some((group) => group.id === groupId && group.accountIds.some((accountId) => nextAccountIdSet.has(accountId))))
 
     updateTask(selectedTask.id, { accountIds: nextAccountIds, groupIds: nextGroupIds })
     setSelectedTargetAccountId(nextActive ?? null)
@@ -1046,11 +1035,13 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     }
 
     const latestGroups = useBroadcastStore.getState().groups
-    const nextGroupIds = Array.from(new Set(joinedGroups.map((group) => {
+    const joinedGroupIds = joinedGroups.map((group) => {
       const incomingTargetRef = (group.targetRef || group.username || group.peerId || '').trim()
       const matchedGroup = latestGroups.find((item) => isSameGroupRef(item, { title: group.title, username: group.username, targetRef: incomingTargetRef }))
       return matchedGroup?.id || ''
-    }).filter(Boolean)))
+    }).filter(Boolean)
+
+    const nextGroupIds = Array.from(new Set([...selectedTask.groupIds, ...joinedGroupIds]))
 
     updateTask(selectedTask.id, { groupIds: nextGroupIds })
     clearPreview()
@@ -1133,7 +1124,6 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     disabled={!selectedAccountId || loadingJoinedGroups}
                     onClick={() => {
                       if (!selectedAccountId) return
-                      syncTaskGroupsForAccount(selectedAccountId)
                       clearPreview()
                       void loadJoinedGroupsForAccount(selectedAccountId)
                     }}
