@@ -44,7 +44,8 @@ const REQUIRED_PYTHON_PACKAGES = [
   'pyaes',
   'pyasn1',
   'rsa',
-  'dotenv'
+  'dotenv',
+  'python_socks'
 ]
 
 const PINNED_DISTRIBUTIONS = [
@@ -79,6 +80,13 @@ const PINNED_DISTRIBUTIONS = [
     packageName: 'python-dotenv',
     version: '1.2.2',
     targets: [{ type: 'dir', name: 'dotenv' }],
+    optional: false,
+    artifactPattern: /py3-none-any\.whl$/i
+  },
+  {
+    packageName: 'python-socks',
+    version: '2.4.4',
+    targets: [{ type: 'dir', name: 'python_socks' }],
     optional: false,
     artifactPattern: /py3-none-any\.whl$/i
   },

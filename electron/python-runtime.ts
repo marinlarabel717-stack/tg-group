@@ -10,7 +10,8 @@ const REQUIRED_BUNDLED_RUNTIME_FILES = [
   ['Lib', 'site-packages', 'pyaes', '__init__.py'],
   ['Lib', 'site-packages', 'pyasn1', '__init__.py'],
   ['Lib', 'site-packages', 'rsa', '__init__.py'],
-  ['Lib', 'site-packages', 'dotenv', '__init__.py']
+  ['Lib', 'site-packages', 'dotenv', '__init__.py'],
+  ['Lib', 'site-packages', 'python_socks', '__init__.py']
 ]
 
 export interface BundledPythonRuntimeCheckResult {
@@ -71,7 +72,7 @@ export function checkBundledPythonRuntime(): BundledPythonRuntimeCheckResult {
     missingPaths,
     message: [
       '当前软件包里的 Python 运行环境不完整，部分核心功能将无法使用。',
-      '受影响功能通常包括：读取已加入群、群采集、2FA、冻结检测、SpamBot 检查。',
+      '受影响功能通常包括：读取已加入群、群采集、2FA、冻结检测、SpamBot 检查、定时群发 Telethon 主链。',
       '请重新下载或重新替换完整的 TG-Matrix 便携版后再试。'
     ].join('\n')
   }

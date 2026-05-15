@@ -9,6 +9,7 @@ import { TelegramClientManager, type AccountClientProxyOptions } from '../accoun
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
 import type { BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastScheduledMessageItem, BroadcastScheduledMessageListResult, BroadcastStopResult } from '../../src/types'
 import { TelethonJoinedGroupReader } from './telethon-joined-group-reader'
+import { TelethonScheduledMessageService } from './telethon-scheduled-message-service'
 
 const MIN_SCHEDULE_AHEAD_MS = 60_000
 const TELEGRAM_SCHEDULE_QUEUE_LIMIT = 100
@@ -75,6 +76,9 @@ function formatBroadcastError(error: unknown) {
   if (/SCHEDULE_DATE_TOO_LATE/i.test(normalized)) return '定时时间设得太远了，Telegram 不接受这么远的时间。'
   if (/SCHEDULE_DATE_INVALID|MSG_ID_INVALID/i.test(normalized)) return '定时时间不对，请改成未来时间再试。'
   if (/TELEGRAM_REPEAT_NOT_APPLIED/i.test(normalized)) return 'Telegram 这次没有把“每天重复”真正挂上去，这条我已经按失败处理了。你可以直接重试这一条；如果还不行，我再继续顺着这条日志往下抠。'
+  if (/SCHEDULE_MESSAGE_NOT_FOUND/i.test(normalized)) return 'Telegram 返回成功了，但这条定时内容没有在待发送列表里稳定出现。我已经按失败处理，你直接重试这一条就行。'
+  if (/TELETHON_SCHEDULED_MESSAGE_SERVICE_UNAVAILABLE/i.test(normalized)) return '当前软件包里的定时群发 Telethon 组件不完整，请重新下载完整包后再试。'
+  if (/No module named 'python_socks'|No module named 'socks'/i.test(normalized)) return '当前软件包里的代理运行环境不完整，定时群发没法通过代理走 Telethon。请重新下载完整包后再试。'
   if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '全局代理已开启，但当前没有可用代理，所以这次没有继续走本地直连。先把可用代理补上再试。'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号的登录状态失效了，需要重新登录。'
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '私密链接失效了、过期了，或者当前账号用不了这个链接。'
@@ -526,7 +530,8 @@ export class BroadcastService {
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
     private readonly proxyPoolService: ProxyPoolService,
-    private readonly telethonJoinedGroupReader: TelethonJoinedGroupReader
+    private readonly telethonJoinedGroupReader: TelethonJoinedGroupReader,
+    private readonly telethonScheduledMessageService: TelethonScheduledMessageService
   ) {}
 
   private async listJoinedGroupsWithTelethonPrimary(account: AccountRecord) {
@@ -541,6 +546,19 @@ export class BroadcastService {
     }
 
     throw new Error('Telethon 这次也没读到这个账号的已加入群。你这个号虽然在线，但当前会话的对话列表还是没拉回来；先在 Telegram 客户端里点开几个群，再回来重试。')
+  }
+
+  private getCurrentProxy() {
+    if (!this.proxyPoolService.isEnabled()) {
+      return null
+    }
+
+    const proxy = this.proxyPoolService.getAccountCheckProxy()
+    if (!proxy) {
+      throw new Error('GLOBAL_PROXY_REQUIRED')
+    }
+
+    return proxy
   }
 
   async stopCurrentPush(): Promise<BroadcastStopResult> {
@@ -568,7 +586,6 @@ export class BroadcastService {
     const accountsById = new Map(accounts.map((item) => [item.id, item]))
     const results: BroadcastPushScheduleResultItem[] = []
     const clients = new Map<number, TelegramClient>()
-    const entityCache = new Map<string, unknown>()
     const scheduledCountCache = new Map<string, number>()
     const pendingItemsByAccount = new Map<number, BroadcastPushSchedulePayload['items']>()
     let successCount = 0
@@ -711,96 +728,47 @@ export class BroadcastService {
           let finished = false
           while (!finished && !task.cancelled) {
             try {
-              let client = clients.get(account.id)
-              if (!client) {
-                client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
-                if (task.cancelled) {
-                  await this.clientManager.destroyClient(client).catch(() => undefined)
-                  break
-                }
-                clients.set(account.id, client)
-              }
-
+              const proxy = this.getCurrentProxy()
+              const normalizedGroupRef = group.targetRef || group.username
               const entityKey = `${account.id}:${groupRef.kind}:${String(groupRef.value)}`
-              let entity = entityCache.get(entityKey)
-              if (!entity) {
-                entity = await resolveGroupEntity(client, groupRef)
-                entityCache.set(entityKey, entity)
-              }
 
               let scheduledCount = scheduledCountCache.get(entityKey)
               if (typeof scheduledCount !== 'number') {
-                scheduledCount = await getScheduledMessageCount(client, entity)
+                const scheduledMessages = await this.telethonScheduledMessageService.list({
+                  sessionPath: account.sessionPath,
+                  groupRef: normalizedGroupRef,
+                  proxy,
+                  timeoutSeconds: 35
+                })
+                scheduledCount = scheduledMessages.total
                 scheduledCountCache.set(entityKey, scheduledCount)
               }
               if (scheduledCount >= TELEGRAM_SCHEDULE_QUEUE_LIMIT) {
                 throw new Error(`SCHEDULE_QUEUE_FULL_LOCAL: current=${scheduledCount}`)
               }
 
-              let messageId: number | null = null
-
               if (creative.kind === 'channel_forward') {
                 const sourceMessage = parseTelegramMessageLink(creative.sourceLink)
                 if (!sourceMessage || !Number.isFinite(sourceMessage.messageId) || sourceMessage.messageId <= 0) {
                   throw new Error('SOURCE_MESSAGE_LINK_INVALID')
                 }
-
-                const forwardResult = await (client as TelegramClient & {
-                  forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
-                }).forwardMessages(entity as never, {
-                  messages: [sourceMessage.messageId],
-                  fromPeer: sourceMessage.peerRef as never,
-                  schedule: Math.floor(scheduledAt.getTime() / 1000),
-                  scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined,
-                  dropAuthor: false
-                })
-
-                const firstResult = Array.isArray(forwardResult) ? forwardResult[0] : forwardResult
-                messageId = extractResponseMessageId(firstResult)
-
-                if ((item.repeatPeriodSeconds ?? 0) > 0 && messageId) {
-                  const responseRepeatPeriod = extractResponseRepeatPeriod(firstResult)
-                  const verification = responseRepeatPeriod === (item.repeatPeriodSeconds ?? 0)
-                    ? { verified: true, sawScheduledMessage: true }
-                    : await verifyScheduledRepeatPeriod(client, entity, messageId, item.repeatPeriodSeconds ?? 0)
-                  if (!verification.verified && !verification.sawScheduledMessage) {
-                    await client.invoke(new Api.messages.DeleteScheduledMessages({
-                      peer: entity as never,
-                      id: [messageId]
-                    })).catch(() => undefined)
-                    throw new Error('TELEGRAM_REPEAT_NOT_APPLIED')
-                  }
-                }
-              } else {
-                const media = creative.imageUrl.trim() ? resolveMediaFile(creative.imageUrl, creative.title || creative.text || 'broadcast-image') : undefined
-                const message = await (client as TelegramClient & { sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }> }).sendMessage(entity as never, {
-                  message: buildCreativeMessage(creative),
-                  file: media,
-                  schedule: Math.floor(scheduledAt.getTime() / 1000),
-                  scheduleRepeatPeriod: (item.repeatPeriodSeconds ?? 0) > 0 ? item.repeatPeriodSeconds : undefined
-                })
-                messageId = extractResponseMessageId(message)
-
-                if ((item.repeatPeriodSeconds ?? 0) > 0 && messageId) {
-                  const responseRepeatPeriod = extractResponseRepeatPeriod(message)
-                  const verification = responseRepeatPeriod === (item.repeatPeriodSeconds ?? 0)
-                    ? { verified: true, sawScheduledMessage: true }
-                    : await verifyScheduledRepeatPeriod(client, entity, messageId, item.repeatPeriodSeconds ?? 0)
-                  if (!verification.verified && !verification.sawScheduledMessage) {
-                    await client.invoke(new Api.messages.DeleteScheduledMessages({
-                      peer: entity as never,
-                      id: [messageId]
-                    })).catch(() => undefined)
-                    throw new Error('TELEGRAM_REPEAT_NOT_APPLIED')
-                  }
-                }
               }
+
+              const pushResult = await this.telethonScheduledMessageService.push({
+                sessionPath: account.sessionPath,
+                groupRef: normalizedGroupRef,
+                creative,
+                scheduledAt: scheduledAt.toISOString(),
+                repeatPeriodSeconds: item.repeatPeriodSeconds ?? 0,
+                proxy,
+                timeoutSeconds: creative.kind === 'channel_forward' ? 45 : 60
+              })
 
               const resultItem: BroadcastPushScheduleResultItem = {
                 previewItemId: item.id,
                 status: 'scheduled',
                 errorMessage: '',
-                remoteMessageId: messageId,
+                remoteMessageId: pushResult.messageId,
                 syncedAt: new Date().toISOString(),
                 accountId: item.accountId,
                 groupId: item.groupId,
@@ -934,32 +902,15 @@ export class BroadcastService {
       throw new Error('群组引用不对，请重新选一个群。')
     }
 
-    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
     try {
-      const entity = await resolveGroupEntity(client, groupRef)
-      const result = await client.invoke(new Api.messages.GetScheduledHistory({
-        peer: entity as never,
-        hash: bigInt.zero
-      })) as { messages?: any[] }
-
-      const items = Array.isArray(result?.messages)
-        ? result.messages.map((message) => serializeScheduledMessage(message)).filter((item): item is BroadcastScheduledMessageItem => Boolean(item))
-          .sort((left, right) => {
-            const leftTime = left.scheduledAt ? new Date(left.scheduledAt).getTime() : 0
-            const rightTime = right.scheduledAt ? new Date(right.scheduledAt).getTime() : 0
-            return leftTime - rightTime
-          })
-        : []
-
-      return {
-        total: items.length,
-        items,
-        message: items.length > 0 ? `已读取到 ${items.length} 条定时内容。` : '这个群当前还没有定时内容。'
-      }
+      return await this.telethonScheduledMessageService.list({
+        sessionPath: account.sessionPath,
+        groupRef: groupRefRaw,
+        proxy: this.getCurrentProxy(),
+        timeoutSeconds: 35
+      })
     } catch (error) {
       throw new Error(formatBroadcastError(error))
-    } finally {
-      await this.clientManager.destroyClient(client)
     }
   }
 
@@ -981,21 +932,16 @@ export class BroadcastService {
       throw new Error('群组引用不对，请重新选一个群。')
     }
 
-    const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
     try {
-      const entity = await resolveGroupEntity(client, groupRef)
-      await client.invoke(new Api.messages.DeleteScheduledMessages({
-        peer: entity as never,
-        id: messageIds
-      }))
-      return {
-        deletedCount: messageIds.length,
-        message: `已删除 ${messageIds.length} 条定时内容。`
-      }
+      return await this.telethonScheduledMessageService.delete({
+        sessionPath: account.sessionPath,
+        groupRef: payload.groupRef,
+        messageIds,
+        proxy: this.getCurrentProxy(),
+        timeoutSeconds: 35
+      })
     } catch (error) {
       throw new Error(formatBroadcastError(error))
-    } finally {
-      await this.clientManager.destroyClient(client)
     }
   }
 

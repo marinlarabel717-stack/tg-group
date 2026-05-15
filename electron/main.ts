@@ -35,6 +35,7 @@ import { LicenseService } from './license/license-service'
 import { BroadcastService } from './broadcast/service'
 import { registerBroadcastIpc } from './broadcast/ipc'
 import { TelethonJoinedGroupReader } from './broadcast/telethon-joined-group-reader'
+import { TelethonScheduledMessageService } from './broadcast/telethon-scheduled-message-service'
 import { DirectMessageService } from './direct-message/service'
 import { TelethonGroupCollector } from './direct-message/telethon-group-collector'
 import { TelethonDirectMessageSender } from './direct-message/telethon-direct-message-sender'
@@ -295,7 +296,8 @@ async function bootstrap() {
   const statusResolver = new StatusResolver()
   const updateService = new AccountUpdateService(accountsRootPath)
   const telethonJoinedGroupReader = new TelethonJoinedGroupReader()
-  const broadcastService = new BroadcastService(repository, sessionLoader, clientManager, proxyPoolService, telethonJoinedGroupReader)
+  const telethonScheduledMessageService = new TelethonScheduledMessageService()
+  const broadcastService = new BroadcastService(repository, sessionLoader, clientManager, proxyPoolService, telethonJoinedGroupReader, telethonScheduledMessageService)
   const telethonGroupCollector = new TelethonGroupCollector()
   const telethonDirectMessageSender = new TelethonDirectMessageSender()
   const telethonAutoJoiner = new TelethonAutoJoiner()
