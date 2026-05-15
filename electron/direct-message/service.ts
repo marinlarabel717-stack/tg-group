@@ -69,6 +69,7 @@ function formatDirectMessageError(error: unknown) {
   if (/SOURCE_MESSAGE_LINK_INVALID/i.test(normalized)) return '频道消息链接不对，请检查链接。'
   if (/CHAT_FORWARDS_RESTRICTED/i.test(normalized)) return '这个频道消息禁止转发。'
   if (/POSTBOT_RESULT_EMPTY/i.test(normalized)) return 'postbot 没返回可发送的图文结果，请检查代码是不是完整可用。'
+  if (/WELCOME_ONLY_CANCELLED/i.test(normalized)) return '欢迎帖已经发出，但广告还没继续发送，任务就被停止了。'
   if (/FLOOD_WAIT_(\d+)/i.test(normalized)) {
     const matched = normalized.match(/FLOOD_WAIT_(\d+)/i)
     return matched ? `当前账号被限流了，请 ${matched[1]} 秒后再试。` : '当前账号被限流了，请稍后再试。'
@@ -566,6 +567,32 @@ function buildPostbotText(parsed: { text: string; buttonText: string; buttonUrl:
   return `${base}${base ? '\n\n' : ''}${parsed.buttonText}\n${parsed.buttonUrl}`
 }
 
+const RANDOM_TEXT_EMOJIS = ['✨', '🌸', '🍀', '🎉', '💫', '🌈', '⭐️', '🎁', '🍃', '☀️'] as const
+
+function normalizeDelaySeconds(value: number | undefined, fallback = 0) {
+  if (!Number.isFinite(value)) return fallback
+  return Math.max(0, Math.min(3600, Math.floor(value ?? fallback)))
+}
+
+function buildRandomEmojiSuffix(enabled: boolean | undefined) {
+  if (!enabled) return ''
+  const count = Math.random() < 0.5 ? 1 : 2
+  const pool = [...RANDOM_TEXT_EMOJIS]
+  const picked: string[] = []
+  for (let index = 0; index < count && pool.length > 0; index += 1) {
+    const cursor = Math.floor(Math.random() * pool.length)
+    const [emoji] = pool.splice(cursor, 1)
+    if (emoji) picked.push(emoji)
+  }
+  return picked.length > 0 ? ` ${picked.join(' ')}` : ''
+}
+
+function buildDirectTextMessage(text: string, randomEmojiEnabled: boolean | undefined) {
+  const base = text.trim()
+  if (!base) return ''
+  return `${base}${buildRandomEmojiSuffix(randomEmojiEnabled)}`
+}
+
 function createRandomId() {
   const seed = `${Date.now()}${Math.floor(Math.random() * 1_000_000)}`
   return bigInt(seed)
@@ -592,6 +619,23 @@ function readDeleteModeLabel(mode: DirectMessageSendPayload['deleteMode']) {
   if (mode === 'self') return '仅自己删除'
   if (mode === 'both') return '双向删除'
   return '不删除'
+}
+
+function buildPostSendFeatureSummary(payload: DirectMessageSendPayload) {
+  const parts: string[] = []
+  if (payload.welcomeMessageEnabled && payload.welcomeMessageText?.trim()) {
+    parts.push(`先发欢迎帖，等待 ${normalizeDelaySeconds(payload.welcomeDelaySeconds, 3)} 秒再发广告`)
+  }
+  if (payload.pinAfterSendEnabled) {
+    parts.push(`${normalizeDelaySeconds(payload.pinDelaySeconds, 3)} 秒后置顶`)
+  }
+  if (payload.deleteMode && payload.deleteMode !== 'none') {
+    parts.push(`${normalizeDelaySeconds(payload.deleteDelaySeconds, 0)} 秒后${readDeleteModeLabel(payload.deleteMode)}`)
+  }
+  if (payload.messageType === 'text' && payload.randomEmojiEnabled) {
+    parts.push('文本随机 emoji')
+  }
+  return parts.length > 0 ? ` 附加动作：${parts.join('；')}。` : ''
 }
 
 async function deleteSentMessage(client: TelegramClient, entity: unknown, messageId: number, mode: DirectMessageSendPayload['deleteMode']) {
@@ -905,6 +949,12 @@ export class DirectMessageService {
         this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
         return
       }
+      if (payload.welcomeMessageEnabled && !payload.welcomeMessageText?.trim()) {
+        const resultItem = this.createFailedSendItem(item, '欢迎帖子内容还没填。')
+        results.push(resultItem)
+        this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
+        return
+      }
 
       let cleanup: undefined | (() => Promise<void>)
       let requeueItem = false
@@ -926,6 +976,24 @@ export class DirectMessageService {
             const resolved = await resolveSendEntity(client, item.targetValue)
             cleanup = resolved.cleanup
             let response: unknown = null
+            const actionNotes: string[] = []
+
+            if (payload.welcomeMessageEnabled && payload.welcomeMessageText?.trim()) {
+              await (client as TelegramClient & {
+                sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
+              }).sendMessage(resolved.entity as never, {
+                message: payload.welcomeMessageText.trim()
+              })
+              actionNotes.push('已先发送欢迎帖')
+
+              const welcomeDelaySeconds = normalizeDelaySeconds(payload.welcomeDelaySeconds, 3)
+              if (welcomeDelaySeconds > 0) {
+                await this.sleepWithCancel(welcomeDelaySeconds * 1000, task)
+                if (task.cancelled) {
+                  throw new Error('WELCOME_ONLY_CANCELLED')
+                }
+              }
+            }
 
             if (payload.messageType === 'channel_forward') {
               const { parsed } = await loadSourceMessage(client, payload.sourceLink)
@@ -985,7 +1053,7 @@ export class DirectMessageService {
               response = await (client as TelegramClient & {
                 sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
               }).sendMessage(resolved.entity as never, {
-                message: payload.messageText.trim() || undefined,
+                message: buildDirectTextMessage(payload.messageText, payload.messageType === 'text' && payload.randomEmojiEnabled) || undefined,
                 file: media
               })
             }
@@ -1003,18 +1071,65 @@ export class DirectMessageService {
               accountId: item.accountId
             }
 
-            if (payload.deleteMode && payload.deleteMode !== 'none' && !resultItem.remoteMessageId) {
-              resultItem.errorMessage = `已发送，但没拿到消息ID，暂时无法自动执行${readDeleteModeLabel(payload.deleteMode)}。`
-            }
+            if (!resultItem.remoteMessageId) {
+              if (payload.pinAfterSendEnabled) {
+                actionNotes.push('已发送，但没拿到消息 ID，暂时无法自动置顶')
+              }
+              if (payload.deleteMode && payload.deleteMode !== 'none') {
+                actionNotes.push(`已发送，但没拿到消息 ID，暂时无法自动执行${readDeleteModeLabel(payload.deleteMode)}`)
+              }
+            } else {
+              const actions: Array<{ kind: 'pin' | 'delete'; delaySeconds: number }> = []
+              if (payload.pinAfterSendEnabled) {
+                actions.push({ kind: 'pin', delaySeconds: normalizeDelaySeconds(payload.pinDelaySeconds, 3) })
+              }
+              if (payload.deleteMode && payload.deleteMode !== 'none') {
+                actions.push({ kind: 'delete', delaySeconds: normalizeDelaySeconds(payload.deleteDelaySeconds, 0) })
+              }
 
-            if (resultItem.remoteMessageId && payload.deleteMode && payload.deleteMode !== 'none') {
-              try {
-                await deleteSentMessage(client, resolved.entity, resultItem.remoteMessageId, payload.deleteMode)
-                resultItem.errorMessage = `已发送，且已${readDeleteModeLabel(payload.deleteMode)}。`
-              } catch (deleteError) {
-                resultItem.errorMessage = `已发送，但${readDeleteModeLabel(payload.deleteMode)}失败：${formatDirectMessageError(deleteError)}`
+              actions.sort((left, right) => left.delaySeconds - right.delaySeconds || (left.kind === 'pin' ? -1 : 1))
+
+              let elapsedSeconds = 0
+              let messageDeleted = false
+              for (const action of actions) {
+                const waitSeconds = Math.max(0, action.delaySeconds - elapsedSeconds)
+                if (waitSeconds > 0) {
+                  await this.sleepWithCancel(waitSeconds * 1000, task)
+                  elapsedSeconds = action.delaySeconds
+                }
+                if (task.cancelled) {
+                  actionNotes.push('任务已停止，未继续执行后置动作')
+                  break
+                }
+
+                if (action.kind === 'pin') {
+                  if (messageDeleted) {
+                    actionNotes.push('删除时间早于置顶时间，这条广告未再执行置顶')
+                    continue
+                  }
+                  try {
+                    await client.pinMessage(resolved.entity as never, resultItem.remoteMessageId, {
+                      notify: false,
+                      pmOneSide: true
+                    })
+                    actionNotes.push(`已在发送后 ${action.delaySeconds} 秒自动置顶`)
+                  } catch (pinError) {
+                    actionNotes.push(`置顶失败：${formatDirectMessageError(pinError)}`)
+                  }
+                  continue
+                }
+
+                try {
+                  await deleteSentMessage(client, resolved.entity, resultItem.remoteMessageId, payload.deleteMode)
+                  messageDeleted = true
+                  actionNotes.push(`已在发送后 ${action.delaySeconds} 秒自动${readDeleteModeLabel(payload.deleteMode)}`)
+                } catch (deleteError) {
+                  actionNotes.push(`${readDeleteModeLabel(payload.deleteMode)}失败：${formatDirectMessageError(deleteError)}`)
+                }
               }
             }
+
+            resultItem.errorMessage = actionNotes.join('；')
             break
           } catch (error) {
             await cleanup?.()
@@ -1116,19 +1231,17 @@ export class DirectMessageService {
     const successCount = results.filter((item) => item.status === 'sent').length
     const failedCount = results.filter((item) => item.status === 'failed').length
     const remainingCount = Math.max(0, payload.items.length - results.length)
-    const deleteModeSuffix = payload.deleteMode && payload.deleteMode !== 'none'
-      ? ` 删除方式：${readDeleteModeLabel(payload.deleteMode)}。`
-      : ''
+    const featureSuffix = buildPostSendFeatureSummary(payload)
     return {
       total: results.length,
       successCount,
       failedCount,
       items: results,
       message: task.cancelled
-        ? `${stopReason || '任务已停止。'} 成功 ${successCount} 条，失败 ${failedCount} 条，剩余 ${remainingCount} 条未继续发送。${deleteModeSuffix}`
+        ? `${stopReason || '任务已停止。'} 成功 ${successCount} 条，失败 ${failedCount} 条，剩余 ${remainingCount} 条未继续发送。${featureSuffix}`
         : failedCount === 0
-          ? `已成功发出 ${successCount} 条私信。${deleteModeSuffix}`
-          : `发送完成：成功 ${successCount} 条，失败 ${failedCount} 条。${deleteModeSuffix}`
+          ? `已成功发出 ${successCount} 条私信。${featureSuffix}`
+          : `发送完成：成功 ${successCount} 条，失败 ${failedCount} 条。${featureSuffix}`
     }
   }
 

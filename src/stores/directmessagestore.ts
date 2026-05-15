@@ -123,6 +123,13 @@ interface DirectMessageState {
   sourceLink: string
   postbotCode: string
   deleteMode: DirectMessageDeleteMode
+  deleteDelaySeconds: number
+  pinAfterSendEnabled: boolean
+  pinDelaySeconds: number
+  welcomeMessageEnabled: boolean
+  welcomeMessageText: string
+  welcomeDelaySeconds: number
+  randomEmojiEnabled: boolean
   groupConcurrency: number
   accountPerGroup: number
   intervalSeconds: number
@@ -152,6 +159,13 @@ interface DirectMessageState {
   setSourceLink: (value: string) => void
   setPostbotCode: (value: string) => void
   setDeleteMode: (value: DirectMessageDeleteMode) => void
+  setDeleteDelaySeconds: (value: number) => void
+  setPinAfterSendEnabled: (value: boolean) => void
+  setPinDelaySeconds: (value: number) => void
+  setWelcomeMessageEnabled: (value: boolean) => void
+  setWelcomeMessageText: (value: string) => void
+  setWelcomeDelaySeconds: (value: number) => void
+  setRandomEmojiEnabled: (value: boolean) => void
   setGroupConcurrency: (value: number) => void
   setAccountPerGroup: (value: number) => void
   setIntervalSeconds: (value: number) => void
@@ -356,6 +370,13 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       sourceLink: '',
       postbotCode: '',
       deleteMode: 'none',
+      deleteDelaySeconds: 0,
+      pinAfterSendEnabled: false,
+      pinDelaySeconds: 3,
+      welcomeMessageEnabled: false,
+      welcomeMessageText: '',
+      welcomeDelaySeconds: 3,
+      randomEmojiEnabled: false,
       groupConcurrency: 3,
       accountPerGroup: 5,
       intervalSeconds: 25,
@@ -398,6 +419,13 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       setSourceLink: (value) => set({ sourceLink: value, previewItems: [] }),
       setPostbotCode: (value) => set({ postbotCode: value, previewItems: [] }),
       setDeleteMode: (value) => set({ deleteMode: value, previewItems: [] }),
+      setDeleteDelaySeconds: (value) => set({ deleteDelaySeconds: Math.max(0, value || 0), previewItems: [] }),
+      setPinAfterSendEnabled: (value) => set({ pinAfterSendEnabled: value, previewItems: [] }),
+      setPinDelaySeconds: (value) => set({ pinDelaySeconds: Math.max(0, value || 0), previewItems: [] }),
+      setWelcomeMessageEnabled: (value) => set({ welcomeMessageEnabled: value, previewItems: [] }),
+      setWelcomeMessageText: (value) => set({ welcomeMessageText: value, previewItems: [] }),
+      setWelcomeDelaySeconds: (value) => set({ welcomeDelaySeconds: Math.max(0, value || 0), previewItems: [] }),
+      setRandomEmojiEnabled: (value) => set({ randomEmojiEnabled: value, previewItems: [] }),
       setGroupConcurrency: (value) => set({ groupConcurrency: Math.max(1, value || 1) }),
       setAccountPerGroup: (value) => set({ accountPerGroup: Math.max(1, value || 1), previewItems: [] }),
       setIntervalSeconds: (value) => set({ intervalSeconds: Math.max(5, value || 5), previewItems: [] }),
@@ -542,6 +570,10 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           set({ previewItems: [], lastActionMessage: '文本直发要先填内容。' })
           return
         }
+        if (state.welcomeMessageEnabled && !state.welcomeMessageText.trim()) {
+          set({ previewItems: [], lastActionMessage: '你开启了欢迎帖子，先把欢迎内容填上。' })
+          return
+        }
         if ((state.messageType === 'channel_forward' || state.messageType === 'hidden_channel_forward') && !state.sourceLink.trim()) {
           set({ previewItems: [], lastActionMessage: '先把频道消息链接填上。' })
           return
@@ -615,6 +647,13 @@ export const useDirectMessageStore = create<DirectMessageState>()(
             sourceLink: state.sourceLink,
             postbotCode: state.postbotCode,
             deleteMode: state.deleteMode,
+            deleteDelaySeconds: state.deleteDelaySeconds,
+            pinAfterSendEnabled: state.pinAfterSendEnabled,
+            pinDelaySeconds: state.pinDelaySeconds,
+            welcomeMessageEnabled: state.welcomeMessageEnabled,
+            welcomeMessageText: state.welcomeMessageText,
+            welcomeDelaySeconds: state.welcomeDelaySeconds,
+            randomEmojiEnabled: state.randomEmojiEnabled,
             concurrency: state.groupConcurrency
           })
           const run = buildRunFromResult(result, state)
@@ -757,7 +796,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
     }),
     {
       name: 'tg-group-direct-message-store',
-      version: 6,
+      version: 7,
       storage: createJSONStorage(() => window.localStorage),
       partialize: (state) => ({
         activeTab: state.activeTab,
@@ -775,6 +814,13 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         sourceLink: state.sourceLink,
         postbotCode: state.postbotCode,
         deleteMode: state.deleteMode,
+        deleteDelaySeconds: state.deleteDelaySeconds,
+        pinAfterSendEnabled: state.pinAfterSendEnabled,
+        pinDelaySeconds: state.pinDelaySeconds,
+        welcomeMessageEnabled: state.welcomeMessageEnabled,
+        welcomeMessageText: state.welcomeMessageText,
+        welcomeDelaySeconds: state.welcomeDelaySeconds,
+        randomEmojiEnabled: state.randomEmojiEnabled,
         groupConcurrency: state.groupConcurrency,
         accountPerGroup: state.accountPerGroup,
         intervalSeconds: state.intervalSeconds,
@@ -808,6 +854,13 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           sourceLink: state?.sourceLink || '',
           postbotCode: state?.postbotCode || '',
           deleteMode: state?.deleteMode === 'self' || state?.deleteMode === 'both' ? state.deleteMode : 'none',
+          deleteDelaySeconds: typeof state?.deleteDelaySeconds === 'number' ? Math.max(0, state.deleteDelaySeconds) : 0,
+          pinAfterSendEnabled: Boolean(state?.pinAfterSendEnabled),
+          pinDelaySeconds: typeof state?.pinDelaySeconds === 'number' ? Math.max(0, state.pinDelaySeconds) : 3,
+          welcomeMessageEnabled: Boolean(state?.welcomeMessageEnabled),
+          welcomeMessageText: state?.welcomeMessageText || '',
+          welcomeDelaySeconds: typeof state?.welcomeDelaySeconds === 'number' ? Math.max(0, state.welcomeDelaySeconds) : 3,
+          randomEmojiEnabled: Boolean(state?.randomEmojiEnabled),
           groupConcurrency: state?.groupConcurrency || 3,
           accountPerGroup: state?.accountPerGroup || 5,
           intervalSeconds: state?.intervalSeconds || 25,

@@ -165,6 +165,20 @@ const SendWorkbench = memo(function SendWorkbench() {
   const setPostbotCode = useDirectMessageStore((state) => state.setPostbotCode)
   const deleteMode = useDirectMessageStore((state) => state.deleteMode)
   const setDeleteMode = useDirectMessageStore((state) => state.setDeleteMode)
+  const deleteDelaySeconds = useDirectMessageStore((state) => state.deleteDelaySeconds)
+  const setDeleteDelaySeconds = useDirectMessageStore((state) => state.setDeleteDelaySeconds)
+  const pinAfterSendEnabled = useDirectMessageStore((state) => state.pinAfterSendEnabled)
+  const setPinAfterSendEnabled = useDirectMessageStore((state) => state.setPinAfterSendEnabled)
+  const pinDelaySeconds = useDirectMessageStore((state) => state.pinDelaySeconds)
+  const setPinDelaySeconds = useDirectMessageStore((state) => state.setPinDelaySeconds)
+  const welcomeMessageEnabled = useDirectMessageStore((state) => state.welcomeMessageEnabled)
+  const setWelcomeMessageEnabled = useDirectMessageStore((state) => state.setWelcomeMessageEnabled)
+  const welcomeMessageText = useDirectMessageStore((state) => state.welcomeMessageText)
+  const setWelcomeMessageText = useDirectMessageStore((state) => state.setWelcomeMessageText)
+  const welcomeDelaySeconds = useDirectMessageStore((state) => state.welcomeDelaySeconds)
+  const setWelcomeDelaySeconds = useDirectMessageStore((state) => state.setWelcomeDelaySeconds)
+  const randomEmojiEnabled = useDirectMessageStore((state) => state.randomEmojiEnabled)
+  const setRandomEmojiEnabled = useDirectMessageStore((state) => state.setRandomEmojiEnabled)
   const groupConcurrency = useDirectMessageStore((state) => state.groupConcurrency)
   const setGroupConcurrency = useDirectMessageStore((state) => state.setGroupConcurrency)
   const intervalSeconds = useDirectMessageStore((state) => state.intervalSeconds)
@@ -294,6 +308,58 @@ const SendWorkbench = memo(function SendWorkbench() {
                   )
                 })}
               </div>
+
+              {deleteMode !== 'none' ? (
+                <label className="mt-3 block rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-3 text-sm">
+                  <div className="text-xs tracking-[0.14em] text-textMuted">删除延时（秒）</div>
+                  <input
+                    type="number"
+                    min={0}
+                    max={3600}
+                    value={deleteDelaySeconds}
+                    onChange={(event) => setDeleteDelaySeconds(Number(event.target.value) || 0)}
+                    className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]"
+                  />
+                </label>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+                <label className="inline-flex items-center gap-2 text-sm text-white">
+                  <input type="checkbox" checked={pinAfterSendEnabled} onChange={(event) => setPinAfterSendEnabled(event.target.checked)} />
+                  发送后自动置顶
+                </label>
+                <div className="mt-2 text-xs text-textMuted">按你填的秒数等待后，把刚发出的广告在当前账号侧置顶。</div>
+                {pinAfterSendEnabled ? (
+                  <input
+                    type="number"
+                    min={0}
+                    max={3600}
+                    value={pinDelaySeconds}
+                    onChange={(event) => setPinDelaySeconds(Number(event.target.value) || 0)}
+                    className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]"
+                  />
+                ) : null}
+              </div>
+
+              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+                <label className="inline-flex items-center gap-2 text-sm text-white">
+                  <input type="checkbox" checked={welcomeMessageEnabled} onChange={(event) => setWelcomeMessageEnabled(event.target.checked)} />
+                  先发欢迎帖子，再发广告
+                </label>
+                <div className="mt-2 text-xs text-textMuted">会先发一条欢迎内容，等几秒后再发送正式广告。</div>
+                {welcomeMessageEnabled ? (
+                  <input
+                    type="number"
+                    min={0}
+                    max={3600}
+                    value={welcomeDelaySeconds}
+                    onChange={(event) => setWelcomeDelaySeconds(Number(event.target.value) || 0)}
+                    className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]"
+                  />
+                ) : null}
+              </div>
             </div>
           </GlassPanel>
 
@@ -350,13 +416,19 @@ const SendWorkbench = memo(function SendWorkbench() {
 
             <div className="mt-4 rounded-[16px] bg-panel/80 p-4">
               {messageType === 'text' ? (
-                <textarea
-                  rows={10}
-                  value={messageText}
-                  onChange={(event) => setMessageText(event.target.value)}
-                  placeholder="文本直发：直接写发送内容"
-                  className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
-                />
+                <div className="space-y-3">
+                  <textarea
+                    rows={10}
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                    placeholder="文本直发：直接写发送内容"
+                    className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
+                  />
+                  <label className="inline-flex items-center gap-2 text-sm text-white">
+                    <input type="checkbox" checked={randomEmojiEnabled} onChange={(event) => setRandomEmojiEnabled(event.target.checked)} />
+                    纯文本随机符号模式（每次随机带 1-2 个 emoji）
+                  </label>
+                </div>
               ) : null}
 
               {messageType === 'channel_forward' ? (
@@ -385,6 +457,20 @@ const SendWorkbench = memo(function SendWorkbench() {
                   placeholder="post图文+按钮：贴 postbot 生成代码"
                   className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
                 />
+              ) : null}
+
+              {welcomeMessageEnabled ? (
+                <div className="mt-4 rounded-[14px] border border-white/[0.06] bg-black/10 p-4">
+                  <div className="text-sm font-medium text-white">欢迎帖子内容</div>
+                  <div className="mt-1 text-xs text-textMuted">这条会先发，等待上面设置的秒数后，再发正式广告。</div>
+                  <textarea
+                    rows={5}
+                    value={welcomeMessageText}
+                    onChange={(event) => setWelcomeMessageText(event.target.value)}
+                    placeholder="先发的欢迎内容写这里"
+                    className="mt-3 w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
+                  />
+                </div>
               ) : null}
             </div>
           </GlassPanel>

@@ -597,6 +597,13 @@ export interface DirectMessageSendPayload {
   sourceLink: string
   postbotCode: string
   deleteMode?: 'none' | 'self' | 'both'
+  deleteDelaySeconds?: number
+  pinAfterSendEnabled?: boolean
+  pinDelaySeconds?: number
+  welcomeMessageEnabled?: boolean
+  welcomeMessageText?: string
+  welcomeDelaySeconds?: number
+  randomEmojiEnabled?: boolean
   concurrency?: number
 }
 
