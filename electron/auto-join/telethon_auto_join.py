@@ -100,7 +100,12 @@ async def _is_already_in_channel(client: Any, entity: Any) -> bool:
         return True
     except Exception as exc:
         message = str(exc).upper()
-        if 'USER_NOT_PARTICIPANT' in message or 'PARTICIPANT_ID_INVALID' in message:
+        if (
+            'USER_NOT_PARTICIPANT' in message
+            or 'PARTICIPANT_ID_INVALID' in message
+            or 'NOT A MEMBER OF THE SPECIFIED MEGAGROUP OR CHANNEL' in message
+            or 'TARGET USER IS NOT A MEMBER' in message
+        ):
             return False
         raise
 

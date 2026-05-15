@@ -204,7 +204,7 @@ async function isAlreadyInChannel(client: TelegramClient, entity: unknown) {
     return true
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (/USER_NOT_PARTICIPANT|PARTICIPANT_ID_INVALID/i.test(message)) {
+    if (/USER_NOT_PARTICIPANT|PARTICIPANT_ID_INVALID|not a member of the specified megagroup or channel|target user is not a member/i.test(message)) {
       return false
     }
     throw error
