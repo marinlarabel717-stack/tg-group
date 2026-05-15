@@ -1012,7 +1012,6 @@ export const useBroadcastStore = create<BroadcastState>()(
         groups: state.groups,
         selectedTaskId: state.selectedTaskId,
         selectedCreativeId: state.selectedCreativeId,
-        previewItems: state.previewItems,
         lastActionMessage: state.lastActionMessage
       })
     }

@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CopyPlus, Eye, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Search, Send, Trash2, Users, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
-import { generatePreviewItems, useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
+import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useAccountStore } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
@@ -880,14 +880,10 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     return groups.filter((group) => selectedTask.groupIds.includes(group.id) && group.accountIds.includes(selectedAccount.id)).length
   }, [groups, selectedAccount, selectedTask])
   const selectedPreview = useMemo(() => previewItems.filter((item) => item.taskId === selectedTask?.id), [previewItems, selectedTask])
-  const livePreviewEstimate = useMemo(
-    () => selectedTask ? generatePreviewItems(selectedTask, creatives, groups, accounts) : [],
-    [accounts, creatives, groups, selectedTask]
-  )
   const previewSummary = useMemo(() => {
     const successCount = selectedPreview.filter((item) => item.status === 'scheduled').length
-    const failedItems = livePreviewEstimate.filter((item) => item.status === 'failed')
-    const pendingCount = livePreviewEstimate.length - successCount - failedItems.length
+    const failedItems = selectedPreview.filter((item) => item.status === 'failed')
+    const pendingCount = selectedPreview.length - successCount - failedItems.length
     const expiredCount = failedItems.filter((item) => item.errorMessage.includes('排程时间太近') || item.errorMessage.includes('已过期')).length
     const unboundGroupNames = Array.from(new Set(failedItems
       .filter((item) => item.errorMessage.includes('目标群内没有已加入且可发送的账号'))
@@ -895,10 +891,11 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     const invalidRefGroupNames = Array.from(new Set(failedItems
       .filter((item) => item.errorMessage.includes('缺少可用的 @username') || item.errorMessage.includes('缺少可用的 @username、私密链接或群链接') || item.errorMessage.includes('无法识别这个群'))
       .map((item) => groups.find((entry) => entry.id === item.groupId)?.title || '未命名群组')))
-    const firstItem = livePreviewEstimate[0] ?? null
-    const lastItem = livePreviewEstimate[livePreviewEstimate.length - 1] ?? null
+    const orderedPreview = [...selectedPreview].sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime())
+    const firstItem = orderedPreview[0] ?? null
+    const lastItem = orderedPreview[orderedPreview.length - 1] ?? null
     return {
-      total: livePreviewEstimate.length,
+      total: selectedPreview.length,
       successCount,
       failedCount: failedItems.length,
       pendingCount,
@@ -908,7 +905,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
       firstScheduledAt: firstItem?.scheduledAt ?? '',
       lastScheduledAt: lastItem?.scheduledAt ?? ''
     }
-  }, [groups, livePreviewEstimate, selectedPreview])
+  }, [groups, selectedPreview])
   const filteredJoinedGroups = useMemo(() => {
     const keyword = groupSearch.trim().toLowerCase()
     return joinedGroups.filter((group) => {
@@ -1260,7 +1257,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                 <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
                 <label className="space-y-2 text-sm"><span className="text-textMuted">单群当天条数（每日上限 100）</span><input type="number" min={1} max={100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
               </div>
-              {previewSummary.total > 0 ? (
+              {selectedPreview.length > 0 ? (
                 <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
                   {selectedTask.scheduleMode === 'daily_repeat' ? (
                     <>
