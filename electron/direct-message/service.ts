@@ -369,6 +369,9 @@ async function ensureCollectorGroupJoined(client: TelegramClient, source: Return
 function formatCollectorGroupError(error: unknown) {
   const normalized = error instanceof Error ? error.message.trim() : String(error).trim()
   if (!normalized) return '采集时出了点问题'
+  if (/Could not find a matching Constructor ID|invalidConstructorId|TLObject that was supposed to be read with ID/i.test(normalized)) {
+    return '当前这次命中了 Telegram 新协议对象，旧的 GramJS 解析失败了。系统应该优先走 Telethon；如果你还看到这个提示，说明还有残留的 GramJS 分支没有切干净。'
+  }
   const waitMatched = normalized.match(/A wait of (\d+) seconds is required/i)
   if (waitMatched?.[1]) return `操作太快了，Telegram 要求先等 ${waitMatched[1]} 秒再继续。`
   const floodMatched = normalized.match(/FLOOD_WAIT_(\d+)/i)
@@ -1636,7 +1639,7 @@ export class DirectMessageService {
     }
   }
 
-  private async collectGroupUsersWithClient(client: TelegramClient, payload: GroupCollectorPayload, account?: AccountRecord): Promise<GroupCollectorResult> {
+  private async collectGroupUsersWithClient(client: TelegramClient | null, payload: GroupCollectorPayload, account?: AccountRecord): Promise<GroupCollectorResult> {
     const normalizedSource = normalizeCollectorGroupSource(payload.source) || (resolveCollectorSource(payload.source) ? {
       kind: 'username' as const,
       value: resolveCollectorSource(payload.source),
@@ -1647,7 +1650,8 @@ export class DirectMessageService {
       throw new Error('请先填写群链接或群用户名')
     }
 
-    if (account) {
+    const useTelethonPrimary = Boolean(account && this.telethonGroupCollector.isAvailable())
+    if (useTelethonPrimary && account) {
       const telethonResult = await this.telethonGroupCollector.collect({
         sessionPath: account.sessionPath,
         source: payload.source,
@@ -1656,24 +1660,30 @@ export class DirectMessageService {
         historyLimit: payload.historyLimit,
         historyDays: payload.historyDays,
         timeoutSeconds: payload.mode === 'hidden_history' ? 60 : 45
-      }).catch(() => null)
+      })
 
-      if (telethonResult) {
-        const telethonUsers = telethonResult.users.map((user) => ({
-          id: user.id,
-          username: user.username,
-          phone: user.phone,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          bot: user.bot,
-          premium: user.premium,
-          hasAvatar: user.hasAvatar,
-          role: user.role,
-          statusBucket: user.statusBucket,
-          statusLabel: user.statusLabel
-        }))
-        return this.buildGroupCollectorResultFromUsers(telethonUsers, payload)
+      if (!telethonResult) {
+        throw new Error('TELETHON_GROUP_COLLECTOR_UNAVAILABLE')
       }
+
+      const telethonUsers = telethonResult.users.map((user) => ({
+        id: user.id,
+        username: user.username,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        bot: user.bot,
+        premium: user.premium,
+        hasAvatar: user.hasAvatar,
+        role: user.role,
+        statusBucket: user.statusBucket,
+        statusLabel: user.statusLabel
+      }))
+      return this.buildGroupCollectorResultFromUsers(telethonUsers, payload)
+    }
+
+    if (!client) {
+      throw new Error('TELETHON_GROUP_COLLECTOR_UNAVAILABLE')
     }
 
     const entity = await resolveCollectorGroupEntity(client, normalizedSource)
@@ -1781,11 +1791,16 @@ export class DirectMessageService {
       message
     })
 
+    const useTelethonCollectorPrimary = this.telethonGroupCollector.isAvailable()
     const accountRuntimes = await Promise.all(accounts.map(async (account) => {
       const phone = account.phone?.trim() ? (account.phone.startsWith('+') ? account.phone : `+${account.phone}`) : `账号#${account.id}`
       try {
-        const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
-        task.clients.set(account.id, client)
+        const client = useTelethonCollectorPrimary
+          ? null
+          : await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+        if (client) {
+          task.clients.set(account.id, client)
+        }
         return {
           account,
           client,
@@ -1931,7 +1946,9 @@ export class DirectMessageService {
     } finally {
       await Promise.allSettled(runtimes.map(async (runtime) => {
         task.clients.delete(runtime.account.id)
-        await this.clientManager.destroyClient(runtime.client).catch(() => undefined)
+        if (runtime.client) {
+          await this.clientManager.destroyClient(runtime.client).catch(() => undefined)
+        }
       }))
     }
 

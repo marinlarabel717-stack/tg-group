@@ -3,6 +3,16 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 function resolveBaseDirectory() {
+  const portableExecutableDir = process.env.PORTABLE_EXECUTABLE_DIR?.trim()
+  if (portableExecutableDir) {
+    return portableExecutableDir
+  }
+
+  const portableExecutableFile = process.env.PORTABLE_EXECUTABLE_FILE?.trim()
+  if (portableExecutableFile) {
+    return path.dirname(portableExecutableFile)
+  }
+
   if (app.isPackaged) {
     return path.dirname(app.getPath('exe'))
   }
