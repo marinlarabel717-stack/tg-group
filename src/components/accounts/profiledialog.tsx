@@ -233,7 +233,7 @@ export const ProfileManageDialog = memo(function ProfileManageDialog({
         </button>
         <button type="button" onClick={() => void submit()} disabled={submitting || pickingAvatar} className="flex h-11 items-center justify-center gap-2 rounded-[12px] bg-sky-300 px-4 text-sm font-medium text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-40">
           {submitting ? <Loader2 size={16} className="animate-spin" /> : null}
-          <span>{submitting ? '提交中...' : '跳转日志中心执行'}</span>
+          <span>{submitting ? '提交中...' : '开始执行'}</span>
         </button>
       </div>
     </ResultDialogShell>

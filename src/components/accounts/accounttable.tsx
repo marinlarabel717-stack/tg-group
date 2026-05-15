@@ -63,6 +63,10 @@ interface ProfileDialogState {
   accountIds: number[]
 }
 
+function profileActionNeedsDialog(action: ProfileOperationAction) {
+  return action === 'custom-avatar' || action === 'custom-nickname' || action === 'custom-username' || action === 'custom-bio'
+}
+
 type BulkOperationSubmenu = 'two-fa' | 'profile' | null
 type PremiumFilter = 'all' | 'premium' | 'non-premium'
 
@@ -1164,18 +1168,6 @@ export const AccountTable = memo(function AccountTable() {
     setBulkActionHint('')
   }, [selectedIds])
 
-  const handleOpenProfileDialog = useCallback((action: ProfileOperationAction) => {
-    if (selectedIds.length === 0) {
-      setBulkActionHint('请先选择要处理的账号。')
-      return
-    }
-
-    setProfileDialog({ action, accountIds: selectedIds })
-    setBulkMenuOpen(false)
-    setBulkSubmenu(null)
-    setBulkActionHint('')
-  }, [selectedIds])
-
   const handleSubmitTwoFactor = useCallback(async (payload: TwoFactorOperationPayload) => {
     if (!window.desktopAccounts?.manageTwoFactor) {
       setBulkActionHint('当前环境没有注入 2FA 能力。')
@@ -1215,6 +1207,29 @@ export const AccountTable = memo(function AccountTable() {
       setProfileSubmitting(false)
     }
   }, [setActiveModule, setLogsContext])
+
+  const handleOpenProfileDialog = useCallback((action: ProfileOperationAction) => {
+    if (selectedIds.length === 0) {
+      setBulkActionHint('请先选择要处理的账号。')
+      return
+    }
+
+    setBulkMenuOpen(false)
+    setBulkSubmenu(null)
+    setBulkActionHint('')
+
+    if (!profileActionNeedsDialog(action)) {
+      void handleSubmitProfileOperation({
+        action,
+        accountIds: selectedIds,
+        value: '',
+        avatarPath: ''
+      })
+      return
+    }
+
+    setProfileDialog({ action, accountIds: selectedIds })
+  }, [handleSubmitProfileOperation, selectedIds])
 
   const handleOpenPremiumDialog = useCallback(async (account: AccountRecord) => {
     let premiumExpiryOverride: string | null | undefined = readPremiumExpiry(account)
