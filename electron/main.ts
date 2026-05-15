@@ -40,6 +40,7 @@ import { registerAutoJoinIpc } from './auto-join/ipc'
 import { DesktopAppUpdater } from './app-updater'
 import { BotCenterService } from './bot-center/service'
 import { registerBotCenterIpc } from './bot-center/ipc'
+import { checkBundledPythonRuntime } from './python-runtime'
 
 const BRAND_NAME = 'TG-Matrix'
 
@@ -238,6 +239,12 @@ function bindWindowControls() {
 async function bootstrap() {
   nativeTheme.themeSource = 'dark'
   app.setName(BRAND_NAME)
+
+  const bundledPythonRuntime = checkBundledPythonRuntime()
+  if (!bundledPythonRuntime.ok) {
+    console.error('包内 Python runtime 缺失：', bundledPythonRuntime.missingPaths)
+    dialog.showErrorBox('TG-Matrix 运行环境不完整', bundledPythonRuntime.message)
+  }
 
   const { dataRoot, sessionsDirectory } = ensureDataDirectories()
   const accountsRootPath = dataRoot
