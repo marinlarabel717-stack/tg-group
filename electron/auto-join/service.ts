@@ -144,14 +144,14 @@ function formatAutoJoinError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '原因没拿到'
-  if (/Cannot find any entity corresponding to/i.test(normalized)) return '当前账号没法直接识别这个@群用户名，群可能存在，建议改用完整链接或邀请链接'
+  if (/Cannot find any entity corresponding to/i.test(normalized)) return '当前账号暂时识别不了这个群，群未必不存在，建议改用完整 t.me 链接或邀请链接再试'
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '邀请链接失效了，或者已经不能用了'
   if (/CHANNEL_PRIVATE/i.test(normalized)) return '这个群进不去，可能是私密群，或者当前账号没权限'
   if (/CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号加的群太多了，先退几个群再试'
   if (/USERS_TOO_MUCH/i.test(normalized)) return '这个群人数太多，当前方式进不去'
-  if (/USERNAME_INVALID/i.test(normalized)) return '@群用户名写错了'
-  if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '@群用户名不存在'
-  if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '这个群链接或群引用不对，Telegram 找不到它'
+  if (/USERNAME_INVALID/i.test(normalized)) return '@群用户名格式不对，或者这个用户名已经失效了'
+  if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '@群用户名当前没有被占用，可能是群改名了，或者你填的不是它现在在用的用户名'
+  if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '这个群链接或群引用当前解析不了，不代表群一定不存在，建议换完整链接或邀请链接再试'
   if (/USER_BANNED_IN_CHANNEL/i.test(normalized)) return '这个账号在目标群里被限制了'
   if (/USER_ALREADY_PARTICIPANT/i.test(normalized)) return '这个账号本来就在群里'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号登录状态失效了，需要重新登录'
