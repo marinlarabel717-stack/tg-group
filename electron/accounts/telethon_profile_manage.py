@@ -68,10 +68,13 @@ async def _read_final_profile(client: TelegramClient):
     }
 
 
-async def _apply_action(client: TelegramClient, action: str, value: str, avatar_path: str):
+async def _apply_action(client: TelegramClient, action: str, value: str, avatar_path: str, first_name: str, last_name: str):
     if action in {'random-nickname', 'custom-nickname'}:
-        await client(functions.account.UpdateProfileRequest(first_name=value, last_name=''))
-        return f'昵称已更新为 {value}。'
+        resolved_first_name = (first_name or value or '').strip()
+        resolved_last_name = (last_name or '').strip()
+        await client(functions.account.UpdateProfileRequest(first_name=resolved_first_name, last_name=resolved_last_name))
+        full_name = f'{resolved_first_name} {resolved_last_name}'.strip()
+        return f'昵称已更新为 {full_name}。'
 
     if action in {'random-username', 'custom-username'}:
         username = value.lstrip('@').strip()
@@ -114,6 +117,8 @@ async def main():
     session_path = _normalize_session_path(payload.get('sessionPath', ''))
     action = str(payload.get('action') or '').strip()
     value = str(payload.get('value') or '')
+    first_name = str(payload.get('firstName') or '')
+    last_name = str(payload.get('lastName') or '')
     avatar_path = str(payload.get('avatarPath') or '').strip()
     proxy = _build_proxy_config(payload.get('proxy'))
 
@@ -131,7 +136,7 @@ async def main():
             _emit({'ok': False, 'reason': 'SESSION_NOT_AUTHORIZED'})
             return
 
-        message = await _apply_action(client, action, value, avatar_path)
+        message = await _apply_action(client, action, value, avatar_path, first_name, last_name)
         final_profile = await _read_final_profile(client)
         _emit({
             'ok': True,

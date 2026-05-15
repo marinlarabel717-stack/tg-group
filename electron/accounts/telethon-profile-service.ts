@@ -1,32 +1,39 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import * as zlib from 'node:zlib'
+import { randomInt } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { AccountRecord, ProfileOperationAction, ProfileOperationPayload, ProfileOperationResultItem } from './types'
+import { nativeImage } from 'electron'
+import type { AccountRecord, ProfileOperationPayload, ProfileOperationResultItem } from './types'
 import { resolveRuntimeAssetPath } from '../runtime-paths'
 import { buildTelethonPythonEnv, resolvePythonExecutable } from '../python-runtime'
 import type { AccountClientProxyOptions } from './check-engine/telegram-client-manager'
 import { serializeTelethonProxy, supportsTelethonProxy } from './check-engine/telethon-proxy'
 
 const execFileAsync = promisify(execFile)
-
-const RANDOM_NICKNAME_PREFIXES = ['星海', '深蓝', '矩阵', '夜航', '极光', '海棠', '银湾', '云栖', '北屿', '岚影']
-const RANDOM_NICKNAME_SUFFIXES = ['引擎', '序列', '信标', '坐标', '回声', '脉冲', '节点', '来信', '编号', '计划']
-const RANDOM_BIOS = [
-  '正在整理频道与社群线索，看到消息会尽快回复。',
-  '长期在线，偶尔潜水，欢迎直接留言。',
-  '偏好清晰沟通，合作请带上关键信息。',
-  '只聊有效内容，慢一点但会认真看完。',
-  '主要处理账号、社群、协作相关事务。',
-  '消息较多时回复会稍慢，但不会漏看。',
-  '喜欢把复杂流程拆清楚，再一步步执行。',
-  '常驻 Telegram，工作时间内基本都会在线。'
-]
+const RANDOM_NAME_ALPHABET = 'abcdefghjklmnpqrstuvwxyz'
+const RANDOM_AVATAR_EMOJIS = ['😀', '😎', '🥳', '🤖', '🦊', '🐼', '🐯', '🐸', '🐧', '🐻', '🦁', '🐨', '🐙', '🦄', '🍀', '🌈', '⚡', '🔥', '⭐', '🌙', '🍓', '🍉', '🎧', '🎮', '🚀', '💎', '🎯', '🧠']
+const RANDOM_AVATAR_BACKGROUNDS = [
+  ['#273B7A', '#4B6BFF'],
+  ['#114B5F', '#1A936F'],
+  ['#5B2A86', '#A4508B'],
+  ['#1D3557', '#457B9D'],
+  ['#6B2737', '#D95D39'],
+  ['#2A2F4F', '#917FB3'],
+  ['#1F3C88', '#39A2DB'],
+  ['#2D4059', '#EA5455'],
+  ['#355C7D', '#6C5B7B'],
+  ['#0F3460', '#533483']
+] as const
+const RANDOM_BIO_OPENERS = ['常驻 Telegram', '长期在线', '白天在线较多', '看到消息会尽快回复', '平时主要处理社群事务', '习惯先看重点再回复']
+const RANDOM_BIO_FOCUS = ['合作沟通', '账号整理', '频道运营', '群组管理', '项目协作', '资源对接', '广告安排', '社群维护']
+const RANDOM_BIO_TONES = ['回复会慢一点，但都会看。', '请直接带上关键信息。', '工作消息优先处理。', '有事可以直接留言。', '只聊有效内容。', '欢迎直接联系。']
 
 interface PreparedProfileOperationInput {
   value: string
+  firstName: string
+  lastName: string
   avatarPath: string
   cleanupPaths: string[]
 }
@@ -46,60 +53,90 @@ function resolveScriptPath() {
   return resolveRuntimeAssetPath('accounts', 'telethon_profile_manage.py')
 }
 
-function crc32(buffer: Buffer) {
-  let crc = 0xffffffff
-  for (const byte of buffer) {
-    crc ^= byte
-    for (let bit = 0; bit < 8; bit += 1) {
-      const mask = -(crc & 1)
-      crc = (crc >>> 1) ^ (0xedb88320 & mask)
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0
+function randomPick<T>(items: readonly T[]) {
+  return items[randomInt(0, items.length)]
 }
 
-function createPngChunk(type: string, data: Buffer) {
-  const typeBuffer = Buffer.from(type, 'ascii')
-  const lengthBuffer = Buffer.alloc(4)
-  lengthBuffer.writeUInt32BE(data.length, 0)
-  const crcBuffer = Buffer.alloc(4)
-  crcBuffer.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])), 0)
-  return Buffer.concat([lengthBuffer, typeBuffer, data, crcBuffer])
+function buildRandomLetters(length: number, alphabet: string) {
+  let output = ''
+  for (let index = 0; index < length; index += 1) {
+    output += alphabet[randomInt(0, alphabet.length)]
+  }
+  return output
 }
 
-function createSolidPngBuffer(width: number, height: number, red: number, green: number, blue: number) {
-  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
-  const ihdr = Buffer.alloc(13)
-  ihdr.writeUInt32BE(width, 0)
-  ihdr.writeUInt32BE(height, 4)
-  ihdr[8] = 8
-  ihdr[9] = 6
-  ihdr[10] = 0
-  ihdr[11] = 0
-  ihdr[12] = 0
-
-  const rows: Buffer[] = []
-  for (let y = 0; y < height; y += 1) {
-    const row = Buffer.alloc(1 + width * 4)
-    row[0] = 0
-    for (let x = 0; x < width; x += 1) {
-      const offset = 1 + x * 4
-      const shade = Math.max(0, Math.min(255, Math.round((x / width) * 18 + (y / height) * 14)))
-      row[offset] = Math.max(0, Math.min(255, red + shade))
-      row[offset + 1] = Math.max(0, Math.min(255, green + Math.round(shade * 0.8)))
-      row[offset + 2] = Math.max(0, Math.min(255, blue + Math.round(shade * 0.6)))
-      row[offset + 3] = 255
-    }
-    rows.push(row)
+function shuffleString(value: string) {
+  const chars = value.split('')
+  for (let index = chars.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(0, index + 1)
+    ;[chars[index], chars[swapIndex]] = [chars[swapIndex], chars[index]]
   }
+  return chars.join('')
+}
 
-  const compressed = zlib.deflateSync(Buffer.concat(rows), { level: 9 })
-  return Buffer.concat([
-    signature,
-    createPngChunk('IHDR', ihdr),
-    createPngChunk('IDAT', compressed),
-    createPngChunk('IEND', Buffer.alloc(0))
-  ])
+function toTitleCase(value: string) {
+  if (!value) return value
+  return value[0].toUpperCase() + value.slice(1)
+}
+
+function createSvgAvatarMarkup(emoji: string, colors: readonly [string, string]) {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${colors[0]}" />
+          <stop offset="100%" stop-color="${colors[1]}" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="512" height="512" rx="156" fill="url(#bg)" />
+      <circle cx="256" cy="256" r="190" fill="rgba(255,255,255,0.10)" />
+      <text x="256" y="284" text-anchor="middle" font-size="232" font-family="'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif">${emoji}</text>
+    </svg>
+  `.trim()
+}
+
+function buildRandomNickname() {
+  const first = toTitleCase(buildRandomLetters(randomInt(4, 8), RANDOM_NAME_ALPHABET))
+  const last = toTitleCase(buildRandomLetters(randomInt(5, 9), RANDOM_NAME_ALPHABET))
+  return {
+    firstName: first,
+    lastName: last,
+    display: `${first} ${last}`
+  }
+}
+
+function buildRandomBio() {
+  const opener = randomPick(RANDOM_BIO_OPENERS)
+  const focus = randomPick(RANDOM_BIO_FOCUS)
+  const tone = randomPick(RANDOM_BIO_TONES)
+  return `${opener}，主要处理${focus}，${tone}`
+}
+
+function buildRandomUsername() {
+  const totalLength = randomInt(8, 13)
+  const digitCount = randomInt(2, Math.min(5, totalLength - 3) + 1)
+  const letterCount = totalLength - digitCount
+  const leadingLetter = String.fromCharCode(97 + randomInt(0, 26))
+  const tail = buildRandomLetters(Math.max(0, letterCount - 1), 'abcdefghijklmnopqrstuvwxyz') + buildRandomLetters(digitCount, '0123456789')
+  const shuffled = shuffleString(tail)
+  return `${leadingLetter}${shuffled}`.slice(0, totalLength)
+}
+
+async function ensureDirectory(targetPath: string) {
+  await fs.promises.mkdir(targetPath, { recursive: true })
+}
+
+function resolveAvatarMimeType(filePath: string) {
+  const ext = path.extname(filePath).toLowerCase()
+  if (ext === '.png') return 'image/png'
+  if (ext === '.webp') return 'image/webp'
+  if (ext === '.gif') return 'image/gif'
+  return 'image/jpeg'
+}
+
+async function toAvatarDataUrl(filePath: string) {
+  const buffer = await fs.promises.readFile(filePath)
+  return `data:${resolveAvatarMimeType(filePath)};base64,${buffer.toString('base64')}`
 }
 
 function formatProfileError(error: string) {
@@ -111,7 +148,7 @@ function formatProfileError(error: string) {
     return '当前账号 Session 已失效或未登录，无法更新个人资料。'
   }
   if (upper.includes('USERNAME_OCCUPIED')) {
-    return '这个用户名已经被占用了，请换一个再试。'
+    return '这个随机用户名撞重复了，Telegram 没有接受。'
   }
   if (upper.includes('USERNAME_INVALID')) {
     return '这个用户名格式不对，Telegram 没有接受。'
@@ -136,43 +173,9 @@ function formatProfileError(error: string) {
   return normalized || '更新个人资料失败，Telegram 没有返回更明确的原因。'
 }
 
-function sanitizeUsernamePart(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9_]+/g, '')
-}
-
-function buildRandomNickname(account: AccountRecord) {
-  const prefix = RANDOM_NICKNAME_PREFIXES[account.id % RANDOM_NICKNAME_PREFIXES.length]
-  const suffix = RANDOM_NICKNAME_SUFFIXES[(account.id * 7) % RANDOM_NICKNAME_SUFFIXES.length]
-  const tail = String(account.id).slice(-2).padStart(2, '0')
-  return `${prefix}${suffix}${tail}`
-}
-
-function buildRandomBio(account: AccountRecord) {
-  return RANDOM_BIOS[account.id % RANDOM_BIOS.length]
-}
-
-function buildRandomUsername(account: AccountRecord) {
-  const numericTail = sanitizeUsernamePart(String(account.userId || account.phone || account.id)).slice(-8) || String(account.id)
-  const alpha = `tgm${Math.abs(account.id * 17).toString(36)}`.slice(0, 6)
-  const joined = `${alpha}${numericTail}`.slice(0, 24)
-  return joined.length >= 5 ? joined : `tgm${joined}${String(account.id).slice(-2)}`
-}
-
-async function ensureDirectory(targetPath: string) {
-  await fs.promises.mkdir(targetPath, { recursive: true })
-}
-
-function resolveAvatarMimeType(filePath: string) {
-  const ext = path.extname(filePath).toLowerCase()
-  if (ext === '.png') return 'image/png'
-  if (ext === '.webp') return 'image/webp'
-  if (ext === '.gif') return 'image/gif'
-  return 'image/jpeg'
-}
-
-async function toAvatarDataUrl(filePath: string) {
-  const buffer = await fs.promises.readFile(filePath)
-  return `data:${resolveAvatarMimeType(filePath)};base64,${buffer.toString('base64')}`
+function isRetryableRandomUsernameError(error: string) {
+  const upper = error.toUpperCase()
+  return upper.includes('USERNAME_OCCUPIED') || upper.includes('USERNAME_INVALID')
 }
 
 export class TelethonProfileService {
@@ -184,31 +187,40 @@ export class TelethonProfileService {
     return fs.existsSync(this.scriptPath)
   }
 
-  private async createRandomAvatarFile(account: AccountRecord) {
+  private async createRandomAvatarFile() {
     await ensureDirectory(this.tempDirectory)
-    const red = 52 + (account.id * 37 % 90)
-    const green = 88 + (account.id * 19 % 80)
-    const blue = 132 + (account.id * 13 % 90)
-    const buffer = createSolidPngBuffer(256, 256, red, green, blue)
-    const filePath = path.join(this.tempDirectory, `avatar-${account.id}-${Date.now()}.png`)
-    await fs.promises.writeFile(filePath, buffer)
+    const emoji = randomPick(RANDOM_AVATAR_EMOJIS)
+    const colors = randomPick(RANDOM_AVATAR_BACKGROUNDS)
+    const svg = createSvgAvatarMarkup(emoji, colors)
+    const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`
+    const image = nativeImage.createFromDataURL(dataUrl)
+    const pngBuffer = image.toPNG()
+    const filePath = path.join(this.tempDirectory, `avatar-${Date.now()}-${randomInt(1000, 9999)}.png`)
+    await fs.promises.writeFile(filePath, pngBuffer)
     return filePath
   }
 
-  private async prepareInput(account: AccountRecord, payload: ProfileOperationPayload): Promise<PreparedProfileOperationInput> {
+  private async prepareInput(payload: ProfileOperationPayload): Promise<PreparedProfileOperationInput> {
     const action = payload.action
     const cleanupPaths: string[] = []
     let value = typeof payload.value === 'string' ? payload.value.trim() : ''
+    let firstName = ''
+    let lastName = ''
     let avatarPath = typeof payload.avatarPath === 'string' ? payload.avatarPath.trim() : ''
 
     if (action === 'random-nickname') {
-      value = buildRandomNickname(account)
+      const generated = buildRandomNickname()
+      value = generated.display
+      firstName = generated.firstName
+      lastName = generated.lastName
     } else if (action === 'random-username') {
-      value = buildRandomUsername(account)
+      value = buildRandomUsername()
     } else if (action === 'random-bio') {
-      value = buildRandomBio(account)
-    } else if (action === 'random-avatar') {
-      avatarPath = await this.createRandomAvatarFile(account)
+      value = buildRandomBio()
+    }
+
+    if (action === 'random-avatar') {
+      avatarPath = await this.createRandomAvatarFile()
       cleanupPaths.push(avatarPath)
     }
 
@@ -216,11 +228,46 @@ export class TelethonProfileService {
       throw new Error('请先填写要批量更新的内容。')
     }
 
+    if (action === 'custom-nickname') {
+      firstName = value
+      lastName = ''
+    }
+
     if (action === 'custom-avatar' && !avatarPath) {
       throw new Error('请先选择要上传的头像图片。')
     }
 
-    return { value, avatarPath, cleanupPaths }
+    return { value, firstName, lastName, avatarPath, cleanupPaths }
+  }
+
+  private async executeOnce(account: AccountRecord, payload: ProfileOperationPayload, proxy?: AccountClientProxyOptions | null) {
+    const prepared = await this.prepareInput(payload)
+    try {
+      const proxyPayload = serializeTelethonProxy(proxy)
+      const { stdout } = await execFileAsync(this.pythonExecutable, [
+        this.scriptPath,
+        JSON.stringify({
+          sessionPath: account.sessionPath,
+          action: payload.action,
+          value: prepared.value,
+          firstName: prepared.firstName,
+          lastName: prepared.lastName,
+          avatarPath: prepared.avatarPath,
+          proxy: proxyPayload ? JSON.parse(proxyPayload) : null
+        })
+      ], {
+        cwd: process.cwd(),
+        windowsHide: true,
+        timeout: 120000,
+        encoding: 'utf8',
+        env: buildTelethonPythonEnv()
+      })
+
+      const raw = JSON.parse(stdout.trim()) as TelethonProfileRawResult
+      return { raw, prepared }
+    } catch (error) {
+      throw error
+    }
   }
 
   async execute(account: AccountRecord, payload: ProfileOperationPayload, proxy?: AccountClientProxyOptions | null): Promise<ProfileOperationResultItem> {
@@ -242,73 +289,74 @@ export class TelethonProfileService {
       }
     }
 
-    let prepared: PreparedProfileOperationInput | null = null
+    const maxAttempts = payload.action === 'random-username' ? 6 : 1
+    let lastReason = ''
 
-    try {
-      prepared = await this.prepareInput(account, payload)
-      const proxyPayload = serializeTelethonProxy(proxy)
-      const { stdout } = await execFileAsync(this.pythonExecutable, [
-        this.scriptPath,
-        JSON.stringify({
-          sessionPath: account.sessionPath,
-          action: payload.action,
-          value: prepared.value,
-          avatarPath: prepared.avatarPath,
-          proxy: proxyPayload ? JSON.parse(proxyPayload) : null
-        })
-      ], {
-        cwd: process.cwd(),
-        windowsHide: true,
-        timeout: 120000,
-        encoding: 'utf8',
-        env: buildTelethonPythonEnv()
-      })
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let prepared: PreparedProfileOperationInput | null = null
+      try {
+        const result = await this.executeOnce(account, payload, proxy)
+        prepared = result.prepared
+        const raw = result.raw
+        if (!raw?.ok) {
+          lastReason = typeof raw?.reason === 'string' ? raw.reason : ''
+          if (payload.action === 'random-username' && attempt < maxAttempts && isRetryableRandomUsernameError(lastReason)) {
+            continue
+          }
+          return {
+            accountId: account.id,
+            phone: account.phone,
+            success: false,
+            message: formatProfileError(lastReason)
+          }
+        }
 
-      const raw = JSON.parse(stdout.trim()) as TelethonProfileRawResult
-      if (!raw?.ok) {
+        let avatar = typeof account.profile?.avatar === 'string' ? account.profile.avatar : null
+        let hasProfilePhoto = typeof raw.has_profile_photo === 'boolean' ? raw.has_profile_photo : null
+
+        if (payload.action === 'custom-avatar' || payload.action === 'random-avatar') {
+          avatar = prepared.avatarPath ? await toAvatarDataUrl(prepared.avatarPath) : avatar
+          hasProfilePhoto = true
+        } else if (payload.action === 'clear-all-profile') {
+          avatar = null
+          hasProfilePhoto = false
+        }
+
         return {
           accountId: account.id,
           phone: account.phone,
-          success: false,
-          message: formatProfileError(typeof raw?.reason === 'string' ? raw.reason : '')
+          success: true,
+          message: typeof raw.message === 'string' && raw.message.trim() ? raw.message.trim() : '个人资料已更新。',
+          firstName: typeof raw.first_name === 'string' ? raw.first_name : null,
+          lastName: typeof raw.last_name === 'string' ? raw.last_name : null,
+          username: typeof raw.username === 'string' ? raw.username : null,
+          bio: typeof raw.bio === 'string' ? raw.bio : null,
+          avatar,
+          hasProfilePhoto
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        lastReason = message
+        if (!(payload.action === 'random-username' && attempt < maxAttempts && isRetryableRandomUsernameError(message))) {
+          return {
+            accountId: account.id,
+            phone: account.phone,
+            success: false,
+            message: formatProfileError(message)
+          }
+        }
+      } finally {
+        if (prepared?.cleanupPaths?.length) {
+          await Promise.allSettled(prepared.cleanupPaths.map((targetPath) => fs.promises.rm(targetPath, { force: true })))
         }
       }
+    }
 
-      let avatar = typeof account.profile?.avatar === 'string' ? account.profile.avatar : null
-      let hasProfilePhoto = typeof raw.has_profile_photo === 'boolean' ? raw.has_profile_photo : null
-
-      if (payload.action === 'custom-avatar' || payload.action === 'random-avatar') {
-        avatar = prepared.avatarPath ? await toAvatarDataUrl(prepared.avatarPath) : avatar
-        hasProfilePhoto = true
-      } else if (payload.action === 'clear-all-profile') {
-        avatar = null
-        hasProfilePhoto = false
-      }
-
-      return {
-        accountId: account.id,
-        phone: account.phone,
-        success: true,
-        message: typeof raw.message === 'string' && raw.message.trim() ? raw.message.trim() : '个人资料已更新。',
-        firstName: typeof raw.first_name === 'string' ? raw.first_name : null,
-        lastName: typeof raw.last_name === 'string' ? raw.last_name : null,
-        username: typeof raw.username === 'string' ? raw.username : null,
-        bio: typeof raw.bio === 'string' ? raw.bio : null,
-        avatar,
-        hasProfilePhoto
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return {
-        accountId: account.id,
-        phone: account.phone,
-        success: false,
-        message: formatProfileError(message)
-      }
-    } finally {
-      if (prepared?.cleanupPaths?.length) {
-        await Promise.allSettled(prepared.cleanupPaths.map((targetPath) => fs.promises.rm(targetPath, { force: true })))
-      }
+    return {
+      accountId: account.id,
+      phone: account.phone,
+      success: false,
+      message: formatProfileError(lastReason || 'USERNAME_OCCUPIED')
     }
   }
 }
