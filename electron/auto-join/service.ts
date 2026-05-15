@@ -5,6 +5,7 @@ import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
+import { TelethonAutoJoiner } from './telethon-auto-joiner'
 import type { AutoJoinPayload, AutoJoinPayloadItem, AutoJoinProgress, AutoJoinResultItem, AutoJoinStopResult, AutoJoinTaskResult } from '../../src/types'
 
 interface ActiveAutoJoinTask {
@@ -290,7 +291,8 @@ export class AutoJoinService {
     private readonly accountRepository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
-    private readonly proxyPoolService: ProxyPoolService
+    private readonly proxyPoolService: ProxyPoolService,
+    private readonly telethonAutoJoiner: TelethonAutoJoiner
   ) {}
 
   async stopCurrentTask(): Promise<AutoJoinStopResult> {
@@ -336,6 +338,7 @@ export class AutoJoinService {
 
     const task: ActiveAutoJoinTask = { id: payload.taskId, cancelled: false }
     this.activeTask = task
+    const useTelethonPrimary = this.telethonAutoJoiner.isAvailable() && !this.proxyPoolService.isEnabled()
 
     const clients = new Map<number, TelegramClient>()
     const results: AutoJoinResultItem[] = []
@@ -447,9 +450,11 @@ export class AutoJoinService {
         let client: TelegramClient | null = null
         const accountLabel = accountLabelById.get(account.id) || `账号#${account.id}`
 
-        try {
-          client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
-          clients.set(account.id, client)
+      try {
+          if (!useTelethonPrimary) {
+            client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+            clients.set(account.id, client)
+          }
         } catch (error) {
           emit(`${accountLabel} 登录状态不可用，已跳过这个账号。`, {
             itemId: createSyntheticItemId(account.id),
@@ -479,7 +484,14 @@ export class AutoJoinService {
 
           const attempt = next.attempts + 1
           try {
-            const joined = await joinSingleTarget(client, next)
+            const joined = useTelethonPrimary
+              ? await this.telethonAutoJoiner.join(account.sessionPath, next, 40)
+              : await joinSingleTarget(client as TelegramClient, next)
+
+            if (!joined) {
+              throw new Error('TELETHON_AUTO_JOINER_UNAVAILABLE')
+            }
+
             finalizeResult({
               itemId: next.id,
               raw: next.raw,

@@ -37,6 +37,7 @@ import { TelethonGroupCollector } from './direct-message/telethon-group-collecto
 import { TelethonDirectMessageSender } from './direct-message/telethon-direct-message-sender'
 import { registerDirectMessageIpc } from './direct-message/ipc'
 import { AutoJoinService } from './auto-join/service'
+import { TelethonAutoJoiner } from './auto-join/telethon-auto-joiner'
 import { registerAutoJoinIpc } from './auto-join/ipc'
 import { DesktopAppUpdater } from './app-updater'
 import { BotCenterService } from './bot-center/service'
@@ -286,8 +287,9 @@ async function bootstrap() {
   const broadcastService = new BroadcastService(repository, sessionLoader, clientManager, proxyPoolService, telethonJoinedGroupReader)
   const telethonGroupCollector = new TelethonGroupCollector()
   const telethonDirectMessageSender = new TelethonDirectMessageSender()
+  const telethonAutoJoiner = new TelethonAutoJoiner()
   const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager, proxyPoolService, telethonGroupCollector, telethonDirectMessageSender)
-  const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager, proxyPoolService)
+  const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager, proxyPoolService, telethonAutoJoiner)
   botCenterService = new BotCenterService(botCenterStoragePath)
   const resultWriter = new CheckResultWriter(repository, {
     onWrite: (accounts) => emitAccountsUpdated(accounts)
