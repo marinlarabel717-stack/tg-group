@@ -18,6 +18,7 @@ from telethon.tl import functions, types
 
 DEFAULT_API_ID = int(os.getenv('ACCOUNT_CHECK_API_ID', '2040') or '2040')
 DEFAULT_API_HASH = os.getenv('ACCOUNT_CHECK_API_HASH', 'b18441a1ff607e10a989891a5462e627').strip() or 'b18441a1ff607e10a989891a5462e627'
+RANDOM_TEXT_EMOJIS = ['✨', '🌸', '🍀', '🎉', '💫', '🌈', '🎁', '🍃', '🔥', '💎']
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -25,6 +26,22 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(value)
     except Exception:
         return default
+
+
+def _build_random_emoji_suffix(enabled: Any) -> str:
+    if not bool(enabled):
+        return ''
+    import random
+    count = 1 if random.random() < 0.5 else 2
+    picked = random.sample(RANDOM_TEXT_EMOJIS, k=min(count, len(RANDOM_TEXT_EMOJIS)))
+    return f" {' '.join(picked)}" if picked else ''
+
+
+def _build_direct_text_message(text: str, random_emoji_enabled: Any) -> str:
+    base = str(text or '').strip()
+    if not base:
+        return ''
+    return f'{base}{_build_random_emoji_suffix(random_emoji_enabled)}'
 
 
 def _parse_direct_target(target_value: str) -> Dict[str, str] | None:
@@ -173,6 +190,7 @@ def _extract_message_id(result: Any) -> int | None:
 async def _send_message(client: Any, entity: Any, payload: Dict[str, Any]) -> int | None:
     message_type = str(payload.get('messageType') or 'text').strip() or 'text'
     message_text = str(payload.get('messageText') or '').strip()
+    random_emoji_enabled = payload.get('randomEmojiEnabled')
     image_url = str(payload.get('imageUrl') or '').strip()
     source_link = str(payload.get('sourceLink') or '').strip()
     postbot_code = str(payload.get('postbotCode') or '').strip()
@@ -217,12 +235,13 @@ async def _send_message(client: Any, entity: Any, payload: Dict[str, Any]) -> in
         ))
         return _extract_message_id(updates)
 
-    media = _resolve_media_file(image_url, message_text or str(payload.get('targetValue') or 'direct_message')) if image_url else None
+    final_text = _build_direct_text_message(message_text, random_emoji_enabled) if message_type == 'text' else message_text
+    media = _resolve_media_file(image_url, final_text or str(payload.get('targetValue') or 'direct_message')) if image_url else None
     if media is not None:
-        result = await client.send_file(entity, media, caption=message_text or None)
+        result = await client.send_file(entity, media, caption=final_text or None)
         return _extract_message_id(result)
 
-    result = await client.send_message(entity, message_text or '')
+    result = await client.send_message(entity, final_text or '')
     return _extract_message_id(result)
 
 

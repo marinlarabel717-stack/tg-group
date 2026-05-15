@@ -18,6 +18,7 @@ interface TelethonDirectMessageSendPayload {
   targetValue: string
   messageType: DirectMessageSendPayload['messageType']
   messageText: string
+  randomEmojiEnabled?: boolean
   imageUrl: string
   sourceLink: string
   postbotCode: string
