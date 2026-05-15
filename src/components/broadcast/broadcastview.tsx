@@ -112,7 +112,7 @@ function explainPreviewError(errorMessage: string) {
   if (!normalized) return '这条目前没有报错。'
   if (plain === '发送失败' || normalized === '发送失败') return '这条没发进去，下面会告诉你具体卡在哪。'
   if (normalized.includes('排程时间太近') || normalized.includes('已过期') || /SCHEDULE_DATE_INVALID|MSG_ID_INVALID/i.test(normalized)) {
-    return '这条时间已经过了，或者时间不合法。先重新点一次“预览发送”，再马上点“开始发送”。'
+    return '这条时间已经过了，或者时间不合法。先重新点一次“预览今日计划”，再马上点“开始定时群发”。'
   }
   if (normalized.includes('目标群内没有已加入且可发送的账号')) {
     return '这个群还没绑到可发送账号。先把群重新绑定到左边当前账号。'
@@ -169,7 +169,7 @@ function explainPreviewError(errorMessage: string) {
     return '这个频道消息不允许转发，可能频道开了禁止转发。'
   }
   if (normalized.includes('频道链接转发暂不支持 Telegram 官方重复')) {
-    return '这是旧版本留下的限制提示。重新点一次“预览发送”再试，现在会员号已经按重复链路放开了。'
+    return '这是旧版本留下的限制提示。重新点一次“预览今日计划”再试，现在会员号已经按重复链路放开了。'
   }
   if (normalized.includes('按钮链接格式不对') || /BUTTON_URL_INVALID/i.test(normalized)) {
     return '按钮链接格式不对，请填完整的 https:// 链接。'
@@ -1630,7 +1630,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
             <div className="rounded-[18px] border border-rose-400/15 bg-rose-400/8 p-4">
               <div className="text-sm font-semibold text-white">先处理这几个问题</div>
               <div className="mt-3 space-y-2 text-sm text-rose-100">
-                {filteredSummary.expiredCount > 0 ? <div>1）有 {filteredSummary.expiredCount} 条已经过期：先重新点“预览发送”，再马上点“开始发送”。</div> : null}
+                {filteredSummary.expiredCount > 0 ? <div>1）有 {filteredSummary.expiredCount} 条已经过期：先重新点“预览今日计划”，再马上点“开始定时群发”。</div> : null}
                 {filteredSummary.unboundGroupNames.length > 0 ? <div>2）这些群还没绑好发送账号：{filteredSummary.unboundGroupNames.join('、')}</div> : null}
                 {filteredSummary.invalidRefGroupNames.length > 0 ? <div>3）这些群的群链接 / 私密链接还不对：{filteredSummary.invalidRefGroupNames.join('、')}</div> : null}
                 {filteredSummary.expiredCount === 0 && filteredSummary.unboundGroupNames.length === 0 && filteredSummary.invalidRefGroupNames.length === 0 ? <div>有失败项，但不是上面这两类常见问题，往下看单条报错就行。</div> : null}
