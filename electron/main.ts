@@ -9,6 +9,7 @@ import { CheckResultWriter } from './accounts/check-engine/check-result-writer'
 import { SessionLoader } from './accounts/check-engine/session-loader'
 import { SpamBotChecker } from './accounts/check-engine/spam-bot-checker'
 import { StatusResolver } from './accounts/check-engine/status-resolver'
+import { TelethonAccountSurvivalService } from './accounts/check-engine/telethon-account-survival-service'
 import { TelegramClientManager } from './accounts/check-engine/telegram-client-manager'
 import { TelethonFreezeChecker } from './accounts/check-engine/telethon-freeze-checker'
 import { TelethonSpamBotChecker } from './accounts/check-engine/telethon-spambot-checker'
@@ -271,6 +272,7 @@ async function bootstrap() {
   const statusService = new AccountStatusService(repository)
 
   const sessionLoader = new SessionLoader()
+  const telethonAccountSurvivalService = new TelethonAccountSurvivalService()
   const telethonFreezeChecker = new TelethonFreezeChecker()
   const telethonSpamBotChecker = new TelethonSpamBotChecker()
   const clientManager = new TelegramClientManager()
@@ -302,6 +304,7 @@ async function bootstrap() {
   const checkEngine = new AccountCheckEngine(
     repository,
     sessionLoader,
+    telethonAccountSurvivalService,
     telethonFreezeChecker,
     telethonSpamBotChecker,
     telethonPremiumReader,

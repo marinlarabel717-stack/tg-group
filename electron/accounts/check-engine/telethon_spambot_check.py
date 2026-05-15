@@ -154,6 +154,7 @@ async def _probe_session(session_path: str, timeout_seconds: int) -> Dict[str, A
             return {
                 'status': 'frozen',
                 'reason': 'FREEZE_STATE_IN_APP_CONFIG',
+                'premium': bool(getattr(me, 'premium', False)),
                 'user_id': getattr(me, 'id', None),
                 'first_name': getattr(me, 'first_name', None),
                 'last_name': getattr(me, 'last_name', None),
@@ -168,6 +169,7 @@ async def _probe_session(session_path: str, timeout_seconds: int) -> Dict[str, A
                 'status': reply_result.get('status', 'unknown'),
                 'reason': reply_result.get('reason', 'ok'),
                 'reply_text': reply_result.get('reply_text', ''),
+                'premium': bool(getattr(me, 'premium', False)),
                 'user_id': getattr(me, 'id', None),
                 'first_name': getattr(me, 'first_name', None),
                 'last_name': getattr(me, 'last_name', None),
@@ -180,6 +182,7 @@ async def _probe_session(session_path: str, timeout_seconds: int) -> Dict[str, A
                 return {
                     'status': 'frozen',
                     'reason': _extract_rpc_error_name(exc),
+                    'premium': bool(getattr(me, 'premium', False)),
                     'user_id': getattr(me, 'id', None),
                     'first_name': getattr(me, 'first_name', None),
                     'last_name': getattr(me, 'last_name', None),
@@ -190,6 +193,7 @@ async def _probe_session(session_path: str, timeout_seconds: int) -> Dict[str, A
             return {
                 'status': 'unknown',
                 'reason': str(exc) or exc.__class__.__name__,
+                'premium': bool(getattr(me, 'premium', False)),
                 'user_id': getattr(me, 'id', None),
                 'first_name': getattr(me, 'first_name', None),
                 'last_name': getattr(me, 'last_name', None),

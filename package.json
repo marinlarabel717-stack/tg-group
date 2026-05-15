@@ -1,6 +1,6 @@
 {
   "name": "telegram-multi-account-manager",
-  "version": "0.0.56",
+  "version": "0.0.57",
   "private": true,
   "description": "TG-Matrix desktop manager",
   "author": "TG-Matrix",
@@ -51,6 +51,10 @@
       {
         "from": "electron/accounts/check-engine/telethon_spambot_check.py",
         "to": "runtime/accounts/check-engine/telethon_spambot_check.py"
+      },
+      {
+        "from": "electron/accounts/check-engine/telethon_account_survival.py",
+        "to": "runtime/accounts/check-engine/telethon_account_survival.py"
       },
       {
         "from": "electron/accounts/telethon_twofa_manage.py",

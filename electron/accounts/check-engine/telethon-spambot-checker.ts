@@ -13,6 +13,7 @@ export interface TelethonSpamBotCheckResult {
   reason?: string | null
   summary: string
   replyText: string
+  premium?: boolean | null
   user_id?: number | string | null
   first_name?: string | null
   last_name?: string | null
@@ -29,6 +30,7 @@ interface TelethonSpamBotCheckRawResult {
   status?: string | null
   reason?: string | null
   reply_text?: string | null
+  premium?: boolean | null
   user_id?: number | string | null
   first_name?: string | null
   last_name?: string | null
@@ -99,6 +101,7 @@ export class TelethonSpamBotChecker {
         reason: raw.reason ?? null,
         summary: buildSummary(status, raw, replyText),
         replyText,
+        premium: typeof raw.premium === 'boolean' ? raw.premium : null,
         user_id: raw.user_id ?? null,
         first_name: raw.first_name ?? null,
         last_name: raw.last_name ?? null,
