@@ -119,16 +119,40 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, telegramTwoFactorService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
   let twoFactorState = createEmptyTwoFactorState()
   let twoFactorStopRequested = false
+  let checkStateEmitTimer: NodeJS.Timeout | null = null
+
+  const flushCheckState = () => {
+    if (checkStateEmitTimer) {
+      clearTimeout(checkStateEmitTimer)
+      checkStateEmitTimer = null
+    }
+
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('accounts:check-state', checkQueue.getState())
+  }
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
     const mainWindow = getMainWindow()
     return mainWindow ? dialog.showOpenDialog(mainWindow, dialogOptions) : dialog.showOpenDialog(dialogOptions)
   }
 
-  const emitCheckState = () => {
-    const mainWindow = getMainWindow()
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('accounts:check-state', checkQueue.getState())
+  const emitCheckState = (force = false) => {
+    if (force) {
+      flushCheckState()
+      return
+    }
+
+    const state = checkQueue.getState()
+    if (!state.running) {
+      flushCheckState()
+      return
+    }
+
+    if (checkStateEmitTimer) return
+    checkStateEmitTimer = setTimeout(() => {
+      flushCheckState()
+    }, 120)
   }
 
   const emitImportProgress = (payload: ImportProgressPayload) => {
@@ -172,7 +196,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     emitTwoFactorProgress()
   }
 
-  checkQueue.on('state', emitCheckState)
+  checkQueue.on('state', () => emitCheckState())
 
   ipcMain.handle('accounts:list', async () => {
     await accountImportService.syncManagedSessions()
@@ -183,11 +207,12 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   ipcMain.handle('app-settings:update', (_event, patch: Partial<AppSettings>) => {
     const next = appSettingsStore.update(patch)
     checkQueue.updateOptions({ concurrency: next.checkConcurrency })
-    emitCheckState()
+    emitCheckState(true)
     return next
   })
   ipcMain.handle('accounts:clear-check-logs', () => {
     checkQueue.clearLogs()
+    emitCheckState(true)
     return checkQueue.getState()
   })
   ipcMain.handle('accounts:start-check', (_event, payload: number[] | { ids: number[]; actions?: CheckAction[] }) => {
@@ -204,12 +229,12 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
     const mode = actions.includes('account-survival') ? 'account-survival' : 'account-status'
     const state = checkQueue.enqueue(ids, mode)
-    emitCheckState()
+    emitCheckState(true)
     return state
   })
   ipcMain.handle('accounts:stop-check', () => {
     const state = checkQueue.stop()
-    emitCheckState()
+    emitCheckState(true)
     return state
   })
 
