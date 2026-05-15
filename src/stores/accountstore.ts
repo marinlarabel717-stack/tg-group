@@ -240,6 +240,8 @@ async function runBusyAction(
   }
 }
 
+let initPromise: Promise<void> | null = null
+
 export const useAccountStore = create<AccountStoreState>((set, get) => ({
   accounts: [],
   initialized: false,
@@ -342,8 +344,13 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     }
 
     if (get().initialized) return
+    if (initPromise) return initPromise
+
     set({ loading: true, errorMessage: '' })
-    await syncAccounts(set, get)
+    initPromise = syncAccounts(set, get).finally(() => {
+      initPromise = null
+    })
+    await initPromise
   },
   refresh: async () => {
     set({ loading: true, errorMessage: '' })

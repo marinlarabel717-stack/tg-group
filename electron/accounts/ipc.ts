@@ -294,10 +294,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
   checkQueue.on('state', () => emitCheckState())
 
-  ipcMain.handle('accounts:list', async () => {
-    await accountImportService.syncManagedSessions()
-    return accountRepository.list()
-  })
+  ipcMain.handle('accounts:list', async () => accountRepository.list())
   ipcMain.handle('accounts:get-check-state', () => checkQueue.getState())
   ipcMain.handle('app-settings:get', () => appSettingsStore.get())
   ipcMain.handle('app-settings:update', (_event, patch: Partial<AppSettings>) => {
