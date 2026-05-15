@@ -132,7 +132,12 @@ async def _ensure_joined(client: Any, entity: Any):
             return entity
         except Exception as exc:
             message = str(exc).upper()
-            if 'USER_NOT_PARTICIPANT' not in message and 'PARTICIPANT_ID_INVALID' not in message:
+            if (
+                'USER_NOT_PARTICIPANT' not in message
+                and 'PARTICIPANT_ID_INVALID' not in message
+                and 'NOT A MEMBER OF THE SPECIFIED MEGAGROUP OR CHANNEL' not in message
+                and 'TARGET USER IS NOT A MEMBER' not in message
+            ):
                 raise
         await client(functions.channels.JoinChannelRequest(channel=entity))
     return entity

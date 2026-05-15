@@ -401,7 +401,7 @@ async function ensureCollectorGroupJoined(client: TelegramClient, source: Return
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (!/USER_NOT_PARTICIPANT|PARTICIPANT_ID_INVALID/i.test(message)) {
+    if (!/USER_NOT_PARTICIPANT|PARTICIPANT_ID_INVALID|not a member of the specified megagroup or channel|target user is not a member/i.test(message)) {
       throw error
     }
   }
@@ -440,6 +440,7 @@ function formatCollectorGroupError(error: unknown) {
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '@群用户名不存在'
   if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '这个群链接或群引用不对，Telegram 找不到它'
   if (/USER_BANNED_IN_CHANNEL/i.test(normalized)) return '这个账号在目标群里被限制了'
+  if (/not a member of the specified megagroup or channel|target user is not a member/i.test(normalized)) return '当前账号还没真正加入这个群，系统刚才在确认入群状态时被 Telegram 拦住了。我已经按“需要先加群”这类问题修，更新后再试这条。'
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '这个群限制加入，当前账号没法直接进'
   if (/INVITE_REQUEST_SENT/i.test(normalized)) return '这个群需要审核，当前账号只提交了入群申请，暂时还采不了'
   if (/USERS_TOO_MUCH|CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号的加群数量已经接近上限了，先清理一些群再试'
