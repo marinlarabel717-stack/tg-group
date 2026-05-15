@@ -356,7 +356,7 @@ export class AutoJoinService {
     this.activeTask.clients.clear()
     return {
       stopped: true,
-      message: '自动加群任务正在停止，等待中的间隔和当前加群动作都会尽快中断。'
+      message: '自动加群任务已停止。'
     }
   }
 

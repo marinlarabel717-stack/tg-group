@@ -346,7 +346,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
             <div className="text-base font-semibold text-white">任务操作</div>
             <div className="mt-3 space-y-3">
               <button type="button" disabled={running || !runtimeReady || occupiedSelectedAccounts.length > 0} onClick={() => void startTask()} className="w-full rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{running ? '执行中' : '开始加群'}</button>
-              <button type="button" disabled={!running || stopping} onClick={() => void stopTask()} className="w-full rounded-[12px] bg-rose-400/12 px-4 py-3 text-sm font-medium text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50">{stopping ? '停止中' : '停止任务'}</button>
+              <button type="button" disabled={!running || stopping} onClick={() => void stopTask()} className="w-full rounded-[12px] bg-rose-400/12 px-4 py-3 text-sm font-medium text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50">{stopping ? '已停止' : '停止任务'}</button>
             </div>
             <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '点击开始后会自动跳到日志页。'}</div>
 
@@ -467,15 +467,21 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const latestTask = tasks[0] ?? null
   const latestSnapshot = useMemo(() => (latestTask ? taskSnapshots.find((item) => item.taskId === latestTask.id) ?? null : null), [latestTask, taskSnapshots])
   const accountSummary = useMemo(() => buildAccountSummary(latestSnapshot), [latestSnapshot])
-  const pendingCount = latestTask ? Math.max(0, (latestTask.total || 0) - (latestTask.completed || 0)) : 0
+  const pendingCount = latestTask
+    ? latestTask.status === 'stopped' || stopping
+      ? 0
+      : Math.max(0, (latestTask.total || 0) - (latestTask.completed || 0))
+    : 0
   const [accountSummaryExpanded, setAccountSummaryExpanded] = useState(false)
-  const statusTitle = latestTask
-    ? latestTask.status === 'running'
-      ? '本次加群进行中'
-      : latestTask.status === 'stopped'
-        ? '本次加群已停止'
-        : '本次加群已完成'
-    : '本次加群总计'
+  const statusTitle = stopping
+    ? '本次加群已停止'
+    : latestTask
+      ? latestTask.status === 'running'
+        ? '本次加群进行中'
+        : latestTask.status === 'stopped'
+          ? '本次加群已停止'
+          : '本次加群已完成'
+      : '本次加群总计'
 
   return (
     <GlassPanel className="bg-card">
@@ -488,7 +494,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
             onClick={() => void stopTask()}
             className="rounded-[12px] bg-rose-400/12 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {stopping ? '停止中' : '停止任务'}
+            {stopping ? '已停止' : '停止任务'}
           </button>
           <button type="button" onClick={clearLogs} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
         </div>
@@ -651,7 +657,7 @@ export default function AutoJoinView() {
         tone={completionStopped ? 'warning' : 'success'}
         maxWidth="max-w-[560px]"
       >
-        <ResultHero label={completionStopped ? '本轮已停止' : '本轮已完成'} value={`${completionSnapshot?.total || 0} 条`} tone={completionStopped ? 'warning' : 'success'} />
+        <ResultHero label={completionStopped ? '本轮已停止' : '本轮已完成'} value={completionStopped ? `已执行 ${completionSnapshot?.total || 0} 条` : `${completionSnapshot?.total || 0} 条`} tone={completionStopped ? 'warning' : 'success'} />
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <ResultStatCard label="成功" value={completionSnapshot?.successCount || 0} tone="success" />
