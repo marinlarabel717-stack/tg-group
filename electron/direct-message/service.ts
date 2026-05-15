@@ -9,6 +9,7 @@ import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
 import { TelethonGroupCollector } from './telethon-group-collector'
+import { TelethonDirectMessageSender } from './telethon-direct-message-sender'
 import type {
   CheckLogLevel,
   DirectMessageAutoReplyEvent,
@@ -764,8 +765,84 @@ export class DirectMessageService {
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
     private readonly proxyPoolService: ProxyPoolService,
-    private readonly telethonGroupCollector: TelethonGroupCollector
+    private readonly telethonGroupCollector: TelethonGroupCollector,
+    private readonly telethonDirectMessageSender: TelethonDirectMessageSender
   ) {}
+
+  private shouldUseTelethonDirectMessagePrimary() {
+    return !this.proxyPoolService.isEnabled() && this.telethonDirectMessageSender.isAvailable()
+  }
+
+  private async sendViaTelethon(
+    account: AccountRecord,
+    item: DirectMessageSendPayload['items'][number],
+    payload: DirectMessageSendPayload,
+    task: ActiveSendTask
+  ) {
+    const actionNotes: string[] = []
+
+    if (payload.welcomeMessageEnabled && payload.welcomeMessageText?.trim()) {
+      await this.telethonDirectMessageSender.send({
+        sessionPath: account.sessionPath,
+        targetValue: item.targetValue,
+        messageType: 'text',
+        messageText: payload.welcomeMessageText.trim(),
+        imageUrl: '',
+        sourceLink: '',
+        postbotCode: '',
+        timeoutSeconds: 35
+      })
+      actionNotes.push('已先发送欢迎帖')
+
+      const welcomeDelaySeconds = normalizeDelaySeconds(payload.welcomeDelaySeconds, 3)
+      if (welcomeDelaySeconds > 0) {
+        await this.sleepWithCancel(welcomeDelaySeconds * 1000, task)
+        if (task.cancelled) {
+          throw new Error('WELCOME_ONLY_CANCELLED')
+        }
+      }
+    }
+
+    const sent = await this.telethonDirectMessageSender.send({
+      sessionPath: account.sessionPath,
+      targetValue: item.targetValue,
+      messageType: payload.messageType,
+      messageText: buildDirectTextMessage(payload.messageText, payload.messageType === 'text' && payload.randomEmojiEnabled),
+      imageUrl: payload.imageUrl,
+      sourceLink: payload.sourceLink,
+      postbotCode: payload.postbotCode,
+      timeoutSeconds: payload.messageType === 'postbot_code' ? 45 : 35
+    })
+
+    return {
+      remoteMessageId: sent.messageId,
+      actionNotes
+    }
+  }
+
+  private async pinViaTelethon(account: AccountRecord, item: DirectMessageSendPayload['items'][number], messageId: number) {
+    await this.telethonDirectMessageSender.pin({
+      sessionPath: account.sessionPath,
+      targetValue: item.targetValue,
+      messageId,
+      timeoutSeconds: 25
+    })
+  }
+
+  private async deleteViaTelethon(
+    account: AccountRecord,
+    item: DirectMessageSendPayload['items'][number],
+    messageId: number,
+    mode: DirectMessageSendPayload['deleteMode']
+  ) {
+    await this.telethonDirectMessageSender.delete({
+      sessionPath: account.sessionPath,
+      targetValue: item.targetValue,
+      messageId,
+      deleteMode: mode,
+      timeoutSeconds: 25
+    })
+  }
 
   setAutoReplyEventSink(sink?: (payload: DirectMessageAutoReplyEvent) => void) {
     this.autoReplyEventSink = sink
@@ -875,6 +952,7 @@ export class DirectMessageService {
       .map((item) => ({ item, dueAt: startedAt + item.waitSeconds * 1000 }))
     const task: ActiveSendTask = { cancelled: false, clients }
     const concurrency = Math.max(1, Math.min(payload.concurrency ?? 1, Math.max(1, accountIds.length || 1), Math.max(1, pendingItems.length || 1)))
+    const useTelethonPrimary = this.shouldUseTelethonDirectMessagePrimary()
     let stopReason = ''
     this.activeSendTask = task
 
@@ -963,99 +1041,115 @@ export class DirectMessageService {
 
       try {
         if (task.cancelled) return
-        let client = clients.get(account.id)
-        if (!client) {
-          client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
-          clients.set(account.id, client)
+        let client: TelegramClient | null = null
+        if (!useTelethonPrimary) {
+          client = clients.get(account.id) ?? null
+          if (!client) {
+            client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+            clients.set(account.id, client)
+          }
         }
 
         let resultItem: DirectMessageSendResultItem | null = null
 
         while (!task.cancelled) {
           try {
-            const resolved = await resolveSendEntity(client, item.targetValue)
-            cleanup = resolved.cleanup
-            let response: unknown = null
             const actionNotes: string[] = []
+            let remoteMessageId: number | null = null
+            let resolved: { entity: unknown; cleanup?: (() => Promise<void>) | undefined } | null = null
 
-            if (payload.welcomeMessageEnabled && payload.welcomeMessageText?.trim()) {
-              await (client as TelegramClient & {
-                sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
-              }).sendMessage(resolved.entity as never, {
-                message: payload.welcomeMessageText.trim()
-              })
-              actionNotes.push('已先发送欢迎帖')
+            if (useTelethonPrimary) {
+              const telethonResult = await this.sendViaTelethon(account, item, payload, task)
+              remoteMessageId = telethonResult.remoteMessageId
+              actionNotes.push(...telethonResult.actionNotes)
+            } else {
+              resolved = await resolveSendEntity(client as TelegramClient, item.targetValue)
+              cleanup = resolved.cleanup
+              let response: unknown = null
 
-              const welcomeDelaySeconds = normalizeDelaySeconds(payload.welcomeDelaySeconds, 3)
-              if (welcomeDelaySeconds > 0) {
-                await this.sleepWithCancel(welcomeDelaySeconds * 1000, task)
-                if (task.cancelled) {
-                  throw new Error('WELCOME_ONLY_CANCELLED')
+              if (payload.welcomeMessageEnabled && payload.welcomeMessageText?.trim()) {
+                await ((client as TelegramClient) as TelegramClient & {
+                  sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
+                }).sendMessage(resolved.entity as never, {
+                  message: payload.welcomeMessageText.trim()
+                })
+                actionNotes.push('已先发送欢迎帖')
+
+                const welcomeDelaySeconds = normalizeDelaySeconds(payload.welcomeDelaySeconds, 3)
+                if (welcomeDelaySeconds > 0) {
+                  await this.sleepWithCancel(welcomeDelaySeconds * 1000, task)
+                  if (task.cancelled) {
+                    throw new Error('WELCOME_ONLY_CANCELLED')
+                  }
                 }
               }
-            }
 
-            if (payload.messageType === 'channel_forward') {
-              const { parsed } = await loadSourceMessage(client, payload.sourceLink)
-              response = await (client as TelegramClient & {
-                forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
-              }).forwardMessages(resolved.entity as never, {
-                messages: [parsed.messageId],
-                fromPeer: parsed.peerRef as never,
-                dropAuthor: false
-              })
-            } else if (payload.messageType === 'hidden_channel_forward') {
-              const { sourceMessage } = await loadSourceMessage(client, payload.sourceLink)
-              const sourceText = typeof sourceMessage.message === 'string'
-                ? sourceMessage.message
-                : typeof sourceMessage.text === 'string'
-                  ? sourceMessage.text
-                  : ''
-              const sourceMedia = sourceMessage.media
-              const sourceEntities = Array.isArray(sourceMessage.entities) ? sourceMessage.entities : undefined
-              if (!sourceText.trim() && !sourceMedia) {
-                throw new Error('MEDIA_EMPTY')
+              if (payload.messageType === 'channel_forward') {
+                const { parsed } = await loadSourceMessage(client as TelegramClient, payload.sourceLink)
+                response = await (((client as TelegramClient) as TelegramClient & {
+                  forwardMessages: (entity: unknown, options: Record<string, unknown>) => Promise<Array<{ id?: number }> | { id?: number }>
+                }).forwardMessages(resolved.entity as never, {
+                  messages: [parsed.messageId],
+                  fromPeer: parsed.peerRef as never,
+                  dropAuthor: false
+                }))
+              } else if (payload.messageType === 'hidden_channel_forward') {
+                const { sourceMessage } = await loadSourceMessage(client as TelegramClient, payload.sourceLink)
+                const sourceText = typeof sourceMessage.message === 'string'
+                  ? sourceMessage.message
+                  : typeof sourceMessage.text === 'string'
+                    ? sourceMessage.text
+                    : ''
+                const sourceMedia = sourceMessage.media
+                const sourceEntities = Array.isArray(sourceMessage.entities) ? sourceMessage.entities : undefined
+                if (!sourceText.trim() && !sourceMedia) {
+                  throw new Error('MEDIA_EMPTY')
+                }
+                response = await (((client as TelegramClient) as TelegramClient & {
+                  sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
+                }).sendMessage(resolved.entity as never, {
+                  message: sourceText || undefined,
+                  file: sourceMedia || undefined,
+                  formattingEntities: sourceEntities
+                }))
+              } else if (payload.messageType === 'postbot_code') {
+                const query = payload.postbotCode.trim()
+                const inlineBot = await (client as TelegramClient).getEntity('@postbot' as never)
+                const inlineResults = await (client as TelegramClient).invoke(new Api.messages.GetInlineBotResults({
+                  bot: inlineBot as never,
+                  peer: resolved.entity as never,
+                  query,
+                  offset: ''
+                }))
+
+                const firstResult = Array.isArray((inlineResults as { results?: unknown[] }).results)
+                  ? (inlineResults as { results: Array<{ id?: string }> }).results[0]
+                  : null
+
+                if (!firstResult?.id) {
+                  throw new Error('POSTBOT_RESULT_EMPTY')
+                }
+
+                response = await (client as TelegramClient).invoke(new Api.messages.SendInlineBotResult({
+                  peer: resolved.entity as never,
+                  queryId: (inlineResults as { queryId: any }).queryId,
+                  id: firstResult.id,
+                  randomId: createRandomId(),
+                  clearDraft: true
+                }))
+              } else {
+                const media = payload.imageUrl.trim() ? resolveMediaFile(payload.imageUrl, payload.messageText || item.targetValue) : undefined
+                response = await (((client as TelegramClient) as TelegramClient & {
+                  sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
+                }).sendMessage(resolved.entity as never, {
+                  message: buildDirectTextMessage(payload.messageText, payload.messageType === 'text' && payload.randomEmojiEnabled) || undefined,
+                  file: media
+                }))
               }
-              response = await (client as TelegramClient & {
-                sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
-              }).sendMessage(resolved.entity as never, {
-                message: sourceText || undefined,
-                file: sourceMedia || undefined,
-                formattingEntities: sourceEntities
-              })
-            } else if (payload.messageType === 'postbot_code') {
-              const query = payload.postbotCode.trim()
-              const inlineBot = await client.getEntity('@postbot' as never)
-              const inlineResults = await client.invoke(new Api.messages.GetInlineBotResults({
-                bot: inlineBot as never,
-                peer: resolved.entity as never,
-                query,
-                offset: ''
-              }))
 
-              const firstResult = Array.isArray((inlineResults as { results?: unknown[] }).results)
-                ? (inlineResults as { results: Array<{ id?: string }> }).results[0]
-                : null
-
-              if (!firstResult?.id) {
-                throw new Error('POSTBOT_RESULT_EMPTY')
-              }
-
-              response = await client.invoke(new Api.messages.SendInlineBotResult({
-                peer: resolved.entity as never,
-                queryId: (inlineResults as { queryId: any }).queryId,
-                id: firstResult.id,
-                randomId: createRandomId(),
-                clearDraft: true
-              }))
-            } else {
-              const media = payload.imageUrl.trim() ? resolveMediaFile(payload.imageUrl, payload.messageText || item.targetValue) : undefined
-              response = await (client as TelegramClient & {
-                sendMessage: (entity: unknown, options: Record<string, unknown>) => Promise<{ id?: number }>
-              }).sendMessage(resolved.entity as never, {
-                message: buildDirectTextMessage(payload.messageText, payload.messageType === 'text' && payload.randomEmojiEnabled) || undefined,
-                file: media
-              })
+              remoteMessageId = Array.isArray(response)
+                ? (typeof (response[0] as { id?: unknown } | undefined)?.id === 'number' ? (response[0] as { id: number }).id : null)
+                : (typeof (response as { id?: unknown } | null)?.id === 'number' ? (response as { id: number }).id : extractResponseMessageId(response))
             }
 
             resultItem = {
@@ -1064,9 +1158,7 @@ export class DirectMessageService {
               targetValue: item.targetValue,
               status: 'sent',
               errorMessage: '',
-              remoteMessageId: Array.isArray(response)
-                ? (typeof (response[0] as { id?: unknown } | undefined)?.id === 'number' ? (response[0] as { id: number }).id : null)
-                : (typeof (response as { id?: unknown } | null)?.id === 'number' ? (response as { id: number }).id : extractResponseMessageId(response)),
+              remoteMessageId,
               sentAt: new Date().toISOString(),
               accountId: item.accountId
             }
@@ -1108,10 +1200,14 @@ export class DirectMessageService {
                     continue
                   }
                   try {
-                    await client.pinMessage(resolved.entity as never, resultItem.remoteMessageId, {
-                      notify: false,
-                      pmOneSide: true
-                    })
+                    if (useTelethonPrimary) {
+                      await this.pinViaTelethon(account, item, resultItem.remoteMessageId)
+                    } else {
+                      await (client as TelegramClient).pinMessage((resolved as { entity: unknown }).entity as never, resultItem.remoteMessageId, {
+                        notify: false,
+                        pmOneSide: true
+                      })
+                    }
                     actionNotes.push(`已在发送后 ${action.delaySeconds} 秒自动置顶`)
                   } catch (pinError) {
                     actionNotes.push(`置顶失败：${formatDirectMessageError(pinError)}`)
@@ -1120,7 +1216,11 @@ export class DirectMessageService {
                 }
 
                 try {
-                  await deleteSentMessage(client, resolved.entity, resultItem.remoteMessageId, payload.deleteMode)
+                  if (useTelethonPrimary) {
+                    await this.deleteViaTelethon(account, item, resultItem.remoteMessageId, payload.deleteMode)
+                  } else {
+                    await deleteSentMessage(client as TelegramClient, (resolved as { entity: unknown }).entity, resultItem.remoteMessageId, payload.deleteMode)
+                  }
                   messageDeleted = true
                   actionNotes.push(`已在发送后 ${action.delaySeconds} 秒自动${readDeleteModeLabel(payload.deleteMode)}`)
                 } catch (deleteError) {

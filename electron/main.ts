@@ -34,6 +34,7 @@ import { registerBroadcastIpc } from './broadcast/ipc'
 import { TelethonJoinedGroupReader } from './broadcast/telethon-joined-group-reader'
 import { DirectMessageService } from './direct-message/service'
 import { TelethonGroupCollector } from './direct-message/telethon-group-collector'
+import { TelethonDirectMessageSender } from './direct-message/telethon-direct-message-sender'
 import { registerDirectMessageIpc } from './direct-message/ipc'
 import { AutoJoinService } from './auto-join/service'
 import { registerAutoJoinIpc } from './auto-join/ipc'
@@ -284,7 +285,8 @@ async function bootstrap() {
   const telethonJoinedGroupReader = new TelethonJoinedGroupReader()
   const broadcastService = new BroadcastService(repository, sessionLoader, clientManager, proxyPoolService, telethonJoinedGroupReader)
   const telethonGroupCollector = new TelethonGroupCollector()
-  const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager, proxyPoolService, telethonGroupCollector)
+  const telethonDirectMessageSender = new TelethonDirectMessageSender()
+  const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager, proxyPoolService, telethonGroupCollector, telethonDirectMessageSender)
   const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager, proxyPoolService)
   botCenterService = new BotCenterService(botCenterStoragePath)
   const resultWriter = new CheckResultWriter(repository, {
