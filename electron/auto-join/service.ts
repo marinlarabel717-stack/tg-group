@@ -647,7 +647,16 @@ export class AutoJoinService {
       }))
 
       if (hasPendingItems()) {
-        if (payload.repeatJoinEnabled) {
+        if (task.cancelled) {
+          if (payload.repeatJoinEnabled) {
+            for (const queue of perAccountQueue.values()) {
+              queue.length = 0
+            }
+          } else if (sharedQueue) {
+            sharedQueue.length = 0
+          }
+          total = completed
+        } else if (payload.repeatJoinEnabled) {
           for (const [accountId, queue] of perAccountQueue.entries()) {
             while (queue.length > 0) {
               const next = queue.shift()
@@ -657,7 +666,7 @@ export class AutoJoinService {
                 raw: next.raw,
                 normalized: next.normalized,
                 status: 'failed',
-                errorMessage: task.cancelled ? '任务已停止，这条没有继续执行' : '没有可用账号继续执行这条加群任务',
+                errorMessage: '没有可用账号继续执行这条加群任务',
                 accountId,
                 accountLabel: accountLabelById.get(accountId) || '',
                 groupTitle: '',
@@ -675,7 +684,7 @@ export class AutoJoinService {
               raw: next.raw,
               normalized: next.normalized,
               status: 'failed',
-              errorMessage: task.cancelled ? '任务已停止，这条没有继续执行' : '没有可用账号继续执行这条加群任务',
+              errorMessage: '没有可用账号继续执行这条加群任务',
               accountId: null,
               accountLabel: '',
               groupTitle: '',
@@ -687,7 +696,7 @@ export class AutoJoinService {
       }
 
       const message = task.cancelled
-        ? `自动加群已停止，已完成 ${completed}/${total} 条。`
+        ? `自动加群已停止，已执行 ${completed} 条。`
         : `自动加群完成：成功 ${successCount}，已在群里 ${alreadyCount}，待审核 ${requestedCount}，失败 ${failedCount}。`
 
       emit(message, null, null, false)
