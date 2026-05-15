@@ -302,9 +302,7 @@ async function bootstrap() {
   const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager, proxyPoolService, telethonGroupCollector, telethonDirectMessageSender)
   const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager, proxyPoolService, telethonAutoJoiner)
   botCenterService = new BotCenterService(botCenterStoragePath)
-  const resultWriter = new CheckResultWriter(repository, {
-    onWrite: (accounts) => emitAccountsUpdated(accounts)
-  })
+  const resultWriter = new CheckResultWriter(repository)
   const checkEngine = new AccountCheckEngine(
     repository,
     sessionLoader,
