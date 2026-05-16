@@ -8,7 +8,7 @@ import type {
   DirectMessageStopResult
 } from '../types'
 
-export type DirectMessageTabKey = 'send' | 'logs' | 'collect' | 'auto-reply'
+export type DirectMessageTabKey = 'send' | 'logs' | 'auto-reply'
 export type DirectMessageMessageType = 'text' | 'channel_forward' | 'hidden_channel_forward' | 'postbot_code'
 export type DirectMessageSendMode = 'username' | 'contact' | 'txt'
 export type DirectMessageCollectorMode = 'manual' | 'contact' | 'group_members' | 'comment_users' | 'react_users'
@@ -812,7 +812,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
     }),
     {
       name: 'tg-group-direct-message-store',
-      version: 8,
+      version: 9,
       storage: createJSONStorage(() => window.localStorage),
       partialize: (state) => ({
         activeTab: state.activeTab,
@@ -845,8 +845,9 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       }),
       migrate: (persistedState) => {
         const state = persistedState as Partial<DirectMessageState> | undefined
+        const activeTab = state?.activeTab === 'logs' || state?.activeTab === 'auto-reply' ? state.activeTab : 'send'
         return {
-          activeTab: state?.activeTab || 'send',
+          activeTab,
           sendMode: state?.sendMode || 'username',
           messageType: state?.messageType || 'text',
           collectorMode: state?.collectorMode || 'manual',

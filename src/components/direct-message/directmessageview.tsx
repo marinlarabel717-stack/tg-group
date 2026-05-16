@@ -9,7 +9,6 @@ import {
   Send,
   Trash2,
   Upload,
-  UserPlus2,
   Users,
   X
 } from 'lucide-react'
@@ -18,7 +17,6 @@ import { useAccountStore } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import {
   useDirectMessageStore,
-  type DirectMessageCollectorMode,
   type DirectMessageDeleteMode,
   type DirectMessageTabKey
 } from '../../stores/directmessagestore'
@@ -27,7 +25,6 @@ import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
 const tabs: Array<{ key: DirectMessageTabKey; label: string; icon: typeof Send }> = [
   { key: 'send', label: '私信群发', icon: Send },
   { key: 'logs', label: '私信日志', icon: Clock3 },
-  { key: 'collect', label: '用户采集', icon: UserPlus2 },
   { key: 'auto-reply', label: '自动回复', icon: Bot }
 ]
 
@@ -52,14 +49,6 @@ function readAccountLabel(account: { id: number; username?: string; phone?: stri
   if (typeof account.username === 'string' && account.username.trim()) return account.username.trim()
   if (typeof account.phone === 'string' && account.phone.trim()) return account.phone.trim()
   return `账号#${account.id}`
-}
-
-function readCollectorModeLabel(mode: DirectMessageCollectorMode) {
-  if (mode === 'contact') return '联系人'
-  if (mode === 'group_members') return '群成员'
-  if (mode === 'comment_users') return '评论用户'
-  if (mode === 'react_users') return '反应用户'
-  return '手工名单'
 }
 
 function getAccountStatusTone(status?: string) {
@@ -766,49 +755,6 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   )
 })
 
-const CollectWorkbench = memo(function CollectWorkbench() {
-  const collectorMode = useDirectMessageStore((state) => state.collectorMode)
-  const setCollectorMode = useDirectMessageStore((state) => state.setCollectorMode)
-  const collectorInput = useDirectMessageStore((state) => state.collectorInput)
-  const setCollectorInput = useDirectMessageStore((state) => state.setCollectorInput)
-  const collectedUsers = useDirectMessageStore((state) => state.collectedUsers)
-  const collectUsers = useDirectMessageStore((state) => state.collectUsers)
-  const collectUsersFromSource = useDirectMessageStore((state) => state.collectUsersFromSource)
-  const appendCollectedUsersToTargets = useDirectMessageStore((state) => state.appendCollectedUsersToTargets)
-  const collecting = useDirectMessageStore((state) => state.collecting)
-
-  return (
-    <GlassPanel className="bg-card">
-      <div className="flex flex-wrap gap-2">
-        {(['manual', 'contact', 'group_members', 'comment_users', 'react_users'] as DirectMessageCollectorMode[]).map((mode) => (
-          <button key={mode} type="button" onClick={() => setCollectorMode(mode)} className={`rounded-[12px] px-4 py-2.5 text-sm transition ${collectorMode === mode ? 'bg-violet-400 text-slate-950' : 'bg-white/[0.05] text-white hover:bg-white/[0.08]'}`}>{readCollectorModeLabel(mode)}</button>
-        ))}
-      </div>
-      <div className="mt-4 space-y-3">
-        {collectorMode !== 'contact' ? (
-          <textarea rows={10} value={collectorInput} onChange={(event) => setCollectorInput(event.target.value)} placeholder={collectorMode === 'manual' ? '手工名单一行一个' : '把群链接或频道消息链接贴这里'} className="w-full rounded-[16px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none focus:border-white/[0.12]" />
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          {collectorMode === 'manual' ? (
-            <button type="button" onClick={() => collectUsers(collectorInput, '手工名单')} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">识别名单</button>
-          ) : (
-            <button type="button" disabled={collecting} onClick={() => void collectUsersFromSource()} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-60">{collecting ? '采集中' : '开始采集'}</button>
-          )}
-          <button type="button" onClick={appendCollectedUsersToTargets} className="rounded-[12px] bg-violet-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-violet-300">加入发送目标</button>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {collectedUsers.map((item) => (
-          <div key={item.id} className="rounded-[14px] bg-panel/70 px-4 py-3">
-            <div className="truncate text-sm text-white">{item.value}</div>
-            <div className="mt-1 text-xs text-textMuted">{item.sourceLabel}</div>
-          </div>
-        ))}
-      </div>
-    </GlassPanel>
-  )
-})
-
 const AutoReplyWorkbench = memo(function AutoReplyWorkbench() {
   const autoReplyEnabled = useDirectMessageStore((state) => state.autoReplyEnabled)
   const setAutoReplyEnabled = useDirectMessageStore((state) => state.setAutoReplyEnabled)
@@ -870,7 +816,6 @@ export default memo(function DirectMessageView() {
       <TabBar />
       {activeTab === 'send' ? <SendWorkbench /> : null}
       {activeTab === 'logs' ? <LogsWorkbench /> : null}
-      {activeTab === 'collect' ? <CollectWorkbench /> : null}
       {activeTab === 'auto-reply' ? <AutoReplyWorkbench /> : null}
     </div>
   )
