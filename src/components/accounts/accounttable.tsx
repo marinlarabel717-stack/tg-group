@@ -10,7 +10,7 @@ import {
   type UIEvent,
   type WheelEvent
 } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import {
   type ColumnDef,
   flexRender,
@@ -1301,15 +1301,19 @@ export const AccountTable = memo(function AccountTable() {
       return
     }
 
-    setSelectedIds([])
-    setBulkMenuOpen(false)
-    setBulkSubmenu(null)
-    setLogsContext('accounts')
-    setActiveModule('logs')
+    flushSync(() => {
+      setSelectedIds([])
+      setBulkMenuOpen(false)
+      setBulkSubmenu(null)
+      setLogsContext('accounts')
+      setActiveModule('logs')
+    })
 
-    window.setTimeout(() => {
-      void startCheckByIds(ids, actions)
-    }, 0)
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        void startCheckByIds(ids, actions)
+      })
+    })
   }, [selectedIds, setActiveModule, setLogsContext, setSelectedIds, startCheckByIds])
 
   const handleBulkCheckAction = useCallback((action: 'account-status' | 'account-survival') => {
