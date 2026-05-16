@@ -139,7 +139,7 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
 
         {statusMessage ? <div className="relative z-10 mt-3 rounded-[14px] border border-white/[0.06] bg-white/[0.04] px-4 py-2.5 text-sm text-slate-100 backdrop-blur-xl">{statusMessage}</div> : null}
         {errorMessage ? <div className="relative z-10 mt-3 rounded-[14px] border border-rose-300/[0.14] bg-rose-400/[0.08] px-4 py-2.5 text-sm text-rose-100 backdrop-blur-xl">{errorMessage}</div> : null}
-        {!state.apiConfigured ? <div className="relative z-10 mt-3 rounded-[14px] border border-amber-300/[0.16] bg-amber-300/[0.08] px-4 py-2.5 text-sm text-amber-50 backdrop-blur-xl">授权服务地址还没配好，当前默认会先连 http://tgmatrix.duckdns.org。</div> : null}
+        {!state.apiConfigured ? <div className="relative z-10 mt-3 rounded-[14px] border border-amber-300/[0.16] bg-amber-300/[0.08] px-4 py-2.5 text-sm text-amber-50 backdrop-blur-xl">授权服务暂未配置完成，请联系技术处理。</div> : null}
       </div>
     </div>
   )

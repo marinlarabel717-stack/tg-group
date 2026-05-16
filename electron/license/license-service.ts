@@ -53,15 +53,15 @@ function tryBuildHttpFallbackApiBaseUrl(value: string) {
   }
 }
 
-function formatLicenseNetworkError(error: unknown, apiBaseUrl: string) {
+function formatLicenseNetworkError(error: unknown, _apiBaseUrl: string) {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const normalized = message.trim().toLowerCase()
   if (!normalized) return '连接授权服务失败，请稍后重试。'
   if (normalized.includes('fetch failed') || normalized.includes('networkerror') || normalized.includes('econnrefused') || normalized.includes('etimedout')) {
-    return `当前连不上授权服务：${apiBaseUrl}。请确认地址可用；当前推荐填写 http://tgmatrix.duckdns.org`
+    return '当前连接不上授权服务，请联系技术。'
   }
   if (normalized.includes('aborted')) {
-    return `连接授权服务超时：${apiBaseUrl}。请稍后重试，或改成 http://tgmatrix.duckdns.org`
+    return '当前连接授权服务超时，请联系技术。'
   }
   return message
 }
