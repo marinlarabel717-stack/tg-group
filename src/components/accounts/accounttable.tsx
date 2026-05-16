@@ -634,7 +634,7 @@ export const AccountTable = memo(function AccountTable() {
   const deleteSelected = useAccountStore((state) => state.deleteSelected)
   const deleteAll = useAccountStore((state) => state.deleteAll)
   const deleteByStatusGroup = useAccountStore((state) => state.deleteByStatusGroup)
-  const startSelectedCheck = useAccountStore((state) => state.startSelectedCheck)
+  const startCheckByIds = useAccountStore((state) => state.startCheckByIds)
   const twoFactorState = useAccountStore((state) => state.twoFactorState)
   const profileOperationState = useAccountStore((state) => state.profileOperationState)
   const setActiveModule = useUIStore((state) => state.setActiveModule)
@@ -1222,10 +1222,22 @@ export const AccountTable = memo(function AccountTable() {
   }, [orderedIds, setSelectedIds])
 
   const handleStartCheck = useCallback((actions: CheckAction[]) => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) {
+      setBulkActionHint('请先选择要处理的账号。')
+      return
+    }
+
+    setSelectedIds([])
+    setBulkMenuOpen(false)
+    setBulkSubmenu(null)
     setLogsContext('accounts')
     setActiveModule('logs')
-    void startSelectedCheck(actions)
-  }, [setActiveModule, setLogsContext, startSelectedCheck])
+
+    window.setTimeout(() => {
+      void startCheckByIds(ids, actions)
+    }, 0)
+  }, [selectedIds, setActiveModule, setLogsContext, setSelectedIds, startCheckByIds])
 
   const handleBulkCheckAction = useCallback((action: 'account-status' | 'account-survival') => {
     handleStartCheck([action])

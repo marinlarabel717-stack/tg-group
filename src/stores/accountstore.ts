@@ -218,6 +218,7 @@ interface AccountStoreState {
   deleteAll: () => Promise<void>
   deleteByStatusGroup: (group: DeleteStatusGroup) => Promise<void>
   startSelectedCheck: (actions: CheckAction[]) => Promise<void>
+  startCheckByIds: (ids: number[], actions: CheckAction[]) => Promise<void>
   stopCheck: () => Promise<void>
   clearCheckLogs: () => Promise<void>
   stopTwoFactorTask: () => Promise<void>
@@ -614,20 +615,23 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     })
   },
   startSelectedCheck: async (actions) => {
+    await get().startCheckByIds(get().selectedIds, actions)
+  },
+  startCheckByIds: async (ids, actions) => {
     await runBusyAction(set, async () => {
-      const ids = get().selectedIds
-      if (ids.length === 0) {
+      const normalizedIds = Array.from(new Set(ids.filter((id) => Number.isFinite(id))))
+      if (normalizedIds.length === 0) {
         set({ errorMessage: '请先选择要批量检测的账号。' })
         return
       }
 
       const normalizedActions: CheckAction[] = actions.length > 0 ? actions : ['account-status']
-      const checkState = await getDesktopAccountsApi()?.startCheck({ ids, actions: normalizedActions })
+      const checkState = await getDesktopAccountsApi()?.startCheck({ ids: normalizedIds, actions: normalizedActions })
       if (!checkState) return
       const actionLabel = normalizedActions.includes('account-survival') ? '账号存活检测' : '账号状态检测'
       set({
         checkState,
-        checkTaskAccountIds: ids,
+        checkTaskAccountIds: normalizedIds,
         checkResultDialog: {
           open: false,
           runMode: checkState.runMode,
@@ -641,7 +645,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           multiIp: 0,
           timeout: 0
         },
-        lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务，当前按 ${checkState.concurrency} 个并发执行，检测过程中账号列表先不刷新，完成后统一更新。`
+        lastActionMessage: `已启动 ${normalizedIds.length} 个账号的${actionLabel}任务，当前按 ${checkState.concurrency} 个并发执行，检测过程中账号列表先不刷新，完成后统一更新。`
       })
     })
   },
