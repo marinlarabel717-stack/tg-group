@@ -26,7 +26,10 @@ export function DashboardView() {
   const setActiveModule = useUIStore((state) => state.setActiveModule)
   const setLogsContext = useUIStore((state) => state.setLogsContext)
 
-  const accountCheckState = useAccountStore((state) => state.checkState)
+  const accountCheckRunning = useAccountStore((state) => state.checkState.running)
+  const accountCheckCompletedCount = useAccountStore((state) => state.checkState.completedCount)
+  const accountCheckTotalCount = useAccountStore((state) => state.checkState.totalCount)
+  const accountCheckLatestMessage = useAccountStore((state) => state.checkState.logs[state.checkState.logs.length - 1]?.message || '账号检测任务进行中')
 
   const broadcastTasks = useBroadcastStore((state) => state.tasks)
   const broadcastPreviewItems = useBroadcastStore((state) => state.previewItems)
@@ -48,13 +51,12 @@ export function DashboardView() {
   const activeTasks = useMemo(() => {
     const items: DashboardTaskCard[] = []
 
-    if (accountCheckState.running) {
-      const latestMessage = accountCheckState.logs[accountCheckState.logs.length - 1]?.message || '账号检测任务进行中'
+    if (accountCheckRunning) {
       items.push({
         id: 'accounts-check',
         title: '账号检测',
-        subtitle: latestMessage,
-        progress: `${accountCheckState.completedCount} / ${accountCheckState.totalCount}`,
+        subtitle: accountCheckLatestMessage,
+        progress: `${accountCheckCompletedCount} / ${accountCheckTotalCount}`,
         accentClass: 'border-violet-300/18 bg-violet-400/8 text-violet-200',
         moduleKey: 'logs',
         logsContext: 'accounts',
@@ -110,10 +112,10 @@ export function DashboardView() {
 
     return items
   }, [
-    accountCheckState.completedCount,
-    accountCheckState.logs,
-    accountCheckState.running,
-    accountCheckState.totalCount,
+    accountCheckCompletedCount,
+    accountCheckLatestMessage,
+    accountCheckRunning,
+    accountCheckTotalCount,
     autoJoinLastActionMessage,
     autoJoinRunning,
     autoJoinTasks,

@@ -189,6 +189,7 @@ interface AccountStoreState {
   selectedIds: number[]
   selectedProfileAccountId: number | null
   checkState: CheckQueueState
+  checkTaskAccountIds: number[]
   twoFactorState: TwoFactorProgressState
   profileOperationState: ProfileOperationProgressState
   importProgress: ImportProgressPayload | null
@@ -239,7 +240,12 @@ async function syncAccounts(set: (partial: Partial<AccountStoreState>) => void, 
     api.getTwoFactorState ? api.getTwoFactorState() : Promise.resolve(createEmptyTwoFactorState()),
     api.getProfileOperationState ? api.getProfileOperationState() : Promise.resolve(createEmptyProfileOperationState())
   ])
-  applyAccountSnapshot(accounts, set, get, { checkState, twoFactorState, profileOperationState })
+  applyAccountSnapshot(accounts, set, get, {
+    checkState,
+    checkTaskAccountIds: checkState.running ? checkState.activeAccountIds : [],
+    twoFactorState,
+    profileOperationState
+  })
 }
 
 async function runBusyAction(
@@ -269,6 +275,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   selectedIds: [],
   selectedProfileAccountId: null,
   checkState: createEmptyCheckState(),
+  checkTaskAccountIds: [],
   twoFactorState: createEmptyTwoFactorState(),
   profileOperationState: createEmptyProfileOperationState(),
   importProgress: null,
@@ -309,6 +316,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     if (!subscribed) {
       window.desktopAccounts?.onCheckState(async (checkState) => {
         const previousState = get().checkState
+        const previousCheckingIds = get().checkTaskAccountIds
         const normalizedCheckState = {
           ...checkState,
           queuedAccountIds: areSameNumberArrays(previousState.queuedAccountIds, checkState.queuedAccountIds)
@@ -319,7 +327,11 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
             : checkState.activeAccountIds
         }
 
-        set({ checkState: normalizedCheckState })
+        const nextCheckTaskAccountIds = checkState.running
+          ? (previousCheckingIds.length > 0 ? previousCheckingIds : normalizedCheckState.activeAccountIds)
+          : []
+
+        set({ checkState: normalizedCheckState, checkTaskAccountIds: nextCheckTaskAccountIds })
         const fullyCompleted = !checkState.running
           && checkState.totalCount > 0
           && checkState.completedCount >= checkState.totalCount
@@ -341,6 +353,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
               multiIp: checkState.resultSummary.multi_ip,
               timeout: checkState.resultSummary.timeout
             },
+            checkTaskAccountIds: [],
             lastActionMessage: '批量检测已完成，账号资料已刷新。'
           })
         }
@@ -614,6 +627,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       const actionLabel = normalizedActions.includes('account-survival') ? '账号存活检测' : '账号状态检测'
       set({
         checkState,
+        checkTaskAccountIds: ids,
         checkResultDialog: {
           open: false,
           runMode: checkState.runMode,
@@ -643,6 +657,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       if (!checkState) return
       set({
         checkState,
+        checkTaskAccountIds: checkState.activeAccountIds,
         lastActionMessage: checkState.activeCount > 0
           ? '已停止继续检测，正在收尾当前检测中的账号。'
           : '账号检测任务已停止。'

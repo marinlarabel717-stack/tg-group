@@ -95,6 +95,16 @@ function trimOperationLogs<T extends { level: string }>(logs: T[], maxNonErrorLo
   })
 }
 
+function serializeCheckStateForRenderer(state: ReturnType<CheckQueue['getState']>) {
+  if (!state.running) return state
+
+  return {
+    ...state,
+    queuedAccountIds: [],
+    activeAccountIds: state.activeAccountIds.slice(-Math.max(1, state.concurrency))
+  }
+}
+
 function buildStoredTwoFactor(account: ReturnType<AccountRepository['getByIds']>[number]) {
   const raw = account.profile?.twoFA
   return typeof raw === 'string' && raw.trim() ? raw.trim() : ''
@@ -204,7 +214,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('accounts:check-state', checkQueue.getState())
+    mainWindow.webContents.send('accounts:check-state', serializeCheckStateForRenderer(checkQueue.getState()))
   }
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
@@ -311,7 +321,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   checkQueue.on('state', () => emitCheckState())
 
   ipcMain.handle('accounts:list', async () => accountRepository.list())
-  ipcMain.handle('accounts:get-check-state', () => checkQueue.getState())
+  ipcMain.handle('accounts:get-check-state', () => serializeCheckStateForRenderer(checkQueue.getState()))
   ipcMain.handle('app-settings:get', () => appSettingsStore.get())
   ipcMain.handle('app-settings:update', (_event, patch: Partial<AppSettings>) => {
     const next = appSettingsStore.update(patch)
@@ -322,7 +332,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   ipcMain.handle('accounts:clear-check-logs', () => {
     checkQueue.clearLogs()
     emitCheckState(true)
-    return checkQueue.getState()
+    return serializeCheckStateForRenderer(checkQueue.getState())
   })
   ipcMain.handle('accounts:start-check', (_event, payload: number[] | { ids: number[]; actions?: CheckAction[] }) => {
     const ids = Array.isArray(payload) ? payload : payload?.ids ?? []
@@ -339,12 +349,12 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     const mode = actions.includes('account-survival') ? 'account-survival' : 'account-status'
     const state = checkQueue.enqueue(ids, mode)
     emitCheckState(true)
-    return state
+    return serializeCheckStateForRenderer(state)
   })
   ipcMain.handle('accounts:stop-check', () => {
     const state = checkQueue.stop()
     emitCheckState(true)
-    return state
+    return serializeCheckStateForRenderer(state)
   })
 
   ipcMain.handle('accounts:pick-import-files', async () => {

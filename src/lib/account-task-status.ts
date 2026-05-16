@@ -114,8 +114,7 @@ export function isAccountOccupied(taskMap: Map<number, AccountTaskKind>, account
 }
 
 export function useAccountTaskStatusMap() {
-  const checkRunning = useAccountStore((state) => state.checkState.running)
-  const checkQueuedAccountIds = useAccountStore((state) => state.checkState.queuedAccountIds)
+  const checkTaskAccountIds = useAccountStore((state) => state.checkTaskAccountIds)
   const checkActiveAccountIds = useAccountStore((state) => state.checkState.activeAccountIds)
   const directMessageSending = useDirectMessageStore((state) => state.sending)
   const directMessageStopping = useDirectMessageStore((state) => state.stopping)
@@ -131,8 +130,8 @@ export function useAccountTaskStatusMap() {
 
   return useMemo(() => buildAccountTaskStatusMap({
     checkState: {
-      running: checkRunning,
-      queuedAccountIds: checkQueuedAccountIds,
+      running: checkTaskAccountIds.length > 0 || checkActiveAccountIds.length > 0,
+      queuedAccountIds: checkTaskAccountIds,
       activeAccountIds: checkActiveAccountIds
     },
     directMessage: {
@@ -168,8 +167,7 @@ export function useAccountTaskStatusMap() {
     broadcastSyncingAccountIds,
     broadcastStopping,
     checkActiveAccountIds,
-    checkQueuedAccountIds,
-    checkRunning,
+    checkTaskAccountIds,
     directMessageRunningAccountIds,
     directMessageSending,
     directMessageStopping,
