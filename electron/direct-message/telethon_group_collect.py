@@ -45,6 +45,66 @@ def _parse_message_link(raw: str) -> Dict[str, Any]:
     return {}
 
 
+def _extract_public_username(raw: str) -> str:
+    matched = re.search(r'(?:https?://)?t\.me/(?:(?:s|a)/)?([A-Za-z0-9_]{5,32})(?:[/?#].*)?$', raw.strip(), re.I)
+    return matched.group(1).strip() if matched else ''
+
+
+def _normalize_username(raw: str) -> str:
+    value = raw.replace('@', '').strip()
+    return value if re.fullmatch(r'[A-Za-z0-9_]{5,32}', value or '') else ''
+
+
+def _extract_usernames_from_text(text: str) -> List[str]:
+    seen = set()
+    output: List[str] = []
+    for matched in re.finditer(r'(?<![A-Za-z0-9_])@([A-Za-z0-9_]{5,32})', text or ''):
+        username = _normalize_username(matched.group(1) or '')
+        lowered = username.lower()
+        if not username or lowered in seen:
+            continue
+        seen.add(lowered)
+        output.append(username)
+    return output
+
+
+def _extract_usernames_from_message(message: Any) -> List[str]:
+    text = str(getattr(message, 'raw_text', None) or getattr(message, 'message', None) or '')
+    seen = set()
+    output: List[str] = []
+
+    def append_username(raw: str):
+        username = _normalize_username(raw)
+        lowered = username.lower()
+        if not username or lowered in seen:
+            return
+        seen.add(lowered)
+        output.append(username)
+
+    for username in _extract_usernames_from_text(text):
+        append_username(username)
+
+    for entity in getattr(message, 'entities', None) or []:
+        if isinstance(entity, types.MessageEntityMention):
+            offset = _safe_int(getattr(entity, 'offset', 0), 0)
+            length = _safe_int(getattr(entity, 'length', 0), 0)
+            if length > 1:
+                append_username(text[offset:offset + length])
+            continue
+
+        if isinstance(entity, types.MessageEntityTextUrl):
+            append_username(_extract_public_username(str(getattr(entity, 'url', '') or '')))
+            continue
+
+        if isinstance(entity, types.MessageEntityUrl):
+            offset = _safe_int(getattr(entity, 'offset', 0), 0)
+            length = _safe_int(getattr(entity, 'length', 0), 0)
+            if length > 0:
+                append_username(_extract_public_username(text[offset:offset + length]))
+
+    return output
+
+
 def _normalize_status(user: Any) -> Dict[str, str]:
     status = getattr(user, 'status', None)
     if isinstance(status, types.UserStatusOnline):
@@ -294,6 +354,42 @@ async def _collect_history_users(client: Any, entity: Any, history_limit: int, h
     return list(users.values())
 
 
+async def _collect_channel_mentions(client: Any, entity: Any, history_limit: int, history_days: int) -> List[Dict[str, Any]]:
+    limit = max(1, min(history_limit, 5000)) if history_limit > 0 else 2000
+    cutoff = None
+    if history_days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=history_days)
+
+    users: Dict[str, Dict[str, Any]] = {}
+    messages = await client.get_messages(entity, limit=limit)
+    for message in messages:
+        message_date = getattr(message, 'date', None)
+        if cutoff and isinstance(message_date, datetime):
+            normalized_date = message_date if message_date.tzinfo else message_date.replace(tzinfo=timezone.utc)
+            if normalized_date < cutoff:
+                break
+
+        for username in _extract_usernames_from_message(message):
+            lowered = username.lower()
+            if lowered in users:
+                continue
+            users[lowered] = {
+                'id': f'channel_username:{lowered}',
+                'username': username,
+                'phone': '',
+                'first_name': f'@{username}',
+                'last_name': '',
+                'bot': False,
+                'premium': False,
+                'has_avatar': False,
+                'role': 'member',
+                'status_bucket': 'unknown',
+                'status_label': '来自频道正文',
+            }
+
+    return list(users.values())
+
+
 async def _run(session_path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     source = str(payload.get('source') or '').strip()
     mode = str(payload.get('mode') or 'public_members').strip() or 'public_members'
@@ -323,6 +419,10 @@ async def _run(session_path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         elif mode == 'react_users':
             entity, message_id = await asyncio.wait_for(_resolve_message_entity(client, source), timeout=timeout_seconds)
             users = await asyncio.wait_for(_collect_reaction_users(client, entity, message_id, limit), timeout=timeout_seconds)
+        elif mode == 'channel_mentions':
+            entity = await asyncio.wait_for(_resolve_entity(client, source), timeout=timeout_seconds)
+            entity = await asyncio.wait_for(_ensure_joined(client, entity), timeout=timeout_seconds)
+            users = await asyncio.wait_for(_collect_channel_mentions(client, entity, history_limit, history_days), timeout=timeout_seconds)
         else:
             entity = await asyncio.wait_for(_resolve_entity(client, source), timeout=timeout_seconds)
             entity = await asyncio.wait_for(_ensure_joined(client, entity), timeout=timeout_seconds)

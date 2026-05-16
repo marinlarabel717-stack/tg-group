@@ -744,7 +744,7 @@ export interface DirectMessageCollectResult {
   message: string
 }
 
-export type GroupCollectorMode = 'public_members' | 'hidden_history'
+export type GroupCollectorMode = 'public_members' | 'hidden_history' | 'channel_mentions'
 export type GroupCollectorRole = 'owner' | 'admin' | 'member'
 export type GroupCollectorLastSeenBucket = 'online' | 'recent' | 'week' | 'month' | 'offline' | 'unknown'
 

@@ -19,6 +19,7 @@ import type {
 } from '../types'
 
 type CollectorTabKey = 'groups' | 'channels' | 'keywords' | 'logs'
+type CollectorSourceType = 'group' | 'channel'
 
 type GroupSourceKind = 'username' | 'invite'
 
@@ -48,6 +49,7 @@ interface CollectorTaskLogView {
 interface CollectorTaskView {
   id: string
   title: string
+  sourceType: CollectorSourceType
   status: GroupCollectorTaskStatus
   totalGroups: number
   processedGroups: number
@@ -63,6 +65,17 @@ interface CollectorTaskView {
   groups: GroupSourceRecord[]
   createdAt: string
 }
+
+const EMPTY_COLLECTOR_FILTERS: GroupCollectorFilterPayload = {
+  roleFilters: [],
+  onlyBots: false,
+  avatarFilters: [],
+  usernameFilters: [],
+  premiumFilters: [],
+  lastSeenFilters: []
+}
+
+const CHANNEL_DAY_PRESETS = [7, 30] as const
 
 const tabs: Array<{ key: CollectorTabKey; label: string; icon: typeof FolderSearch2 }> = [
   { key: 'groups', label: '采集群组', icon: FolderSearch2 },
@@ -241,6 +254,22 @@ function getAccountStatusTone(status: string, busy: boolean) {
   return 'bg-white/10 text-slate-200'
 }
 
+function readTaskSourceUnitLabel(task: Pick<CollectorTaskView, 'sourceType'> | null | undefined) {
+  return task?.sourceType === 'channel' ? '频道' : '群'
+}
+
+function readTaskProgressVerb(task: Pick<CollectorTaskView, 'sourceType'> | null | undefined) {
+  return task?.sourceType === 'channel' ? '已读取频道' : '已加入群'
+}
+
+function readTaskSuccessLabel(task: Pick<CollectorTaskView, 'sourceType'> | null | undefined) {
+  return task?.sourceType === 'channel' ? '成功整理 @用户名' : '成功采集用户'
+}
+
+function readTaskFailureLabel(task: Pick<CollectorTaskView, 'sourceType'> | null | undefined) {
+  return task?.sourceType === 'channel' ? '失败频道' : '失败群数'
+}
+
 function TabBar({ activeTab, setActiveTab }: { activeTab: CollectorTabKey; setActiveTab: (tab: CollectorTabKey) => void }) {
   return (
     <div className="flex flex-wrap gap-3">
@@ -288,9 +317,15 @@ export default function SessionManagerModule() {
   const [groupInput, setGroupInput] = useState('')
   const [groupSources, setGroupSources] = useState<GroupSourceRecord[]>([])
   const [groupInputSummary, setGroupInputSummary] = useState<GroupInputSummary>({ added: 0, duplicate: 0, invalid: 0 })
+  const [channelInput, setChannelInput] = useState('')
+  const [channelSources, setChannelSources] = useState<GroupSourceRecord[]>([])
+  const [channelInputSummary, setChannelInputSummary] = useState<GroupInputSummary>({ added: 0, duplicate: 0, invalid: 0 })
   const [participantLimit, setParticipantLimit] = useState('')
   const [historyLimit, setHistoryLimit] = useState('')
   const [historyDays, setHistoryDays] = useState('')
+  const [channelHistoryLimit, setChannelHistoryLimit] = useState('2000')
+  const [channelHistoryDaysPreset, setChannelHistoryDaysPreset] = useState<string>('7')
+  const [channelHistoryDaysCustom, setChannelHistoryDaysCustom] = useState('')
   const [roleFilters, setRoleFilters] = useState<GroupCollectorRole[]>([])
   const [onlyBots, setOnlyBots] = useState(false)
   const [avatarFilters, setAvatarFilters] = useState<Array<'has' | 'none'>>([])
@@ -301,8 +336,9 @@ export default function SessionManagerModule() {
   const [activeTaskId, setActiveTaskId] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [hintMessage, setHintMessage] = useState('')
-  const [resultDialog, setResultDialog] = useState<{ open: boolean; result: GroupCollectorTaskResult | null }>({ open: false, result: null })
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [resultDialog, setResultDialog] = useState<{ open: boolean; result: GroupCollectorTaskResult | null; sourceType: CollectorSourceType }>({ open: false, result: null, sourceType: 'group' })
+  const groupFileInputRef = useRef<HTMLInputElement | null>(null)
+  const channelFileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     void initAccounts()
@@ -310,11 +346,13 @@ export default function SessionManagerModule() {
 
   useEffect(() => {
     const unsubscribe = window.desktopDirectMessage?.onGroupCollectorProgress((payload: GroupCollectorTaskProgress) => {
+      let resolvedSourceType: CollectorSourceType = 'group'
       setTasks((current) => {
         const existing = current.find((task) => task.id === payload.taskId)
         const nextTask: CollectorTaskView = {
           id: payload.taskId,
           title: existing?.title || `任务 ${current.length + 1}`,
+          sourceType: existing?.sourceType || 'group',
           status: payload.status,
           totalGroups: payload.totalGroups,
           processedGroups: payload.processedGroups,
@@ -340,6 +378,7 @@ export default function SessionManagerModule() {
           groups: existing?.groups || [],
           createdAt: existing?.createdAt || new Date().toISOString()
         }
+        resolvedSourceType = nextTask.sourceType
 
         if (!existing) {
           return [nextTask, ...current]
@@ -350,7 +389,7 @@ export default function SessionManagerModule() {
 
       if (payload.status === 'completed' || payload.status === 'stopped' || payload.status === 'failed') {
         if (payload.result) {
-          setResultDialog({ open: true, result: payload.result })
+          setResultDialog({ open: true, result: payload.result, sourceType: resolvedSourceType })
         }
       }
     })
@@ -414,7 +453,11 @@ export default function SessionManagerModule() {
     }
   }, [activeTask, activeTaskId, tasks])
 
-  const canStart = selectedAccountIds.length > 0 && groupSources.length > 0 && !loading
+  const canStartGroupTask = selectedAccountIds.length > 0 && groupSources.length > 0 && !loading
+  const canStartChannelTask = selectedAccountIds.length > 0 && channelSources.length > 0 && !loading
+  const resolvedChannelHistoryDays = channelHistoryDaysPreset === 'custom'
+    ? Number(channelHistoryDaysCustom || 0)
+    : Number(channelHistoryDaysPreset || 0)
 
   const syncGroupSourcesFromInput = (input: string) => {
     const result = parseGroupSourcesInput(input)
@@ -428,20 +471,52 @@ export default function SessionManagerModule() {
     setHintMessage(`已添加 ${summary.added} 个群${summary.duplicate > 0 ? `，去重 ${summary.duplicate} 个` : ''}${summary.invalid > 0 ? `，过滤错误 ${summary.invalid} 个` : ''}。`)
   }
 
-  const handleImportFile = async (file: File | null) => {
+  const syncChannelSourcesFromInput = (input: string) => {
+    const result = parseGroupSourcesInput(input)
+    const summary = { added: result.added, duplicate: result.duplicate, invalid: result.invalid }
+    setChannelSources(result.next)
+    setChannelInputSummary(summary)
+    setChannelInput(input)
+    if (summary.added === 0 && summary.duplicate === 0 && summary.invalid === 0) {
+      return
+    }
+    setHintMessage(`已添加 ${summary.added} 个频道${summary.duplicate > 0 ? `，去重 ${summary.duplicate} 个` : ''}${summary.invalid > 0 ? `，过滤错误 ${summary.invalid} 个` : ''}。`)
+  }
+
+  const handleImportFile = async (file: File | null, sourceType: CollectorSourceType) => {
     if (!file) return
     const text = await file.text()
+    if (sourceType === 'channel') {
+      const nextInput = channelInput.trim() ? `${channelInput.trim()}\n${text.trim()}` : text.trim()
+      syncChannelSourcesFromInput(nextInput)
+      return
+    }
     const nextInput = groupInput.trim() ? `${groupInput.trim()}\n${text.trim()}` : text.trim()
     syncGroupSourcesFromInput(nextInput)
   }
 
-  const handlePasteGroups = (text: string) => {
+  const handlePasteSources = (text: string, sourceType: CollectorSourceType) => {
     if (!text.trim()) return
+    if (sourceType === 'channel') {
+      const nextInput = channelInput.trim() ? `${channelInput.trim()}\n${text.trim()}` : text.trim()
+      syncChannelSourcesFromInput(nextInput)
+      return
+    }
     const nextInput = groupInput.trim() ? `${groupInput.trim()}\n${text.trim()}` : text.trim()
     syncGroupSourcesFromInput(nextInput)
   }
 
-  const handleStart = async () => {
+  const startCollectorTask = async (options: {
+    sourceType: CollectorSourceType
+    title: string
+    sources: GroupSourceRecord[]
+    mode: GroupCollectorMode
+    participantLimit?: number
+    historyLimit?: number
+    historyDays?: number
+    filters: GroupCollectorFilterPayload
+    startHint: string
+  }) => {
     setErrorMessage('')
     setHintMessage('')
 
@@ -449,18 +524,19 @@ export default function SessionManagerModule() {
       setErrorMessage('请先选择采集账号。')
       return
     }
-    if (groupSources.length === 0) {
-      setErrorMessage('请先添加采集群列表。')
+    if (options.sources.length === 0) {
+      setErrorMessage(options.sourceType === 'channel' ? '请先添加采集频道列表。' : '请先添加采集群列表。')
       return
     }
     const taskId = createId('collector_task')
-    const taskTitle = `任务 ${tasks.length + 1}`
+    const taskTitle = `${options.title} ${tasks.length + 1}`
 
     setTasks((current) => [{
       id: taskId,
       title: taskTitle,
+      sourceType: options.sourceType,
       status: 'running',
-      totalGroups: groupSources.length,
+      totalGroups: options.sources.length,
       processedGroups: 0,
       totalAccounts: selectedAccountIds.length,
       joinedCount: 0,
@@ -471,7 +547,7 @@ export default function SessionManagerModule() {
       usernames: [],
       result: null,
       selectedAccountIds,
-      groups: groupSources,
+      groups: options.sources,
       createdAt: new Date().toISOString()
     }, ...current])
     setActiveTaskId(taskId)
@@ -480,20 +556,52 @@ export default function SessionManagerModule() {
       await window.desktopDirectMessage?.startGroupCollectorTask({
         taskId,
         accountIds: selectedAccountIds,
-        sources: groupSources.map((item) => item.displayValue),
-        mode,
-        participantLimit: participantLimit.trim() ? Number(participantLimit) : undefined,
-        historyLimit: historyLimit.trim() ? Number(historyLimit) : undefined,
-        historyDays: historyDays.trim() ? Number(historyDays) : undefined,
-        filters
+        sources: options.sources.map((item) => item.displayValue),
+        mode: options.mode,
+        participantLimit: options.participantLimit,
+        historyLimit: options.historyLimit,
+        historyDays: options.historyDays,
+        filters: options.filters
       })
       setActiveTab('logs')
-      setHintMessage('采集任务已开始，已自动跳转到采集日志。')
+      setHintMessage(options.startHint)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setErrorMessage(message)
       setTasks((current) => current.filter((task) => task.id !== taskId))
     }
+  }
+
+  const handleStartGroup = async () => {
+    await startCollectorTask({
+      sourceType: 'group',
+      title: '群组任务',
+      sources: groupSources,
+      mode,
+      participantLimit: participantLimit.trim() ? Number(participantLimit) : undefined,
+      historyLimit: historyLimit.trim() ? Number(historyLimit) : undefined,
+      historyDays: historyDays.trim() ? Number(historyDays) : undefined,
+      filters,
+      startHint: '采集群组任务已开始，已自动跳转到采集日志。'
+    })
+  }
+
+  const handleStartChannel = async () => {
+    if (channelHistoryDaysPreset === 'custom' && (!Number.isFinite(resolvedChannelHistoryDays) || resolvedChannelHistoryDays <= 0)) {
+      setErrorMessage('自定义天数请填写大于 0 的数字。')
+      return
+    }
+
+    await startCollectorTask({
+      sourceType: 'channel',
+      title: '频道任务',
+      sources: channelSources,
+      mode: 'channel_mentions',
+      historyLimit: channelHistoryLimit.trim() ? Number(channelHistoryLimit) : undefined,
+      historyDays: Number.isFinite(resolvedChannelHistoryDays) && resolvedChannelHistoryDays > 0 ? resolvedChannelHistoryDays : undefined,
+      filters: EMPTY_COLLECTOR_FILTERS,
+      startHint: '采集频道任务已开始，已自动跳转到采集日志。'
+    })
   }
 
   const handleStopTask = async (taskId: string) => {
@@ -557,12 +665,20 @@ export default function SessionManagerModule() {
     setHintMessage('采集群列表已清空。')
   }
 
+  const clearChannels = () => {
+    setChannelSources([])
+    setChannelInput('')
+    setChannelInputSummary({ added: 0, duplicate: 0, invalid: 0 })
+    setHintMessage('采集频道列表已清空。')
+  }
+
   const applyAccountSelection = () => {
     setSelectedAccountIds(draftAccountIds.filter((accountId) => !busyAccountIds.has(accountId) || selectedAccountIds.includes(accountId)))
     setAccountPickerOpen(false)
   }
 
-  const summaryText = `已选 ${selectedAccountIds.length} 个账号，当前识别 ${groupSources.length} 个采集目标。`
+  const groupSummaryText = `已选 ${selectedAccountIds.length} 个账号，当前识别 ${groupSources.length} 个群。`
+  const channelSummaryText = `已选 ${selectedAccountIds.length} 个账号，当前识别 ${channelSources.length} 个频道。`
 
   const groupTabContent = (
     <div className="space-y-5 contain-layout">
@@ -609,7 +725,7 @@ export default function SessionManagerModule() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => groupFileInputRef.current?.click()}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
                 >
                   <Upload size={14} />
@@ -635,7 +751,7 @@ export default function SessionManagerModule() {
                   const text = event.clipboardData.getData('text')
                   if (!text.trim()) return
                   event.preventDefault()
-                  handlePasteGroups(text)
+                  handlePasteSources(text, 'group')
                 }}
                 onBlur={() => {
                   if (groupInput.trim()) {
@@ -771,26 +887,206 @@ export default function SessionManagerModule() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={!canStart}
-              onClick={() => void handleStart()}
+              disabled={!canStartGroupTask}
+              onClick={() => void handleStartGroup()}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-violet-300/16 bg-violet-400/10 px-4 text-sm font-medium text-violet-200 transition hover:bg-violet-400/16 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Play size={15} />
               开始采集
             </button>
-            <div className="text-sm text-textMuted">{summaryText}</div>
+            <div className="text-sm text-textMuted">{groupSummaryText}</div>
           </div>
         </div>
       </GlassPanel>
 
       <input
-        ref={fileInputRef}
+        ref={groupFileInputRef}
         type="file"
         accept=".txt,text/plain"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0] || null
-          void handleImportFile(file)
+          void handleImportFile(file, 'group')
+          event.currentTarget.value = ''
+        }}
+      />
+    </div>
+  )
+
+  const channelTabContent = (
+    <div className="space-y-5 contain-layout">
+      {errorMessage ? (
+        <GlassPanel className="bg-card py-0">
+          <div className="text-sm font-medium text-white">{errorMessage}</div>
+        </GlassPanel>
+      ) : null}
+
+      {!errorMessage && hintMessage ? (
+        <GlassPanel className="bg-card py-0">
+          <div className="text-sm font-medium text-white">{hintMessage}</div>
+        </GlassPanel>
+      ) : null}
+
+      <GlassPanel>
+        <div className="space-y-4">
+          <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+            <button
+              type="button"
+              onClick={() => setAccountPickerOpen(true)}
+              className="block w-full rounded-[14px] border border-white/[0.08] bg-black/10 px-4 py-4 text-left transition hover:border-white/[0.12] hover:bg-white/[0.03]"
+            >
+              <div className="text-xs tracking-[0.18em] text-textMuted">采集账号</div>
+              <div className="mt-2 text-sm text-white">{selectedAccounts.length > 0 ? `已选择 ${selectedAccounts.length} 个账号，点击重新选择` : '点击选择账号'}</div>
+            </button>
+
+            {selectedAccounts.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {selectedAccounts.map((account) => (
+                  <span key={account.id} className="inline-flex rounded-full bg-violet-400/10 px-3 py-1 text-xs text-violet-200">
+                    {readAccountPhone(account) || readAccountLabel(account)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-base font-semibold text-white">频道来源</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => channelFileInputRef.current?.click()}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
+                >
+                  <Upload size={14} />
+                  导入TXT
+                </button>
+                <button
+                  type="button"
+                  onClick={clearChannels}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
+                >
+                  <Trash2 size={14} />
+                  清空频道列表
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <textarea
+                rows={12}
+                value={channelInput}
+                onChange={(event) => setChannelInput(event.target.value)}
+                onPaste={(event) => {
+                  const text = event.clipboardData.getData('text')
+                  if (!text.trim()) return
+                  event.preventDefault()
+                  handlePasteSources(text, 'channel')
+                }}
+                onBlur={() => {
+                  if (channelInput.trim()) {
+                    syncChannelSourcesFromInput(channelInput)
+                  }
+                }}
+                placeholder="一行一个，支持 @频道用户名 / t.me公开链接 / t.me私密邀请链接"
+                className="w-full rounded-[16px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none transition focus:border-white/[0.12]"
+              />
+              <div className="mt-3 flex flex-wrap gap-2 text-sm text-textMuted">
+                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-violet-300">会自动去重和过滤无效格式</div>
+                {channelInputSummary.duplicate > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">去重 {channelInputSummary.duplicate} 条</div> : null}
+                {channelInputSummary.invalid > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">过滤错误 {channelInputSummary.invalid} 条</div> : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+              <div className="text-xs tracking-[0.18em] text-textMuted">时间范围</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {CHANNEL_DAY_PRESETS.map((days) => {
+                  const active = channelHistoryDaysPreset === String(days)
+                  return (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => {
+                        setChannelHistoryDaysPreset(String(days))
+                        setChannelHistoryDaysCustom('')
+                      }}
+                      className={`rounded-[12px] px-4 py-2.5 text-sm ${SOFT_TAB_CLASS} ${active ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
+                    >
+                      最近 {days} 天
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => setChannelHistoryDaysPreset('custom')}
+                  className={`rounded-[12px] px-4 py-2.5 text-sm ${SOFT_TAB_CLASS} ${channelHistoryDaysPreset === 'custom' ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
+                >
+                  自定义天数
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <label className="rounded-[14px] bg-black/10 px-4 py-4 text-sm">
+                  <div className="text-xs tracking-[0.18em] text-textMuted">采集最近几天</div>
+                  <input
+                    value={channelHistoryDaysPreset === 'custom' ? channelHistoryDaysCustom : channelHistoryDaysPreset}
+                    onChange={(event) => {
+                      setChannelHistoryDaysPreset('custom')
+                      setChannelHistoryDaysCustom(event.target.value.replace(/[^\d]/g, ''))
+                    }}
+                    placeholder="例如 7 / 30 / 90"
+                    className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
+                  />
+                </label>
+                <label className="rounded-[14px] bg-black/10 px-4 py-4 text-sm">
+                  <div className="text-xs tracking-[0.18em] text-textMuted">最多读取最近帖子数</div>
+                  <input
+                    value={channelHistoryLimit}
+                    onChange={(event) => setChannelHistoryLimit(event.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="默认 2000"
+                    className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+              <div className="text-xs tracking-[0.18em] text-textMuted">采集说明</div>
+              <div className="mt-3 space-y-3 text-sm leading-6 text-textMuted">
+                <div className="rounded-[14px] bg-black/10 px-4 py-4">只提取频道帖子正文里带 <span className="text-white">@username</span> 的内容，不会去做验证码绕过之类的动作。</div>
+                <div className="rounded-[14px] bg-black/10 px-4 py-4">时间范围按“最近 N 天”过滤；开始后会自动跳到日志页，过程里优先给你白话提示。</div>
+                <div className="rounded-[14px] bg-black/10 px-4 py-4">导出的结果会自动去重，只保留可直接用于后续私信的 <span className="text-white">@用户名</span>。</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={!canStartChannelTask}
+              onClick={() => void handleStartChannel()}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-violet-300/16 bg-violet-400/10 px-4 text-sm font-medium text-violet-200 transition hover:bg-violet-400/16 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Play size={15} />
+              开始采集频道
+            </button>
+            <div className="text-sm text-textMuted">{channelSummaryText}</div>
+          </div>
+        </div>
+      </GlassPanel>
+
+      <input
+        ref={channelFileInputRef}
+        type="file"
+        accept=".txt,text/plain"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0] || null
+          void handleImportFile(file, 'channel')
           event.currentTarget.value = ''
         }}
       />
@@ -811,7 +1107,7 @@ export default function SessionManagerModule() {
 
           <div className="space-y-2">
             {tasks.length === 0 ? (
-              <div className="rounded-[14px] bg-panel/80 px-4 py-6 text-sm text-textMuted">还没有采集任务，先去“采集群组”页发起任务。</div>
+              <div className="rounded-[14px] bg-panel/80 px-4 py-6 text-sm text-textMuted">还没有采集任务，先去“采集群组”或“采集频道”页发起任务。</div>
             ) : tasks.map((task) => (
               <button
                 key={task.id}
@@ -823,7 +1119,7 @@ export default function SessionManagerModule() {
                   <div className="text-sm font-medium text-white">{task.title}</div>
                   <span className={`rounded-full px-2.5 py-1 text-xs ${getTaskTone(task.status)}`}>{task.status === 'running' ? '进行中' : task.status === 'completed' ? '已完成' : task.status === 'stopped' ? '已停止' : '失败'}</span>
                 </div>
-                <div className="mt-2 text-xs text-textMuted">{task.totalAccounts} 个账号 / {task.totalGroups} 个群</div>
+                <div className="mt-2 text-xs text-textMuted">{task.totalAccounts} 个账号 / {task.totalGroups} 个{readTaskSourceUnitLabel(task)}</div>
                 <div className="mt-1 text-xs text-textMuted">成功 {task.successCount} / 失败 {task.failedCount}</div>
               </button>
             ))}
@@ -883,28 +1179,28 @@ export default function SessionManagerModule() {
 
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-[14px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.16em] text-textMuted">已加入群</div>
+                <div className="text-xs tracking-[0.16em] text-textMuted">{readTaskProgressVerb(activeTask)}</div>
                 <div className="mt-2 text-xl font-semibold text-white">{activeTask.joinedCount}</div>
               </div>
               <div className="rounded-[14px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.16em] text-textMuted">成功采集用户</div>
+                <div className="text-xs tracking-[0.16em] text-textMuted">{readTaskSuccessLabel(activeTask)}</div>
                 <div className="mt-2 text-xl font-semibold text-white">{activeTask.successCount}</div>
               </div>
               <div className="rounded-[14px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.16em] text-textMuted">失败群数</div>
+                <div className="text-xs tracking-[0.16em] text-textMuted">{readTaskFailureLabel(activeTask)}</div>
                 <div className="mt-2 text-xl font-semibold text-white">{activeTask.failedCount}</div>
               </div>
             </div>
 
             <div className="rounded-[14px] bg-panel/80 px-4 py-4 text-sm text-textMuted">
-              进度：{activeTask.processedGroups} / {activeTask.totalGroups} 个群，账号 {activeTask.totalAccounts} 个。
+              进度：{activeTask.processedGroups} / {activeTask.totalGroups} 个{readTaskSourceUnitLabel(activeTask)}，账号 {activeTask.totalAccounts} 个。
             </div>
 
             <div className="max-h-[520px] space-y-2 overflow-auto pr-1">
               {activeTask.logs.length === 0 ? (
                 <div className="rounded-[14px] bg-panel/80 px-4 py-6 text-sm text-textMuted">当前任务还没有日志。</div>
               ) : activeTask.logs.map((log) => (
-                <div key={log.id} className="rounded-[14px] bg-panel/80 px-4 py-3 text-sm text-slate-200">
+                <div key={log.id} className="select-text rounded-[14px] bg-panel/80 px-4 py-3 text-sm text-slate-200">
                   <div className="leading-6 text-white">[{formatTime(log.createdAt)}] {log.message}</div>
                 </div>
               ))}
@@ -917,10 +1213,10 @@ export default function SessionManagerModule() {
 
   const tabContent = useMemo(() => {
     if (activeTab === 'groups') return groupTabContent
-    if (activeTab === 'channels') return <PlaceholderTab title="采集频道" description="频道采集下一轮再接，后面按评论用户 / 反应用户继续做。" />
+    if (activeTab === 'channels') return channelTabContent
     if (activeTab === 'keywords') return <PlaceholderTab title="采集关键词" description="关键词采集下一轮再接，后面按指定来源 + 关键词命中消息发送者来做。" />
     return logsTabContent
-  }, [activeTab, groupTabContent, logsTabContent])
+  }, [activeTab, channelTabContent, groupTabContent, logsTabContent])
 
   return (
     <>
@@ -995,7 +1291,7 @@ export default function SessionManagerModule() {
 
       <ResultDialogShell
         open={resultDialog.open && Boolean(resultDialog.result)}
-        onClose={() => setResultDialog({ open: false, result: null })}
+        onClose={() => setResultDialog((current) => ({ ...current, open: false, result: null }))}
         title="采集完成"
         subtitle="本次采集结果如下"
         icon={<Check size={18} />}
@@ -1004,19 +1300,19 @@ export default function SessionManagerModule() {
       >
         <ResultHero
           label="采集结果"
-          value={resultDialog.result ? `成功采集 ${resultDialog.result.successCount} 个去重用户` : '0'}
+          value={resultDialog.result ? (resultDialog.sourceType === 'channel' ? `成功整理 ${resultDialog.result.successCount} 个去重 @用户名` : `成功采集 ${resultDialog.result.successCount} 个去重用户`) : '0'}
           tone={resultDialog.result?.status === 'completed' ? 'success' : 'warning'}
         />
 
         <div className="grid grid-cols-3 gap-3 text-center text-sm">
-          <ResultStatCard label="已加入群" value={resultDialog.result?.joinedCount ?? 0} tone="info" />
-          <ResultStatCard label="成功采集用户" value={resultDialog.result?.successCount ?? 0} tone="success" />
-          <ResultStatCard label="失败" value={resultDialog.result?.failedCount ?? 0} tone="warning" />
+          <ResultStatCard label={resultDialog.sourceType === 'channel' ? '已读取频道' : '已加入群'} value={resultDialog.result?.joinedCount ?? 0} tone="info" />
+          <ResultStatCard label={resultDialog.sourceType === 'channel' ? '成功整理 @用户名' : '成功采集用户'} value={resultDialog.result?.successCount ?? 0} tone="success" />
+          <ResultStatCard label={resultDialog.sourceType === 'channel' ? '失败频道' : '失败'} value={resultDialog.result?.failedCount ?? 0} tone="warning" />
         </div>
 
         <ResultPrimaryButton
           label="知道了"
-          onClick={() => setResultDialog({ open: false, result: null })}
+          onClick={() => setResultDialog((current) => ({ ...current, open: false, result: null }))}
           tone={resultDialog.result?.status === 'completed' ? 'success' : 'warning'}
         />
       </ResultDialogShell>

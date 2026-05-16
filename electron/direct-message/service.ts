@@ -502,6 +502,78 @@ function readGroupTitle(source: unknown, fallback: string) {
   return fallback
 }
 
+function extractPublicUsernameFromUrl(raw: string) {
+  const matched = raw.trim().match(/(?:https?:\/\/)?t\.me\/(?:(?:s|a)\/)?([A-Za-z0-9_]{5,32})(?:[/?#].*)?$/i)
+  return matched?.[1]?.trim() || ''
+}
+
+function normalizeMentionUsername(raw: string) {
+  const value = raw.replace(/^@+/, '').trim()
+  return /^[A-Za-z0-9_]{5,32}$/i.test(value) ? value : ''
+}
+
+function extractUsernamesFromText(text: string) {
+  const seen = new Set<string>()
+  const usernames: string[] = []
+  const matched = text.matchAll(/(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{5,32})/g)
+  for (const item of matched) {
+    const username = normalizeMentionUsername(item[2] || '')
+    const lowered = username.toLowerCase()
+    if (!username || seen.has(lowered)) continue
+    seen.add(lowered)
+    usernames.push(username)
+  }
+  return usernames
+}
+
+function readMessageTextContent(message: any) {
+  return [message?.rawText, message?.raw_text, message?.message, message?.text, message?.caption]
+    .find((item) => typeof item === 'string' && item.trim()) || ''
+}
+
+function extractUsernamesFromMessage(message: any) {
+  const text = readMessageTextContent(message)
+  const seen = new Set<string>()
+  const usernames: string[] = []
+
+  const appendUsername = (raw: string) => {
+    const username = normalizeMentionUsername(raw)
+    const lowered = username.toLowerCase()
+    if (!username || seen.has(lowered)) return
+    seen.add(lowered)
+    usernames.push(username)
+  }
+
+  extractUsernamesFromText(text).forEach(appendUsername)
+
+  const entities = Array.isArray(message?.entities) ? message.entities : []
+  for (const entity of entities) {
+    const className = String(entity?.className || entity?.constructor?.name || '')
+    const offset = Number(entity?.offset ?? 0)
+    const length = Number(entity?.length ?? 0)
+
+    if (/MessageEntityMention/i.test(className)) {
+      if (length > 1) {
+        appendUsername(text.slice(offset, offset + length))
+      }
+      continue
+    }
+
+    if (/MessageEntityTextUrl/i.test(className)) {
+      appendUsername(extractPublicUsernameFromUrl(String(entity?.url || '')))
+      continue
+    }
+
+    if (/MessageEntityUrl/i.test(className)) {
+      if (length > 0) {
+        appendUsername(extractPublicUsernameFromUrl(text.slice(offset, offset + length)))
+      }
+    }
+  }
+
+  return usernames
+}
+
 function readCollectorLastSeen(user: Record<string, unknown>): { bucket: GroupCollectorLastSeenBucket; label: string } {
   const status = user.status as Record<string, unknown> | null | undefined
   const className = String(status?.className || (status as any)?.constructor?.name || '')
@@ -1657,13 +1729,18 @@ export class DirectMessageService {
       const role = rawUser.role === 'owner' || rawUser.role === 'admin'
         ? rawUser.role
         : adminRoleMap.get(userId) || 'member'
+      const sourceLabel = payload.mode === 'channel_mentions'
+        ? '频道帖子正文'
+        : payload.mode === 'public_members'
+          ? '公开群成员'
+          : '历史发言用户'
       const item: GroupCollectorUserPayload = {
         userId,
         displayName: normalizeCollectorDisplayName(rawUser),
         username: typeof rawUser.username === 'string' ? rawUser.username : '',
         phone: typeof rawUser.phone === 'string' ? rawUser.phone : '',
         targetValue: normalizeCollectedValue(rawUser),
-        sourceLabel: payload.mode === 'public_members' ? '公开群成员' : '历史发言用户',
+        sourceLabel,
         role,
         isBot: Boolean((rawUser as { bot?: boolean | null }).bot),
         hasAvatar: typeof rawUser.hasAvatar === 'boolean' ? rawUser.hasAvatar : readCollectorHasAvatar(rawUser as Record<string, unknown>),
@@ -1687,14 +1764,22 @@ export class DirectMessageService {
       filtered: skipped,
       items,
       message: items.length > 0
-        ? `采集完成，原始 ${rawUsers.length}，命中 ${items.length}，过滤 ${skipped}。`
+        ? payload.mode === 'channel_mentions'
+          ? `采集完成，共整理出 ${items.length} 个去重 @用户名（原始命中 ${rawUsers.length}，过滤 ${skipped}）。`
+          : `采集完成，原始 ${rawUsers.length}，命中 ${items.length}，过滤 ${skipped}。`
         : rawUsers.length > 0
-          ? `这次拉到 ${rawUsers.length} 个用户，但都被过滤条件筛掉了。`
+          ? payload.mode === 'channel_mentions'
+            ? `这次扫到 ${rawUsers.length} 个 @用户名，但都被过滤条件筛掉了。`
+            : `这次拉到 ${rawUsers.length} 个用户，但都被过滤条件筛掉了。`
           : payload.mode === 'public_members'
             ? '这次没有拉到群成员，可能这个群不开放成员列表，或者当前账号权限不够。'
-            : payload.historyDays && payload.historyDays > 0
-              ? `这次没有从最近 ${payload.historyDays} 天的历史消息里扫到可用用户，可能这几天没人发言，或者历史消息太少。`
-              : '这次没有从历史消息里扫到可用用户，可能群里最近没人发言，或者历史消息太少。'
+            : payload.mode === 'channel_mentions'
+              ? payload.historyDays && payload.historyDays > 0
+                ? `这次没有从最近 ${payload.historyDays} 天的频道帖子正文里扫到可用 @用户名。`
+                : '这次没有从频道帖子正文里扫到可用 @用户名。'
+              : payload.historyDays && payload.historyDays > 0
+                ? `这次没有从最近 ${payload.historyDays} 天的历史消息里扫到可用用户，可能这几天没人发言，或者历史消息太少。`
+                : '这次没有从历史消息里扫到可用用户，可能群里最近没人发言，或者历史消息太少。'
     }
   }
 
@@ -1718,7 +1803,7 @@ export class DirectMessageService {
         participantLimit: payload.participantLimit,
         historyLimit: payload.historyLimit,
         historyDays: payload.historyDays,
-        timeoutSeconds: payload.mode === 'hidden_history' ? 60 : 45
+        timeoutSeconds: payload.mode === 'public_members' ? 45 : 75
       })
 
       if (!telethonResult) {
@@ -1748,7 +1833,7 @@ export class DirectMessageService {
     const entity = await resolveCollectorGroupEntity(client, normalizedSource)
     const joinedState = await ensureCollectorGroupJoined(client, normalizedSource, (entity as { chat?: unknown } | null)?.chat ?? entity)
     const targetEntity = joinedState.entity ?? (entity as { chat?: unknown } | null)?.chat ?? entity
-    const adminRoleMap = await loadAdminRoleMap(client, targetEntity)
+    const adminRoleMap = payload.mode === 'channel_mentions' ? new Map<string, GroupCollectorRole>() : await loadAdminRoleMap(client, targetEntity)
     let rawUsers: Array<{ id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }> = []
 
     if (payload.mode === 'public_members') {
@@ -1768,28 +1853,59 @@ export class DirectMessageService {
         getMessages: (entity: unknown, params: Record<string, unknown>) => Promise<Array<any>>
       }).getMessages(targetEntity as never, { limit: Math.max(1, Math.min(historyLimit, 5000)) })
 
-      const users = new Map<string, { id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }>()
-      for (const message of messages || []) {
-        if (cutoffTimeMs) {
-          const messageTimeMs = readTelegramMessageTimestampMs(message)
-          if (Number.isFinite(messageTimeMs) && messageTimeMs < cutoffTimeMs) {
-            continue
+      if (payload.mode === 'channel_mentions') {
+        const users = new Map<string, { id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown; role?: GroupCollectorRole | 'member' | null; hasAvatar?: boolean | null; statusBucket?: string | null; statusLabel?: string | null }>()
+        for (const message of messages || []) {
+          if (cutoffTimeMs) {
+            const messageTimeMs = readTelegramMessageTimestampMs(message)
+            if (Number.isFinite(messageTimeMs) && messageTimeMs < cutoffTimeMs) {
+              continue
+            }
+          }
+
+          for (const username of extractUsernamesFromMessage(message)) {
+            const lowered = username.toLowerCase()
+            if (users.has(lowered)) continue
+            users.set(lowered, {
+              id: `channel_username:${lowered}`,
+              username,
+              phone: '',
+              firstName: `@${username}`,
+              lastName: '',
+              bot: false,
+              premium: false,
+              hasAvatar: false,
+              role: 'member',
+              statusBucket: 'unknown',
+              statusLabel: '来自频道正文'
+            })
           }
         }
-        let sender = typeof message?.getSender === 'function' ? await message.getSender() : null
-        if (!sender && message?.senderId) {
-          try {
-            sender = await client.getEntity(message.senderId as never)
-          } catch {
-            sender = null
+        rawUsers = Array.from(users.values())
+      } else {
+        const users = new Map<string, { id?: unknown; username?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; bot?: boolean | null; photo?: unknown; premium?: boolean | null; status?: unknown }>()
+        for (const message of messages || []) {
+          if (cutoffTimeMs) {
+            const messageTimeMs = readTelegramMessageTimestampMs(message)
+            if (Number.isFinite(messageTimeMs) && messageTimeMs < cutoffTimeMs) {
+              continue
+            }
           }
+          let sender = typeof message?.getSender === 'function' ? await message.getSender() : null
+          if (!sender && message?.senderId) {
+            try {
+              sender = await client.getEntity(message.senderId as never)
+            } catch {
+              sender = null
+            }
+          }
+          if (!sender || typeof sender !== 'object') continue
+          const userId = stringifyEntityId((sender as { id?: unknown }).id)
+          if (!userId || users.has(userId)) continue
+          users.set(userId, sender as any)
         }
-        if (!sender || typeof sender !== 'object') continue
-        const userId = stringifyEntityId((sender as { id?: unknown }).id)
-        if (!userId || users.has(userId)) continue
-        users.set(userId, sender as any)
+        rawUsers = Array.from(users.values())
       }
-      rawUsers = Array.from(users.values())
     }
 
     return this.buildGroupCollectorResultFromUsers(rawUsers, payload, adminRoleMap)
@@ -1801,6 +1917,8 @@ export class DirectMessageService {
 
   private async runGroupCollectorTask(taskId: string, task: ActiveGroupCollectorTask, payload: GroupCollectorTaskPayload) {
     const accounts = this.accountRepository.getByIds(payload.accountIds)
+    const isChannelMentionMode = payload.mode === 'channel_mentions'
+    const sourceUnitLabel = isChannelMentionMode ? '频道' : '群'
     const normalizedSources = payload.sources
       .map((source) => normalizeCollectorGroupSource(source))
       .filter((source): source is NonNullable<ReturnType<typeof normalizeCollectorGroupSource>> => Boolean(source))
@@ -1905,7 +2023,7 @@ export class DirectMessageService {
       joinedCount,
       successCount,
       failedCount,
-      message: `采集任务已开始：${payload.accountIds.length} 个账号，${normalizedSources.length} 个群。`,
+      message: `采集任务已开始：${payload.accountIds.length} 个账号，${normalizedSources.length} 个${sourceUnitLabel}。`,
       log: null,
       result: null
     })
@@ -1917,7 +2035,9 @@ export class DirectMessageService {
       let label = source.label
 
       try {
-        pushLog('running', 'info', `[${runtime.phone}] 已开始处理 ${label}，准备采集用户`, runtime.account.id, runtime.phone, label)
+        pushLog('running', 'info', isChannelMentionMode
+          ? `[${runtime.phone}] 已开始处理 ${label}，正在扫描帖子正文里的 @用户名`
+          : `[${runtime.phone}] 已开始处理 ${label}，准备采集用户`, runtime.account.id, runtime.phone, label)
 
         const result = await this.collectGroupUsersWithClient(runtime.client, {
           accountId: runtime.account.id,
@@ -1940,9 +2060,13 @@ export class DirectMessageService {
         successCount = uniqueItems.size
         processedGroups += 1
         if (result.items.length > 0) {
-          pushLog('running', 'success', `[${runtime.phone}] ${label} 采集完成：命中 ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}（原始 ${result.total}，过滤 ${result.filtered}）`, runtime.account.id, runtime.phone, label)
+          pushLog('running', 'success', isChannelMentionMode
+            ? `[${runtime.phone}] ${label} 扫描完成：命中 ${result.items.length} 个 @用户名${added > 0 ? `，本频道新增 ${added}` : ''}（原始 ${result.total}，过滤 ${result.filtered}）`
+            : `[${runtime.phone}] ${label} 采集完成：命中 ${result.items.length}${added > 0 ? `，本群新增 ${added}` : ''}（原始 ${result.total}，过滤 ${result.filtered}）`, runtime.account.id, runtime.phone, label)
         } else {
-          pushLog('running', 'warning', `[${runtime.phone}] ${label} 这轮没采到可用用户（原始 ${result.total}，过滤 ${result.filtered}，原因：${result.message}）`, runtime.account.id, runtime.phone, label)
+          pushLog('running', 'warning', isChannelMentionMode
+            ? `[${runtime.phone}] ${label} 这轮没从帖子正文里扫到可用 @用户名（原始 ${result.total}，过滤 ${result.filtered}，原因：${result.message}）`
+            : `[${runtime.phone}] ${label} 这轮没采到可用用户（原始 ${result.total}，过滤 ${result.filtered}，原因：${result.message}）`, runtime.account.id, runtime.phone, label)
         }
       } catch (error) {
         const waitSeconds = readRiskPauseSeconds(error)
@@ -1955,7 +2079,9 @@ export class DirectMessageService {
 
         failedCount += 1
         processedGroups += 1
-        const actionLabel = label === source.label ? '加入/采集失败' : '采集失败'
+        const actionLabel = isChannelMentionMode
+          ? (label === source.label ? '读取/采集失败' : '采集失败')
+          : (label === source.label ? '加入/采集失败' : '采集失败')
         pushLog('running', 'error', `[${runtime.phone}] ${label} ${actionLabel}（${formatCollectorGroupError(error)}）`, runtime.account.id, runtime.phone, label)
       } finally {
         runtime.active = false
@@ -2014,7 +2140,9 @@ export class DirectMessageService {
     const finalStatus: GroupCollectorTaskStatus = task.cancelled ? 'stopped' : 'completed'
     const finalMessage = task.cancelled
       ? '采集任务已停止。'
-      : `采集完成：成功采集 ${successCount} 个去重用户，失败 ${failedCount} 个群。`
+      : isChannelMentionMode
+        ? `采集完成：成功整理 ${successCount} 个去重 @用户名，失败 ${failedCount} 个频道。`
+        : `采集完成：成功采集 ${successCount} 个去重用户，失败 ${failedCount} 个群。`
     const finalResult = buildResult(finalStatus, finalMessage)
     this.emitGroupCollectorProgress({
       taskId,
