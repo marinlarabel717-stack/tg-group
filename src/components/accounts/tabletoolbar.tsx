@@ -4,10 +4,13 @@ import {
   ChevronDown,
   Download,
   FolderSearch2,
+  Loader2,
   SquareDashedMousePointer,
   Trash2,
   Upload
 } from 'lucide-react'
+import type { ImportProgressPayload } from '../../types'
+import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from './resultdialog'
 
 interface TableToolbarProps {
   selectedCount: number
@@ -20,8 +23,12 @@ interface TableToolbarProps {
   }
   loading: boolean
   busy: boolean
-  onImportFiles: () => void
-  onImportFolder: () => void
+  importProgress: ImportProgressPayload | null
+  importResultOpen: boolean
+  lastActionMessage: string
+  errorMessage: string
+  onImportFiles: () => Promise<void> | void
+  onImportFolder: () => Promise<void> | void
   onExportSelected: () => void
   onDeleteSelected: () => void
   onDeleteAll: () => void
@@ -67,6 +74,10 @@ export const TableToolbar = memo(function TableToolbar({
   deletePresetCounts,
   loading,
   busy,
+  importProgress,
+  importResultOpen,
+  lastActionMessage,
+  errorMessage,
   onImportFiles,
   onImportFolder,
   onExportSelected,
@@ -85,6 +96,8 @@ export const TableToolbar = memo(function TableToolbar({
   const [rangeEnd, setRangeEnd] = useState('20')
   const [rangeMenuOpen, setRangeMenuOpen] = useState(false)
   const [deleteMenuOpen, setDeleteMenuOpen] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importPickerHint, setImportPickerHint] = useState('')
   const deleteMenuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -101,6 +114,20 @@ export const TableToolbar = memo(function TableToolbar({
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [deleteMenuOpen])
 
+  useEffect(() => {
+    if (importResultOpen) {
+      setImportDialogOpen(false)
+      setImportPickerHint('')
+    }
+  }, [importResultOpen])
+
+  useEffect(() => {
+    if (importProgress?.mode === 'import' && importProgress.phase !== 'completed') {
+      setImportDialogOpen(true)
+      setImportPickerHint('')
+    }
+  }, [importProgress])
+
   const handleRangeSelect = () => {
     const start = Number(rangeStart)
     const end = Number(rangeEnd)
@@ -108,11 +135,24 @@ export const TableToolbar = memo(function TableToolbar({
     onSelectRange(start, end)
   }
 
+  const handleImportAction = async (action: () => Promise<void> | void, hint: string) => {
+    setImportDialogOpen(true)
+    setImportPickerHint(hint)
+    await action()
+  }
+
+  const importRunning = importProgress?.mode === 'import' && importProgress.phase !== 'completed'
+  const importPercent = importRunning && importProgress.total > 0
+    ? Math.min((importProgress.current / importProgress.total) * 100, 100)
+    : 0
+
   return (
     <div className="rounded-[14px] bg-card px-5 py-5">
       <div className="flex flex-wrap items-center gap-3">
-        <ActionButton label="导入文件" icon={<Upload size={16} />} onClick={onImportFiles} disabled={blocked} />
-        <ActionButton label="扫描文件夹" icon={<FolderSearch2 size={16} />} onClick={onImportFolder} disabled={blocked} />
+        <ActionButton label="导入账号" icon={<Upload size={16} />} onClick={() => {
+          setImportDialogOpen(true)
+          setImportPickerHint('')
+        }} disabled={blocked} emphasis />
         <ActionButton label="导出所选" icon={<Download size={16} />} onClick={onExportSelected} disabled={blocked || selectedCount === 0} />
 
         <ActionButton label="删除所选" icon={<Trash2 size={16} />} onClick={onDeleteSelected} disabled={blocked || selectedCount === 0} />
@@ -199,6 +239,95 @@ export const TableToolbar = memo(function TableToolbar({
           ) : null}
         </div>
       </div>
+
+      <ResultDialogShell
+        open={importDialogOpen}
+        onClose={() => {
+          if (importRunning) return
+          setImportDialogOpen(false)
+          setImportPickerHint('')
+        }}
+        title="导入账号"
+        subtitle={importRunning ? '导入过程中这里会持续显示实时进度' : '先选导入方式，再开始导入账号'}
+        icon={<Upload size={18} />}
+        tone="violet"
+        maxWidth="max-w-[420px]"
+        closable={!importRunning}
+      >
+        {importRunning && importProgress ? (
+          <>
+            <ResultHero label="当前进度" value={`${importProgress.current} / ${importProgress.total}`} tone="violet" />
+
+            <div className="flex items-center justify-between rounded-[14px] bg-panel px-4 py-3 text-sm">
+              <div className="flex items-center gap-2 text-white">
+                <Loader2 size={16} className="animate-spin text-violet-300" />
+                <span>{importProgress.message || '正在处理...'}</span>
+              </div>
+              <div className="font-medium text-violet-300">{`${importProgress.current} / ${importProgress.total}`}</div>
+            </div>
+
+            <div className="h-2 overflow-hidden rounded-full bg-panel">
+              <div className="h-full rounded-full bg-violet-300 transition-all duration-300" style={{ width: `${importPercent}%` }} />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 text-center text-sm">
+              <ResultStatCard label="已导入" value={importProgress.importedCount} tone="success" />
+              <ResultStatCard label="补 JSON" value={importProgress.generatedJsonCount} tone="violet" />
+              <ResultStatCard label="跳过" value={importProgress.skippedCount} tone="warning" />
+            </div>
+          </>
+        ) : (
+          <>
+            <ResultHero label="导入方式" value="选择后立即开始" tone="violet" />
+
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                type="button"
+                onClick={() => void handleImportAction(onImportFiles, '已打开文件选择窗口，选完后这里会继续显示导入进度。')}
+                disabled={blocked}
+                className="flex h-11 items-center justify-center gap-2 rounded-[12px] bg-violet-400/12 text-sm font-medium text-violet-100 transition hover:bg-violet-400/16 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Upload size={16} />
+                导入文件
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleImportAction(onImportFolder, '已打开文件夹选择窗口，选完后这里会继续显示导入进度。')}
+                disabled={blocked}
+                className="flex h-11 items-center justify-center gap-2 rounded-[12px] bg-panel text-sm font-medium text-white transition hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <FolderSearch2 size={16} />
+                扫描文件夹
+              </button>
+            </div>
+
+            {importPickerHint ? (
+              <div className="rounded-[12px] border border-violet-300/15 bg-violet-300/8 px-4 py-3 text-sm text-violet-100">
+                {importPickerHint}
+              </div>
+            ) : lastActionMessage ? (
+              <div className="rounded-[12px] border border-white/10 bg-panel px-4 py-3 text-sm text-slate-200">
+                {lastActionMessage}
+              </div>
+            ) : null}
+
+            {errorMessage ? (
+              <div className="rounded-[12px] border border-amber-300/15 bg-amber-300/8 px-4 py-3 text-sm text-amber-200">
+                {errorMessage}
+              </div>
+            ) : null}
+
+            <ResultPrimaryButton
+              label="先不导入"
+              onClick={() => {
+                setImportDialogOpen(false)
+                setImportPickerHint('')
+              }}
+              tone="violet"
+            />
+          </>
+        )}
+      </ResultDialogShell>
     </div>
   )
 })

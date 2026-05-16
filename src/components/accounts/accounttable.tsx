@@ -637,6 +637,10 @@ export const AccountTable = memo(function AccountTable() {
   const refresh = useAccountStore((state) => state.refresh)
   const importFiles = useAccountStore((state) => state.importFiles)
   const importFolder = useAccountStore((state) => state.importFolder)
+  const importProgress = useAccountStore((state) => state.importProgress)
+  const importResultOpen = useAccountStore((state) => state.importResultDialog.open)
+  const lastActionMessage = useAccountStore((state) => state.lastActionMessage)
+  const errorMessage = useAccountStore((state) => state.errorMessage)
   const exportSelected = useAccountStore((state) => state.exportSelected)
   const deleteSelected = useAccountStore((state) => state.deleteSelected)
   const deleteAll = useAccountStore((state) => state.deleteAll)
@@ -1690,8 +1694,12 @@ export const AccountTable = memo(function AccountTable() {
         deletePresetCounts={deletePresetCounts}
         loading={tableLoading}
         busy={operationBusy}
-        onImportFiles={() => void importFiles()}
-        onImportFolder={() => void importFolder()}
+        importProgress={importProgress}
+        importResultOpen={importResultOpen}
+        lastActionMessage={lastActionMessage}
+        errorMessage={errorMessage}
+        onImportFiles={() => importFiles()}
+        onImportFolder={() => importFolder()}
         onExportSelected={() => void exportSelected()}
         onDeleteSelected={() => void deleteSelected()}
         onDeleteAll={() => void deleteAll()}

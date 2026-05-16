@@ -32,7 +32,7 @@ export function AccountsView() {
   const lastActionMessage = useAccountStore((state) => state.lastActionMessage)
   const errorMessage = useAccountStore((state) => state.errorMessage)
 
-  const showImportProgressDialog = Boolean(importProgress && importProgress.phase !== 'completed')
+  const showImportProgressDialog = Boolean(importProgress && importProgress.phase !== 'completed' && importProgress.mode !== 'import')
   const showImportResultDialog = importResultDialog.open
   const showExportResultDialog = exportResultDialog.open
   const showDeleteResultDialog = deleteResultDialog.open
