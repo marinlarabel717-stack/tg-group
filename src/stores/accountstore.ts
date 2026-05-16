@@ -180,6 +180,8 @@ function createPendingTransferProgress(mode: 'import' | 'export' | 'delete'): Im
   }
 }
 
+const LARGE_IMPORT_REFRESH_THRESHOLD = 2000
+
 let subscribed = false
 
 interface AccountStoreState {
@@ -443,7 +445,10 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       if (!result) {
         return
       }
-      await syncAccounts(set, get)
+      const shouldDeferRefresh = result.importedCount >= LARGE_IMPORT_REFRESH_THRESHOLD || result.scannedCount >= LARGE_IMPORT_REFRESH_THRESHOLD
+      if (!shouldDeferRefresh) {
+        await syncAccounts(set, get)
+      }
       set({
         importProgress: null,
         importResultDialog: {
@@ -454,7 +459,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           skippedCount: result.skippedCount,
           warning: result.warnings[0] ?? ''
         },
-        lastActionMessage: `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}，自动补 JSON ${result.generatedJsonCount}）`,
+        lastActionMessage: shouldDeferRefresh
+          ? `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}，自动补 JSON ${result.generatedJsonCount}）。为避免大批量数据拖慢界面，这次先不自动刷新账号列表；需要查看新账号时再点刷新。`
+          : `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}，自动补 JSON ${result.generatedJsonCount}）`,
         errorMessage: result.warnings[0] ?? ''
       })
     })
@@ -473,7 +480,10 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       if (!result) {
         return
       }
-      await syncAccounts(set, get)
+      const shouldDeferRefresh = result.importedCount >= LARGE_IMPORT_REFRESH_THRESHOLD || result.scannedCount >= LARGE_IMPORT_REFRESH_THRESHOLD
+      if (!shouldDeferRefresh) {
+        await syncAccounts(set, get)
+      }
       set({
         importProgress: null,
         importResultDialog: {
@@ -484,7 +494,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           skippedCount: result.skippedCount,
           warning: result.warnings[0] ?? ''
         },
-        lastActionMessage: `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}，自动补 JSON ${result.generatedJsonCount}）`,
+        lastActionMessage: shouldDeferRefresh
+          ? `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}，自动补 JSON ${result.generatedJsonCount}）。为避免大批量数据拖慢界面，这次先不自动刷新账号列表；需要查看新账号时再点刷新。`
+          : `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}，自动补 JSON ${result.generatedJsonCount}）`,
         errorMessage: result.warnings[0] ?? ''
       })
     })
@@ -502,7 +514,10 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         }
       }
       if (!result) return
-      await syncAccounts(set, get)
+      const shouldDeferRefresh = result.importedCount >= LARGE_IMPORT_REFRESH_THRESHOLD || result.scannedCount >= LARGE_IMPORT_REFRESH_THRESHOLD
+      if (!shouldDeferRefresh) {
+        await syncAccounts(set, get)
+      }
       set({
         importProgress: null,
         importResultDialog: {
@@ -513,7 +528,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           skippedCount: result.skippedCount,
           warning: result.warnings[0] ?? ''
         },
-        lastActionMessage: `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}）`,
+        lastActionMessage: shouldDeferRefresh
+          ? `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}）。为避免大批量数据拖慢界面，这次先不自动刷新账号列表；需要查看新账号时再点刷新。`
+          : `本次成功导入 ${result.importedCount} 个账号（扫描 ${result.scannedCount}）`,
         errorMessage: result.warnings[0] ?? ''
       })
     })
@@ -804,6 +821,14 @@ export function filterAccounts(accounts: AccountRecord[], filters: {
 
     if (!keyword) return true
 
+    const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name : ''
+    const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name : ''
+    const bio = typeof account.profile?.bio === 'string' ? account.profile.bio : ''
+    const premiumExpiry = account.profile?.premium_expiry == null ? '' : String(account.profile.premium_expiry)
+    const freezeSince = account.profile?.freeze_since_date == null ? '' : String(account.profile.freeze_since_date)
+    const freezeUntil = account.profile?.freeze_until_date == null ? '' : String(account.profile.freeze_until_date)
+    const checkError = typeof account.profile?.check_error === 'string' ? account.profile.check_error : ''
+
     return [
       account.phone,
       account.username,
@@ -813,7 +838,13 @@ export function filterAccounts(accounts: AccountRecord[], filters: {
       account.sessionPath,
       account.jsonPath,
       account.profileSource,
-      JSON.stringify(account.profile ?? {})
+      firstName,
+      lastName,
+      bio,
+      premiumExpiry,
+      freezeSince,
+      freezeUntil,
+      checkError
     ]
       .join(' ')
       .toLowerCase()
