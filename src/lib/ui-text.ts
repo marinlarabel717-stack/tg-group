@@ -13,7 +13,7 @@ export const moduleLabelMap = {
   accounts: '账号管理',
   automation: '定时群发',
   'bot-center': '机器人中心',
-  'auto-join': '自动加群',
+  'auto-join': '极速群发',
   'direct-message': '私信用户',
   'proxy-pool': '代理池',
   'session-manager': '采集用户',

@@ -8,9 +8,9 @@ import { formatAccountStatus } from '../../lib/ui-text'
 import { parseAutoJoinTargets, useAutoJoinStore, type AutoJoinLogEntry, type AutoJoinTabKey, type AutoJoinTaskSnapshot } from '../../stores/autojoinstore'
 
 const tabs: Array<{ key: AutoJoinTabKey; label: string; icon: typeof Play }> = [
-  { key: 'tasks', label: '加群任务', icon: Play },
-  { key: 'logs', label: '加群日志', icon: Clock3 },
-  { key: 'links', label: '群链接整理', icon: Wand2 }
+  { key: 'tasks', label: '极速任务', icon: Play },
+  { key: 'logs', label: '执行日志', icon: Clock3 },
+  { key: 'links', label: '目标整理', icon: Wand2 }
 ]
 
 const SOFT_INPUT_CLASS = 'border border-white/[0.06] bg-black/10 text-white outline-none transition focus:border-white/[0.12] focus:bg-black/12'
@@ -164,9 +164,21 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const init = useAutoJoinStore((state) => state.init)
   const selectedAccountIds = useAutoJoinStore((state) => state.selectedAccountIds)
   const setSelectedAccountIds = useAutoJoinStore((state) => state.setSelectedAccountIds)
+  const mode = useAutoJoinStore((state) => state.mode)
+  const setMode = useAutoJoinStore((state) => state.setMode)
+  const speedPreset = useAutoJoinStore((state) => state.speedPreset)
+  const setSpeedPreset = useAutoJoinStore((state) => state.setSpeedPreset)
   const linkInput = useAutoJoinStore((state) => state.linkInput)
   const setLinkInput = useAutoJoinStore((state) => state.setLinkInput)
   const clearLinkInput = useAutoJoinStore((state) => state.clearLinkInput)
+  const messageText = useAutoJoinStore((state) => state.messageText)
+  const setMessageText = useAutoJoinStore((state) => state.setMessageText)
+  const imageData = useAutoJoinStore((state) => state.imageData)
+  const setImageData = useAutoJoinStore((state) => state.setImageData)
+  const buttonText = useAutoJoinStore((state) => state.buttonText)
+  const setButtonText = useAutoJoinStore((state) => state.setButtonText)
+  const buttonUrl = useAutoJoinStore((state) => state.buttonUrl)
+  const setButtonUrl = useAutoJoinStore((state) => state.setButtonUrl)
   const concurrency = useAutoJoinStore((state) => state.concurrency)
   const setConcurrency = useAutoJoinStore((state) => state.setConcurrency)
   const accountIntervalMin = useAutoJoinStore((state) => state.accountIntervalMin)
@@ -177,6 +189,10 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const joinIntervalMax = useAutoJoinStore((state) => state.joinIntervalMax)
   const setJoinIntervalMin = useAutoJoinStore((state) => state.setJoinIntervalMin)
   const setJoinIntervalMax = useAutoJoinStore((state) => state.setJoinIntervalMax)
+  const sendIntervalMin = useAutoJoinStore((state) => state.sendIntervalMin)
+  const sendIntervalMax = useAutoJoinStore((state) => state.sendIntervalMax)
+  const setSendIntervalMin = useAutoJoinStore((state) => state.setSendIntervalMin)
+  const setSendIntervalMax = useAutoJoinStore((state) => state.setSendIntervalMax)
   const floodRestMin = useAutoJoinStore((state) => state.floodRestMin)
   const floodRestMax = useAutoJoinStore((state) => state.floodRestMax)
   const setFloodRestMin = useAutoJoinStore((state) => state.setFloodRestMin)
@@ -256,6 +272,18 @@ const TasksWorkbench = memo(function TasksWorkbench() {
     event.target.value = ''
   }
 
+  const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const value = typeof reader.result === 'string' ? reader.result : ''
+      setImageData(value)
+    }
+    reader.readAsDataURL(file)
+    event.target.value = ''
+  }
+
   const exportTargetsAsTxt = () => {
     const content = summary.items.map((item) => item.normalized).join('\n')
     if (!content) return
@@ -268,23 +296,15 @@ const TasksWorkbench = memo(function TasksWorkbench() {
     URL.revokeObjectURL(url)
   }
 
+  const needsMessage = mode !== 'join-only'
+
   const applyAccountSelection = () => {
     setSelectedAccountIds(draftAccountIds.filter((accountId) => !getAccountTaskMeta(accountTaskStatusMap, accountId).occupied))
     setAccountPickerOpen(false)
   }
 
   const applySafePreset = () => {
-    setSafeModeEnabled(true)
-    setConcurrency(1)
-    setAccountIntervalMin(20)
-    setAccountIntervalMax(60)
-    setJoinIntervalMin(90)
-    setJoinIntervalMax(180)
-    setFloodRestMin(20)
-    setFloodRestMax(45)
-    setRepeatJoinEnabled(false)
-    setDispatchMode('sequential')
-    setMaxJoinsPerAccount(3)
+    setSpeedPreset('safe')
   }
 
   return (
@@ -294,7 +314,51 @@ const TasksWorkbench = memo(function TasksWorkbench() {
           <GlassPanel className="bg-card">
             <div className="flex flex-wrap gap-2">
               <button type="button" disabled={running || stopping} onClick={applySafePreset} className="rounded-[12px] bg-emerald-400/12 px-4 py-2.5 text-sm text-emerald-300 transition hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60">一键套用防冻结参数</button>
-              <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-textMuted">建议：1 线程、顺序加群、每号最多 3 个</div>
+              <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-textMuted">建议默认用“加完再发 + 稳妥节奏”，更稳。</div>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              {[
+                { key: 'join-only', title: '只加群', desc: '只执行加入，不发送内容' },
+                { key: 'join-and-send', title: '边加边发', desc: '加入成功后立刻发送，节奏更快' },
+                { key: 'join-then-send', title: '加完再发', desc: '先加群再统一发送，推荐' }
+              ].map((item) => {
+                const active = mode === item.key
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    disabled={running || stopping}
+                    onClick={() => setMode(item.key as typeof mode)}
+                    className={`rounded-[16px] border px-4 py-4 text-left transition ${active ? 'border-white/[0.12] bg-violet-400/10 text-white' : 'border-white/[0.06] bg-panel/80 text-slate-200 hover:bg-white/[0.03]'} disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    <div className="text-sm font-semibold">{item.title}</div>
+                    <div className="mt-2 text-xs leading-5 text-textMuted">{item.desc}</div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              {[
+                { key: 'safe', title: '稳妥', desc: '更保守，默认推荐' },
+                { key: 'normal', title: '标准', desc: '兼顾速度和稳定' },
+                { key: 'fast', title: '快速', desc: '更激进，风险更高' }
+              ].map((item) => {
+                const active = speedPreset === item.key
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    disabled={running || stopping}
+                    onClick={() => setSpeedPreset(item.key as typeof speedPreset)}
+                    className={`rounded-[14px] border px-4 py-3 text-left transition ${active ? 'border-white/[0.12] bg-white/[0.06] text-white' : 'border-white/[0.06] bg-panel/60 text-slate-200 hover:bg-white/[0.03]'} disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    <div className="text-sm font-medium">{item.title}</div>
+                    <div className="mt-1 text-xs text-textMuted">{item.desc}</div>
+                  </button>
+                )
+              })}
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -304,12 +368,23 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 <div className="mt-1 text-xs text-textMuted">{occupiedSelectedAccounts.length > 0 ? `有 ${occupiedSelectedAccounts.length} 个账号正在忙，先别拿来加群。` : '点这里选择账号'}</div>
               </button>
 
-              <NumberRangeField label="每号间隔" minValue={accountIntervalMin} maxValue={accountIntervalMax} onMinChange={setAccountIntervalMin} onMaxChange={setAccountIntervalMax} min={0} max={600} />
-              <NumberRangeField label="加群间隔" minValue={joinIntervalMin} maxValue={joinIntervalMax} onMinChange={setJoinIntervalMin} onMaxChange={setJoinIntervalMax} min={0} max={600} />
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">线程数</div>
-                <input type="number" min={1} max={Math.max(1, selectedAccountIds.length || 1)} value={concurrency} onChange={(event) => setConcurrency(Math.max(1, Number(event.target.value) || 1))} className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-              </label>
+              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+                <div className="text-xs tracking-[0.18em] text-textMuted">执行模式</div>
+                <div className="mt-2 text-lg font-semibold text-white">{mode === 'join-only' ? '只加群' : mode === 'join-and-send' ? '边加边发' : '加完再发'}</div>
+                <div className="mt-1 text-xs text-textMuted">{needsMessage ? '本轮会附带发送内容' : '本轮不会发送任何内容'}</div>
+              </div>
+
+              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+                <div className="text-xs tracking-[0.18em] text-textMuted">执行节奏</div>
+                <div className="mt-2 text-lg font-semibold text-white">{speedPreset === 'safe' ? '稳妥' : speedPreset === 'normal' ? '标准' : '快速'}</div>
+                <div className="mt-1 text-xs text-textMuted">{safeModeEnabled ? '当前防冻结保护已开启' : '当前偏速度优先'}</div>
+              </div>
+
+              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+                <div className="text-xs tracking-[0.18em] text-textMuted">每号上限</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{maxJoinsPerAccount}</div>
+                <div className="mt-1 text-xs text-textMuted">建议 2-3 个，减少风控概率</div>
+              </div>
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_220px_220px]">
@@ -342,7 +417,74 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 </div>
               </div>
             </div>
+
+            <details className="mt-4 rounded-[16px] bg-panel/60 px-4 py-4 text-sm text-slate-200">
+              <summary className="cursor-pointer list-none font-medium text-white">高级设置</summary>
+              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <NumberRangeField label="每号间隔" minValue={accountIntervalMin} maxValue={accountIntervalMax} onMinChange={setAccountIntervalMin} onMaxChange={setAccountIntervalMax} min={0} max={600} />
+                <NumberRangeField label="加群间隔" minValue={joinIntervalMin} maxValue={joinIntervalMax} onMinChange={setJoinIntervalMin} onMaxChange={setJoinIntervalMax} min={0} max={600} />
+                {needsMessage ? <NumberRangeField label="发送间隔" minValue={sendIntervalMin} maxValue={sendIntervalMax} onMinChange={setSendIntervalMin} onMaxChange={setSendIntervalMax} min={0} max={600} /> : null}
+                <label className="rounded-[16px] bg-black/10 px-4 py-4 text-sm">
+                  <div className="text-xs tracking-[0.18em] text-textMuted">线程数</div>
+                  <input type="number" min={1} max={Math.max(1, selectedAccountIds.length || 1)} value={concurrency} onChange={(event) => setConcurrency(Math.max(1, Number(event.target.value) || 1))} className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                </label>
+              </div>
+            </details>
           </GlassPanel>
+
+          {needsMessage ? (
+            <GlassPanel className="bg-card">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-base font-semibold text-white">发送内容</div>
+                  <div className="mt-1 text-sm text-textMuted">支持文字、本地图片和一个跳转按钮。</div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+                <div className="space-y-4">
+                  <label className="block text-sm">
+                    <div className="mb-2 text-textMuted">发送文案</div>
+                    <textarea
+                      rows={8}
+                      value={messageText}
+                      onChange={(event) => setMessageText(event.target.value)}
+                      placeholder="输入要发送的文字内容…"
+                      className={`w-full rounded-[16px] px-4 py-4 ${SOFT_PANEL_INPUT_CLASS}`}
+                    />
+                  </label>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block text-sm">
+                      <div className="mb-2 text-textMuted">按钮文字</div>
+                      <input value={buttonText} onChange={(event) => setButtonText(event.target.value)} placeholder="比如：立即查看" className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                    </label>
+                    <label className="block text-sm">
+                      <div className="mb-2 text-textMuted">按钮链接</div>
+                      <input value={buttonUrl} onChange={(event) => setButtonUrl(event.target.value)} placeholder="https://..." className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">
+                      <Upload size={14} /> 上传图片
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                    </label>
+                    {imageData ? <button type="button" onClick={() => setImageData('')} className="rounded-[12px] bg-rose-400/12 px-3 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18">删除图片</button> : null}
+                  </div>
+                </div>
+
+                <div className="rounded-[18px] bg-panel/80 p-4">
+                  <div className="text-sm font-medium text-white">发送预览</div>
+                  <div className="mt-3 space-y-3 rounded-[16px] bg-black/10 p-4 text-sm text-slate-200">
+                    {imageData ? <img src={imageData} alt="发送预览" className="max-h-[220px] w-full rounded-[12px] object-cover" /> : <div className="rounded-[12px] border border-dashed border-white/[0.08] px-4 py-8 text-center text-textMuted">还没上传图片</div>}
+                    <div className="whitespace-pre-wrap break-words">{messageText.trim() || '这里会显示发送文案。'}</div>
+                    {buttonUrl.trim() ? <div className="inline-flex rounded-[12px] bg-violet-400/12 px-3 py-2 text-violet-200">{buttonText.trim() || '立即查看'}</div> : null}
+                  </div>
+                </div>
+              </div>
+            </GlassPanel>
+          ) : null}
 
           <GlassPanel className="bg-card">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -384,7 +526,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
           <GlassPanel className="bg-card sticky top-4">
             <div className="text-base font-semibold text-white">任务操作</div>
             <div className="mt-3 space-y-3">
-              <button type="button" disabled={running || !runtimeReady || occupiedSelectedAccounts.length > 0} onClick={() => void startTask()} className="w-full rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{running ? '执行中' : '开始加群'}</button>
+              <button type="button" disabled={running || !runtimeReady || occupiedSelectedAccounts.length > 0} onClick={() => void startTask()} className="w-full rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{running ? '执行中' : '开始极速群发'}</button>
               <button type="button" disabled={!running || stopping} onClick={() => void stopTask()} className="w-full rounded-[12px] bg-rose-400/12 px-4 py-3 text-sm font-medium text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50">{stopping ? '已停止' : '停止任务'}</button>
             </div>
             <div className="mt-4 rounded-[14px] bg-white/[0.04] px-4 py-3 text-sm text-textMuted">{lastActionMessage || '点击开始后会自动跳到日志页。'}</div>
@@ -513,19 +655,19 @@ const LogsWorkbench = memo(function LogsWorkbench() {
     : 0
   const [accountSummaryExpanded, setAccountSummaryExpanded] = useState(false)
   const statusTitle = stopping
-    ? '本次加群已停止'
+    ? '本次任务已停止'
     : latestTask
       ? latestTask.status === 'running'
-        ? '本次加群进行中'
+        ? '本次任务进行中'
         : latestTask.status === 'stopped'
-          ? '本次加群已停止'
-          : '本次加群已完成'
-      : '本次加群总计'
+          ? '本次任务已停止'
+          : '本次任务已完成'
+      : '本次任务总计'
 
   return (
     <GlassPanel className="bg-card">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-base font-semibold text-white">加群日志</div>
+        <div className="text-base font-semibold text-white">执行日志</div>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -541,11 +683,11 @@ const LogsWorkbench = memo(function LogsWorkbench() {
 
       <div className="mt-4 rounded-[16px] bg-panel/70 px-4 py-4">
         <div className="text-sm font-semibold text-white">{statusTitle}</div>
-        <div className="mt-2 text-sm text-textMuted">{lastActionMessage || '这里会显示自动加群过程里的最新状态。'}</div>
+        <div className="mt-2 text-sm text-textMuted">{lastActionMessage || '这里会显示极速群发过程里的最新状态。'}</div>
 
         {latestTask ? (
           <>
-            <div className="mt-3 grid gap-3 md:grid-cols-5">
+            <div className="mt-3 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
               <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
                 <div className="text-xs tracking-[0.16em] text-emerald-200/80">成功</div>
                 <div className="mt-2 text-2xl font-semibold text-emerald-300">{latestTask.successCount ?? 0}</div>
@@ -565,6 +707,18 @@ const LogsWorkbench = memo(function LogsWorkbench() {
               <div className="rounded-[14px] bg-sky-400/8 px-4 py-3">
                 <div className="text-xs tracking-[0.16em] text-sky-200/80">待加入</div>
                 <div className="mt-2 text-2xl font-semibold text-sky-300">{pendingCount}</div>
+              </div>
+              <div className="rounded-[14px] bg-cyan-400/8 px-4 py-3">
+                <div className="text-xs tracking-[0.16em] text-cyan-200/80">发送成功</div>
+                <div className="mt-2 text-2xl font-semibold text-cyan-200">{latestTask.sendSuccessCount ?? 0}</div>
+              </div>
+              <div className="rounded-[14px] bg-amber-300/8 px-4 py-3">
+                <div className="text-xs tracking-[0.16em] text-amber-100/80">跳过发送</div>
+                <div className="mt-2 text-2xl font-semibold text-amber-100">{latestTask.sendSkippedCount ?? 0}</div>
+              </div>
+              <div className="rounded-[14px] bg-rose-300/8 px-4 py-3">
+                <div className="text-xs tracking-[0.16em] text-rose-100/80">发送失败</div>
+                <div className="mt-2 text-2xl font-semibold text-rose-100">{latestTask.sendFailedCount ?? 0}</div>
               </div>
             </div>
 
@@ -604,7 +758,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
       </div>
 
       <div className="mt-4 space-y-2 font-mono text-sm select-text">
-        {logs.length === 0 ? <div className="text-sm text-textMuted">还没有加群日志。</div> : null}
+        {logs.length === 0 ? <div className="text-sm text-textMuted">还没有执行日志。</div> : null}
         {logs.map((log) => (
           <div key={log.id} className={`${getLogTone(log)} break-all cursor-text select-text`}>
             [{formatLogTime(log.createdAt)}] [{log.accountLabel || '系统'}] - {log.message}
@@ -691,8 +845,8 @@ export default function AutoJoinView() {
       <ResultDialogShell
         open={Boolean(completionSnapshot)}
         onClose={closeCompletionDialog}
-        title={completionStopped ? '自动加群任务已停止' : '自动加群任务完成'}
-        subtitle={completionSnapshot?.message || (completionStopped ? '这轮加群已经停止。' : '这轮加群已经跑完了。')}
+        title={completionStopped ? '极速群发任务已停止' : '极速群发任务完成'}
+        subtitle={completionSnapshot?.message || (completionStopped ? '这轮任务已经停止。' : '这轮任务已经跑完了。')}
         icon={<CheckCircle2 size={18} />}
         tone={completionStopped ? 'warning' : 'success'}
         maxWidth="max-w-[560px]"
@@ -704,6 +858,12 @@ export default function AutoJoinView() {
           <ResultStatCard label="审核" value={completionSnapshot?.requestedCount || 0} tone="warning" />
           <ResultStatCard label="失败" value={completionSnapshot?.failedCount || 0} tone="danger" />
           <ResultStatCard label="已在群" value={completionSnapshot?.alreadyCount || 0} tone="violet" />
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <ResultStatCard label="发送成功" value={completionSnapshot?.sendSuccessCount || 0} tone="success" />
+          <ResultStatCard label="跳过发送" value={completionSnapshot?.sendSkippedCount || 0} tone="warning" />
+          <ResultStatCard label="发送失败" value={completionSnapshot?.sendFailedCount || 0} tone="danger" />
         </div>
 
         <ResultPrimaryButton label="知道了" onClick={closeCompletionDialog} tone={completionStopped ? 'warning' : 'success'} />

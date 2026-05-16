@@ -928,11 +928,15 @@ export interface AutoJoinPayload {
   taskId: string
   accountIds: number[]
   items: AutoJoinPayloadItem[]
+  mode: 'join-only' | 'join-and-send' | 'join-then-send'
+  speedPreset: 'safe' | 'normal' | 'fast'
   concurrency: number
   accountIntervalMin: number
   accountIntervalMax: number
   joinIntervalMin: number
   joinIntervalMax: number
+  sendIntervalMin: number
+  sendIntervalMax: number
   floodRestMin: number
   floodRestMax: number
   retryLimit: number
@@ -941,6 +945,10 @@ export interface AutoJoinPayload {
   dispatchMode: 'random' | 'sequential'
   safeModeEnabled: boolean
   maxJoinsPerAccount: number
+  messageText: string
+  imageData: string
+  buttonText: string
+  buttonUrl: string
 }
 
 export interface AutoJoinResultItem {
@@ -953,6 +961,9 @@ export interface AutoJoinResultItem {
   accountLabel: string
   groupTitle: string
   joinedAt: string | null
+  sendStatus?: 'sent' | 'skipped' | 'failed'
+  sendErrorMessage?: string
+  sentAt?: string | null
   attempt: number
 }
 
@@ -963,6 +974,9 @@ export interface AutoJoinTaskResult {
   alreadyCount: number
   requestedCount: number
   failedCount: number
+  sendSuccessCount: number
+  sendSkippedCount: number
+  sendFailedCount: number
   items: AutoJoinResultItem[]
   message: string
   stopped?: boolean
@@ -981,6 +995,9 @@ export interface AutoJoinProgress {
   alreadyCount: number
   requestedCount: number
   failedCount: number
+  sendSuccessCount: number
+  sendSkippedCount: number
+  sendFailedCount: number
   running: boolean
   item?: AutoJoinResultItem | null
   message: string

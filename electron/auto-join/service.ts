@@ -1,5 +1,6 @@
 import { Api } from 'telegram'
 import type { TelegramClient } from 'telegram'
+import { CustomFile } from 'telegram/client/uploads'
 import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
@@ -19,6 +20,12 @@ interface ActiveAutoJoinTask {
 
 interface PendingJoinItem extends AutoJoinPayloadItem {
   attempts: number
+}
+
+interface JoinExecutionResult {
+  status: 'joined' | 'already' | 'requested'
+  groupTitle: string
+  entity?: unknown
 }
 
 function wakeTaskWaiters(task: ActiveAutoJoinTask) {
@@ -60,6 +67,34 @@ function randomInt(min: number, max: number) {
 
 function pickDelayMs(minSeconds: number, maxSeconds: number) {
   return randomInt(minSeconds, maxSeconds) * 1000
+}
+
+function slugifyFileName(input: string) {
+  const value = input.trim().replace(/[^\p{L}\p{N}._-]+/gu, '_').replace(/^_+|_+$/g, '')
+  return value || 'fast_broadcast_image'
+}
+
+function inferImageExtension(mimeType: string) {
+  if (mimeType.includes('png')) return 'png'
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg'
+  if (mimeType.includes('webp')) return 'webp'
+  if (mimeType.includes('gif')) return 'gif'
+  return 'bin'
+}
+
+function resolveMediaFile(imageData: string, title: string) {
+  const value = imageData.trim()
+  if (!value) return undefined
+  if (value.startsWith('data:')) {
+    const matched = value.match(/^data:([^;,]+)?(;base64)?,(.*)$/s)
+    if (!matched) throw new Error('图片 Data URL 格式不正确')
+    const mimeType = matched[1] || 'application/octet-stream'
+    const encoded = matched[3] || ''
+    const buffer = matched[2] ? Buffer.from(encoded, 'base64') : Buffer.from(decodeURIComponent(encoded), 'utf8')
+    const extension = inferImageExtension(mimeType)
+    return new CustomFile(`${slugifyFileName(title)}.${extension}`, buffer.length, '', buffer)
+  }
+  return value
 }
 
 function toClientProxy(proxy: AccountCheckProxy | null): AccountClientProxyOptions | null {
@@ -260,6 +295,8 @@ function applySafeModeLimits(payload: AutoJoinPayload) {
       accountIntervalMax: payload.accountIntervalMax,
       joinIntervalMin: payload.joinIntervalMin,
       joinIntervalMax: payload.joinIntervalMax,
+      sendIntervalMin: payload.sendIntervalMin,
+      sendIntervalMax: payload.sendIntervalMax,
       floodRestMin: payload.floodRestMin,
       floodRestMax: payload.floodRestMax,
       maxJoinsPerAccount: payload.maxJoinsPerAccount
@@ -272,6 +309,8 @@ function applySafeModeLimits(payload: AutoJoinPayload) {
     accountIntervalMax: Math.max(Math.max(20, payload.accountIntervalMin), Math.max(60, payload.accountIntervalMax)),
     joinIntervalMin: Math.max(90, payload.joinIntervalMin),
     joinIntervalMax: Math.max(Math.max(90, payload.joinIntervalMin), Math.max(180, payload.joinIntervalMax)),
+    sendIntervalMin: Math.max(25, payload.sendIntervalMin),
+    sendIntervalMax: Math.max(Math.max(25, payload.sendIntervalMin), Math.max(60, payload.sendIntervalMax)),
     floodRestMin: Math.max(20, payload.floodRestMin),
     floodRestMax: Math.max(Math.max(20, payload.floodRestMin), Math.max(45, payload.floodRestMax)),
     maxJoinsPerAccount: Math.max(1, Math.min(20, payload.maxJoinsPerAccount || 3))
@@ -355,7 +394,7 @@ async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: Ses
   return client
 }
 
-async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadItem) {
+async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadItem): Promise<JoinExecutionResult> {
   const parsed = parseJoinTarget(item)
   if (parsed.kind === 'invite') {
     try {
@@ -366,14 +405,22 @@ async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadIte
           ? (result as unknown as { CLASS_NAME: string }).CLASS_NAME
           : ''
       if (/ChatInviteAlready/i.test(resultName)) {
+        const inviteEntity = Array.isArray((result as { chats?: unknown[] } | null)?.chats)
+          ? (result as { chats: unknown[] }).chats[0]
+          : undefined
         return {
           status: 'already' as const,
-          groupTitle: readGroupTitle(result, item.normalized)
+          groupTitle: readGroupTitle(result, item.normalized),
+          entity: inviteEntity
         }
       }
+      const inviteEntity = Array.isArray((result as { chats?: unknown[] } | null)?.chats)
+        ? (result as { chats: unknown[] }).chats[0]
+        : undefined
       return {
         status: 'joined' as const,
-        groupTitle: readGroupTitle(result, item.normalized)
+        groupTitle: readGroupTitle(result, item.normalized),
+        entity: inviteEntity
       }
     } catch (error) {
       if (isJoinRequestSent(error)) {
@@ -384,9 +431,11 @@ async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadIte
       }
       if (/USER_ALREADY_PARTICIPANT/i.test(error instanceof Error ? error.message : String(error))) {
         const invite = await client.invoke(new Api.messages.CheckChatInvite({ hash: parsed.value }))
+        const inviteEntity = 'chat' in (invite as object) ? (invite as { chat?: unknown }).chat : undefined
         return {
           status: 'already' as const,
-          groupTitle: readGroupTitle(invite, item.normalized)
+          groupTitle: readGroupTitle(invite, item.normalized),
+          entity: inviteEntity
         }
       }
       throw error
@@ -397,7 +446,8 @@ async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadIte
   if (await isAlreadyInChannel(client, entity)) {
     return {
       status: 'already' as const,
-      groupTitle: readGroupTitle(entity, item.normalized)
+      groupTitle: readGroupTitle(entity, item.normalized),
+      entity
     }
   }
 
@@ -405,7 +455,8 @@ async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadIte
     await client.invoke(new Api.channels.JoinChannel({ channel: entity as never }))
     return {
       status: 'joined' as const,
-      groupTitle: readGroupTitle(entity, item.normalized)
+      groupTitle: readGroupTitle(entity, item.normalized),
+      entity
     }
   } catch (error) {
     if (isJoinRequestSent(error)) {
@@ -417,11 +468,54 @@ async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadIte
     if (/USER_ALREADY_PARTICIPANT/i.test(error instanceof Error ? error.message : String(error))) {
       return {
         status: 'already' as const,
-        groupTitle: readGroupTitle(entity, item.normalized)
+        groupTitle: readGroupTitle(entity, item.normalized),
+        entity
       }
     }
     throw error
   }
+}
+
+async function resolveSendEntity(client: TelegramClient, item: AutoJoinPayloadItem, joinedEntity?: unknown) {
+  if (joinedEntity) return joinedEntity
+  const parsed = parseJoinTarget(item)
+  if (parsed.kind === 'invite') {
+    const invite = await client.invoke(new Api.messages.CheckChatInvite({ hash: parsed.value }))
+    if ('chat' in (invite as object) && (invite as { chat?: unknown }).chat) {
+      return (invite as { chat: unknown }).chat
+    }
+    throw new Error('CHANNEL_INVALID')
+  }
+  return await resolveJoinEntity(client, parsed.value)
+}
+
+async function sendContentToJoinedTarget(client: TelegramClient, entity: unknown, payload: AutoJoinPayload, targetTitle: string) {
+  const messageText = payload.messageText.trim()
+  const buttonText = payload.buttonText.trim()
+  const buttonUrl = payload.buttonUrl.trim()
+  const media = payload.imageData.trim() ? resolveMediaFile(payload.imageData, targetTitle || 'fast_broadcast') : undefined
+  const replyMarkup = buttonUrl
+    ? new Api.ReplyInlineMarkup({
+        rows: [
+          new Api.KeyboardButtonRow({
+            buttons: [
+              new Api.KeyboardButtonUrl({
+                text: buttonText || '立即查看',
+                url: buttonUrl
+              })
+            ]
+          })
+        ]
+      })
+    : undefined
+
+  await (((client as TelegramClient) as TelegramClient & {
+    sendMessage: (peer: unknown, options: Record<string, unknown>) => Promise<unknown>
+  }).sendMessage(entity as never, {
+    message: messageText || undefined,
+    file: media,
+    replyMarkup
+  }))
 }
 
 export class AutoJoinService {
@@ -502,6 +596,9 @@ export class AutoJoinService {
         alreadyCount: 0,
         requestedCount: 0,
         failedCount: 0,
+        sendSuccessCount: 0,
+        sendSkippedCount: 0,
+        sendFailedCount: 0,
         items: [],
         message: '没有可执行的加群目标。'
       }
@@ -517,7 +614,9 @@ export class AutoJoinService {
     }
     this.activeTask = task
     const useTelethonPrimary = this.telethonAutoJoiner.isAvailable()
+    const needsMessage = payload.mode !== 'join-only'
     const results: AutoJoinResultItem[] = []
+    const accountById = new Map(accounts.map((item) => [item.id, item]))
     const accountLabelById = new Map(accounts.map((item) => [item.id, readAccountLogLabel(item)]))
     const sharedQueue = payload.repeatJoinEnabled ? null : createPendingItems(payload.items, payload.dispatchMode)
     const perAccountQueue = new Map<number, PendingJoinItem[]>()
@@ -534,6 +633,9 @@ export class AutoJoinService {
     let alreadyCount = 0
     let requestedCount = 0
     let failedCount = 0
+    let sendSuccessCount = 0
+    let sendSkippedCount = 0
+    let sendFailedCount = 0
 
     const emit = (message: string, item?: AutoJoinResultItem | null, waitSeconds?: number | null, running = true) => {
       onProgress?.({
@@ -544,6 +646,9 @@ export class AutoJoinService {
         alreadyCount,
         requestedCount,
         failedCount,
+        sendSuccessCount,
+        sendSkippedCount,
+        sendFailedCount,
         running,
         item,
         message,
@@ -565,6 +670,16 @@ export class AutoJoinService {
         accountJoinCounts.set(item.accountId ?? -1, (accountJoinCounts.get(item.accountId ?? -1) ?? 0) + 1)
       } else failedCount += 1
       emit(item.errorMessage || '自动加群进度已更新。', item, null, true)
+    }
+
+    const finalizeSendState = (item: AutoJoinResultItem, status: 'sent' | 'skipped' | 'failed', message: string) => {
+      item.sendStatus = status
+      item.sendErrorMessage = message
+      item.sentAt = new Date().toISOString()
+      if (status === 'sent') sendSuccessCount += 1
+      else if (status === 'skipped') sendSkippedCount += 1
+      else sendFailedCount += 1
+      emit(message, item, null, true)
     }
 
     const takeNextItem = (accountId: number) => {
@@ -644,7 +759,7 @@ export class AutoJoinService {
             return
           }
 
-          if (!useTelethonPrimary) {
+          if (!useTelethonPrimary || needsMessage) {
             client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
             clients.set(account.id, client)
           }
@@ -713,7 +828,7 @@ export class AutoJoinService {
               return
             }
 
-            finalizeResult({
+            const resultItem: AutoJoinResultItem = {
               itemId: next.id,
               raw: next.raw,
               normalized: next.normalized,
@@ -729,14 +844,33 @@ export class AutoJoinService {
               groupTitle: joined.groupTitle,
               joinedAt: new Date().toISOString(),
               attempt
-            })
+            }
+
+            finalizeResult(resultItem)
+
+            if (needsMessage) {
+              if (payload.mode === 'join-and-send' && joined.status !== 'requested') {
+                try {
+                  const sendEntity = await resolveSendEntity(client as TelegramClient, next, 'entity' in joined ? joined.entity : undefined)
+                  await sendContentToJoinedTarget(client as TelegramClient, sendEntity, payload, joined.groupTitle || next.normalized)
+                  finalizeSendState(resultItem, 'sent', `${accountLabel} 已向 ${joined.groupTitle || next.normalized} 发送内容。`)
+                } catch (sendError) {
+                  finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}`)
+                }
+              } else if (payload.mode === 'join-and-send') {
+                finalizeSendState(resultItem, 'skipped', '当前群还在审核中，这次先不发送。')
+              }
+            }
 
             if (shouldWaitAfterAttempt(account.id)) {
               const baseDelay = pickDelayMs(safeModeLimits.accountIntervalMin, safeModeLimits.accountIntervalMax)
               const joinDelay = pickDelayMs(safeModeLimits.joinIntervalMin, safeModeLimits.joinIntervalMax)
-              const totalWaitSeconds = Math.max(1, Math.ceil((baseDelay + joinDelay) / 1000))
+              const sendDelay = needsMessage && payload.mode === 'join-and-send'
+                ? pickDelayMs(safeModeLimits.sendIntervalMin, safeModeLimits.sendIntervalMax)
+                : 0
+              const totalWaitSeconds = Math.max(1, Math.ceil((baseDelay + joinDelay + sendDelay) / 1000))
               emit(`${accountLabel} 等待 ${totalWaitSeconds} 秒后，继续加入下一个。`, null, totalWaitSeconds, true)
-              await sleepForTask(task, baseDelay + joinDelay)
+              await sleepForTask(task, baseDelay + joinDelay + sendDelay)
             }
           } catch (error) {
             if (task.cancelled) {
@@ -887,9 +1021,64 @@ export class AutoJoinService {
         }
       }
 
+      if (!task.cancelled && needsMessage && payload.mode === 'join-then-send') {
+        const sendCandidates = results.filter((item) => (item.status === 'joined' || item.status === 'already') && typeof item.accountId === 'number')
+        if (sendCandidates.length > 0) {
+          emit(`加群阶段已完成，开始发送内容（共 ${sendCandidates.length} 个群）。`, null, null, true)
+        }
+
+        for (const item of sendCandidates) {
+          if (task.cancelled) break
+          const accountId = item.accountId
+          if (typeof accountId !== 'number') {
+            finalizeSendState(item, 'skipped', '没有拿到发送账号，这条先跳过。')
+            continue
+          }
+
+          let client = clients.get(accountId) ?? null
+          if (!client) {
+            const account = accountById.get(accountId)
+            if (!account) {
+              finalizeSendState(item, 'skipped', '没找到对应账号，这条先跳过。')
+              continue
+            }
+            try {
+              client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+              clients.set(accountId, client)
+            } catch (error) {
+              finalizeSendState(item, 'failed', `发送前账号登录失效：${formatAutoJoinError(error)}`)
+              continue
+            }
+          }
+
+          try {
+            const sourceItem: AutoJoinPayloadItem = {
+              id: item.itemId,
+              raw: item.raw,
+              normalized: item.normalized,
+              kind: item.normalized.startsWith('https://t.me/+') ? 'invite' : 'username'
+            }
+            const entity = await resolveSendEntity(client, sourceItem)
+            await sendContentToJoinedTarget(client, entity, payload, item.groupTitle || item.normalized)
+            finalizeSendState(item, 'sent', `${item.accountLabel || '当前账号'} 已向 ${item.groupTitle || item.normalized} 发送内容。`)
+          } catch (error) {
+            finalizeSendState(item, 'failed', `发送失败：${formatAutoJoinError(error)}`)
+          }
+
+          if (!task.cancelled && sendCandidates.indexOf(item) < sendCandidates.length - 1) {
+            const waitMs = pickDelayMs(safeModeLimits.sendIntervalMin, safeModeLimits.sendIntervalMax)
+            const waitSeconds = Math.max(1, Math.ceil(waitMs / 1000))
+            emit(`${item.accountLabel || '当前账号'} 等待 ${waitSeconds} 秒后继续发送下一个。`, null, waitSeconds, true)
+            await sleepForTask(task, waitMs)
+          }
+        }
+      }
+
       const message = task.cancelled
-        ? `自动加群已停止，已执行 ${completed} 条。`
-        : `自动加群完成：成功 ${successCount}，已在群里 ${alreadyCount}，待审核 ${requestedCount}，失败 ${failedCount}。`
+        ? `极速群发已停止，已执行 ${completed} 条。`
+        : needsMessage
+          ? `极速群发完成：加群成功 ${successCount}，已在群里 ${alreadyCount}，待审核 ${requestedCount}，失败 ${failedCount}；发送成功 ${sendSuccessCount}，跳过 ${sendSkippedCount}，发送失败 ${sendFailedCount}。`
+          : `极速群发完成：成功 ${successCount}，已在群里 ${alreadyCount}，待审核 ${requestedCount}，失败 ${failedCount}。`
 
       emit(message, null, null, false)
       return {
@@ -899,6 +1088,9 @@ export class AutoJoinService {
         alreadyCount,
         requestedCount,
         failedCount,
+        sendSuccessCount,
+        sendSkippedCount,
+        sendFailedCount,
         items: results,
         message,
         stopped: task.cancelled

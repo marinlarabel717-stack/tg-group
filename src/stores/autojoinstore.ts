@@ -22,6 +22,9 @@ export interface AutoJoinTaskRecord {
   alreadyCount: number
   requestedCount: number
   failedCount: number
+  sendSuccessCount: number
+  sendSkippedCount: number
+  sendFailedCount: number
   startedAt: string | null
   finishedAt: string | null
   lastMessage: string
@@ -48,6 +51,9 @@ export interface AutoJoinTaskSnapshot {
   alreadyCount: number
   requestedCount: number
   failedCount: number
+  sendSuccessCount: number
+  sendSkippedCount: number
+  sendFailedCount: number
   items: AutoJoinResultItem[]
   finishedAt: string
   message: string
@@ -58,12 +64,20 @@ interface AutoJoinState {
   activeTab: AutoJoinTabKey
   selectedAccountIds: number[]
   taskName: string
+  mode: 'join-only' | 'join-and-send' | 'join-then-send'
+  speedPreset: 'safe' | 'normal' | 'fast'
   linkInput: string
+  messageText: string
+  imageData: string
+  buttonText: string
+  buttonUrl: string
   concurrency: number
   accountIntervalMin: number
   accountIntervalMax: number
   joinIntervalMin: number
   joinIntervalMax: number
+  sendIntervalMin: number
+  sendIntervalMax: number
   floodRestMin: number
   floodRestMax: number
   retryLimit: number
@@ -84,12 +98,20 @@ interface AutoJoinState {
   setActiveTab: (tab: AutoJoinTabKey) => void
   setSelectedAccountIds: (ids: number[]) => void
   setTaskName: (value: string) => void
+  setMode: (value: 'join-only' | 'join-and-send' | 'join-then-send') => void
+  setSpeedPreset: (value: 'safe' | 'normal' | 'fast') => void
   setLinkInput: (value: string) => void
+  setMessageText: (value: string) => void
+  setImageData: (value: string) => void
+  setButtonText: (value: string) => void
+  setButtonUrl: (value: string) => void
   setConcurrency: (value: number) => void
   setAccountIntervalMin: (value: number) => void
   setAccountIntervalMax: (value: number) => void
   setJoinIntervalMin: (value: number) => void
   setJoinIntervalMax: (value: number) => void
+  setSendIntervalMin: (value: number) => void
+  setSendIntervalMax: (value: number) => void
   setFloodRestMin: (value: number) => void
   setFloodRestMax: (value: number) => void
   setRetryLimit: (value: number) => void
@@ -106,6 +128,63 @@ interface AutoJoinState {
 }
 
 let subscribed = false
+
+function readSpeedPresetConfig(preset: 'safe' | 'normal' | 'fast') {
+  if (preset === 'fast') {
+    return {
+      concurrency: 2,
+      accountIntervalMin: 10,
+      accountIntervalMax: 25,
+      joinIntervalMin: 45,
+      joinIntervalMax: 90,
+      sendIntervalMin: 12,
+      sendIntervalMax: 25,
+      floodRestMin: 12,
+      floodRestMax: 25,
+      retryLimit: 1,
+      dispatchMode: 'random' as const,
+      repeatJoinEnabled: false,
+      maxJoinsPerAccount: 5,
+      safeModeEnabled: false
+    }
+  }
+
+  if (preset === 'normal') {
+    return {
+      concurrency: 1,
+      accountIntervalMin: 15,
+      accountIntervalMax: 35,
+      joinIntervalMin: 60,
+      joinIntervalMax: 120,
+      sendIntervalMin: 18,
+      sendIntervalMax: 35,
+      floodRestMin: 15,
+      floodRestMax: 35,
+      retryLimit: 1,
+      dispatchMode: 'sequential' as const,
+      repeatJoinEnabled: false,
+      maxJoinsPerAccount: 4,
+      safeModeEnabled: true
+    }
+  }
+
+  return {
+    concurrency: 1,
+    accountIntervalMin: 20,
+    accountIntervalMax: 60,
+    joinIntervalMin: 90,
+    joinIntervalMax: 180,
+    sendIntervalMin: 25,
+    sendIntervalMax: 60,
+    floodRestMin: 20,
+    floodRestMax: 45,
+    retryLimit: 1,
+    dispatchMode: 'sequential' as const,
+    repeatJoinEnabled: false,
+    maxJoinsPerAccount: 3,
+    safeModeEnabled: true
+  }
+}
 
 function createId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
@@ -183,9 +262,12 @@ function createTaskRecord(input: { id: string; name: string; total: number }): A
     alreadyCount: 0,
     requestedCount: 0,
     failedCount: 0,
+    sendSuccessCount: 0,
+    sendSkippedCount: 0,
+    sendFailedCount: 0,
     startedAt: new Date().toISOString(),
     finishedAt: null,
-    lastMessage: '自动加群任务已启动。'
+    lastMessage: '极速群发任务已启动。'
   }
 }
 
@@ -243,6 +325,9 @@ function collectRemovableTargets(
 
 function formatLogMessage(item: AutoJoinResultItem, fallbackMessage: string) {
   const target = item.normalized || item.raw || '这个群'
+  if (item.sendStatus === 'sent') return `${target}已发送内容`
+  if (item.sendStatus === 'skipped') return `${target}已跳过发送（${item.sendErrorMessage || '当前模式不需要发送'}）`
+  if (item.sendStatus === 'failed') return `${target}发送失败（${item.sendErrorMessage || '原因没拿到'}）`
   if (item.status === 'joined') return `成功加入${target}`
   if (item.status === 'requested') return `${target}需要审核，已申请等待通过`
   if (item.status === 'already') return `${target}已在群`
@@ -267,7 +352,17 @@ function buildProgressLog(payload: AutoJoinProgress): AutoJoinLogEntry | null {
     }
   }
 
-  const level: AutoJoinLogLevel = item.status === 'failed' ? 'error' : item.status === 'requested' || item.status === 'already' ? 'warning' : 'success'
+  const level: AutoJoinLogLevel = item.sendStatus === 'failed'
+    ? 'error'
+    : item.sendStatus === 'skipped'
+      ? 'warning'
+      : item.sendStatus === 'sent'
+        ? 'success'
+        : item.status === 'failed'
+          ? 'error'
+          : item.status === 'requested' || item.status === 'already'
+            ? 'warning'
+            : 'success'
   return {
     id: createId('joinlog'),
     taskId: payload.taskId,
@@ -276,16 +371,16 @@ function buildProgressLog(payload: AutoJoinProgress): AutoJoinLogEntry | null {
     accountLabel: item.accountLabel,
     target: item.normalized || item.raw,
     groupTitle: item.groupTitle,
-    status: item.status,
+    status: item.sendStatus === 'sent' ? 'joined' : item.sendStatus === 'failed' ? 'failed' : item.status,
     message: formatLogMessage(item, payload.message),
-    createdAt: item.joinedAt || new Date().toISOString()
+    createdAt: item.sentAt || item.joinedAt || new Date().toISOString()
   }
 }
 
 function applyProgress(tasks: AutoJoinTaskRecord[], payload: AutoJoinProgress) {
   const current = tasks.find((item) => item.id === payload.taskId) ?? createTaskRecord({
     id: payload.taskId,
-    name: '自动加群任务',
+    name: '极速群发任务',
     total: payload.total
   })
 
@@ -297,6 +392,9 @@ function applyProgress(tasks: AutoJoinTaskRecord[], payload: AutoJoinProgress) {
     alreadyCount: payload.alreadyCount,
     requestedCount: payload.requestedCount,
     failedCount: payload.failedCount,
+    sendSuccessCount: payload.sendSuccessCount,
+    sendSkippedCount: payload.sendSkippedCount,
+    sendFailedCount: payload.sendFailedCount,
     status: payload.running ? 'running' : current.status === 'stopped' ? 'stopped' : 'completed',
     finishedAt: payload.running ? null : new Date().toISOString(),
     lastMessage: payload.message
@@ -308,7 +406,7 @@ function applyProgress(tasks: AutoJoinTaskRecord[], payload: AutoJoinProgress) {
 function applyResult(tasks: AutoJoinTaskRecord[], result: AutoJoinTaskResult) {
   const current = tasks.find((item) => item.id === result.taskId) ?? createTaskRecord({
     id: result.taskId,
-    name: '自动加群任务',
+    name: '极速群发任务',
     total: result.total
   })
 
@@ -320,6 +418,9 @@ function applyResult(tasks: AutoJoinTaskRecord[], result: AutoJoinTaskResult) {
     alreadyCount: result.alreadyCount,
     requestedCount: result.requestedCount,
     failedCount: result.failedCount,
+    sendSuccessCount: result.sendSuccessCount,
+    sendSkippedCount: result.sendSkippedCount,
+    sendFailedCount: result.sendFailedCount,
     status: result.stopped || current.status === 'stopped' ? 'stopped' : 'completed',
     finishedAt: new Date().toISOString(),
     lastMessage: result.message
@@ -334,12 +435,20 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       activeTab: 'tasks',
       selectedAccountIds: [],
       taskName: '',
+      mode: 'join-then-send',
+      speedPreset: 'safe',
       linkInput: '',
+      messageText: '',
+      imageData: '',
+      buttonText: '',
+      buttonUrl: '',
       concurrency: 1,
       accountIntervalMin: 20,
       accountIntervalMax: 60,
       joinIntervalMin: 90,
       joinIntervalMax: 180,
+      sendIntervalMin: 25,
+      sendIntervalMax: 60,
       floodRestMin: 20,
       floodRestMax: 45,
       retryLimit: 1,
@@ -360,12 +469,39 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       setActiveTab: (tab) => set({ activeTab: tab }),
       setSelectedAccountIds: (ids) => set({ selectedAccountIds: ids }),
       setTaskName: (value) => set({ taskName: value }),
+      setMode: (value) => set({ mode: value }),
+      setSpeedPreset: (value) => {
+        const preset = readSpeedPresetConfig(value)
+        set({
+          speedPreset: value,
+          concurrency: preset.concurrency,
+          accountIntervalMin: preset.accountIntervalMin,
+          accountIntervalMax: preset.accountIntervalMax,
+          joinIntervalMin: preset.joinIntervalMin,
+          joinIntervalMax: preset.joinIntervalMax,
+          sendIntervalMin: preset.sendIntervalMin,
+          sendIntervalMax: preset.sendIntervalMax,
+          floodRestMin: preset.floodRestMin,
+          floodRestMax: preset.floodRestMax,
+          retryLimit: preset.retryLimit,
+          dispatchMode: preset.dispatchMode,
+          repeatJoinEnabled: preset.repeatJoinEnabled,
+          maxJoinsPerAccount: preset.maxJoinsPerAccount,
+          safeModeEnabled: preset.safeModeEnabled
+        })
+      },
       setLinkInput: (value) => set({ linkInput: value }),
+      setMessageText: (value) => set({ messageText: value }),
+      setImageData: (value) => set({ imageData: value }),
+      setButtonText: (value) => set({ buttonText: value }),
+      setButtonUrl: (value) => set({ buttonUrl: value }),
       setConcurrency: (value) => set({ concurrency: value }),
       setAccountIntervalMin: (value) => set({ accountIntervalMin: value }),
       setAccountIntervalMax: (value) => set({ accountIntervalMax: value }),
       setJoinIntervalMin: (value) => set({ joinIntervalMin: value }),
       setJoinIntervalMax: (value) => set({ joinIntervalMax: value }),
+      setSendIntervalMin: (value) => set({ sendIntervalMin: value }),
+      setSendIntervalMax: (value) => set({ sendIntervalMax: value }),
       setFloodRestMin: (value) => set({ floodRestMin: value }),
       setFloodRestMax: (value) => set({ floodRestMax: value }),
       setRetryLimit: (value) => set({ retryLimit: value }),
@@ -380,7 +516,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
         taskSnapshots: [],
         completionDialogTaskId: null,
         currentTaskId: null,
-        lastActionMessage: '加群日志已清空。'
+        lastActionMessage: '极速群发日志已清空。'
       }),
       clearLinkInput: () => set({ linkInput: '' }),
       init: () => {
@@ -408,13 +544,13 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       startTask: async () => {
         const api = window.desktopAutoJoin
         if (!api) {
-          set({ runtimeReady: false, lastActionMessage: '当前运行环境还没接好自动加群能力。' })
+          set({ runtimeReady: false, lastActionMessage: '当前运行环境还没接好极速群发能力。' })
           return
         }
 
         const { items, duplicates, invalids } = parseAutoJoinTargets(get().linkInput)
         if (get().selectedAccountIds.length === 0) {
-          set({ lastActionMessage: '先选几个账号，再开始自动加群。' })
+          set({ lastActionMessage: '先选几个账号，再开始极速群发。' })
           return
         }
         if (items.length === 0) {
@@ -422,8 +558,15 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           return
         }
 
+        const mode = get().mode
+        const needsMessage = mode !== 'join-only'
+        if (needsMessage && !get().messageText.trim() && !get().imageData.trim()) {
+          set({ lastActionMessage: '当前模式需要发送内容，至少填一段文案或上传一张图片。' })
+          return
+        }
+
         const taskId = createId('autojoin')
-        const taskName = get().taskName.trim() || `自动加群 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
+        const taskName = get().taskName.trim() || `极速群发 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
         const safeModeEnabled = get().safeModeEnabled
         const selectedAccountCount = get().selectedAccountIds.length
         const perAccountTargetLimit = Math.max(1, get().maxJoinsPerAccount)
@@ -441,8 +584,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           taskSnapshots: [],
           tasks: [createTaskRecord({ id: taskId, name: taskName, total: initialTotal })],
           lastActionMessage: duplicates.length > 0 || invalids.length > 0
-            ? `已过滤 ${duplicates.length} 条重复、${invalids.length} 条无效目标，准备开始加群。${safeModeEnabled ? ` 当前防冻结保护已开启：每号最多 ${perAccountTargetLimit} 个。` : ''}`
-            : `自动加群任务已提交，正在启动。${safeModeEnabled ? ` 当前防冻结保护已开启：每号最多 ${perAccountTargetLimit} 个。` : ''}`
+            ? `已过滤 ${duplicates.length} 条重复、${invalids.length} 条无效目标，准备开始执行。${safeModeEnabled ? ` 当前防冻结保护已开启：每号最多 ${perAccountTargetLimit} 个。` : ''}`
+            : `极速群发任务已提交，正在启动。${safeModeEnabled ? ` 当前防冻结保护已开启：每号最多 ${perAccountTargetLimit} 个。` : ''}`
         }))
 
         try {
@@ -450,11 +593,15 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             taskId,
             accountIds: get().selectedAccountIds,
             items,
+            mode,
+            speedPreset: get().speedPreset,
             concurrency: get().concurrency,
             accountIntervalMin: Math.min(get().accountIntervalMin, get().accountIntervalMax),
             accountIntervalMax: Math.max(get().accountIntervalMin, get().accountIntervalMax),
             joinIntervalMin: Math.min(get().joinIntervalMin, get().joinIntervalMax),
             joinIntervalMax: Math.max(get().joinIntervalMin, get().joinIntervalMax),
+            sendIntervalMin: Math.min(get().sendIntervalMin, get().sendIntervalMax),
+            sendIntervalMax: Math.max(get().sendIntervalMin, get().sendIntervalMax),
             floodRestMin: Math.min(get().floodRestMin, get().floodRestMax),
             floodRestMax: Math.max(get().floodRestMin, get().floodRestMax),
             retryLimit: get().retryLimit,
@@ -462,7 +609,11 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             repeatJoinEnabled: get().repeatJoinEnabled,
             dispatchMode: get().dispatchMode,
             safeModeEnabled,
-            maxJoinsPerAccount: perAccountTargetLimit
+            maxJoinsPerAccount: perAccountTargetLimit,
+            messageText: get().messageText,
+            imageData: get().imageData,
+            buttonText: get().buttonText,
+            buttonUrl: get().buttonUrl
           })
 
           set((state) => ({
@@ -485,6 +636,9 @@ export const useAutoJoinStore = create<AutoJoinState>()(
               alreadyCount: result.alreadyCount,
               requestedCount: result.requestedCount,
               failedCount: result.failedCount,
+              sendSuccessCount: result.sendSuccessCount,
+              sendSkippedCount: result.sendSkippedCount,
+              sendFailedCount: result.sendFailedCount,
               items: result.items,
               finishedAt: new Date().toISOString(),
               message: result.message,
@@ -503,72 +657,88 @@ export const useAutoJoinStore = create<AutoJoinState>()(
               ...(state.tasks.find((item) => item.id === taskId) ?? createTaskRecord({ id: taskId, name: taskName, total: items.length })),
               status: 'stopped',
               finishedAt: new Date().toISOString(),
-              lastMessage: error instanceof Error ? error.message : '自动加群任务启动失败。'
+              lastMessage: error instanceof Error ? error.message : '极速群发任务启动失败。'
             }),
-            lastActionMessage: error instanceof Error ? error.message : '自动加群任务启动失败。'
+            lastActionMessage: error instanceof Error ? error.message : '极速群发任务启动失败。'
           }))
         }
       },
       stopTask: async () => {
         const api = window.desktopAutoJoin
         if (!api) {
-          set({ runtimeReady: false, lastActionMessage: '当前运行环境还没接好自动加群能力。' })
+          set({ runtimeReady: false, lastActionMessage: '当前运行环境还没接好极速群发能力。' })
           return
         }
         if (!get().running) {
-          set({ lastActionMessage: '现在没有正在跑的自动加群任务。' })
+          set({ lastActionMessage: '现在没有正在跑的极速群发任务。' })
           return
         }
 
-        set({ stopping: true, lastActionMessage: '正在停止自动加群任务…' })
+        set({ stopping: true, lastActionMessage: '正在停止极速群发任务…' })
         try {
           const result = await api.stop()
           set((state) => ({
             stopping: true,
             tasks: state.currentTaskId
               ? upsertTask(state.tasks, {
-                  ...(state.tasks.find((item) => item.id === state.currentTaskId) ?? createTaskRecord({ id: state.currentTaskId, name: '自动加群任务', total: 0 })),
+                  ...(state.tasks.find((item) => item.id === state.currentTaskId) ?? createTaskRecord({ id: state.currentTaskId, name: '极速群发任务', total: 0 })),
                   status: 'stopped',
                   total: state.tasks.find((item) => item.id === state.currentTaskId)?.completed ?? 0,
                   finishedAt: new Date().toISOString(),
                   lastMessage: result.message
                 })
               : state.tasks,
-            lastActionMessage: '自动加群任务已停止。'
+            lastActionMessage: '极速群发任务已停止。'
           }))
         } catch (error) {
           set({
             stopping: false,
-            lastActionMessage: error instanceof Error ? error.message : '停止自动加群任务失败。'
+            lastActionMessage: error instanceof Error ? error.message : '停止极速群发任务失败。'
           })
         }
       }
     }),
     {
       name: 'tg-group-auto-join-store',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => window.localStorage),
       migrate: (persistedState) => {
         const state = persistedState as Partial<AutoJoinState> | undefined
         return {
           ...state,
           selectedAccountIds: [],
+          mode: state?.mode ?? 'join-then-send',
+          speedPreset: state?.speedPreset ?? 'safe',
+          messageText: state?.messageText || '',
+          imageData: state?.imageData || '',
+          buttonText: state?.buttonText || '',
+          buttonUrl: state?.buttonUrl || '',
           safeModeEnabled: state?.safeModeEnabled ?? true,
           maxJoinsPerAccount: Math.max(1, state?.maxJoinsPerAccount ?? 3),
           repeatJoinEnabled: state?.repeatJoinEnabled ?? false,
           dispatchMode: state?.dispatchMode ?? 'sequential',
-          retryLimit: state?.retryLimit ?? 1
+          retryLimit: state?.retryLimit ?? 1,
+          sendIntervalMin: state?.sendIntervalMin ?? 25,
+          sendIntervalMax: state?.sendIntervalMax ?? 60
         }
       },
       partialize: (state) => ({
         activeTab: state.activeTab,
         taskName: state.taskName,
+        mode: state.mode,
+        speedPreset: state.speedPreset,
         linkInput: state.linkInput,
+        messageText: state.messageText,
+        imageData: state.imageData,
+        buttonText: state.buttonText,
+        buttonUrl: state.buttonUrl,
         concurrency: state.concurrency,
         accountIntervalMin: state.accountIntervalMin,
         accountIntervalMax: state.accountIntervalMax,
         joinIntervalMin: state.joinIntervalMin,
         joinIntervalMax: state.joinIntervalMax,
+        sendIntervalMin: state.sendIntervalMin,
+        sendIntervalMax: state.sendIntervalMax,
         floodRestMin: state.floodRestMin,
         floodRestMax: state.floodRestMax,
         retryLimit: state.retryLimit,
