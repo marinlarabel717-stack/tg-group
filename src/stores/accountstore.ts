@@ -37,6 +37,39 @@ interface CheckResultDialogState {
   banned: number
   multiIp: number
   timeout: number
+  frozenDetails: Array<{
+    id: number
+    phone: string
+    freezeSince: string | null
+    freezeUntil: string | null
+  }>
+}
+
+function buildFrozenDetailsForDialog(accounts: AccountRecord[], checkState: CheckQueueState) {
+  const seen = new Set<number>()
+  const rows: Array<{ id: number; phone: string; freezeSince: string | null; freezeUntil: string | null }> = []
+
+  for (const log of checkState.logs) {
+    if (log.status !== 'frozen' || typeof log.accountId !== 'number' || seen.has(log.accountId)) continue
+    seen.add(log.accountId)
+    const account = accounts.find((item) => item.id === log.accountId)
+    rows.push({
+      id: log.accountId,
+      phone: account?.phone || log.phone || `账号#${log.accountId}`,
+      freezeSince: typeof account?.profile?.freeze_since_date === 'string'
+        ? account.profile.freeze_since_date
+        : typeof account?.profile?.freeze_since_date === 'number'
+          ? String(account.profile.freeze_since_date)
+          : null,
+      freezeUntil: typeof account?.profile?.freeze_until_date === 'string'
+        ? account.profile.freeze_until_date
+        : typeof account?.profile?.freeze_until_date === 'number'
+          ? String(account.profile.freeze_until_date)
+          : null
+    })
+  }
+
+  return rows
 }
 
 function getDesktopAccountsApi() {
@@ -285,7 +318,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     frozen: 0,
     banned: 0,
     multiIp: 0,
-    timeout: 0
+    timeout: 0,
+    frozenDetails: []
   },
   lastActionMessage: '',
   errorMessage: '',
@@ -313,7 +347,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
               frozen: checkState.resultSummary.frozen,
               banned: checkState.resultSummary.banned,
               multiIp: checkState.resultSummary.multi_ip,
-              timeout: checkState.resultSummary.timeout
+              timeout: checkState.resultSummary.timeout,
+              frozenDetails: buildFrozenDetailsForDialog(get().accounts, checkState)
             },
             lastActionMessage: '批量检测已完成，账号资料已刷新。'
           })
@@ -579,7 +614,8 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           frozen: 0,
           banned: 0,
           multiIp: 0,
-          timeout: 0
+          timeout: 0,
+          frozenDetails: []
         },
         lastActionMessage: `已启动 ${ids.length} 个账号的${actionLabel}任务，当前按 ${checkState.concurrency} 个并发执行，检测过程中账号列表先不刷新，完成后统一更新。`
       })
