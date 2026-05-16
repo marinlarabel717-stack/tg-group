@@ -7,10 +7,14 @@ import type { AccountRepository } from './account-repository'
 import { FileScanner } from './file-scanner'
 import { JsonTemplateService } from './json-template-service'
 
-const FILE_IO_CONCURRENCY = Math.max(8, (typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length || 4) * 4)
+const FILE_IO_CONCURRENCY = Math.min(
+  16,
+  Math.max(4, (typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length || 4) * 2)
+)
 const IMPORT_PROGRESS_CHUNK = 200
 const EXPORT_PROGRESS_CHUNK = 25
 const DELETE_PROGRESS_CHUNK = 25
+const IMPORT_DB_WRITE_CHUNK = 200
 
 function readStringField(profile: AccountJsonProfile, ...keys: string[]) {
   for (const key of keys) {
@@ -279,7 +283,6 @@ export class AccountImportService {
     options: { mirrorToManagedDirectory: boolean; onProgress?: (payload: ImportProgressPayload) => void }
   ) {
     const warnings = [...ignoredPaths.map((item) => `已忽略非账号文件：${item}`)]
-    const inputs: UpsertAccountInput[] = []
     let generatedJsonCount = 0
     let completedCount = 0
     let importedCount = 0
@@ -335,11 +338,12 @@ export class AccountImportService {
     for (let startIndex = 0; startIndex < candidates.length; startIndex += FILE_IO_CONCURRENCY) {
       const batch = candidates.slice(startIndex, startIndex + FILE_IO_CONCURRENCY)
       const batchResults = await Promise.all(batch.map((candidate) => processCandidate(candidate)))
+      const persistedInputs: UpsertAccountInput[] = []
 
       for (const result of batchResults) {
         completedCount += 1
         if (result) {
-          inputs.push(result)
+          persistedInputs.push(result)
           importedCount += 1
         }
         skippedCount = Math.max(candidates.length - importedCount, 0)
@@ -352,18 +356,21 @@ export class AccountImportService {
           emitProgress('progress', completedCount, `正在导入账号 ${completedCount} / ${candidates.length}`)
         }
       }
-    }
 
-    if (inputs.length > 0) {
-      this.repository.upsertMany(inputs)
+      if (persistedInputs.length > 0) {
+        for (let writeIndex = 0; writeIndex < persistedInputs.length; writeIndex += IMPORT_DB_WRITE_CHUNK) {
+          const writeBatch = persistedInputs.slice(writeIndex, writeIndex + IMPORT_DB_WRITE_CHUNK)
+          this.repository.upsertMany(writeBatch, { returnAccounts: false })
+        }
+      }
     }
 
     skippedCount = Math.max(candidates.length - importedCount, 0)
-    emitProgress('completed', candidates.length, `本次成功导入 ${inputs.length} 个账号`)
+    emitProgress('completed', candidates.length, `本次成功导入 ${importedCount} 个账号`)
 
     return {
       scannedCount: candidates.length,
-      importedCount: inputs.length,
+      importedCount,
       generatedJsonCount,
       skippedCount,
       warnings: warnings.slice(0, 50)

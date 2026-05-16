@@ -120,7 +120,7 @@ export class AccountRepository {
     return (this.listStatement.all() as AccountRow[]).map(mapRow)
   }
 
-  upsertMany(items: UpsertAccountInput[]) {
+  upsertMany(items: UpsertAccountInput[], options?: { returnAccounts?: boolean }) {
     const now = new Date().toISOString()
     const transaction = this.database.transaction((batch: UpsertAccountInput[]) => {
       for (const item of batch) {
@@ -135,6 +135,10 @@ export class AccountRepository {
     })
 
     transaction(items)
+    if (options?.returnAccounts === false) {
+      return []
+    }
+
     return this.list()
   }
 
