@@ -4,6 +4,7 @@ import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
+import { TelethonFreezeChecker, type TelethonFreezeCheckResult } from '../accounts/check-engine/telethon-freeze-checker'
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
 import { TelethonAutoJoiner } from './telethon-auto-joiner'
 import type { AutoJoinPayload, AutoJoinPayloadItem, AutoJoinProgress, AutoJoinResultItem, AutoJoinStopResult, AutoJoinTaskResult } from '../../src/types'
@@ -135,6 +136,7 @@ function isMissingTargetError(error: unknown) {
   const normalized = message.trim()
   if (!normalized) return false
   return /Cannot find any entity corresponding to/i.test(normalized)
+    || /No user has\s+".+"\s+as username/i.test(normalized)
     || /USERNAME_INVALID|USERNAME_NOT_OCCUPIED/i.test(normalized)
     || /CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)
     || /INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)
@@ -145,6 +147,7 @@ function formatAutoJoinError(error: unknown) {
   const normalized = message.trim()
   if (!normalized) return '原因没拿到'
   if (/Cannot find any entity corresponding to/i.test(normalized)) return '当前账号暂时识别不了这个群，群未必不存在，建议改用完整 t.me 链接或邀请链接再试'
+  if (/No user has\s+".+"\s+as username/i.test(normalized)) return '当前账号暂时识别不了这个群，未必是群不存在，更像是这个账号当前搜不到，建议换完整 t.me 链接或邀请链接再试'
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '邀请链接失效了，或者已经不能用了'
   if (/CHANNEL_PRIVATE/i.test(normalized)) return '这个群进不去，可能是私密群，或者当前账号没权限'
   if (/CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号加的群太多了，先退几个群再试'
@@ -167,6 +170,74 @@ function formatAutoJoinError(error: unknown) {
   const wait = readRequiredWaitSeconds(error)
   if (wait) return `Telegram 要求先等 ${wait} 秒`
   return `加入时出了点问题：${normalized}`
+}
+
+type AutoJoinFatalAccountState = {
+  persistedStatus: 'frozen' | 'banned' | 'session_expired' | 'not_logged_in' | null
+  itemMessage: string
+  stopMessage: string
+}
+
+function readFatalAccountStateFromError(error: unknown): AutoJoinFatalAccountState | null {
+  const message = error instanceof Error ? error.message : String(error)
+  const normalized = message.trim()
+  if (!normalized) return null
+
+  if (/FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING|FREEZE_STATE_IN_APP_CONFIG/i.test(normalized)) {
+    return {
+      persistedStatus: 'frozen',
+      itemMessage: '这个账号已经冻结了，已停止继续加群',
+      stopMessage: '已冻结，后面的群已不再继续用这个账号加入。'
+    }
+  }
+
+  if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN|USER_DEACTIVATED/i.test(normalized)) {
+    return {
+      persistedStatus: 'banned',
+      itemMessage: '这个账号已经封禁了，已停止继续加群',
+      stopMessage: '已封禁，后面的群已不再继续用这个账号加入。'
+    }
+  }
+
+  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) {
+    return {
+      persistedStatus: 'session_expired',
+      itemMessage: '这个账号登录状态失效了，已停止继续加群',
+      stopMessage: '登录状态失效，后面的群已不再继续用这个账号加入。'
+    }
+  }
+
+  if (/ACCOUNT_RESTRICTED/i.test(normalized)) {
+    return {
+      persistedStatus: null,
+      itemMessage: '这个账号当前被限制了，已停止继续加群',
+      stopMessage: '当前被限制，后面的群已不再继续用这个账号加入。'
+    }
+  }
+
+  return null
+}
+
+function readFatalAccountStateFromProbe(result: TelethonFreezeCheckResult | null | undefined): AutoJoinFatalAccountState | null {
+  if (!result) return null
+
+  if (result.status === 'frozen') {
+    return {
+      persistedStatus: 'frozen',
+      itemMessage: '这个账号已经冻结了，已停止继续加群',
+      stopMessage: '已冻结，后面的群已不再继续用这个账号加入。'
+    }
+  }
+
+  if (result.status === 'not_logged_in') {
+    return {
+      persistedStatus: 'not_logged_in',
+      itemMessage: '这个账号登录状态失效了，已停止继续加群',
+      stopMessage: '登录状态失效，后面的群已不再继续用这个账号加入。'
+    }
+  }
+
+  return null
 }
 
 function parseJoinTarget(target: AutoJoinPayloadItem) {
@@ -335,8 +406,18 @@ export class AutoJoinService {
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
     private readonly proxyPoolService: ProxyPoolService,
+    private readonly telethonFreezeChecker: TelethonFreezeChecker,
     private readonly telethonAutoJoiner: TelethonAutoJoiner
   ) {}
+
+  private async probeAccountState(account: AccountRecord) {
+    try {
+      const proxy = this.getCurrentProxy()
+      return await this.telethonFreezeChecker.check(account.sessionPath, 20, toClientProxy(proxy))
+    } catch {
+      return null
+    }
+  }
 
   async stopCurrentTask(): Promise<AutoJoinStopResult> {
     if (!this.activeTask) {
@@ -367,7 +448,7 @@ export class AutoJoinService {
 
     const accountIds = Array.from(new Set(payload.accountIds.filter((item): item is number => typeof item === 'number')))
     const requestedAccounts = this.accountRepository.getByIds(accountIds)
-    const accounts = requestedAccounts.filter((account) => account.status !== 'banned' && account.status !== 'session_expired' && account.status !== 'not_logged_in')
+    const accounts = requestedAccounts.filter((account) => account.status !== 'banned' && account.status !== 'frozen' && account.status !== 'session_expired' && account.status !== 'not_logged_in')
     const workerLimit = Math.max(1, Math.min(payload.concurrency || accounts.length, accounts.length))
     let total = payload.repeatJoinEnabled ? payload.items.length * accounts.length : payload.items.length
     if (accounts.length === 0) {
@@ -506,6 +587,16 @@ export class AutoJoinService {
         const accountLabel = accountLabelById.get(account.id) || `账号#${account.id}`
 
       try {
+          const preflightState = await this.probeAccountState(account)
+          const preflightFatal = readFatalAccountStateFromProbe(preflightState)
+          if (preflightFatal) {
+            if (preflightFatal.persistedStatus) {
+              this.accountRepository.updateStatus([account.id], preflightFatal.persistedStatus)
+            }
+            emit(`${accountLabel} ${preflightFatal.stopMessage}`, null, null, true)
+            return
+          }
+
           if (!useTelethonPrimary) {
             client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
             clients.set(account.id, client)
@@ -605,6 +696,30 @@ export class AutoJoinService {
               pushBackItem(account.id, { ...next, attempts: attempt })
               emit(`${accountLabel} 触发限流，先休息 ${Math.ceil(finalWaitMs / 1000)} 秒后继续。`, null, Math.ceil(finalWaitMs / 1000), true)
               continue
+            }
+
+            const fatalAccountStateFromError = readFatalAccountStateFromError(error)
+            const fatalAccountState = fatalAccountStateFromError ?? (isMissingTargetError(error) ? readFatalAccountStateFromProbe(await this.probeAccountState(account)) : null)
+
+            if (fatalAccountState) {
+              if (fatalAccountState.persistedStatus) {
+                this.accountRepository.updateStatus([account.id], fatalAccountState.persistedStatus)
+              }
+
+              finalizeResult({
+                itemId: next.id,
+                raw: next.raw,
+                normalized: next.normalized,
+                status: 'failed',
+                errorMessage: fatalAccountState.itemMessage,
+                accountId: account.id,
+                accountLabel,
+                groupTitle: '',
+                joinedAt: new Date().toISOString(),
+                attempt
+              })
+              emit(`${accountLabel} ${fatalAccountState.stopMessage}`, null, null, true)
+              return
             }
 
             const missingTarget = isMissingTargetError(error)

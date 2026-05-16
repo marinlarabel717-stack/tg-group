@@ -98,7 +98,7 @@ function buildFrozenTimeSuffix(profile: AccountCheckResult['profile'] | null | u
   const freezeSince = formatFreezeTime(profile?.freeze_since_date)
 
   if (freezeSince) {
-    return `（开始：${freezeSince}）`
+    return `（${freezeSince}）`
   }
 
   return ''
