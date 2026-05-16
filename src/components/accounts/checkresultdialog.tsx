@@ -1,11 +1,37 @@
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { useAccountStore } from '../../stores/accountstore'
+import { formatDateTimeFull } from '../../lib/ui-text'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from './resultdialog'
 
 export const CheckResultDialog = memo(function CheckResultDialog() {
   const checkResultDialog = useAccountStore((state) => state.checkResultDialog)
+  const checkState = useAccountStore((state) => state.checkState)
+  const accounts = useAccountStore((state) => state.accounts)
   const closeCheckResultDialog = useAccountStore((state) => state.closeCheckResultDialog)
+
+  const frozenDetails = useMemo(() => {
+    const seen = new Set<number>()
+    const rows: Array<{ id: number; phone: string; freezeSinceDisplay: string; freezeUntilDisplay: string }> = []
+
+    for (const log of checkState.logs) {
+      if (log.status !== 'frozen' || typeof log.accountId !== 'number' || seen.has(log.accountId)) continue
+      seen.add(log.accountId)
+      const account = accounts.find((item) => item.id === log.accountId)
+      const freezeSinceRaw = account?.profile?.freeze_since_date
+      const freezeUntilRaw = account?.profile?.freeze_until_date
+      const freezeSince = formatDateTimeFull(typeof freezeSinceRaw === 'number' ? new Date(freezeSinceRaw).toISOString() : freezeSinceRaw ?? null)
+      const freezeUntil = formatDateTimeFull(typeof freezeUntilRaw === 'number' ? new Date(freezeUntilRaw).toISOString() : freezeUntilRaw ?? null)
+      rows.push({
+        id: log.accountId,
+        phone: account?.phone || log.phone || `账号#${log.accountId}`,
+        freezeSinceDisplay: freezeSince !== '—' ? freezeSince : 'Telegram 暂未返回冻结开始时间',
+        freezeUntilDisplay: freezeUntil !== '—' ? freezeUntil : 'Telegram 暂未返回冻结结束时间'
+      })
+    }
+
+    return rows
+  }, [accounts, checkState.logs])
 
   if (!checkResultDialog.open) {
     return null
@@ -44,6 +70,21 @@ export const CheckResultDialog = memo(function CheckResultDialog() {
           <ResultStatCard label="超时" value={checkResultDialog.timeout} tone="violet" />
         </div>
       )}
+
+      {frozenDetails.length > 0 ? (
+        <div className="space-y-3 rounded-[14px] border border-cyan-300/12 bg-cyan-300/6 px-4 py-4 text-sm">
+          <div className="text-sm font-semibold text-white">本次冻结时间</div>
+          <div className="space-y-2">
+            {frozenDetails.map((item) => (
+              <div key={item.id} className="rounded-[12px] bg-black/10 px-4 py-3">
+                <div className="text-sm font-medium text-white">{item.phone}</div>
+                <div className="mt-2 text-xs text-cyan-100/85">冻结开始：{item.freezeSinceDisplay}</div>
+                <div className="mt-1 text-xs text-cyan-100/85">冻结结束：{item.freezeUntilDisplay}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <ResultPrimaryButton label="知道了" onClick={closeCheckResultDialog} tone="violet" />
     </ResultDialogShell>
