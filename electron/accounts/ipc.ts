@@ -101,7 +101,7 @@ function serializeCheckStateForRenderer(state: ReturnType<CheckQueue['getState']
 
   return {
     ...state,
-    queuedAccountIds: [],
+    queuedAccountIds: state.queuedAccountIds,
     activeAccountIds: state.activeAccountIds.slice(-Math.max(1, state.concurrency))
   }
 }

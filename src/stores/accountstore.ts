@@ -327,7 +327,6 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     if (!subscribed) {
       window.desktopAccounts?.onCheckState(async (checkState) => {
         const previousState = get().checkState
-        const previousCheckingIds = get().checkTaskAccountIds
         const normalizedCheckState = {
           ...checkState,
           queuedAccountIds: areSameNumberArrays(previousState.queuedAccountIds, checkState.queuedAccountIds)
@@ -339,7 +338,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         }
 
         const nextCheckTaskAccountIds = checkState.running
-          ? (previousCheckingIds.length > 0 ? previousCheckingIds : normalizedCheckState.activeAccountIds)
+          ? Array.from(new Set([...normalizedCheckState.activeAccountIds, ...normalizedCheckState.queuedAccountIds]))
           : []
 
         set({ checkState: normalizedCheckState, checkTaskAccountIds: nextCheckTaskAccountIds })
