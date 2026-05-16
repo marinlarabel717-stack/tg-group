@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -244,6 +244,46 @@ function ButtonsEditor({ title, buttons, onChange }: { title: string; buttons: B
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function ImageUploadField({
+  label,
+  value,
+  onChange,
+  onClear,
+  hint
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  onClear: () => void
+  hint?: string
+}) {
+  const handleUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      onChange(typeof reader.result === 'string' ? reader.result : '')
+    }
+    reader.readAsDataURL(file)
+    event.target.value = ''
+  }
+
+  return (
+    <div className="space-y-3 text-sm text-textMuted">
+      <div>{label}</div>
+      <label className="block cursor-pointer rounded-[12px] border border-white/[0.06] bg-black/10 px-4 py-3 text-white transition hover:border-white/[0.12] hover:bg-black/12 file:mr-3 file:rounded-[8px] file:border-0 file:bg-violet-400/14 file:px-3 file:py-2 file:text-sm file:text-violet-300">
+        <input type="file" accept="image/*" onChange={handleUpload} className="w-full text-sm text-white file:mr-3 file:rounded-[8px] file:border-0 file:bg-violet-400/14 file:px-3 file:py-2 file:text-sm file:text-violet-300" />
+      </label>
+      <div className="flex items-center justify-between rounded-[12px] bg-black/10 px-4 py-3 text-xs text-textMuted">
+        <span>{value ? '已上传本地图片' : '还没上传图片'}</span>
+        {value ? <button type="button" onClick={onClear} className="text-white transition hover:text-rose-200">删除图片</button> : null}
+      </div>
+      {value ? <img src={value} alt="上传预览" className="max-h-56 w-full rounded-[14px] border border-white/[0.06] object-contain bg-black/10" /> : null}
+      {hint ? <div className="text-xs leading-5 text-textMuted">{hint}</div> : null}
     </div>
   )
 }
@@ -641,10 +681,13 @@ export default memo(function BotCenterView() {
                   </div>
 
                   {guestReplyType === 'photo' ? (
-                    <label className="flex flex-col gap-2 text-sm text-textMuted">
-                      <span>图片 URL</span>
-                      <input value={guestReplyImageUrl} onChange={(event) => setGuestReplyImageUrl(event.target.value)} placeholder="https://..." className={SOFT_INPUT_CLASS} />
-                    </label>
+                    <ImageUploadField
+                      label="上传图片"
+                      value={guestReplyImageUrl}
+                      onChange={setGuestReplyImageUrl}
+                      onClear={() => setGuestReplyImageUrl('')}
+                      hint="这里改成直接上传本地图片，不用再填 URL。保存后会跟默认回复一起走。"
+                    />
                   ) : null}
 
                   <label className="flex flex-col gap-2 text-sm text-textMuted">
@@ -747,10 +790,13 @@ export default memo(function BotCenterView() {
 
                       <div className="space-y-4">
                         {selectedRule.replyType === 'photo' ? (
-                          <label className="flex flex-col gap-2 text-sm text-textMuted">
-                            <span>图片 URL</span>
-                            <input value={selectedRule.imageUrl} onChange={(event) => updateRule(selectedRule.id, { imageUrl: event.target.value })} placeholder="https://..." className={SOFT_INPUT_CLASS} />
-                          </label>
+                          <ImageUploadField
+                            label="上传图片"
+                            value={selectedRule.imageUrl}
+                            onChange={(value) => updateRule(selectedRule.id, { imageUrl: value })}
+                            onClear={() => updateRule(selectedRule.id, { imageUrl: '' })}
+                            hint="关键词命中后会直接用这张本地图片回复，不用再额外准备 URL。"
+                          />
                         ) : null}
 
                         <label className="flex flex-col gap-2 text-sm text-textMuted">
