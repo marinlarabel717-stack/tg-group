@@ -1,5 +1,5 @@
 import { CheckCircle2, Copy, PlusSquare, SquareTerminal, StopCircle } from 'lucide-react'
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { GlassPanel } from '../common/glasspanel'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
 import { useAccountStore } from '../../stores/accountstore'
@@ -26,15 +26,52 @@ function NumberRangeField(props: {
 }) {
   const { label, minValue, maxValue, onMinChange, onMaxChange, min = 0, max = 999 } = props
   return (
-    <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-      <div className="text-xs tracking-[0.18em] text-textMuted">{label}</div>
-      <div className="mt-3 flex items-center gap-2">
-        <input type="number" min={min} max={max} value={minValue} onChange={(event) => onMinChange(Math.max(min, Number(event.target.value) || min))} className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-        <span className="text-textMuted">-</span>
-        <input type="number" min={min} max={max} value={maxValue} onChange={(event) => onMaxChange(Math.max(min, Number(event.target.value) || min))} className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+    <label className="rounded-[14px] bg-black/10 px-4 py-3 text-sm">
+      <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
+        <div>
+          <div className="text-sm text-white">{label}</div>
+          <div className="mt-1 text-xs text-textMuted">最小 - 最大（秒）</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="number" min={min} max={max} value={minValue} onChange={(event) => onMinChange(Math.max(min, Number(event.target.value) || min))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+          <span className="text-textMuted">-</span>
+          <input type="number" min={min} max={max} value={maxValue} onChange={(event) => onMaxChange(Math.max(min, Number(event.target.value) || min))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+        </div>
       </div>
-      <div className="mt-2 text-xs text-textMuted">单位：秒</div>
     </label>
+  )
+}
+
+function FoldSection(props: { title: string; hint?: string; defaultOpen?: boolean; children: ReactNode }) {
+  const { title, hint, defaultOpen = true, children } = props
+  return (
+    <details open={defaultOpen} className="rounded-[18px] border border-white/[0.06] bg-panel/60 px-4 py-4">
+      <summary className="cursor-pointer list-none">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-white">{title}</div>
+            {hint ? <div className="mt-1 text-xs text-textMuted">{hint}</div> : null}
+          </div>
+          <div className="text-xs text-textMuted">展开 / 收起</div>
+        </div>
+      </summary>
+      <div className="mt-4 space-y-3">{children}</div>
+    </details>
+  )
+}
+
+function ConfigRow(props: { label: string; hint?: string; children: ReactNode }) {
+  const { label, hint, children } = props
+  return (
+    <div className="rounded-[14px] bg-black/10 px-4 py-3 text-sm">
+      <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
+        <div>
+          <div className="text-sm text-white">{label}</div>
+          {hint ? <div className="mt-1 text-xs text-textMuted">{hint}</div> : null}
+        </div>
+        <div>{children}</div>
+      </div>
+    </div>
   )
 }
 
@@ -155,105 +192,84 @@ const TasksWorkbench = memo(function TasksWorkbench() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-textMuted">支持批量创建公开群组、公开频道，也支持两种一起建。</div>
-              <div className="rounded-[12px] bg-emerald-400/12 px-4 py-2.5 text-sm text-emerald-300">随机公开链接默认走字母数字组合</div>
-            </div>
+            <FoldSection title="基础配置" hint="每个参数一行，需要时再展开改，不再堆一屏按钮。">
+              <ConfigRow label="选择账号" hint="点右侧按钮挑选要拿来创建的账号。">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm text-white">已选 {selectedAccountIds.length} 个账号</div>
+                  <button type="button" disabled={running || stopping} onClick={() => setPickerOpen(true)} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60">选择账号</button>
+                </div>
+              </ConfigRow>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-3">
-              {[
-                { key: 'group', title: '公开群组', desc: '只创建公开群组' },
-                { key: 'channel', title: '公开频道', desc: '只创建公开频道' },
-                { key: 'both', title: '两种都建', desc: '每轮同时建群组和频道' }
-              ].map((item) => {
-                const active = createMode === item.key
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    disabled={running || stopping}
-                    onClick={() => setCreateMode(item.key as typeof createMode)}
-                    className={`rounded-[14px] border px-4 py-3 text-left transition ${active ? 'border-white/[0.12] bg-white/[0.06] text-white' : 'border-white/[0.06] bg-panel/60 text-slate-200 hover:bg-white/[0.03]'} disabled:cursor-not-allowed disabled:opacity-60`}
-                  >
-                    <div className="text-sm font-medium">{item.title}</div>
-                    <div className="mt-1 text-xs text-textMuted">{item.desc}</div>
-                  </button>
-                )
-              })}
-            </div>
+              <ConfigRow label="创建类型" hint="公开群组、公开频道，或两种都建。">
+                <select value={createMode} onChange={(event) => setCreateMode(event.target.value as typeof createMode)} disabled={running || stopping} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
+                  <option value="group">公开群组</option>
+                  <option value="channel">公开频道</option>
+                  <option value="both">两种都建</option>
+                </select>
+              </ConfigRow>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <button type="button" disabled={running || stopping} onClick={() => setPickerOpen(true)} className="rounded-[16px] bg-panel/80 px-4 py-4 text-left transition hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60">
-                <div className="text-xs tracking-[0.18em] text-textMuted">账号数量</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{selectedAccountIds.length}</div>
-                <div className="mt-1 text-xs text-textMuted">点这里选择要拿来批量创建的账号</div>
-              </button>
+              <ConfigRow label="单号创建数量" hint="每个账号本轮要创建多少个公开目标。">
+                <input type="number" min={1} max={50} value={countPerAccount} onChange={(event) => setCountPerAccount(Number(event.target.value) || 1)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+              </ConfigRow>
 
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">单号创建数量</div>
-                <input type="number" min={1} max={50} value={countPerAccount} onChange={(event) => setCountPerAccount(Number(event.target.value) || 1)} className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-                <div className="mt-2 text-xs text-textMuted">批量时会按账号顺序一个个创建</div>
-              </label>
-
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">随机位数</div>
-                <input type="number" min={4} max={24} value={randomLength} onChange={(event) => setRandomLength(Number(event.target.value) || 8)} className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-                <div className="mt-2 text-xs text-textMuted">随机群名/链接时用这个长度</div>
-              </label>
-
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">预计创建</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{totalWillCreate}</div>
-                <div className="mt-1 text-xs text-textMuted">当前配置下会创建这么多个公开目标</div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <NumberRangeField label="每次创建间隔" minValue={createIntervalMin} maxValue={createIntervalMax} onMinChange={setCreateIntervalMin} onMaxChange={setCreateIntervalMax} min={0} max={600} />
 
-              <label className="flex items-center gap-3 rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
-                <input type="checkbox" checked={autoWaitOnFlood} onChange={(event) => setAutoWaitOnFlood(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-                创建频繁自动等待
-              </label>
+              <ConfigRow label="创建频繁自动等待" hint="Telegram 明确要求等多久，就按它要求的时间继续。">
+                <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                  <span>{autoWaitOnFlood ? '已开启' : '已关闭'}</span>
+                  <input type="checkbox" checked={autoWaitOnFlood} onChange={(event) => setAutoWaitOnFlood(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                </label>
+              </ConfigRow>
 
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-textMuted">
-                如果 Telegram 提示创建太快，系统会按它要求的时间自动等待，再继续当前账号。
+              <ConfigRow label="预计创建" hint="按当前账号数和类型算出来的总量。">
+                <div className="text-sm font-medium text-white">{totalWillCreate} 个</div>
+              </ConfigRow>
+            </FoldSection>
+
+            <div className="mt-4" />
+
+            <FoldSection title="自定义数据" hint="关闭随机后，就按你填写的数据创建；不会偷偷给自定义值补 accountId 或 index。" defaultOpen>
+              <ConfigRow label="群名 / 频道名" hint="不勾随机时，默认直接用这里的内容。占位符可选，不强制。">
+                <input value={titleTemplate} onChange={(event) => setTitleTemplate(event.target.value)} placeholder="例如：品牌交流群" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+              </ConfigRow>
+
+              <ConfigRow label="公开链接" hint="不勾随机时，默认直接按这里创建公开链接。">
+                <input value={usernameTemplate} onChange={(event) => setUsernameTemplate(event.target.value)} placeholder="例如：brandgroup01" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+              </ConfigRow>
+
+              <ConfigRow label="简介" hint="不勾随机时，默认直接用这里的简介。">
+                <textarea value={aboutTemplate} onChange={(event) => setAboutTemplate(event.target.value)} rows={4} placeholder="例如：欢迎加入品牌交流群" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+              </ConfigRow>
+
+              <ConfigRow label="随机群名 / 频道名">
+                <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                  <span>{randomTitleEnabled ? '已开启' : '已关闭'}</span>
+                  <input type="checkbox" checked={randomTitleEnabled} onChange={(event) => setRandomTitleEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                </label>
+              </ConfigRow>
+
+              <ConfigRow label="随机公开链接">
+                <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                  <span>{randomUsernameEnabled ? '已开启' : '已关闭'}</span>
+                  <input type="checkbox" checked={randomUsernameEnabled} onChange={(event) => setRandomUsernameEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                </label>
+              </ConfigRow>
+
+              <ConfigRow label="随机简介">
+                <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                  <span>{randomAboutEnabled ? '已开启' : '已关闭'}</span>
+                  <input type="checkbox" checked={randomAboutEnabled} onChange={(event) => setRandomAboutEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                </label>
+              </ConfigRow>
+
+              <ConfigRow label="随机位数" hint="只有启用随机群名或随机公开链接时才会用到。">
+                <input type="number" min={4} max={24} value={randomLength} onChange={(event) => setRandomLength(Number(event.target.value) || 8)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+              </ConfigRow>
+
+              <div className="rounded-[14px] bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
+                支持公开群组 / 公开频道。若公开链接撞名，系统只会在重试时补随机后缀，不会在第一次创建时私自改你的自定义值。
               </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 xl:grid-cols-2">
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">群名 / 频道名模板</div>
-                <input value={titleTemplate} onChange={(event) => setTitleTemplate(event.target.value)} placeholder="例如：品牌群_{accountId}_{index}" className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-                <div className="mt-2 text-xs text-textMuted">支持 {`{accountId} {index} {type} {rand6}`} 占位符</div>
-              </label>
-
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">公开链接模板</div>
-                <input value={usernameTemplate} onChange={(event) => setUsernameTemplate(event.target.value)} placeholder="例如：brand_group_{accountId}_{index}" className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-                <div className="mt-2 text-xs text-textMuted">不勾随机时，会按这里生成公开 @link</div>
-              </label>
-            </div>
-
-            <label className="mt-4 block rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-              <div className="text-xs tracking-[0.18em] text-textMuted">简介模板</div>
-              <textarea value={aboutTemplate} onChange={(event) => setAboutTemplate(event.target.value)} rows={4} placeholder="例如：欢迎来到 {type} {index}" className={`mt-3 w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
-            </label>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <label className="flex items-center gap-3 rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
-                <input type="checkbox" checked={randomTitleEnabled} onChange={(event) => setRandomTitleEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-                随机群名/频道名
-              </label>
-              <label className="flex items-center gap-3 rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
-                <input type="checkbox" checked={randomUsernameEnabled} onChange={(event) => setRandomUsernameEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-                随机公开链接
-              </label>
-              <label className="flex items-center gap-3 rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
-                <input type="checkbox" checked={randomAboutEnabled} onChange={(event) => setRandomAboutEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-                随机简介
-              </label>
-            </div>
+            </FoldSection>
           </GlassPanel>
         </div>
 

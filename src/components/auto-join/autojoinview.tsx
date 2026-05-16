@@ -1,4 +1,4 @@
-import { memo, useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { memo, useDeferredValue, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react'
 import { CheckCircle2, ChevronDown, ChevronRight, Clock3, Copy, Download, Play, Search, Trash2, Upload, Wand2, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
@@ -88,29 +88,66 @@ function NumberRangeField(props: {
 }) {
   const { label, minValue, maxValue, onMinChange, onMaxChange, min = 0, max = 999 } = props
   return (
-    <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-      <div className="text-xs tracking-[0.18em] text-textMuted">{label}</div>
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          type="number"
-          min={min}
-          max={max}
-          value={minValue}
-          onChange={(event) => onMinChange(Math.max(min, Number(event.target.value) || min))}
-          className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
-        />
-        <span className="text-textMuted">-</span>
-        <input
-          type="number"
-          min={min}
-          max={max}
-          value={maxValue}
-          onChange={(event) => onMaxChange(Math.max(min, Number(event.target.value) || min))}
-          className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
-        />
+    <label className="rounded-[14px] bg-black/10 px-4 py-3 text-sm">
+      <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
+        <div>
+          <div className="text-sm text-white">{label}</div>
+          <div className="mt-1 text-xs text-textMuted">最小 - 最大（秒）</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={min}
+            max={max}
+            value={minValue}
+            onChange={(event) => onMinChange(Math.max(min, Number(event.target.value) || min))}
+            className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
+          />
+          <span className="text-textMuted">-</span>
+          <input
+            type="number"
+            min={min}
+            max={max}
+            value={maxValue}
+            onChange={(event) => onMaxChange(Math.max(min, Number(event.target.value) || min))}
+            className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
+          />
+        </div>
       </div>
-      <div className="mt-2 text-xs text-textMuted">单位：秒</div>
     </label>
+  )
+}
+
+function FoldSection(props: { title: string; hint?: string; defaultOpen?: boolean; children: ReactNode }) {
+  const { title, hint, defaultOpen = true, children } = props
+  return (
+    <details open={defaultOpen} className="rounded-[18px] border border-white/[0.06] bg-panel/60 px-4 py-4">
+      <summary className="cursor-pointer list-none">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-white">{title}</div>
+            {hint ? <div className="mt-1 text-xs text-textMuted">{hint}</div> : null}
+          </div>
+          <div className="text-xs text-textMuted">展开 / 收起</div>
+        </div>
+      </summary>
+      <div className="mt-4 space-y-3">{children}</div>
+    </details>
+  )
+}
+
+function ConfigRow(props: { label: string; hint?: string; children: ReactNode }) {
+  const { label, hint, children } = props
+  return (
+    <div className="rounded-[14px] bg-black/10 px-4 py-3 text-sm">
+      <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
+        <div>
+          <div className="text-sm text-white">{label}</div>
+          {hint ? <div className="mt-1 text-xs text-textMuted">{hint}</div> : null}
+        </div>
+        <div>{children}</div>
+      </div>
+    </div>
   )
 }
 
@@ -316,193 +353,125 @@ const TasksWorkbench = memo(function TasksWorkbench() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={running || stopping} onClick={applySafePreset} className="rounded-[12px] bg-emerald-400/12 px-4 py-2.5 text-sm text-emerald-300 transition hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60">一键套用防冻结参数</button>
-              <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-textMuted">建议默认用“加完再发 + 稳妥节奏”，更稳。</div>
-            </div>
+            <FoldSection title="基础配置" hint="每个参数一行，需要时展开修改，先把页面收口到更清爽。">
+              <ConfigRow label="选择账号" hint={occupiedSelectedAccounts.length > 0 ? `有 ${occupiedSelectedAccounts.length} 个账号正在忙，先别拿来跑。` : '点右侧按钮选择本轮账号。'}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm text-white">已选 {selectedAccountIds.length} 个账号</div>
+                  <button type="button" disabled={running || stopping} onClick={() => setAccountPickerOpen(true)} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60">选择账号</button>
+                </div>
+              </ConfigRow>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-3">
-              {[
-                { key: 'join-only', title: '只加群', desc: '只执行加入，不发送内容' },
-                { key: 'join-and-send', title: '边加边发', desc: '加入成功后立刻发送，节奏更快' },
-                { key: 'join-then-send', title: '加完再发', desc: '先加群再统一发送，推荐' }
-              ].map((item) => {
-                const active = mode === item.key
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    disabled={running || stopping}
-                    onClick={() => setMode(item.key as typeof mode)}
-                    className={`rounded-[16px] border px-4 py-4 text-left transition ${active ? 'border-white/[0.12] bg-violet-400/10 text-white' : 'border-white/[0.06] bg-panel/80 text-slate-200 hover:bg-white/[0.03]'} disabled:cursor-not-allowed disabled:opacity-60`}
-                  >
-                    <div className="text-sm font-semibold">{item.title}</div>
-                    <div className="mt-2 text-xs leading-5 text-textMuted">{item.desc}</div>
-                  </button>
-                )
-              })}
-            </div>
+              <ConfigRow label="执行模式" hint="只加群、边加边发、加完再发。">
+                <select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} disabled={running || stopping} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
+                  <option value="join-only">只加群</option>
+                  <option value="join-and-send">边加边发</option>
+                  <option value="join-then-send">加完再发</option>
+                </select>
+              </ConfigRow>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-3">
-              {[
-                { key: 'safe', title: '稳妥', desc: '更保守，默认推荐' },
-                { key: 'normal', title: '标准', desc: '兼顾速度和稳定' },
-                { key: 'fast', title: '快速', desc: '更激进，风险更高' }
-              ].map((item) => {
-                const active = speedPreset === item.key
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    disabled={running || stopping}
-                    onClick={() => setSpeedPreset(item.key as typeof speedPreset)}
-                    className={`rounded-[14px] border px-4 py-3 text-left transition ${active ? 'border-white/[0.12] bg-white/[0.06] text-white' : 'border-white/[0.06] bg-panel/60 text-slate-200 hover:bg-white/[0.03]'} disabled:cursor-not-allowed disabled:opacity-60`}
-                  >
-                    <div className="text-sm font-medium">{item.title}</div>
-                    <div className="mt-1 text-xs text-textMuted">{item.desc}</div>
-                  </button>
-                )
-              })}
-            </div>
+              <ConfigRow label="执行节奏" hint="建议默认用稳妥。">
+                <div className="flex flex-wrap items-center gap-3">
+                  <select value={speedPreset} onChange={(event) => setSpeedPreset(event.target.value as typeof speedPreset)} disabled={running || stopping} className={`h-10 min-w-[180px] rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
+                    <option value="safe">稳妥</option>
+                    <option value="normal">标准</option>
+                    <option value="fast">快速</option>
+                  </select>
+                  <button type="button" disabled={running || stopping} onClick={applySafePreset} className="rounded-[12px] bg-emerald-400/12 px-4 py-2 text-sm text-emerald-300 transition hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60">一键套用稳妥</button>
+                </div>
+              </ConfigRow>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <button type="button" disabled={running || stopping} onClick={() => setAccountPickerOpen(true)} className="rounded-[16px] bg-panel/80 px-4 py-4 text-left transition hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60">
-                <div className="text-xs tracking-[0.18em] text-textMuted">账号数量</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{selectedAccountIds.length}</div>
-                <div className="mt-1 text-xs text-textMuted">{occupiedSelectedAccounts.length > 0 ? `有 ${occupiedSelectedAccounts.length} 个账号正在忙，先别拿来加群。` : '点这里选择账号'}</div>
-              </button>
-
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">执行模式</div>
-                <div className="mt-2 text-lg font-semibold text-white">{mode === 'join-only' ? '只加群' : mode === 'join-and-send' ? '边加边发' : '加完再发'}</div>
-                <div className="mt-1 text-xs text-textMuted">{needsMessage ? '本轮会附带发送内容' : '本轮不会发送任何内容'}</div>
-              </div>
-
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">执行节奏</div>
-                <div className="mt-2 text-lg font-semibold text-white">{speedPreset === 'safe' ? '稳妥' : speedPreset === 'normal' ? '标准' : '快速'}</div>
-                <div className="mt-1 text-xs text-textMuted">{safeModeEnabled ? '当前防冻结保护已开启' : '当前偏速度优先'}</div>
-              </div>
-
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">每号上限</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{maxJoinsPerAccount}</div>
-                <div className="mt-1 text-xs text-textMuted">建议 2-3 个，减少风控概率</div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_220px_220px]">
-              <NumberRangeField label="限流休息" minValue={floodRestMin} maxValue={floodRestMax} onMinChange={setFloodRestMin} onMaxChange={setFloodRestMax} min={1} max={600} />
-
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
-                <div className="flex items-center gap-3">
+              <ConfigRow label="防冻结保护" hint="开启后会强制更保守，并在高风险报错时尽快停号。">
+                <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                  <span>{safeModeEnabled ? '已开启' : '已关闭'}</span>
                   <input type="checkbox" checked={safeModeEnabled} onChange={(event) => setSafeModeEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-                  防冻结保护
-                </div>
-                <div className="mt-2 text-xs text-textMuted">开启后会强制按更保守的节奏跑，并在高风险报错时尽快停掉当前账号。</div>
-              </label>
-
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">每号最多加群</div>
-                <input type="number" min={1} max={20} value={maxJoinsPerAccount} onChange={(event) => setMaxJoinsPerAccount(Math.min(20, Math.max(1, Number(event.target.value) || 1)))} className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-                <div className="mt-2 text-xs text-textMuted">防冻结保护开启时生效，建议 2-3 个。</div>
-              </label>
-
-              <label className="flex items-center gap-3 rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
-                <input type="checkbox" checked={repeatJoinEnabled} onChange={(event) => setRepeatJoinEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-                重复加群
-              </label>
-
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200 md:col-span-2 xl:col-span-1">
-                <div className="flex items-center gap-3">
-                  <input type="checkbox" checked={skipChannelsEnabled} onChange={(event) => setSkipChannelsEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-                  遇到频道自动跳过
-                </div>
-                <div className="mt-2 text-xs text-textMuted">打开后，识别到频道会直接跳过，不把频道混进群任务里。</div>
-              </label>
-
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200 md:col-span-2 xl:col-span-1">
-                <div className="flex items-center gap-3">
-                  <input type="checkbox" checked={leaveMutedGroupsEnabled} onChange={(event) => setLeaveMutedGroupsEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-                  禁言/无法发送自动退群
-                </div>
-                <div className="mt-2 text-xs text-textMuted">遇到禁言群、发不了内容的群，会尝试自动退出，避免名单越积越脏。</div>
-              </label>
-
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm md:col-span-2 xl:col-span-1">
-                <div className="text-xs tracking-[0.18em] text-textMuted">添加顺序</div>
-                <div className="mt-3 flex gap-2">
-                  <button type="button" onClick={() => setDispatchMode('random')} className={`flex-1 rounded-[12px] px-3 py-2.5 transition ${dispatchMode === 'random' ? 'bg-violet-400 text-slate-950' : 'bg-white/[0.05] text-white hover:bg-white/[0.08]'}`}>随机添加</button>
-                  <button type="button" onClick={() => setDispatchMode('sequential')} className={`flex-1 rounded-[12px] px-3 py-2.5 transition ${dispatchMode === 'sequential' ? 'bg-violet-400 text-slate-950' : 'bg-white/[0.05] text-white hover:bg-white/[0.08]'}`}>按顺序</button>
-                </div>
-              </div>
-            </div>
-
-            <details className="mt-4 rounded-[16px] bg-panel/60 px-4 py-4 text-sm text-slate-200">
-              <summary className="cursor-pointer list-none font-medium text-white">高级设置</summary>
-              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <NumberRangeField label="每号间隔" minValue={accountIntervalMin} maxValue={accountIntervalMax} onMinChange={setAccountIntervalMin} onMaxChange={setAccountIntervalMax} min={0} max={600} />
-                <NumberRangeField label="加群间隔" minValue={joinIntervalMin} maxValue={joinIntervalMax} onMinChange={setJoinIntervalMin} onMaxChange={setJoinIntervalMax} min={0} max={600} />
-                {needsMessage ? <NumberRangeField label="发送间隔" minValue={sendIntervalMin} maxValue={sendIntervalMax} onMinChange={setSendIntervalMin} onMaxChange={setSendIntervalMax} min={0} max={600} /> : null}
-                <label className="rounded-[16px] bg-black/10 px-4 py-4 text-sm">
-                  <div className="text-xs tracking-[0.18em] text-textMuted">线程数</div>
-                  <input type="number" min={1} max={Math.max(1, selectedAccountIds.length || 1)} value={concurrency} onChange={(event) => setConcurrency(Math.max(1, Number(event.target.value) || 1))} className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
                 </label>
-              </div>
-            </details>
+              </ConfigRow>
+
+              <ConfigRow label="每号最多加群" hint="建议 2-3 个。">
+                <input type="number" min={1} max={20} value={maxJoinsPerAccount} onChange={(event) => setMaxJoinsPerAccount(Math.min(20, Math.max(1, Number(event.target.value) || 1)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+              </ConfigRow>
+
+              <ConfigRow label="重复加群" hint="关闭后，成功/已在群/已申请的目标会自动从列表移除。">
+                <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                  <span>{repeatJoinEnabled ? '已开启' : '已关闭'}</span>
+                  <input type="checkbox" checked={repeatJoinEnabled} onChange={(event) => setRepeatJoinEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                </label>
+              </ConfigRow>
+
+              <ConfigRow label="遇到频道自动跳过">
+                <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                  <span>{skipChannelsEnabled ? '已开启' : '已关闭'}</span>
+                  <input type="checkbox" checked={skipChannelsEnabled} onChange={(event) => setSkipChannelsEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                </label>
+              </ConfigRow>
+
+              <ConfigRow label="禁言/无法发送自动退群">
+                <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                  <span>{leaveMutedGroupsEnabled ? '已开启' : '已关闭'}</span>
+                  <input type="checkbox" checked={leaveMutedGroupsEnabled} onChange={(event) => setLeaveMutedGroupsEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                </label>
+              </ConfigRow>
+
+              <ConfigRow label="添加顺序">
+                <select value={dispatchMode} onChange={(event) => setDispatchMode(event.target.value as typeof dispatchMode)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
+                  <option value="sequential">按顺序</option>
+                  <option value="random">随机添加</option>
+                </select>
+              </ConfigRow>
+            </FoldSection>
+
+            <div className="mt-4" />
+
+            <FoldSection title="间隔配置" hint="不想细调就保持默认。" defaultOpen={false}>
+              <NumberRangeField label="限流休息" minValue={floodRestMin} maxValue={floodRestMax} onMinChange={setFloodRestMin} onMaxChange={setFloodRestMax} min={1} max={600} />
+              <NumberRangeField label="每号间隔" minValue={accountIntervalMin} maxValue={accountIntervalMax} onMinChange={setAccountIntervalMin} onMaxChange={setAccountIntervalMax} min={0} max={600} />
+              <NumberRangeField label="加群间隔" minValue={joinIntervalMin} maxValue={joinIntervalMax} onMinChange={setJoinIntervalMin} onMaxChange={setJoinIntervalMax} min={0} max={600} />
+              {needsMessage ? <NumberRangeField label="发送间隔" minValue={sendIntervalMin} maxValue={sendIntervalMax} onMinChange={setSendIntervalMin} onMaxChange={setSendIntervalMax} min={0} max={600} /> : null}
+              <ConfigRow label="线程数" hint="通常 1 最稳。">
+                <input type="number" min={1} max={Math.max(1, selectedAccountIds.length || 1)} value={concurrency} onChange={(event) => setConcurrency(Math.max(1, Number(event.target.value) || 1))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+              </ConfigRow>
+            </FoldSection>
           </GlassPanel>
 
           {needsMessage ? (
             <GlassPanel className="bg-card">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-base font-semibold text-white">发送内容</div>
-                  <div className="mt-1 text-sm text-textMuted">支持文字、本地图片和一个跳转按钮。</div>
-                </div>
-              </div>
+              <FoldSection title="发送内容配置" hint="支持文字、本地图片和一个跳转按钮。">
+                <ConfigRow label="发送文案">
+                  <textarea
+                    rows={6}
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                    placeholder="输入要发送的文字内容…"
+                    className={`w-full rounded-[12px] px-3 py-3 ${SOFT_PANEL_INPUT_CLASS}`}
+                  />
+                </ConfigRow>
 
-              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-                <div className="space-y-4">
-                  <label className="block text-sm">
-                    <div className="mb-2 text-textMuted">发送文案</div>
-                    <textarea
-                      rows={8}
-                      value={messageText}
-                      onChange={(event) => setMessageText(event.target.value)}
-                      placeholder="输入要发送的文字内容…"
-                      className={`w-full rounded-[16px] px-4 py-4 ${SOFT_PANEL_INPUT_CLASS}`}
-                    />
-                  </label>
+                <ConfigRow label="按钮文字">
+                  <input value={buttonText} onChange={(event) => setButtonText(event.target.value)} placeholder="比如：立即查看" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                </ConfigRow>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="block text-sm">
-                      <div className="mb-2 text-textMuted">按钮文字</div>
-                      <input value={buttonText} onChange={(event) => setButtonText(event.target.value)} placeholder="比如：立即查看" className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-                    </label>
-                    <label className="block text-sm">
-                      <div className="mb-2 text-textMuted">按钮链接</div>
-                      <input value={buttonUrl} onChange={(event) => setButtonUrl(event.target.value)} placeholder="https://..." className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-                    </label>
-                  </div>
+                <ConfigRow label="按钮链接">
+                  <input value={buttonUrl} onChange={(event) => setButtonUrl(event.target.value)} placeholder="https://..." className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                </ConfigRow>
 
+                <ConfigRow label="发送图片">
                   <div className="flex flex-wrap items-center gap-2">
                     <label className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">
                       <Upload size={14} /> 上传图片
                       <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                     </label>
-                    {imageData ? <button type="button" onClick={() => setImageData('')} className="rounded-[12px] bg-rose-400/12 px-3 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18">删除图片</button> : null}
+                    {imageData ? <button type="button" onClick={() => setImageData('')} className="rounded-[12px] bg-rose-400/12 px-3 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18">删除图片</button> : <span className="text-xs text-textMuted">未上传</span>}
                   </div>
-                </div>
+                </ConfigRow>
 
-                <div className="rounded-[18px] bg-panel/80 p-4">
-                  <div className="text-sm font-medium text-white">发送预览</div>
-                  <div className="mt-3 space-y-3 rounded-[16px] bg-black/10 p-4 text-sm text-slate-200">
-                    {imageData ? <img src={imageData} alt="发送预览" className="max-h-[220px] w-full rounded-[12px] object-cover" /> : <div className="rounded-[12px] border border-dashed border-white/[0.08] px-4 py-8 text-center text-textMuted">还没上传图片</div>}
+                <ConfigRow label="发送预览">
+                  <div className="space-y-3 rounded-[14px] bg-panel/80 p-4 text-sm text-slate-200">
+                    {imageData ? <img src={imageData} alt="发送预览" className="max-h-[220px] w-full rounded-[12px] object-cover" /> : <div className="rounded-[12px] border border-dashed border-white/[0.08] px-4 py-6 text-center text-textMuted">还没上传图片</div>}
                     <div className="whitespace-pre-wrap break-words">{messageText.trim() || '这里会显示发送文案。'}</div>
                     {buttonUrl.trim() ? <div className="inline-flex rounded-[12px] bg-violet-400/12 px-3 py-2 text-violet-200">{buttonText.trim() || '立即查看'}</div> : null}
                   </div>
-                </div>
-              </div>
+                </ConfigRow>
+              </FoldSection>
             </GlassPanel>
           ) : null}
 

@@ -113,8 +113,11 @@ function buildTitle(payload: BatchCreatePayload, context: { accountId: number; i
   if (payload.randomTitleEnabled) {
     return `${typeLabel}_${randomAlphaNumeric(Math.max(4, Math.min(10, payload.randomLength)) )}`
   }
-  const template = payload.titleTemplate.trim() || `${typeLabel}_{accountId}_{index}`
-  return expandTemplate(template, context)
+  const template = payload.titleTemplate.trim()
+  if (!template) {
+    return expandTemplate(`${typeLabel}_{accountId}_{index}`, context)
+  }
+  return hasTemplateTokens(template) ? expandTemplate(template, context) : template
 }
 
 function buildAbout(payload: BatchCreatePayload, context: { accountId: number; index: number; type: 'group' | 'channel' }, title: string) {
@@ -123,7 +126,7 @@ function buildAbout(payload: BatchCreatePayload, context: { accountId: number; i
   }
   const template = payload.aboutTemplate.trim()
   if (!template) return ''
-  return expandTemplate(template, context)
+  return hasTemplateTokens(template) ? expandTemplate(template, context) : template
 }
 
 function normalizeUsername(raw: string) {
@@ -144,12 +147,8 @@ function buildUsername(payload: BatchCreatePayload, context: { accountId: number
   }
 
   const sourceTemplate = payload.usernameTemplate.trim() || `tg${typePrefix}_{accountId}_{index}`
-  const expanded = expandTemplate(sourceTemplate, context)
+  const expanded = hasTemplateTokens(sourceTemplate) ? expandTemplate(sourceTemplate, context) : sourceTemplate
   let value = normalizeUsername(expanded)
-  const shouldAppendSequence = !hasTemplateTokens(sourceTemplate) && (payload.countPerAccount > 1 || payload.accountIds.length > 1 || payload.createMode === 'both')
-  if (shouldAppendSequence) {
-    value = normalizeUsername(`${value}_${context.accountId}_${context.index + 1}`)
-  }
   if (retry > 0) {
     value = normalizeUsername(`${value}_${randomAlphaNumeric(Math.min(6, retry + 2))}`)
   }
