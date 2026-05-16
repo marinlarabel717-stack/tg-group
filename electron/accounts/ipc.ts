@@ -264,8 +264,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       return
     }
 
-    const state = checkQueue.getState()
-    if (!state.running) {
+    if (!checkQueue.isRunning()) {
       flushCheckState()
       return
     }
@@ -273,7 +272,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     if (checkStateEmitTimer) return
     checkStateEmitTimer = setTimeout(() => {
       flushCheckState()
-    }, 120)
+    }, 280)
   }
 
   const emitImportProgress = (payload: ImportProgressPayload) => {
@@ -396,7 +395,6 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
       try {
         checkQueue.enqueue(chunk, mode, offset === 0 ? uniqueIds.length : undefined)
-        emitCheckState(true)
       } catch (error) {
         console.error('启动账号检测任务失败：', error)
         return

@@ -163,6 +163,10 @@ export class CheckQueue extends EventEmitter {
     }
   }
 
+  isRunning() {
+    return this.state.running
+  }
+
   updateOptions(options: CheckQueueOptions) {
     if (options.concurrency !== undefined) {
       this.options.concurrency = Math.max(1, Math.trunc(options.concurrency))
