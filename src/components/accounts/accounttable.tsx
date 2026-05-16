@@ -22,7 +22,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, CircleAlert, HeartPulse, KeyRound, Loader2, LockKeyhole, Settings2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
-import type { AccountRecord, CheckAction, ProfileOperationAction, ProfileOperationPayload, TwoFactorAction, TwoFactorOperationPayload } from '../../types'
+import type { AccountRecord, AccountStatus, CheckAction, ProfileOperationAction, ProfileOperationPayload, TwoFactorAction, TwoFactorOperationPayload } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
 import { AccountSummaryCards } from './accountsummarycards'
@@ -41,6 +41,7 @@ import { useProxyPoolStore } from '../../stores/proxypoolstore'
 const ACCOUNT_GRID_TEMPLATE = '38px 52px minmax(148px,1.35fr) minmax(96px,0.9fr) minmax(108px,1fr) 74px minmax(140px,1.15fr) minmax(88px,0.85fr) minmax(96px,0.9fr) minmax(176px,1.4fr)'
 const ACCOUNT_GRID_MIN_WIDTH = 1016
 const ACCOUNT_SHELL_MIN_WIDTH = ACCOUNT_GRID_MIN_WIDTH + 16
+const LARGE_ACCOUNT_UI_THRESHOLD = 3000
 const ACCOUNT_GRID_STYLE: CSSProperties = {
   gridTemplateColumns: ACCOUNT_GRID_TEMPLATE,
   width: '100%',
@@ -1015,14 +1016,57 @@ export const AccountTable = memo(function AccountTable() {
   const virtualRows = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
 
+  const accountUiMeta = useMemo(() => {
+    const countries = new Set<string>()
+    const proxies = new Set<string>()
+    const statusSamples = new Map<AccountStatus, AccountRecord>()
+    let hasPremiumAccounts = false
+    const deletePresetCounts = {
+      flagged: 0,
+      banned: 0,
+      frozen: 0,
+      multiIp: 0
+    }
+
+    for (const account of accounts) {
+      const countryDisplay = formatCountryDisplay(account.country, account.phone)
+      if (countryDisplay) countries.add(countryDisplay)
+
+      const proxyDisplay = readProxy(account)
+      if (proxyDisplay) proxies.add(proxyDisplay)
+
+      if (!statusSamples.has(account.status)) {
+        statusSamples.set(account.status, account)
+      }
+
+      if (account.profile?.is_premium) {
+        hasPremiumAccounts = true
+      }
+
+      if (account.status === 'banned') deletePresetCounts.banned += 1
+      if (account.status === 'frozen') deletePresetCounts.frozen += 1
+      if (account.status === 'multi_ip') deletePresetCounts.multiIp += 1
+      if (account.status === 'banned' || account.status === 'frozen' || account.status === 'multi_ip' || account.status === 'session_expired' || account.status === 'not_logged_in') {
+        deletePresetCounts.flagged += 1
+      }
+    }
+
+    return {
+      countries: Array.from(countries),
+      proxies: Array.from(proxies),
+      statusSamples,
+      hasPremiumAccounts,
+      deletePresetCounts
+    }
+  }, [accounts])
+
   const countries = useMemo(
-    () => Array.from(new Set(accounts.map((item) => formatCountryDisplay(item.country, item.phone)).filter(Boolean))).map((value) => ({ label: value, value })),
-    [accounts]
+    () => accountUiMeta.countries.map((value) => ({ label: value, value })),
+    [accountUiMeta.countries]
   )
   const statuses = useMemo(
     () => {
-      const options: Array<{ label: string; value: AccountStatusFilter }> = Array.from(new Set(accounts.map((item) => item.status))).map((value) => {
-        const sampleAccount = accounts.find((item) => item.status === value)
+      const options: Array<{ label: string; value: AccountStatusFilter }> = Array.from(accountUiMeta.statusSamples.entries()).map(([value, sampleAccount]) => {
         const checkMode = sampleAccount?.profile?.check_mode === 'account-survival'
           ? 'account-survival'
           : sampleAccount?.profile?.check_mode === 'account-status'
@@ -1044,13 +1088,13 @@ export const AccountTable = memo(function AccountTable() {
         { label: '双向', value: 'limited-group' as AccountStatusFilter }
       )
 
-      if (accounts.some((item) => item.profile?.is_premium)) {
+      if (accountUiMeta.hasPremiumAccounts) {
         options.unshift({ label: '会员', value: 'premium' as AccountStatusFilter })
       }
 
       return options
     },
-    [accounts]
+    [accountUiMeta.hasPremiumAccounts, accountUiMeta.statusSamples]
   )
   const sources = useMemo(
     () => [
@@ -1060,8 +1104,8 @@ export const AccountTable = memo(function AccountTable() {
     []
   )
   const proxies = useMemo(
-    () => Array.from(new Set(accounts.map((account) => readProxy(account)))).filter(Boolean).map((value) => ({ label: value, value })),
-    [accounts]
+    () => accountUiMeta.proxies.map((value) => ({ label: value, value })),
+    [accountUiMeta.proxies]
   )
   const presenceOptions = useMemo(
     () => [
@@ -1073,25 +1117,7 @@ export const AccountTable = memo(function AccountTable() {
 
   const selectedCount = selectedIds.length
   const totalCount = data.length
-  const deletePresetCounts = useMemo(() => {
-    const counts = {
-      flagged: 0,
-      banned: 0,
-      frozen: 0,
-      multiIp: 0
-    }
-
-    for (const account of accounts) {
-      if (account.status === 'banned') counts.banned += 1
-      if (account.status === 'frozen') counts.frozen += 1
-      if (account.status === 'multi_ip') counts.multiIp += 1
-      if (account.status === 'banned' || account.status === 'frozen' || account.status === 'multi_ip' || account.status === 'session_expired' || account.status === 'not_logged_in') {
-        counts.flagged += 1
-      }
-    }
-
-    return counts
-  }, [accounts])
+  const deletePresetCounts = accountUiMeta.deletePresetCounts
   const summaryCards = useMemo(() => {
     let aliveCount = 0
     let limitedCount = 0
@@ -1131,31 +1157,41 @@ export const AccountTable = memo(function AccountTable() {
     ]
   }, [summaryScopedData])
 
-  const shortcutCards = useMemo(() => (
-    savedShortcuts.map((shortcut) => {
-      const count = accounts.filter((account) => {
-        if (shortcut.countryFilter && formatCountryDisplay(account.country, account.phone) !== shortcut.countryFilter) return false
+  const shortcutCards = useMemo(() => {
+    if (accounts.length >= LARGE_ACCOUNT_UI_THRESHOLD) {
+      return savedShortcuts.map((shortcut) => ({
+        ...shortcut,
+        count: '—',
+        summary: `${readShortcutSummary(shortcut)}（账号过多，已暂停实时计数）`
+      }))
+    }
+
+    return savedShortcuts.map((shortcut) => {
+      let count = 0
+
+      for (const account of accounts) {
+        if (shortcut.countryFilter && formatCountryDisplay(account.country, account.phone) !== shortcut.countryFilter) continue
         if (shortcut.statusFilter !== 'all') {
           if (shortcut.statusFilter === 'premium') {
-            if (!isPremiumAccount(account)) return false
+            if (!isPremiumAccount(account)) continue
           } else if (shortcut.statusFilter === 'alive') {
-            if (account.status !== 'alive' && account.status !== 'geo_restricted') return false
+            if (account.status !== 'alive' && account.status !== 'geo_restricted') continue
           } else if (shortcut.statusFilter === 'limited-group') {
-            if (account.status !== 'limited' && account.status !== 'temporary_limited') return false
+            if (account.status !== 'limited' && account.status !== 'temporary_limited') continue
           } else if (shortcut.statusFilter === 'timeout-group') {
-            if (account.status !== 'timeout' && account.status !== 'unknown' && account.status !== 'checking') return false
+            if (account.status !== 'timeout' && account.status !== 'unknown' && account.status !== 'checking') continue
           } else if (account.status !== shortcut.statusFilter) {
-            return false
+            continue
           }
         }
-        if (shortcut.proxyFilter && readProxy(account) !== shortcut.proxyFilter) return false
-        if (!matchesPremiumFilter(account, shortcut.premiumFilter)) return false
-        if (!matchesPresenceFilter(Boolean(readTwoFactor(account)), shortcut.twoFactorFilter)) return false
-        if (!matchesPresenceFilter(hasAvatar(account), shortcut.avatarFilter)) return false
-        if (!matchesPresenceFilter(getAccountTaskMeta(accountTaskStatusMap, account.id).occupied, shortcut.taskFilter)) return false
-        if (!matchesPresenceFilter(hasUsername(account), shortcut.usernameFilter)) return false
-        return true
-      }).length
+        if (shortcut.proxyFilter && readProxy(account) !== shortcut.proxyFilter) continue
+        if (!matchesPremiumFilter(account, shortcut.premiumFilter)) continue
+        if (!matchesPresenceFilter(Boolean(readTwoFactor(account)), shortcut.twoFactorFilter)) continue
+        if (!matchesPresenceFilter(hasAvatar(account), shortcut.avatarFilter)) continue
+        if (!matchesPresenceFilter(getAccountTaskMeta(accountTaskStatusMap, account.id).occupied, shortcut.taskFilter)) continue
+        if (!matchesPresenceFilter(hasUsername(account), shortcut.usernameFilter)) continue
+        count += 1
+      }
 
       return {
         ...shortcut,
@@ -1163,7 +1199,7 @@ export const AccountTable = memo(function AccountTable() {
         summary: readShortcutSummary(shortcut)
       }
     })
-  ), [accountTaskStatusMap, accounts, savedShortcuts])
+  }, [accountTaskStatusMap, accounts, savedShortcuts])
 
   useEffect(() => {
     if (selectedCount > 0) return
@@ -1187,9 +1223,9 @@ export const AccountTable = memo(function AccountTable() {
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [bulkMenuOpen])
 
-  const orderedIds = useMemo(
+  const readOrderedIds = useCallback(
     () => table.getSortedRowModel().rows.map((row) => row.original.id),
-    [table, data, sorting]
+    [table]
   )
 
   const handleSearchChange = useCallback((value: string) => {
@@ -1280,8 +1316,8 @@ export const AccountTable = memo(function AccountTable() {
   }, [])
 
   const handleSelectAll = useCallback(() => {
-    setSelectedIds(orderedIds)
-  }, [orderedIds, setSelectedIds])
+    setSelectedIds(readOrderedIds())
+  }, [readOrderedIds, setSelectedIds])
 
   const handleClearSelection = useCallback(() => {
     setSelectedIds([])
@@ -1290,9 +1326,9 @@ export const AccountTable = memo(function AccountTable() {
   const handleSelectRange = useCallback((start: number, end: number) => {
     const normalizedStart = Math.max(1, Math.min(start, end))
     const normalizedEnd = Math.max(start, end)
-    const ids = orderedIds.slice(normalizedStart - 1, normalizedEnd)
+    const ids = readOrderedIds().slice(normalizedStart - 1, normalizedEnd)
     setSelectedIds(ids)
-  }, [orderedIds, setSelectedIds])
+  }, [readOrderedIds, setSelectedIds])
 
   const handleStartCheck = useCallback((actions: CheckAction[]) => {
     const ids = [...selectedIds]
