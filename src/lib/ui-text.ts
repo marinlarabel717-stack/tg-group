@@ -15,6 +15,7 @@ export const moduleLabelMap = {
   'bot-center': '机器人中心',
   'auto-join': '极速群发',
   'batch-create': '批量创建',
+  'other-tools': '其他功能',
   'direct-message': '私信用户',
   'proxy-pool': '代理池',
   'session-manager': '采集用户',

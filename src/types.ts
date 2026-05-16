@@ -5,6 +5,7 @@ export type ModuleKey =
   | 'bot-center'
   | 'auto-join'
   | 'batch-create'
+  | 'other-tools'
   | 'direct-message'
   | 'proxy-pool'
   | 'session-manager'

@@ -10,6 +10,7 @@ const AutomationModule = lazy(() => import('./automation-module'))
 const BotCenterModule = lazy(() => import('./bot-center-module'))
 const AutoJoinModule = lazy(() => import('./auto-join-module'))
 const BatchCreateModule = lazy(() => import('./batch-create-module'))
+const OtherToolsModule = lazy(() => import('./other-tools-module'))
 const DirectMessageModule = lazy(() => import('./direct-message-module'))
 const ProxyPoolModule = lazy(() => import('./proxy-pool-module'))
 const SessionManagerModule = lazy(() => import('./session-manager-module'))
@@ -23,6 +24,7 @@ const moduleMap: Record<ModuleKey, LazyExoticComponent<ComponentType>> = {
   'bot-center': BotCenterModule,
   'auto-join': AutoJoinModule,
   'batch-create': BatchCreateModule,
+  'other-tools': OtherToolsModule,
   'direct-message': DirectMessageModule,
   'proxy-pool': ProxyPoolModule,
   'session-manager': SessionManagerModule,
