@@ -157,7 +157,8 @@ function formatAutoJoinError(error: unknown) {
   if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '这个群链接或群引用当前解析不了，不代表群一定不存在，建议换完整链接或邀请链接再试'
   if (/USER_BANNED_IN_CHANNEL/i.test(normalized)) return '这个账号在目标群里被限制了'
   if (/USER_ALREADY_PARTICIPANT/i.test(normalized)) return '这个账号本来就在群里'
-  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号登录状态失效了，需要重新登录'
+  if (/The server claims it doesn't know about the authorization key|authorization key \(session file\) currently being used|AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号的登录凭证已经失效了，或者 Telegram 现在不认这个 session 了，需要重新登录'
+  if (/TimeoutError|timed out|ETIMEDOUT|Request timed out/i.test(normalized)) return '连接 Telegram 超时了，更像是网络或代理不稳定，稍后再试会更稳'
   if (/No module named 'python_socks'|No module named 'socks'/i.test(normalized)) return '当前软件包里的代理运行环境不完整，自动加群没法通过 Telethon 走代理。请重新下载完整包后再试。'
   if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '全局代理已开启，但当前没有可用代理，所以这次没有继续走本地直连。先把可用代理补上再试。'
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '这个群限制加入，当前账号没法直接进'
@@ -169,6 +170,8 @@ function formatAutoJoinError(error: unknown) {
   if (/AUTO_JOIN_STOPPED_BY_USER/i.test(normalized)) return '任务已停止'
   const wait = readRequiredWaitSeconds(error)
   if (wait) return `Telegram 要求先等 ${wait} 秒`
+  if (/^[A-Z0-9_]+$/.test(normalized)) return `加入时出了点问题：${normalized}`
+  if (/[A-Za-z]/.test(normalized) && normalized.length >= 60) return '加入时出了点问题，像是 Telegram 返回了异常响应；如果反复出现，优先检查网络、代理和 session 状态'
   return `加入时出了点问题：${normalized}`
 }
 
@@ -199,7 +202,7 @@ function readFatalAccountStateFromError(error: unknown): AutoJoinFatalAccountSta
     }
   }
 
-  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) {
+  if (/The server claims it doesn't know about the authorization key|authorization key \(session file\) currently being used|AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) {
     return {
       persistedStatus: 'session_expired',
       itemMessage: '这个账号登录状态失效了，已停止继续加群',
