@@ -81,6 +81,20 @@ function createProfileOperationLogEntry(input: Omit<ProfileOperationLogEntry, 'i
   }
 }
 
+function trimOperationLogs<T extends { level: string }>(logs: T[], maxNonErrorLogs = 400) {
+  let removableRegularLogs = Math.max(0, logs.filter((log) => log.level !== 'error').length - maxNonErrorLogs)
+  if (removableRegularLogs <= 0) return logs
+
+  return logs.filter((log) => {
+    if (log.level === 'error') return true
+    if (removableRegularLogs > 0) {
+      removableRegularLogs -= 1
+      return false
+    }
+    return true
+  })
+}
+
 function buildStoredTwoFactor(account: ReturnType<AccountRepository['getByIds']>[number]) {
   const raw = account.profile?.twoFA
   return typeof raw === 'string' && raw.trim() ? raw.trim() : ''
@@ -255,9 +269,10 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   }
 
   const pushTwoFactorLog = (entry: Omit<TwoFactorLogEntry, 'id' | 'createdAt'>) => {
+    const nextLogs = trimOperationLogs([...twoFactorState.logs, createTwoFactorLogEntry(entry)])
     twoFactorState = {
       ...twoFactorState,
-      logs: [...twoFactorState.logs, createTwoFactorLogEntry(entry)].slice(-400),
+      logs: nextLogs,
       lastUpdatedAt: new Date().toISOString()
     }
     emitTwoFactorProgress()
@@ -284,9 +299,10 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   }
 
   const pushProfileOperationLog = (entry: Omit<ProfileOperationLogEntry, 'id' | 'createdAt'>) => {
+    const nextLogs = trimOperationLogs([...profileOperationState.logs, createProfileOperationLogEntry(entry)])
     profileOperationState = {
       ...profileOperationState,
-      logs: [...profileOperationState.logs, createProfileOperationLogEntry(entry)].slice(-400),
+      logs: nextLogs,
       lastUpdatedAt: new Date().toISOString()
     }
     emitProfileOperationProgress()
