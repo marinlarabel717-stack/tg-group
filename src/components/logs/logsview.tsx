@@ -105,6 +105,50 @@ const LogLines = memo(function LogLines({
   )
 })
 
+const LOG_RENDER_CHUNK = 200
+const LOG_INITIAL_RENDER_COUNT = 300
+
+const IncrementalLogLines = memo(function IncrementalLogLines({
+  logs,
+  lineClassResolver
+}: {
+  logs: Array<{ id: string; createdAt: string; message: string }>
+  lineClassResolver: (log: any) => string
+}) {
+  const [visibleCount, setVisibleCount] = useState(() => Math.min(logs.length, LOG_INITIAL_RENDER_COUNT))
+
+  useEffect(() => {
+    setVisibleCount((current) => {
+      if (logs.length === 0) return 0
+      if (logs.length <= LOG_INITIAL_RENDER_COUNT) return logs.length
+      if (current === 0) return Math.min(logs.length, LOG_INITIAL_RENDER_COUNT)
+      if (current >= logs.length) return logs.length
+      return Math.max(current, Math.min(logs.length, LOG_INITIAL_RENDER_COUNT))
+    })
+  }, [logs.length])
+
+  const hiddenCount = Math.max(logs.length - visibleCount, 0)
+  const displayedLogs = hiddenCount > 0 ? logs.slice(-visibleCount) : logs
+
+  return (
+    <div className="space-y-3 select-text">
+      {hiddenCount > 0 ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((current) => Math.min(logs.length, current + LOG_RENDER_CHUNK))}
+            className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-xs text-textMuted transition hover:bg-white/[0.07] hover:text-white"
+          >
+            加载更早日志（还有 {hiddenCount} 条）
+          </button>
+        </div>
+      ) : null}
+
+      <LogLines logs={displayedLogs} lineClassResolver={lineClassResolver} />
+    </div>
+  )
+})
+
 const ProxySummary = memo(function ProxySummary() {
   const proxyState = useProxyPoolStore((state) => state.state)
   const logsContext = useUIStore((state) => state.logsContext)
@@ -155,7 +199,7 @@ const ProxySummary = memo(function ProxySummary() {
         {proxyState.checkState.logs.length === 0 ? (
           <div className="flex min-h-[160px] items-center justify-center text-sm text-textMuted">暂无代理日志</div>
         ) : (
-          <LogLines logs={proxyState.checkState.logs} lineClassResolver={getProxyLogLineClass} />
+          <IncrementalLogLines logs={proxyState.checkState.logs} lineClassResolver={getProxyLogLineClass} />
         )}
       </div>
     </GlassPanel>
@@ -178,7 +222,8 @@ const AccountOperationSummary = memo(function AccountOperationSummary({
   onStop,
   onClear,
   lineClassResolver,
-  scrollContainerRef
+  scrollContainerRef,
+  onScroll
 }: {
   title: string
   subtitle: string
@@ -196,6 +241,7 @@ const AccountOperationSummary = memo(function AccountOperationSummary({
   onClear: () => void
   lineClassResolver: (log: any) => string
   scrollContainerRef?: RefObject<HTMLDivElement | null>
+  onScroll?: () => void
 }) {
   const [failedOnly, setFailedOnly] = useState(false)
   const failedAccountIds = useMemo(() => new Set(logs.filter((log) => log.level === 'error' && typeof log.accountId === 'number').map((log) => log.accountId as number)), [logs])
@@ -270,21 +316,21 @@ const AccountOperationSummary = memo(function AccountOperationSummary({
         </div>
       </div>
 
-      <div ref={scrollContainerRef as RefObject<HTMLDivElement> | undefined} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">
+      <div ref={scrollContainerRef as RefObject<HTMLDivElement> | undefined} onScroll={onScroll} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">
         {displayedLogs.length === 0 ? (
           <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center text-textMuted">
             <FileClock size={24} className="text-neonSoft" />
             <div className="text-base font-medium text-white">{failedOnly ? '当前没有失败账号日志' : '暂无运行日志'}</div>
           </div>
         ) : (
-          <LogLines logs={displayedLogs} lineClassResolver={lineClassResolver} />
+          <IncrementalLogLines logs={displayedLogs} lineClassResolver={lineClassResolver} />
         )}
       </div>
     </GlassPanel>
   )
 })
 
-function TwoFactorSummary({ state, scrollContainerRef }: { state: TwoFactorProgressState; scrollContainerRef: RefObject<HTMLDivElement | null> }) {
+function TwoFactorSummary({ state, scrollContainerRef, onScroll }: { state: TwoFactorProgressState; scrollContainerRef: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
   const stopTwoFactorTask = useAccountStore((store) => store.stopTwoFactorTask)
   const clearTwoFactorLogs = useAccountStore((store) => store.clearTwoFactorLogs)
 
@@ -306,11 +352,12 @@ function TwoFactorSummary({ state, scrollContainerRef }: { state: TwoFactorProgr
       onClear={() => void clearTwoFactorLogs()}
       lineClassResolver={getTwoFactorLineClass}
       scrollContainerRef={scrollContainerRef}
+      onScroll={onScroll}
     />
   )
 }
 
-function ProfileSummary({ state, scrollContainerRef }: { state: ProfileOperationProgressState; scrollContainerRef: RefObject<HTMLDivElement | null> }) {
+function ProfileSummary({ state, scrollContainerRef, onScroll }: { state: ProfileOperationProgressState; scrollContainerRef: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
   const stopProfileOperationTask = useAccountStore((store) => store.stopProfileOperationTask)
   const clearProfileOperationLogs = useAccountStore((store) => store.clearProfileOperationLogs)
 
@@ -332,6 +379,7 @@ function ProfileSummary({ state, scrollContainerRef }: { state: ProfileOperation
       onClear={() => void clearProfileOperationLogs()}
       lineClassResolver={getProfileLineClass}
       scrollContainerRef={scrollContainerRef}
+      onScroll={onScroll}
     />
   )
 }
@@ -341,11 +389,13 @@ export default memo(function LogsView() {
   const stopCheck = useAccountStore((state) => state.stopCheck)
   const clearCheckLogs = useAccountStore((state) => state.clearCheckLogs)
   const initProxyPool = useProxyPoolStore((state) => state.init)
-  const checkState = useAccountStore((state) => state.checkState)
+  const checkRunning = useAccountStore((state) => state.checkState.running)
+  const checkLogs = useAccountStore((state) => state.checkState.logs)
   const twoFactorState = useAccountStore((state) => state.twoFactorState)
   const profileOperationState = useAccountStore((state) => state.profileOperationState)
   const logsContext = useUIStore((state) => state.logsContext)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const shouldStickToBottomRef = useRef(true)
 
   useEffect(() => {
     void initAccounts()
@@ -353,28 +403,36 @@ export default memo(function LogsView() {
   }, [initAccounts, initProxyPool])
 
   const activeLogCount = useMemo(() => {
-    if (logsContext === 'accounts') return checkState.logs.length
+    if (logsContext === 'accounts') return checkLogs.length
     if (logsContext === 'accounts-two-factor') return twoFactorState.logs.length
     if (logsContext === 'accounts-profile') return profileOperationState.logs.length
     return 0
-  }, [checkState.logs.length, logsContext, profileOperationState.logs.length, twoFactorState.logs.length])
+  }, [checkLogs.length, logsContext, profileOperationState.logs.length, twoFactorState.logs.length])
 
   useEffect(() => {
     const element = scrollContainerRef.current
     if (!element) return
+    if (!shouldStickToBottomRef.current) return
     element.scrollTop = element.scrollHeight
   }, [activeLogCount])
+
+  const handleScroll = () => {
+    const element = scrollContainerRef.current
+    if (!element) return
+    const distanceToBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+    shouldStickToBottomRef.current = distanceToBottom <= 40
+  }
 
   if (logsContext === 'proxy-pool') {
     return <ProxySummary />
   }
 
   if (logsContext === 'accounts-two-factor') {
-    return <TwoFactorSummary state={twoFactorState} scrollContainerRef={scrollContainerRef} />
+    return <TwoFactorSummary state={twoFactorState} scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
   }
 
   if (logsContext === 'accounts-profile') {
-    return <ProfileSummary state={profileOperationState} scrollContainerRef={scrollContainerRef} />
+    return <ProfileSummary state={profileOperationState} scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
   }
 
   return (
@@ -387,7 +445,7 @@ export default memo(function LogsView() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                disabled={!checkState.running}
+                disabled={!checkRunning}
                 onClick={() => void stopCheck()}
                 className="rounded-[12px] bg-rose-400/12 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -404,14 +462,14 @@ export default memo(function LogsView() {
           </div>
         </div>
 
-        <div ref={scrollContainerRef} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">
-          {checkState.logs.length === 0 ? (
+        <div ref={scrollContainerRef} onScroll={handleScroll} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">
+          {checkLogs.length === 0 ? (
             <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center text-textMuted">
               <FileClock size={24} className="text-neonSoft" />
               <div className="text-base font-medium text-white">暂无账号运行日志</div>
             </div>
           ) : (
-            <LogLines logs={checkState.logs} lineClassResolver={getAccountLogLineClass} />
+            <IncrementalLogLines logs={checkLogs} lineClassResolver={getAccountLogLineClass} />
           )}
         </div>
       </GlassPanel>
