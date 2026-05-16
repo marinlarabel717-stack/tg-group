@@ -88,7 +88,7 @@ function NumberRangeField(props: {
 }) {
   const { label, minValue, maxValue, onMinChange, onMaxChange, min = 0, max = 999 } = props
   return (
-    <label className="rounded-[14px] bg-black/10 px-4 py-3 text-sm">
+    <label className="block px-3 py-3 text-sm">
       <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
         <div>
           <div className="text-sm text-white">{label}</div>
@@ -122,11 +122,11 @@ function FoldSection(props: { title: string; hint?: string; defaultOpen?: boolea
   const { title, hint, defaultOpen = true, children } = props
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-[18px] border border-white/[0.06] bg-panel/60 p-2">
+    <div className="space-y-2">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-3 rounded-[14px] bg-black/10 px-4 py-3 text-left transition hover:bg-white/[0.03]"
+        className="flex w-full items-center justify-between gap-3 rounded-[12px] border border-white/[0.035] bg-black/[0.08] px-3.5 py-2.5 text-left transition hover:bg-white/[0.02]"
       >
         <div className="min-w-0">
           <div className="text-sm font-medium text-white">{title}</div>
@@ -137,7 +137,7 @@ function FoldSection(props: { title: string; hint?: string; defaultOpen?: boolea
           {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </div>
       </button>
-      {open ? <div className="mt-3 space-y-3 px-1 pb-1">{children}</div> : null}
+      {open ? <div className="overflow-hidden rounded-[12px] border border-white/[0.03] bg-black/[0.06] divide-y divide-white/[0.035]">{children}</div> : null}
     </div>
   )
 }
@@ -145,7 +145,7 @@ function FoldSection(props: { title: string; hint?: string; defaultOpen?: boolea
 function ConfigRow(props: { label: string; hint?: string; children: ReactNode }) {
   const { label, hint, children } = props
   return (
-    <div className="rounded-[14px] bg-black/10 px-4 py-3 text-sm">
+    <div className="px-3 py-3 text-sm">
       <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
         <div>
           <div className="text-sm text-white">{label}</div>
