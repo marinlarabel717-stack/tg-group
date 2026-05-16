@@ -490,6 +490,7 @@ export class CheckQueue extends EventEmitter {
     this.state.running = this.pending.length > 0 || this.active.size > 0
 
     if (wasRunning && !this.state.running && this.state.totalCount === this.state.completedCount) {
+      this.engine.flushPendingWrites()
       this.appendLog('success', null, '本次检查结果')
       const summaryItems: Array<{ status: AccountCheckResult['status']; count: number }> = [
         { status: 'alive', count: this.state.resultSummary.alive },

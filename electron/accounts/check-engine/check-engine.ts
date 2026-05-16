@@ -118,6 +118,10 @@ export class AccountCheckEngine {
     this.timeoutMs = options.timeoutMs ?? 25000
   }
 
+  flushPendingWrites() {
+    this.resultWriter.flush()
+  }
+
   private async applyAccountSurvivalTtl(client: TelegramClient) {
     const result = await client.invoke(new Api.account.SetAccountTTL({
       ttl: new Api.AccountDaysTTL({ days: 730 })
