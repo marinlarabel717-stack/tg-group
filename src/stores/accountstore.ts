@@ -125,6 +125,15 @@ function createEmptyProfileOperationState(): ProfileOperationProgressState {
   }
 }
 
+function areSameNumberArrays(left: number[], right: number[]) {
+  if (left === right) return true
+  if (left.length !== right.length) return false
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false
+  }
+  return true
+}
+
 function hasRunningAccountTask(state: Pick<AccountStoreState, 'checkState' | 'twoFactorState' | 'profileOperationState' | 'importProgress'>) {
   return state.checkState.running
     || state.twoFactorState.running
@@ -300,7 +309,17 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     if (!subscribed) {
       window.desktopAccounts?.onCheckState(async (checkState) => {
         const previousState = get().checkState
-        set({ checkState })
+        const normalizedCheckState = {
+          ...checkState,
+          queuedAccountIds: areSameNumberArrays(previousState.queuedAccountIds, checkState.queuedAccountIds)
+            ? previousState.queuedAccountIds
+            : checkState.queuedAccountIds,
+          activeAccountIds: areSameNumberArrays(previousState.activeAccountIds, checkState.activeAccountIds)
+            ? previousState.activeAccountIds
+            : checkState.activeAccountIds
+        }
+
+        set({ checkState: normalizedCheckState })
         const fullyCompleted = !checkState.running
           && checkState.totalCount > 0
           && checkState.completedCount >= checkState.totalCount
