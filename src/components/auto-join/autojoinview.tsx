@@ -168,6 +168,10 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const setMode = useAutoJoinStore((state) => state.setMode)
   const speedPreset = useAutoJoinStore((state) => state.speedPreset)
   const setSpeedPreset = useAutoJoinStore((state) => state.setSpeedPreset)
+  const skipChannelsEnabled = useAutoJoinStore((state) => state.skipChannelsEnabled)
+  const setSkipChannelsEnabled = useAutoJoinStore((state) => state.setSkipChannelsEnabled)
+  const leaveMutedGroupsEnabled = useAutoJoinStore((state) => state.leaveMutedGroupsEnabled)
+  const setLeaveMutedGroupsEnabled = useAutoJoinStore((state) => state.setLeaveMutedGroupsEnabled)
   const linkInput = useAutoJoinStore((state) => state.linkInput)
   const setLinkInput = useAutoJoinStore((state) => state.setLinkInput)
   const clearLinkInput = useAutoJoinStore((state) => state.clearLinkInput)
@@ -407,6 +411,22 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               <label className="flex items-center gap-3 rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
                 <input type="checkbox" checked={repeatJoinEnabled} onChange={(event) => setRepeatJoinEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
                 重复加群
+              </label>
+
+              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200 md:col-span-2 xl:col-span-1">
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" checked={skipChannelsEnabled} onChange={(event) => setSkipChannelsEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                  遇到频道自动跳过
+                </div>
+                <div className="mt-2 text-xs text-textMuted">打开后，识别到频道会直接跳过，不把频道混进群任务里。</div>
+              </label>
+
+              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200 md:col-span-2 xl:col-span-1">
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" checked={leaveMutedGroupsEnabled} onChange={(event) => setLeaveMutedGroupsEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                  禁言/无法发送自动退群
+                </div>
+                <div className="mt-2 text-xs text-textMuted">遇到禁言群、发不了内容的群，会尝试自动退出，避免名单越积越脏。</div>
               </label>
 
               <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm md:col-span-2 xl:col-span-1">
@@ -687,39 +707,74 @@ const LogsWorkbench = memo(function LogsWorkbench() {
 
         {latestTask ? (
           <>
-            <div className="mt-3 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
-              <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-emerald-200/80">成功</div>
-                <div className="mt-2 text-2xl font-semibold text-emerald-300">{latestTask.successCount ?? 0}</div>
-              </div>
-              <div className="rounded-[14px] bg-violet-400/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-violet-200/80">已在群</div>
-                <div className="mt-2 text-2xl font-semibold text-violet-300">{latestTask.alreadyCount ?? 0}</div>
-              </div>
-              <div className="rounded-[14px] bg-amber-400/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-amber-200/80">审核</div>
-                <div className="mt-2 text-2xl font-semibold text-amber-200">{latestTask.requestedCount ?? 0}</div>
-              </div>
-              <div className="rounded-[14px] bg-rose-400/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-rose-200/80">失败</div>
-                <div className="mt-2 text-2xl font-semibold text-rose-300">{latestTask.failedCount ?? 0}</div>
-              </div>
-              <div className="rounded-[14px] bg-sky-400/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-sky-200/80">待加入</div>
-                <div className="mt-2 text-2xl font-semibold text-sky-300">{pendingCount}</div>
-              </div>
-              <div className="rounded-[14px] bg-cyan-400/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-cyan-200/80">发送成功</div>
-                <div className="mt-2 text-2xl font-semibold text-cyan-200">{latestTask.sendSuccessCount ?? 0}</div>
-              </div>
-              <div className="rounded-[14px] bg-amber-300/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-amber-100/80">跳过发送</div>
-                <div className="mt-2 text-2xl font-semibold text-amber-100">{latestTask.sendSkippedCount ?? 0}</div>
-              </div>
-              <div className="rounded-[14px] bg-rose-300/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-rose-100/80">发送失败</div>
-                <div className="mt-2 text-2xl font-semibold text-rose-100">{latestTask.sendFailedCount ?? 0}</div>
-              </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-4 xl:grid-cols-8">
+              {latestTask.sendSuccessCount + latestTask.sendSkippedCount + latestTask.sendFailedCount > 0 ? (
+                <>
+                  <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-emerald-200/80">成功</div>
+                    <div className="mt-2 text-2xl font-semibold text-emerald-300">{latestTask.successCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-violet-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-violet-200/80">已在群</div>
+                    <div className="mt-2 text-2xl font-semibold text-violet-300">{latestTask.alreadyCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-amber-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-amber-200/80">审核</div>
+                    <div className="mt-2 text-2xl font-semibold text-amber-200">{latestTask.requestedCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-rose-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-rose-200/80">失败</div>
+                    <div className="mt-2 text-2xl font-semibold text-rose-300">{latestTask.failedCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-sky-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-sky-200/80">频道跳过</div>
+                    <div className="mt-2 text-2xl font-semibold text-sky-300">{latestTask.channelSkippedCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-cyan-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-cyan-200/80">发送成功</div>
+                    <div className="mt-2 text-2xl font-semibold text-cyan-200">{latestTask.sendSuccessCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-amber-300/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-amber-100/80">跳过发送</div>
+                    <div className="mt-2 text-2xl font-semibold text-amber-100">{latestTask.sendSkippedCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-rose-300/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-rose-100/80">发送失败</div>
+                    <div className="mt-2 text-2xl font-semibold text-rose-100">{latestTask.sendFailedCount ?? 0}</div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-emerald-200/80">可发言</div>
+                    <div className="mt-2 text-2xl font-semibold text-emerald-300">{latestTask.speakableCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-amber-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-amber-200/80">需验证</div>
+                    <div className="mt-2 text-2xl font-semibold text-amber-200">{latestTask.requestedCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-orange-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-orange-200/80">禁言群</div>
+                    <div className="mt-2 text-2xl font-semibold text-orange-200">{latestTask.mutedCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-violet-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-violet-200/80">已在群</div>
+                    <div className="mt-2 text-2xl font-semibold text-violet-300">{latestTask.alreadyCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-sky-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-sky-200/80">频道跳过</div>
+                    <div className="mt-2 text-2xl font-semibold text-sky-300">{latestTask.channelSkippedCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-rose-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-rose-200/80">失败</div>
+                    <div className="mt-2 text-2xl font-semibold text-rose-300">{latestTask.failedCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-slate-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-slate-200/80">待加入</div>
+                    <div className="mt-2 text-2xl font-semibold text-slate-100">{pendingCount}</div>
+                  </div>
+                </>
+              )}
             </div>
 
             {latestSnapshot ? (
@@ -853,18 +908,31 @@ export default function AutoJoinView() {
       >
         <ResultHero label={completionStopped ? '本轮已停止' : '本轮已完成'} value={completionStopped ? `已执行 ${completionSnapshot?.total || 0} 条` : `${completionSnapshot?.total || 0} 条`} tone={completionStopped ? 'warning' : 'success'} />
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <ResultStatCard label="成功" value={completionSnapshot?.successCount || 0} tone="success" />
-          <ResultStatCard label="审核" value={completionSnapshot?.requestedCount || 0} tone="warning" />
-          <ResultStatCard label="失败" value={completionSnapshot?.failedCount || 0} tone="danger" />
-          <ResultStatCard label="已在群" value={completionSnapshot?.alreadyCount || 0} tone="violet" />
-        </div>
+        {((completionSnapshot?.sendSuccessCount || 0) + (completionSnapshot?.sendSkippedCount || 0) + (completionSnapshot?.sendFailedCount || 0)) > 0 ? (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <ResultStatCard label="成功" value={completionSnapshot?.successCount || 0} tone="success" />
+              <ResultStatCard label="审核" value={completionSnapshot?.requestedCount || 0} tone="warning" />
+              <ResultStatCard label="失败" value={completionSnapshot?.failedCount || 0} tone="danger" />
+              <ResultStatCard label="已在群" value={completionSnapshot?.alreadyCount || 0} tone="violet" />
+              <ResultStatCard label="频道跳过" value={completionSnapshot?.channelSkippedCount || 0} tone="warning" />
+            </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <ResultStatCard label="发送成功" value={completionSnapshot?.sendSuccessCount || 0} tone="success" />
-          <ResultStatCard label="跳过发送" value={completionSnapshot?.sendSkippedCount || 0} tone="warning" />
-          <ResultStatCard label="发送失败" value={completionSnapshot?.sendFailedCount || 0} tone="danger" />
-        </div>
+            <div className="grid grid-cols-3 gap-3">
+              <ResultStatCard label="发送成功" value={completionSnapshot?.sendSuccessCount || 0} tone="success" />
+              <ResultStatCard label="跳过发送" value={completionSnapshot?.sendSkippedCount || 0} tone="warning" />
+              <ResultStatCard label="发送失败" value={completionSnapshot?.sendFailedCount || 0} tone="danger" />
+            </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <ResultStatCard label="可发言" value={completionSnapshot?.speakableCount || 0} tone="success" />
+            <ResultStatCard label="需验证" value={completionSnapshot?.requestedCount || 0} tone="warning" />
+            <ResultStatCard label="禁言群" value={completionSnapshot?.mutedCount || 0} tone="danger" />
+            <ResultStatCard label="已在群" value={completionSnapshot?.alreadyCount || 0} tone="violet" />
+            <ResultStatCard label="频道跳过" value={completionSnapshot?.channelSkippedCount || 0} tone="warning" />
+          </div>
+        )}
 
         <ResultPrimaryButton label="知道了" onClick={closeCompletionDialog} tone={completionStopped ? 'warning' : 'success'} />
       </ResultDialogShell>

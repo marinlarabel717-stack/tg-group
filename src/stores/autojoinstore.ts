@@ -22,6 +22,9 @@ export interface AutoJoinTaskRecord {
   alreadyCount: number
   requestedCount: number
   failedCount: number
+  speakableCount: number
+  mutedCount: number
+  channelSkippedCount: number
   sendSuccessCount: number
   sendSkippedCount: number
   sendFailedCount: number
@@ -51,6 +54,9 @@ export interface AutoJoinTaskSnapshot {
   alreadyCount: number
   requestedCount: number
   failedCount: number
+  speakableCount: number
+  mutedCount: number
+  channelSkippedCount: number
   sendSuccessCount: number
   sendSkippedCount: number
   sendFailedCount: number
@@ -66,6 +72,8 @@ interface AutoJoinState {
   taskName: string
   mode: 'join-only' | 'join-and-send' | 'join-then-send'
   speedPreset: 'safe' | 'normal' | 'fast'
+  skipChannelsEnabled: boolean
+  leaveMutedGroupsEnabled: boolean
   linkInput: string
   messageText: string
   imageData: string
@@ -100,6 +108,8 @@ interface AutoJoinState {
   setTaskName: (value: string) => void
   setMode: (value: 'join-only' | 'join-and-send' | 'join-then-send') => void
   setSpeedPreset: (value: 'safe' | 'normal' | 'fast') => void
+  setSkipChannelsEnabled: (value: boolean) => void
+  setLeaveMutedGroupsEnabled: (value: boolean) => void
   setLinkInput: (value: string) => void
   setMessageText: (value: string) => void
   setImageData: (value: string) => void
@@ -261,8 +271,11 @@ function createTaskRecord(input: { id: string; name: string; total: number }): A
     successCount: 0,
     alreadyCount: 0,
     requestedCount: 0,
-    failedCount: 0,
-    sendSuccessCount: 0,
+      failedCount: 0,
+      speakableCount: 0,
+      mutedCount: 0,
+      channelSkippedCount: 0,
+      sendSuccessCount: 0,
     sendSkippedCount: 0,
     sendFailedCount: 0,
     startedAt: new Date().toISOString(),
@@ -325,6 +338,10 @@ function collectRemovableTargets(
 
 function formatLogMessage(item: AutoJoinResultItem, fallbackMessage: string) {
   const target = item.normalized || item.raw || '这个群'
+  if (item.joinCategory === 'channel-skipped') return `${target}是频道，已经自动跳过`
+  if (item.joinCategory === 'muted') return `${target}已归为禁言群`
+  if (item.joinCategory === 'speakable') return `${target}已归为可发言`
+  if (item.joinCategory === 'requested') return `${target}需要管理员通过，先归到需验证`
   if (item.sendStatus === 'sent') return `${target}已发送内容`
   if (item.sendStatus === 'skipped') return `${target}已跳过发送（${item.sendErrorMessage || '当前模式不需要发送'}）`
   if (item.sendStatus === 'failed') return `${target}发送失败（${item.sendErrorMessage || '原因没拿到'}）`
@@ -392,6 +409,9 @@ function applyProgress(tasks: AutoJoinTaskRecord[], payload: AutoJoinProgress) {
     alreadyCount: payload.alreadyCount,
     requestedCount: payload.requestedCount,
     failedCount: payload.failedCount,
+    speakableCount: payload.speakableCount,
+    mutedCount: payload.mutedCount,
+    channelSkippedCount: payload.channelSkippedCount,
     sendSuccessCount: payload.sendSuccessCount,
     sendSkippedCount: payload.sendSkippedCount,
     sendFailedCount: payload.sendFailedCount,
@@ -418,6 +438,9 @@ function applyResult(tasks: AutoJoinTaskRecord[], result: AutoJoinTaskResult) {
     alreadyCount: result.alreadyCount,
     requestedCount: result.requestedCount,
     failedCount: result.failedCount,
+    speakableCount: result.speakableCount,
+    mutedCount: result.mutedCount,
+    channelSkippedCount: result.channelSkippedCount,
     sendSuccessCount: result.sendSuccessCount,
     sendSkippedCount: result.sendSkippedCount,
     sendFailedCount: result.sendFailedCount,
@@ -437,6 +460,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       taskName: '',
       mode: 'join-then-send',
       speedPreset: 'safe',
+      skipChannelsEnabled: true,
+      leaveMutedGroupsEnabled: false,
       linkInput: '',
       messageText: '',
       imageData: '',
@@ -490,6 +515,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           safeModeEnabled: preset.safeModeEnabled
         })
       },
+      setSkipChannelsEnabled: (value) => set({ skipChannelsEnabled: value }),
+      setLeaveMutedGroupsEnabled: (value) => set({ leaveMutedGroupsEnabled: value }),
       setLinkInput: (value) => set({ linkInput: value }),
       setMessageText: (value) => set({ messageText: value }),
       setImageData: (value) => set({ imageData: value }),
@@ -595,6 +622,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             items,
             mode,
             speedPreset: get().speedPreset,
+            skipChannelsEnabled: get().skipChannelsEnabled,
+            leaveMutedGroupsEnabled: get().leaveMutedGroupsEnabled,
             concurrency: get().concurrency,
             accountIntervalMin: Math.min(get().accountIntervalMin, get().accountIntervalMax),
             accountIntervalMax: Math.max(get().accountIntervalMin, get().accountIntervalMax),
@@ -636,6 +665,9 @@ export const useAutoJoinStore = create<AutoJoinState>()(
               alreadyCount: result.alreadyCount,
               requestedCount: result.requestedCount,
               failedCount: result.failedCount,
+              speakableCount: result.speakableCount,
+              mutedCount: result.mutedCount,
+              channelSkippedCount: result.channelSkippedCount,
               sendSuccessCount: result.sendSuccessCount,
               sendSkippedCount: result.sendSkippedCount,
               sendFailedCount: result.sendFailedCount,
@@ -700,7 +732,7 @@ export const useAutoJoinStore = create<AutoJoinState>()(
     }),
     {
       name: 'tg-group-auto-join-store',
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => window.localStorage),
       migrate: (persistedState) => {
         const state = persistedState as Partial<AutoJoinState> | undefined
@@ -709,6 +741,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           selectedAccountIds: [],
           mode: state?.mode ?? 'join-then-send',
           speedPreset: state?.speedPreset ?? 'safe',
+          skipChannelsEnabled: state?.skipChannelsEnabled ?? true,
+          leaveMutedGroupsEnabled: state?.leaveMutedGroupsEnabled ?? false,
           messageText: state?.messageText || '',
           imageData: state?.imageData || '',
           buttonText: state?.buttonText || '',
@@ -727,6 +761,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
         taskName: state.taskName,
         mode: state.mode,
         speedPreset: state.speedPreset,
+        skipChannelsEnabled: state.skipChannelsEnabled,
+        leaveMutedGroupsEnabled: state.leaveMutedGroupsEnabled,
         linkInput: state.linkInput,
         messageText: state.messageText,
         imageData: state.imageData,

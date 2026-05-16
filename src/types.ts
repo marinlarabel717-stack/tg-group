@@ -930,6 +930,8 @@ export interface AutoJoinPayload {
   items: AutoJoinPayloadItem[]
   mode: 'join-only' | 'join-and-send' | 'join-then-send'
   speedPreset: 'safe' | 'normal' | 'fast'
+  skipChannelsEnabled: boolean
+  leaveMutedGroupsEnabled: boolean
   concurrency: number
   accountIntervalMin: number
   accountIntervalMax: number
@@ -956,6 +958,7 @@ export interface AutoJoinResultItem {
   raw: string
   normalized: string
   status: 'joined' | 'already' | 'requested' | 'failed'
+  joinCategory?: 'speakable' | 'muted' | 'requested' | 'channel-skipped' | null
   errorMessage: string
   accountId: number | null
   accountLabel: string
@@ -974,6 +977,9 @@ export interface AutoJoinTaskResult {
   alreadyCount: number
   requestedCount: number
   failedCount: number
+  speakableCount: number
+  mutedCount: number
+  channelSkippedCount: number
   sendSuccessCount: number
   sendSkippedCount: number
   sendFailedCount: number
@@ -995,6 +1001,9 @@ export interface AutoJoinProgress {
   alreadyCount: number
   requestedCount: number
   failedCount: number
+  speakableCount: number
+  mutedCount: number
+  channelSkippedCount: number
   sendSuccessCount: number
   sendSkippedCount: number
   sendFailedCount: number

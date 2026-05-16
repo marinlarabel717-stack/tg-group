@@ -181,6 +181,7 @@ function formatAutoJoinError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '原因没拿到'
+  if (/BROADCAST_CHANNEL_SKIPPED/i.test(normalized)) return '这是频道，不是群，已经自动跳过了'
   if (/Cannot find any entity corresponding to/i.test(normalized)) return '当前账号暂时识别不了这个群，群未必不存在，建议改用完整 t.me 链接或邀请链接再试'
   if (/No user has\s+".+"\s+as username/i.test(normalized)) return '当前账号暂时识别不了这个群，未必是群不存在，更像是这个账号当前搜不到，建议换完整 t.me 链接或邀请链接再试'
   if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '邀请链接失效了，或者已经不能用了'
@@ -191,6 +192,12 @@ function formatAutoJoinError(error: unknown) {
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '@群用户名当前没有被占用，可能是群改名了，或者你填的不是它现在在用的用户名'
   if (/CHANNEL_INVALID|CHAT_ID_INVALID|PEER_ID_INVALID/i.test(normalized)) return '这个群链接或群引用当前解析不了，不代表群一定不存在，建议换完整链接或邀请链接再试'
   if (/USER_BANNED_IN_CHANNEL/i.test(normalized)) return '这个账号在目标群里被限制了'
+  if (/CHAT_WRITE_FORBIDDEN/i.test(normalized)) return '这个群现在发不了言，更像是被禁言了'
+  if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '这个群当前不让这个账号发消息'
+  if (/CHAT_RESTRICTED/i.test(normalized)) return '这个群把当前账号限制住了，暂时发不了消息'
+  if (/CHAT_SEND_MEDIA_FORBIDDEN/i.test(normalized)) return '这个群不让发图片或媒体'
+  if (/CHAT_SEND_PLAIN_FORBIDDEN/i.test(normalized)) return '这个群不让发纯文字'
+  if (/CHAT_SEND_PHOTOS_FORBIDDEN/i.test(normalized)) return '这个群不让发图片'
   if (/USER_ALREADY_PARTICIPANT/i.test(normalized)) return '这个账号本来就在群里'
   if (/The server claims it doesn't know about the authorization key|authorization key \(session file\) currently being used|AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号的登录凭证已经失效了，或者 Telegram 现在不认这个 session 了，需要重新登录'
   if (/TimeoutError|timed out|ETIMEDOUT|Request timed out/i.test(normalized)) return '连接 Telegram 超时了，更像是网络或代理不稳定，稍后再试会更稳'
@@ -373,6 +380,95 @@ function readGroupTitle(source: unknown, fallback: string) {
   if (typeof entity?.title === 'string' && entity.title.trim()) return entity.title.trim()
   if (typeof entity?.username === 'string' && entity.username.trim()) return `@${entity.username.replace(/^@+/, '')}`
   return fallback
+}
+
+function extractInviteEntity(source: unknown) {
+  const value = source as { chats?: unknown[]; chat?: unknown } | null
+  if (Array.isArray(value?.chats) && value.chats[0]) {
+    return value.chats[0]
+  }
+  if (value?.chat) {
+    return value.chat
+  }
+  return null
+}
+
+function isBroadcastChannel(entity: unknown) {
+  const value = entity as { broadcast?: unknown; megagroup?: unknown } | null
+  return Boolean(value?.broadcast) && !Boolean(value?.megagroup)
+}
+
+function readSendRestrictedRights(source: unknown) {
+  const rights = source as {
+    sendMessages?: unknown
+    sendMedia?: unknown
+    sendPlain?: unknown
+    sendPhotos?: unknown
+  } | null
+  return Boolean(rights?.sendMessages || rights?.sendMedia || rights?.sendPlain || rights?.sendPhotos)
+}
+
+async function inspectTargetPreview(client: TelegramClient, item: AutoJoinPayloadItem) {
+  const parsed = parseJoinTarget(item)
+  if (parsed.kind === 'invite') {
+    const invite = await client.invoke(new Api.messages.CheckChatInvite({ hash: parsed.value }))
+    const entity = extractInviteEntity(invite)
+    return {
+      entity,
+      groupTitle: readGroupTitle(invite, item.normalized),
+      isBroadcast: isBroadcastChannel(entity)
+    }
+  }
+
+  const entity = await resolveJoinEntity(client, parsed.value)
+  return {
+    entity,
+    groupTitle: readGroupTitle(entity, item.normalized),
+    isBroadcast: isBroadcastChannel(entity)
+  }
+}
+
+async function inspectSpeakingAbility(client: TelegramClient, entity: unknown) {
+  if (isBroadcastChannel(entity)) return 'channel-skipped' as const
+  if (readSendRestrictedRights((entity as { defaultBannedRights?: unknown } | null)?.defaultBannedRights)) {
+    return 'muted' as const
+  }
+
+  try {
+    const participantResult = await client.invoke(new Api.channels.GetParticipant({
+      channel: entity as never,
+      participant: new Api.InputPeerSelf()
+    }))
+    const participant = (participantResult as { participant?: unknown }).participant
+    if (readSendRestrictedRights((participant as { bannedRights?: unknown } | null)?.bannedRights)) {
+      return 'muted' as const
+    }
+  } catch {
+    // ignore permission probe failures and fall back to entity-level rights
+  }
+
+  return 'speakable' as const
+}
+
+function isSendForbiddenError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /CHAT_WRITE_FORBIDDEN|USER_BANNED_IN_CHANNEL|CHAT_RESTRICTED|CHAT_ADMIN_REQUIRED|CHAT_SEND_[A-Z_]+_FORBIDDEN/i.test(message)
+}
+
+async function leaveJoinedTarget(client: TelegramClient, entity: unknown) {
+  const inputPeer = await client.getInputEntity(entity as never)
+  if ('channelId' in (inputPeer as object)) {
+    await client.invoke(new Api.channels.LeaveChannel({ channel: inputPeer as never }))
+    return
+  }
+
+  if ('chatId' in (inputPeer as object)) {
+    const chatPeer = inputPeer as unknown as { chatId: bigint | number }
+    await client.invoke(new Api.messages.DeleteChatUser({
+      chatId: chatPeer.chatId as never,
+      userId: 'me'
+    }))
+  }
 }
 
 async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: SessionLoader, clientManager: TelegramClientManager, proxyPoolService: ProxyPoolService) {
@@ -570,13 +666,13 @@ export class AutoJoinService {
     this.activeTask.clients.clear()
     return {
       stopped: true,
-      message: '自动加群任务已停止。'
+      message: '极速群发任务已停止。'
     }
   }
 
   async start(payload: AutoJoinPayload, onProgress?: (payload: AutoJoinProgress) => void): Promise<AutoJoinTaskResult> {
     if (this.activeTask) {
-      throw new Error('已经有自动加群任务在执行了，请先停掉当前任务。')
+      throw new Error('已经有极速群发任务在执行了，请先停掉当前任务。')
     }
 
     const accountIds = Array.from(new Set(payload.accountIds.filter((item): item is number => typeof item === 'number')))
@@ -596,6 +692,9 @@ export class AutoJoinService {
         alreadyCount: 0,
         requestedCount: 0,
         failedCount: 0,
+        speakableCount: 0,
+        mutedCount: 0,
+        channelSkippedCount: 0,
         sendSuccessCount: 0,
         sendSkippedCount: 0,
         sendFailedCount: 0,
@@ -613,8 +712,9 @@ export class AutoJoinService {
       joinAbortControllers: new Set()
     }
     this.activeTask = task
-    const useTelethonPrimary = this.telethonAutoJoiner.isAvailable()
     const needsMessage = payload.mode !== 'join-only'
+    const requiresNativeInspection = needsMessage || payload.skipChannelsEnabled || payload.leaveMutedGroupsEnabled || payload.mode === 'join-only'
+    const useTelethonPrimary = this.telethonAutoJoiner.isAvailable() && !requiresNativeInspection
     const results: AutoJoinResultItem[] = []
     const accountById = new Map(accounts.map((item) => [item.id, item]))
     const accountLabelById = new Map(accounts.map((item) => [item.id, readAccountLogLabel(item)]))
@@ -628,11 +728,15 @@ export class AutoJoinService {
     const pendingAccounts = [...accounts]
     const cooldownUntil = new Map<number, number>()
     const accountJoinCounts = new Map<number, number>()
+    const stoppedAccountIds = new Set<number>()
     let completed = 0
     let successCount = 0
     let alreadyCount = 0
     let requestedCount = 0
     let failedCount = 0
+    let speakableCount = 0
+    let mutedCount = 0
+    let channelSkippedCount = 0
     let sendSuccessCount = 0
     let sendSkippedCount = 0
     let sendFailedCount = 0
@@ -646,6 +750,9 @@ export class AutoJoinService {
         alreadyCount,
         requestedCount,
         failedCount,
+        speakableCount,
+        mutedCount,
+        channelSkippedCount,
         sendSuccessCount,
         sendSkippedCount,
         sendFailedCount,
@@ -659,6 +766,9 @@ export class AutoJoinService {
     const finalizeResult = (item: AutoJoinResultItem) => {
       results.push(item)
       completed += 1
+      if (item.joinCategory === 'channel-skipped') {
+        channelSkippedCount += 1
+      }
       if (item.status === 'joined') {
         successCount += 1
         accountJoinCounts.set(item.accountId ?? -1, (accountJoinCounts.get(item.accountId ?? -1) ?? 0) + 1)
@@ -668,7 +778,9 @@ export class AutoJoinService {
       } else if (item.status === 'requested') {
         requestedCount += 1
         accountJoinCounts.set(item.accountId ?? -1, (accountJoinCounts.get(item.accountId ?? -1) ?? 0) + 1)
-      } else failedCount += 1
+      } else if (item.joinCategory !== 'channel-skipped') failedCount += 1
+      if (item.joinCategory === 'speakable') speakableCount += 1
+      if (item.joinCategory === 'muted') mutedCount += 1
       emit(item.errorMessage || '自动加群进度已更新。', item, null, true)
     }
 
@@ -788,6 +900,11 @@ export class AutoJoinService {
             }
           }
 
+          if (stoppedAccountIds.has(account.id)) {
+            emit(`${accountLabel} 当前已经停用，后面的目标不再继续跑。`, null, null, true)
+            return
+          }
+
           const cooldown = cooldownUntil.get(account.id) ?? 0
           const waitMs = cooldown - Date.now()
           if (waitMs > 0) {
@@ -804,6 +921,30 @@ export class AutoJoinService {
 
           const attempt = next.attempts + 1
           try {
+            let previewEntity: unknown | undefined
+            let previewTitle = next.normalized
+            if (client && (payload.skipChannelsEnabled || payload.mode === 'join-only')) {
+              const preview = await inspectTargetPreview(client, next)
+              previewEntity = preview.entity ?? undefined
+              previewTitle = preview.groupTitle || previewTitle
+              if (payload.skipChannelsEnabled && preview.isBroadcast) {
+                finalizeResult({
+                  itemId: next.id,
+                  raw: next.raw,
+                  normalized: next.normalized,
+                  status: 'failed',
+                  joinCategory: 'channel-skipped',
+                  errorMessage: '这是频道，不是群，已经自动跳过。',
+                  accountId: account.id,
+                  accountLabel,
+                  groupTitle: preview.groupTitle,
+                  joinedAt: new Date().toISOString(),
+                  attempt
+                })
+                continue
+              }
+            }
+
             const joined = useTelethonPrimary
               ? await (async () => {
                   const controller = new AbortController()
@@ -846,6 +987,30 @@ export class AutoJoinService {
               attempt
             }
 
+            if (payload.mode === 'join-only') {
+              if (joined.status === 'requested') {
+                resultItem.joinCategory = 'requested'
+                resultItem.errorMessage = '这个群需要管理员通过，先归到需验证。'
+              } else if (client) {
+                const speakable = await inspectSpeakingAbility(client, ('entity' in joined ? joined.entity : undefined) ?? previewEntity)
+                if (speakable === 'muted') {
+                  resultItem.joinCategory = 'muted'
+                  resultItem.errorMessage = '这个群能进，但当前账号发不了言，已归到禁言群。'
+                  if (payload.leaveMutedGroupsEnabled) {
+                    try {
+                      await leaveJoinedTarget(client, ('entity' in joined ? joined.entity : undefined) ?? previewEntity)
+                      resultItem.errorMessage = '这个群能进但发不了言，已归到禁言群，并已自动退群。'
+                    } catch {
+                      resultItem.errorMessage = '这个群能进但发不了言，已归到禁言群；不过自动退群没成功。'
+                    }
+                  }
+                } else {
+                  resultItem.joinCategory = 'speakable'
+                  resultItem.errorMessage = '这个群已归到可发言。'
+                }
+              }
+            }
+
             finalizeResult(resultItem)
 
             if (needsMessage) {
@@ -855,7 +1020,28 @@ export class AutoJoinService {
                   await sendContentToJoinedTarget(client as TelegramClient, sendEntity, payload, joined.groupTitle || next.normalized)
                   finalizeSendState(resultItem, 'sent', `${accountLabel} 已向 ${joined.groupTitle || next.normalized} 发送内容。`)
                 } catch (sendError) {
-                  finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}`)
+                  const fatal = readFatalAccountStateFromError(sendError)
+                  if (fatal) {
+                    if (fatal.persistedStatus) {
+                      this.accountRepository.updateStatus([account.id], fatal.persistedStatus)
+                    }
+                    stoppedAccountIds.add(account.id)
+                    finalizeSendState(resultItem, 'failed', `发送时发现账号状态异常：${fatal.itemMessage}`)
+                    emit(`${accountLabel} ${fatal.stopMessage}`, null, null, true)
+                    return
+                  }
+
+                  if (payload.leaveMutedGroupsEnabled && isSendForbiddenError(sendError)) {
+                    try {
+                      const sendEntity = await resolveSendEntity(client as TelegramClient, next, 'entity' in joined ? joined.entity : undefined)
+                      await leaveJoinedTarget(client as TelegramClient, sendEntity)
+                      finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}，已自动退群。`)
+                    } catch {
+                      finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}，不过自动退群没成功。`)
+                    }
+                  } else {
+                    finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}`)
+                  }
                 }
               } else if (payload.mode === 'join-and-send') {
                 finalizeSendState(resultItem, 'skipped', '当前群还在审核中，这次先不发送。')
@@ -1046,9 +1232,21 @@ export class AutoJoinService {
               client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
               clients.set(accountId, client)
             } catch (error) {
-              finalizeSendState(item, 'failed', `发送前账号登录失效：${formatAutoJoinError(error)}`)
+              const fatal = readFatalAccountStateFromError(error)
+              if (fatal?.persistedStatus) {
+                this.accountRepository.updateStatus([accountId], fatal.persistedStatus)
+              }
+              if (fatal) {
+                stoppedAccountIds.add(accountId)
+              }
+              finalizeSendState(item, 'failed', fatal ? `发送前发现账号状态异常：${fatal.itemMessage}` : `发送前账号登录失效：${formatAutoJoinError(error)}`)
               continue
             }
+          }
+
+          if (stoppedAccountIds.has(accountId)) {
+            finalizeSendState(item, 'skipped', '这个账号已经停掉了，后面的发送先不继续。')
+            continue
           }
 
           try {
@@ -1062,7 +1260,31 @@ export class AutoJoinService {
             await sendContentToJoinedTarget(client, entity, payload, item.groupTitle || item.normalized)
             finalizeSendState(item, 'sent', `${item.accountLabel || '当前账号'} 已向 ${item.groupTitle || item.normalized} 发送内容。`)
           } catch (error) {
-            finalizeSendState(item, 'failed', `发送失败：${formatAutoJoinError(error)}`)
+            const fatal = readFatalAccountStateFromError(error)
+            if (fatal?.persistedStatus) {
+              this.accountRepository.updateStatus([accountId], fatal.persistedStatus)
+            }
+            if (fatal) {
+              stoppedAccountIds.add(accountId)
+              finalizeSendState(item, 'failed', `发送时发现账号状态异常：${fatal.itemMessage}`)
+              emit(`${item.accountLabel || '当前账号'} ${fatal.stopMessage}`, null, null, true)
+            } else if (payload.leaveMutedGroupsEnabled && isSendForbiddenError(error)) {
+              try {
+                const sourceItem: AutoJoinPayloadItem = {
+                  id: item.itemId,
+                  raw: item.raw,
+                  normalized: item.normalized,
+                  kind: item.normalized.startsWith('https://t.me/+') ? 'invite' : 'username'
+                }
+                const entity = await resolveSendEntity(client, sourceItem)
+                await leaveJoinedTarget(client, entity)
+                finalizeSendState(item, 'failed', `发送失败：${formatAutoJoinError(error)}，已自动退群。`)
+              } catch {
+                finalizeSendState(item, 'failed', `发送失败：${formatAutoJoinError(error)}，不过自动退群没成功。`)
+              }
+            } else {
+              finalizeSendState(item, 'failed', `发送失败：${formatAutoJoinError(error)}`)
+            }
           }
 
           if (!task.cancelled && sendCandidates.indexOf(item) < sendCandidates.length - 1) {
@@ -1077,8 +1299,8 @@ export class AutoJoinService {
       const message = task.cancelled
         ? `极速群发已停止，已执行 ${completed} 条。`
         : needsMessage
-          ? `极速群发完成：加群成功 ${successCount}，已在群里 ${alreadyCount}，待审核 ${requestedCount}，失败 ${failedCount}；发送成功 ${sendSuccessCount}，跳过 ${sendSkippedCount}，发送失败 ${sendFailedCount}。`
-          : `极速群发完成：成功 ${successCount}，已在群里 ${alreadyCount}，待审核 ${requestedCount}，失败 ${failedCount}。`
+          ? `极速群发完成：加群成功 ${successCount}，已在群里 ${alreadyCount}，待审核 ${requestedCount}，失败 ${failedCount}，频道跳过 ${channelSkippedCount}；发送成功 ${sendSuccessCount}，跳过 ${sendSkippedCount}，发送失败 ${sendFailedCount}。`
+          : `极速群发完成：可发言 ${speakableCount}，需验证 ${requestedCount}，禁言群 ${mutedCount}，已在群里 ${alreadyCount}，失败 ${failedCount}，频道跳过 ${channelSkippedCount}。`
 
       emit(message, null, null, false)
       return {
@@ -1088,6 +1310,9 @@ export class AutoJoinService {
         alreadyCount,
         requestedCount,
         failedCount,
+        speakableCount,
+        mutedCount,
+        channelSkippedCount,
         sendSuccessCount,
         sendSkippedCount,
         sendFailedCount,
