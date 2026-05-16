@@ -249,6 +249,42 @@ function parseJoinTarget(target: AutoJoinPayloadItem) {
   return { kind: 'username' as const, value: target.normalized.startsWith('@') ? target.normalized : `@${target.normalized.replace(/^@+/, '')}` }
 }
 
+function applySafeModeLimits(payload: AutoJoinPayload) {
+  if (!payload.safeModeEnabled) {
+    return {
+      workerLimit: payload.concurrency,
+      accountIntervalMin: payload.accountIntervalMin,
+      accountIntervalMax: payload.accountIntervalMax,
+      joinIntervalMin: payload.joinIntervalMin,
+      joinIntervalMax: payload.joinIntervalMax,
+      floodRestMin: payload.floodRestMin,
+      floodRestMax: payload.floodRestMax,
+      maxJoinsPerAccount: payload.maxJoinsPerAccount
+    }
+  }
+
+  return {
+    workerLimit: 1,
+    accountIntervalMin: Math.max(20, payload.accountIntervalMin),
+    accountIntervalMax: Math.max(Math.max(20, payload.accountIntervalMin), Math.max(60, payload.accountIntervalMax)),
+    joinIntervalMin: Math.max(90, payload.joinIntervalMin),
+    joinIntervalMax: Math.max(Math.max(90, payload.joinIntervalMin), Math.max(180, payload.joinIntervalMax)),
+    floodRestMin: Math.max(20, payload.floodRestMin),
+    floodRestMax: Math.max(Math.max(20, payload.floodRestMin), Math.max(45, payload.floodRestMax)),
+    maxJoinsPerAccount: Math.max(1, Math.min(20, payload.maxJoinsPerAccount || 3))
+  }
+}
+
+function readRiskHoldMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  const normalized = message.trim()
+  if (!normalized) return null
+  if (/PEER_FLOOD/i.test(normalized)) return '这个账号触发了 Telegram 风控，已停止继续加群，避免越跑越危险。'
+  if (/CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号加群数量已经太多，已停止继续加群，避免继续触发风控。'
+  if (/ACCOUNT_RESTRICTED/i.test(normalized)) return '这个账号当前已被限制，已停止继续加群。'
+  return null
+}
+
 async function resolveJoinEntity(client: TelegramClient, value: string) {
   try {
     return await client.getEntity(value as never)
@@ -449,7 +485,8 @@ export class AutoJoinService {
     const accountIds = Array.from(new Set(payload.accountIds.filter((item): item is number => typeof item === 'number')))
     const requestedAccounts = this.accountRepository.getByIds(accountIds)
     const accounts = requestedAccounts.filter((account) => account.status !== 'banned' && account.status !== 'frozen' && account.status !== 'session_expired' && account.status !== 'not_logged_in')
-    const workerLimit = Math.max(1, Math.min(payload.concurrency || accounts.length, accounts.length))
+    const safeModeLimits = applySafeModeLimits(payload)
+    const workerLimit = Math.max(1, Math.min(safeModeLimits.workerLimit || accounts.length, accounts.length))
     let total = payload.repeatJoinEnabled ? payload.items.length * accounts.length : payload.items.length
     if (accounts.length === 0) {
       throw new Error('一个可用账号都没选上，先选能登录的账号再开始。')
@@ -488,6 +525,7 @@ export class AutoJoinService {
     })
     const pendingAccounts = [...accounts]
     const cooldownUntil = new Map<number, number>()
+    const accountJoinCounts = new Map<number, number>()
     let completed = 0
     let successCount = 0
     let alreadyCount = 0
@@ -513,10 +551,16 @@ export class AutoJoinService {
     const finalizeResult = (item: AutoJoinResultItem) => {
       results.push(item)
       completed += 1
-      if (item.status === 'joined') successCount += 1
-      else if (item.status === 'already') alreadyCount += 1
-      else if (item.status === 'requested') requestedCount += 1
-      else failedCount += 1
+      if (item.status === 'joined') {
+        successCount += 1
+        accountJoinCounts.set(item.accountId ?? -1, (accountJoinCounts.get(item.accountId ?? -1) ?? 0) + 1)
+      } else if (item.status === 'already') {
+        alreadyCount += 1
+        accountJoinCounts.set(item.accountId ?? -1, (accountJoinCounts.get(item.accountId ?? -1) ?? 0) + 1)
+      } else if (item.status === 'requested') {
+        requestedCount += 1
+        accountJoinCounts.set(item.accountId ?? -1, (accountJoinCounts.get(item.accountId ?? -1) ?? 0) + 1)
+      } else failedCount += 1
       emit(item.errorMessage || '自动加群进度已更新。', item, null, true)
     }
 
@@ -618,6 +662,14 @@ export class AutoJoinService {
         }
 
         while (!task.cancelled) {
+          if (payload.safeModeEnabled) {
+            const joinedCount = accountJoinCounts.get(account.id) ?? 0
+            if (joinedCount >= safeModeLimits.maxJoinsPerAccount) {
+              emit(`${accountLabel} 已达到本轮防冻结上限（${safeModeLimits.maxJoinsPerAccount} 个），这个号先停在这里。`, null, null, true)
+              return
+            }
+          }
+
           const cooldown = cooldownUntil.get(account.id) ?? 0
           const waitMs = cooldown - Date.now()
           if (waitMs > 0) {
@@ -677,8 +729,8 @@ export class AutoJoinService {
             })
 
             if (shouldWaitAfterAttempt(account.id)) {
-              const baseDelay = pickDelayMs(payload.accountIntervalMin, payload.accountIntervalMax)
-              const joinDelay = pickDelayMs(payload.joinIntervalMin, payload.joinIntervalMax)
+              const baseDelay = pickDelayMs(safeModeLimits.accountIntervalMin, safeModeLimits.accountIntervalMax)
+              const joinDelay = pickDelayMs(safeModeLimits.joinIntervalMin, safeModeLimits.joinIntervalMax)
               const totalWaitSeconds = Math.max(1, Math.ceil((baseDelay + joinDelay) / 1000))
               emit(`${accountLabel} 等待 ${totalWaitSeconds} 秒后，继续加入下一个。`, null, totalWaitSeconds, true)
               await sleepForTask(task, baseDelay + joinDelay)
@@ -690,7 +742,7 @@ export class AutoJoinService {
 
             const waitSeconds = readRequiredWaitSeconds(error)
             if (waitSeconds && payload.autoRetryOnFloodWait && attempt <= Math.max(1, payload.retryLimit + 1)) {
-              const configuredRestMs = pickDelayMs(payload.floodRestMin, payload.floodRestMax)
+              const configuredRestMs = pickDelayMs(safeModeLimits.floodRestMin, safeModeLimits.floodRestMax)
               const finalWaitMs = Math.max(waitSeconds * 1000, configuredRestMs)
               cooldownUntil.set(account.id, Date.now() + finalWaitMs)
               pushBackItem(account.id, { ...next, attempts: attempt })
@@ -722,6 +774,24 @@ export class AutoJoinService {
               return
             }
 
+            const riskHoldMessage = payload.safeModeEnabled ? readRiskHoldMessage(error) : null
+            if (riskHoldMessage) {
+              finalizeResult({
+                itemId: next.id,
+                raw: next.raw,
+                normalized: next.normalized,
+                status: 'failed',
+                errorMessage: riskHoldMessage,
+                accountId: account.id,
+                accountLabel,
+                groupTitle: '',
+                joinedAt: new Date().toISOString(),
+                attempt
+              })
+              emit(`${accountLabel} ${riskHoldMessage}`, null, null, true)
+              return
+            }
+
             const missingTarget = isMissingTargetError(error)
             if (payload.repeatJoinEnabled && missingTarget) {
               const removed = dropTargetFromQueues(next.normalized, account.id)
@@ -743,7 +813,7 @@ export class AutoJoinService {
               attempt
             })
             if (shouldWaitAfterAttempt(account.id)) {
-              const waitMs = pickDelayMs(payload.accountIntervalMin, payload.accountIntervalMax)
+              const waitMs = pickDelayMs(safeModeLimits.accountIntervalMin, safeModeLimits.accountIntervalMax)
               const waitSeconds = Math.max(1, Math.ceil(waitMs / 1000))
               emit(`${accountLabel} 等待 ${waitSeconds} 秒后，继续加入下一个。`, null, waitSeconds, true)
               await sleepForTask(task, waitMs)
@@ -760,6 +830,10 @@ export class AutoJoinService {
           if (!payload.repeatJoinEnabled && !hasPendingItems()) return
         }
       }))
+
+      const pendingStopMessage = payload.safeModeEnabled
+        ? '防冻结保护已触发：当前账号都已达到本轮上限或被系统判定有风险，剩余目标已停止。'
+        : '没有可用账号继续执行这条加群任务'
 
       if (hasPendingItems()) {
         if (task.cancelled) {
@@ -781,7 +855,7 @@ export class AutoJoinService {
                 raw: next.raw,
                 normalized: next.normalized,
                 status: 'failed',
-                errorMessage: '没有可用账号继续执行这条加群任务',
+                errorMessage: pendingStopMessage,
                 accountId,
                 accountLabel: accountLabelById.get(accountId) || '',
                 groupTitle: '',
@@ -799,7 +873,7 @@ export class AutoJoinService {
               raw: next.raw,
               normalized: next.normalized,
               status: 'failed',
-              errorMessage: '没有可用账号继续执行这条加群任务',
+              errorMessage: pendingStopMessage,
               accountId: null,
               accountLabel: '',
               groupTitle: '',

@@ -181,6 +181,10 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const floodRestMax = useAutoJoinStore((state) => state.floodRestMax)
   const setFloodRestMin = useAutoJoinStore((state) => state.setFloodRestMin)
   const setFloodRestMax = useAutoJoinStore((state) => state.setFloodRestMax)
+  const safeModeEnabled = useAutoJoinStore((state) => state.safeModeEnabled)
+  const setSafeModeEnabled = useAutoJoinStore((state) => state.setSafeModeEnabled)
+  const maxJoinsPerAccount = useAutoJoinStore((state) => state.maxJoinsPerAccount)
+  const setMaxJoinsPerAccount = useAutoJoinStore((state) => state.setMaxJoinsPerAccount)
   const repeatJoinEnabled = useAutoJoinStore((state) => state.repeatJoinEnabled)
   const setRepeatJoinEnabled = useAutoJoinStore((state) => state.setRepeatJoinEnabled)
   const dispatchMode = useAutoJoinStore((state) => state.dispatchMode)
@@ -269,12 +273,31 @@ const TasksWorkbench = memo(function TasksWorkbench() {
     setAccountPickerOpen(false)
   }
 
+  const applySafePreset = () => {
+    setSafeModeEnabled(true)
+    setConcurrency(1)
+    setAccountIntervalMin(20)
+    setAccountIntervalMax(60)
+    setJoinIntervalMin(90)
+    setJoinIntervalMax(180)
+    setFloodRestMin(20)
+    setFloodRestMax(45)
+    setRepeatJoinEnabled(false)
+    setDispatchMode('sequential')
+    setMaxJoinsPerAccount(3)
+  }
+
   return (
     <>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={running || stopping} onClick={applySafePreset} className="rounded-[12px] bg-emerald-400/12 px-4 py-2.5 text-sm text-emerald-300 transition hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60">一键套用防冻结参数</button>
+              <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-textMuted">建议：1 线程、顺序加群、每号最多 3 个</div>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <button type="button" disabled={running || stopping} onClick={() => setAccountPickerOpen(true)} className="rounded-[16px] bg-panel/80 px-4 py-4 text-left transition hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60">
                 <div className="text-xs tracking-[0.18em] text-textMuted">账号数量</div>
                 <div className="mt-2 text-2xl font-semibold text-white">{selectedAccountIds.length}</div>
@@ -289,15 +312,29 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               </label>
             </div>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_220px]">
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_220px_220px]">
               <NumberRangeField label="限流休息" minValue={floodRestMin} maxValue={floodRestMax} onMinChange={setFloodRestMin} onMaxChange={setFloodRestMax} min={1} max={600} />
+
+              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" checked={safeModeEnabled} onChange={(event) => setSafeModeEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                  防冻结保护
+                </div>
+                <div className="mt-2 text-xs text-textMuted">开启后会强制按更保守的节奏跑，并在高风险报错时尽快停掉当前账号。</div>
+              </label>
+
+              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+                <div className="text-xs tracking-[0.18em] text-textMuted">每号最多加群</div>
+                <input type="number" min={1} max={20} value={maxJoinsPerAccount} onChange={(event) => setMaxJoinsPerAccount(Math.min(20, Math.max(1, Number(event.target.value) || 1)))} className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                <div className="mt-2 text-xs text-textMuted">防冻结保护开启时生效，建议 2-3 个。</div>
+              </label>
 
               <label className="flex items-center gap-3 rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
                 <input type="checkbox" checked={repeatJoinEnabled} onChange={(event) => setRepeatJoinEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
                 重复加群
               </label>
 
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm md:col-span-2 xl:col-span-1">
                 <div className="text-xs tracking-[0.18em] text-textMuted">添加顺序</div>
                 <div className="mt-3 flex gap-2">
                   <button type="button" onClick={() => setDispatchMode('random')} className={`flex-1 rounded-[12px] px-3 py-2.5 transition ${dispatchMode === 'random' ? 'bg-violet-400 text-slate-950' : 'bg-white/[0.05] text-white hover:bg-white/[0.08]'}`}>随机添加</button>
@@ -337,6 +374,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               <div className="mt-3 flex flex-wrap gap-2 text-sm text-textMuted">
                 <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-violet-300">会自动去重和过滤无效格式</div>
                 <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">不勾选重复加群时，成功/已在群/已申请的目标会自动从列表移除</div>
+                <div className="rounded-[12px] bg-emerald-400/12 px-4 py-2.5 text-emerald-300">开启防冻结保护后，会按更保守节奏执行，并限制每个号本轮最多加群数量</div>
               </div>
             </div>
           </GlassPanel>

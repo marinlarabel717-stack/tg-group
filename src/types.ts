@@ -939,6 +939,8 @@ export interface AutoJoinPayload {
   autoRetryOnFloodWait: boolean
   repeatJoinEnabled: boolean
   dispatchMode: 'random' | 'sequential'
+  safeModeEnabled: boolean
+  maxJoinsPerAccount: number
 }
 
 export interface AutoJoinResultItem {

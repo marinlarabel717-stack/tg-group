@@ -69,6 +69,8 @@ interface AutoJoinState {
   retryLimit: number
   repeatJoinEnabled: boolean
   dispatchMode: 'random' | 'sequential'
+  safeModeEnabled: boolean
+  maxJoinsPerAccount: number
   running: boolean
   stopping: boolean
   runningAccountIds: number[]
@@ -93,6 +95,8 @@ interface AutoJoinState {
   setRetryLimit: (value: number) => void
   setRepeatJoinEnabled: (value: boolean) => void
   setDispatchMode: (value: 'random' | 'sequential') => void
+  setSafeModeEnabled: (value: boolean) => void
+  setMaxJoinsPerAccount: (value: number) => void
   closeCompletionDialog: () => void
   clearLogs: () => void
   clearLinkInput: () => void
@@ -331,16 +335,18 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       selectedAccountIds: [],
       taskName: '',
       linkInput: '',
-      concurrency: 10,
-      accountIntervalMin: 5,
-      accountIntervalMax: 30,
-      joinIntervalMin: 60,
-      joinIntervalMax: 120,
-      floodRestMin: 5,
-      floodRestMax: 11,
-      retryLimit: 2,
-      repeatJoinEnabled: true,
-      dispatchMode: 'random',
+      concurrency: 1,
+      accountIntervalMin: 20,
+      accountIntervalMax: 60,
+      joinIntervalMin: 90,
+      joinIntervalMax: 180,
+      floodRestMin: 20,
+      floodRestMax: 45,
+      retryLimit: 1,
+      repeatJoinEnabled: false,
+      dispatchMode: 'sequential',
+      safeModeEnabled: true,
+      maxJoinsPerAccount: 3,
       running: false,
       stopping: false,
       runningAccountIds: [],
@@ -365,6 +371,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       setRetryLimit: (value) => set({ retryLimit: value }),
       setRepeatJoinEnabled: (value) => set({ repeatJoinEnabled: value }),
       setDispatchMode: (value) => set({ dispatchMode: value }),
+      setSafeModeEnabled: (value) => set({ safeModeEnabled: value }),
+      setMaxJoinsPerAccount: (value) => set({ maxJoinsPerAccount: Math.max(1, value) }),
       closeCompletionDialog: () => set({ completionDialogTaskId: null }),
       clearLogs: () => set({
         logs: [],
@@ -416,7 +424,12 @@ export const useAutoJoinStore = create<AutoJoinState>()(
 
         const taskId = createId('autojoin')
         const taskName = get().taskName.trim() || `自动加群 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
-        const initialTotal = get().repeatJoinEnabled ? items.length * get().selectedAccountIds.length : items.length
+        const safeModeEnabled = get().safeModeEnabled
+        const selectedAccountCount = get().selectedAccountIds.length
+        const perAccountTargetLimit = Math.max(1, get().maxJoinsPerAccount)
+        const initialTotal = get().repeatJoinEnabled
+          ? items.length * selectedAccountCount
+          : items.length
         set((state) => ({
           activeTab: 'logs',
           running: true,
@@ -428,8 +441,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           taskSnapshots: [],
           tasks: [createTaskRecord({ id: taskId, name: taskName, total: initialTotal })],
           lastActionMessage: duplicates.length > 0 || invalids.length > 0
-            ? `已过滤 ${duplicates.length} 条重复、${invalids.length} 条无效目标，准备开始加群。`
-            : '自动加群任务已提交，正在启动。'
+            ? `已过滤 ${duplicates.length} 条重复、${invalids.length} 条无效目标，准备开始加群。${safeModeEnabled ? ` 当前防冻结保护已开启：每号最多 ${perAccountTargetLimit} 个。` : ''}`
+            : `自动加群任务已提交，正在启动。${safeModeEnabled ? ` 当前防冻结保护已开启：每号最多 ${perAccountTargetLimit} 个。` : ''}`
         }))
 
         try {
@@ -447,7 +460,9 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             retryLimit: get().retryLimit,
             autoRetryOnFloodWait: true,
             repeatJoinEnabled: get().repeatJoinEnabled,
-            dispatchMode: get().dispatchMode
+            dispatchMode: get().dispatchMode,
+            safeModeEnabled,
+            maxJoinsPerAccount: perAccountTargetLimit
           })
 
           set((state) => ({
@@ -531,13 +546,18 @@ export const useAutoJoinStore = create<AutoJoinState>()(
     }),
     {
       name: 'tg-group-auto-join-store',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => window.localStorage),
       migrate: (persistedState) => {
         const state = persistedState as Partial<AutoJoinState> | undefined
         return {
           ...state,
-          selectedAccountIds: []
+          selectedAccountIds: [],
+          safeModeEnabled: state?.safeModeEnabled ?? true,
+          maxJoinsPerAccount: Math.max(1, state?.maxJoinsPerAccount ?? 3),
+          repeatJoinEnabled: state?.repeatJoinEnabled ?? false,
+          dispatchMode: state?.dispatchMode ?? 'sequential',
+          retryLimit: state?.retryLimit ?? 1
         }
       },
       partialize: (state) => ({
@@ -553,7 +573,9 @@ export const useAutoJoinStore = create<AutoJoinState>()(
         floodRestMax: state.floodRestMax,
         retryLimit: state.retryLimit,
         repeatJoinEnabled: state.repeatJoinEnabled,
-        dispatchMode: state.dispatchMode
+        dispatchMode: state.dispatchMode,
+        safeModeEnabled: state.safeModeEnabled,
+        maxJoinsPerAccount: state.maxJoinsPerAccount
       })
     }
   )
