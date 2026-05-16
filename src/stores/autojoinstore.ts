@@ -231,7 +231,7 @@ function collectRemovableTargets(
 
   return Array.from(new Set(
     items
-      .filter((item) => item.status === 'joined' || item.status === 'already' || item.status === 'requested' || item.status === 'failed')
+      .filter((item) => item.status === 'joined' || item.status === 'already' || item.status === 'requested')
       .map((item) => (item.normalized || item.raw || '').trim())
       .filter(Boolean)
   ))
@@ -390,9 +390,6 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             currentTaskId: payload.running ? payload.taskId : state.currentTaskId === payload.taskId ? null : state.currentTaskId,
             tasks: applyProgress(state.tasks, payload),
             logs: nextLogs ? appendLog(state.logs, nextLogs) : state.logs,
-            linkInput: payload.item && ['joined', 'already', 'requested', 'failed'].includes(payload.item.status)
-              ? removeTargetFromInput(state.linkInput, payload.item.normalized || payload.item.raw)
-              : state.linkInput,
             lastActionMessage: payload.message
           }))
         })
@@ -459,10 +456,12 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             runningAccountIds: [],
             currentTaskId: state.currentTaskId === result.taskId ? null : state.currentTaskId,
             tasks: applyResult(state.tasks, result),
-            linkInput: removeTargetsFromInput(
-              state.linkInput,
-              collectRemovableTargets(result.items)
-            ),
+            linkInput: state.repeatJoinEnabled
+              ? state.linkInput
+              : removeTargetsFromInput(
+                  state.linkInput,
+                  collectRemovableTargets(result.items)
+                ),
             taskSnapshots: upsertTaskSnapshot(state.taskSnapshots, {
               taskId: result.taskId,
               name: state.tasks.find((item) => item.id === result.taskId)?.name || taskName,

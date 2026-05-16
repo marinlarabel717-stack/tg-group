@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { memo, useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { CheckCircle2, ChevronDown, ChevronRight, Clock3, Copy, Download, Play, Search, Trash2, Upload, Wand2, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
@@ -224,7 +224,8 @@ const TasksWorkbench = memo(function TasksWorkbench() {
     setRangeEnd(String(Math.min(10, Math.max(accounts.length, 1))))
   }, [accountPickerOpen, accounts.length])
 
-  const summary = useMemo(() => parseAutoJoinTargets(linkInput), [linkInput])
+  const deferredLinkInput = useDeferredValue(linkInput)
+  const summary = useMemo(() => parseAutoJoinTargets(deferredLinkInput), [deferredLinkInput])
   const filteredAccounts = useMemo(() => {
     const keyword = accountSearch.trim().toLowerCase()
     if (!keyword) return accounts
@@ -579,7 +580,8 @@ const LogsWorkbench = memo(function LogsWorkbench() {
 const LinksWorkbench = memo(function LinksWorkbench() {
   const linkInput = useAutoJoinStore((state) => state.linkInput)
   const setLinkInput = useAutoJoinStore((state) => state.setLinkInput)
-  const summary = useMemo(() => parseAutoJoinTargets(linkInput), [linkInput])
+  const deferredLinkInput = useDeferredValue(linkInput)
+  const summary = useMemo(() => parseAutoJoinTargets(deferredLinkInput), [deferredLinkInput])
   const cleaned = summary.items.map((item) => item.normalized).join('\n')
 
   const copyCleaned = async () => {
