@@ -440,7 +440,6 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   setSelectedProfileAccountId: (id) => set({ selectedProfileAccountId: id }),
   importFiles: async () => {
     await runBusyAction(set, async () => {
-      set({ importProgress: createPendingTransferProgress('import') })
       let result = null
       try {
         result = await getDesktopAccountsApi()?.pickImportFiles()
@@ -475,7 +474,6 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   },
   importFolder: async () => {
     await runBusyAction(set, async () => {
-      set({ importProgress: createPendingTransferProgress('import') })
       let result = null
       try {
         result = await getDesktopAccountsApi()?.pickImportFolder()
@@ -582,12 +580,6 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      set({
-        importProgress: createPendingTransferProgress('export', {
-          total: ids.length,
-          message: ids.length > 0 ? `正在准备导出账号 0 / ${ids.length}` : '正在准备导出账号...'
-        })
-      })
       let result = null
       try {
         result = await getDesktopAccountsApi()?.exportByIds(ids)
