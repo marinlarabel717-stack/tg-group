@@ -48,6 +48,9 @@ interface BatchCreateState {
   selectedAccountIds: number[]
   createMode: BatchCreateMode
   countPerAccount: number
+  createIntervalMin: number
+  createIntervalMax: number
+  autoWaitOnFlood: boolean
   titleTemplate: string
   aboutTemplate: string
   usernameTemplate: string
@@ -69,6 +72,9 @@ interface BatchCreateState {
   setSelectedAccountIds: (value: number[]) => void
   setCreateMode: (value: BatchCreateMode) => void
   setCountPerAccount: (value: number) => void
+  setCreateIntervalMin: (value: number) => void
+  setCreateIntervalMax: (value: number) => void
+  setAutoWaitOnFlood: (value: boolean) => void
   setTitleTemplate: (value: string) => void
   setAboutTemplate: (value: string) => void
   setUsernameTemplate: (value: string) => void
@@ -132,6 +138,9 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
   selectedAccountIds: [],
   createMode: 'group',
   countPerAccount: 1,
+  createIntervalMin: 3,
+  createIntervalMax: 8,
+  autoWaitOnFlood: true,
   titleTemplate: '',
   aboutTemplate: '',
   usernameTemplate: '',
@@ -153,6 +162,9 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
   setSelectedAccountIds: (value) => set({ selectedAccountIds: value }),
   setCreateMode: (value) => set({ createMode: value }),
   setCountPerAccount: (value) => set({ countPerAccount: Math.max(1, Math.min(50, value)) }),
+  setCreateIntervalMin: (value) => set({ createIntervalMin: Math.max(0, Math.min(600, value)) }),
+  setCreateIntervalMax: (value) => set({ createIntervalMax: Math.max(0, Math.min(600, value)) }),
+  setAutoWaitOnFlood: (value) => set({ autoWaitOnFlood: value }),
   setTitleTemplate: (value) => set({ titleTemplate: value }),
   setAboutTemplate: (value) => set({ aboutTemplate: value }),
   setUsernameTemplate: (value) => set({ usernameTemplate: value }),
@@ -227,6 +239,9 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
         accountIds: selectedAccountIds,
         createMode: get().createMode,
         countPerAccount: get().countPerAccount,
+        createIntervalMin: get().createIntervalMin,
+        createIntervalMax: get().createIntervalMax,
+        autoWaitOnFlood: get().autoWaitOnFlood,
         titleTemplate: get().titleTemplate,
         aboutTemplate: get().aboutTemplate,
         usernameTemplate: get().usernameTemplate,

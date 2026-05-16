@@ -1021,6 +1021,9 @@ export interface BatchCreatePayload {
   accountIds: number[]
   createMode: BatchCreateMode
   countPerAccount: number
+  createIntervalMin: number
+  createIntervalMax: number
+  autoWaitOnFlood: boolean
   titleTemplate: string
   aboutTemplate: string
   usernameTemplate: string
@@ -1073,6 +1076,7 @@ export interface BatchCreateProgress {
   running: boolean
   item?: BatchCreateResultItem | null
   message: string
+  waitSeconds?: number | null
 }
 
 export interface DesktopSettingsApi {

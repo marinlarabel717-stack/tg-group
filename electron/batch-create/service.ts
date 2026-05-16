@@ -60,6 +60,32 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function pickDelayMs(minSeconds: number, maxSeconds: number) {
+  const min = Math.max(0, Math.min(minSeconds, maxSeconds))
+  const max = Math.max(min, Math.max(minSeconds, maxSeconds))
+  const minMs = Math.round(min * 1000)
+  const maxMs = Math.round(max * 1000)
+  if (maxMs <= minMs) return minMs
+  return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs
+}
+
+function readRequiredWaitSeconds(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  const waitMatched = message.match(/A wait of (\d+) seconds is required/i)
+  if (waitMatched?.[1]) {
+    const seconds = Number(waitMatched[1])
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  }
+
+  const floodMatched = message.match(/FLOOD_WAIT_(\d+)/i)
+  if (floodMatched?.[1]) {
+    const seconds = Number(floodMatched[1])
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  }
+
+  return null
+}
+
 function randomAlphaNumeric(length: number) {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
   let result = ''
@@ -230,7 +256,7 @@ export class BatchCreateService {
     let groupCount = 0
     let channelCount = 0
 
-    const emit = (message: string, item?: BatchCreateResultItem | null, running = true) => {
+    const emit = (message: string, item?: BatchCreateResultItem | null, running = true, waitSeconds?: number | null) => {
       onProgress?.({
         taskId: payload.taskId,
         total,
@@ -241,7 +267,8 @@ export class BatchCreateService {
         channelCount,
         running,
         item: item ?? null,
-        message
+        message,
+        waitSeconds: waitSeconds ?? null
       })
     }
 
@@ -334,11 +361,18 @@ export class BatchCreateService {
               } catch (error) {
                 lastError = error
                 const fatal = isFatalAccountError(error)
+                const waitSeconds = readRequiredWaitSeconds(error)
                 if (fatal) {
                   this.accountRepository.updateStatus([account.id], fatal.status)
                 }
                 if (createdEntity) {
                   await rollbackCreatedEntity(client, createdEntity).catch(() => undefined)
+                }
+                if (payload.autoWaitOnFlood && waitSeconds && !fatal) {
+                  emit(`${accountLabel} 创建得有点频繁了，先自动等待 ${waitSeconds} 秒再继续。`, null, true, waitSeconds)
+                  await sleep(waitSeconds * 1000)
+                  retry -= 1
+                  continue
                 }
                 const canRetryUsername = /USERNAME_OCCUPIED|USERNAME_INVALID|USERNAMES_UNAVAILABLE/i.test(error instanceof Error ? error.message : String(error))
                 if (!canRetryUsername || retry >= 3 || fatal) {
@@ -385,7 +419,12 @@ export class BatchCreateService {
             }
 
             if (!task.cancelled) {
-              await sleep(1200)
+              const delayMs = pickDelayMs(payload.createIntervalMin, payload.createIntervalMax)
+              if (delayMs > 0) {
+                const waitSeconds = Math.max(1, Math.ceil(delayMs / 1000))
+                emit(`${accountLabel} 等待 ${waitSeconds} 秒后继续创建下一个。`, null, true, waitSeconds)
+                await sleep(delayMs)
+              }
             }
           }
         }

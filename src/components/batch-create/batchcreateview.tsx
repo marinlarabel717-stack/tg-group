@@ -15,6 +15,29 @@ const tabs: Array<{ key: BatchCreateTabKey; label: string; icon: typeof PlusSqua
 const SOFT_INPUT_CLASS = 'border border-white/[0.06] bg-black/10 text-white outline-none transition focus:border-white/[0.12] focus:bg-black/12'
 const SOFT_TAB_CLASS = 'border border-white/[0.06] transition'
 
+function NumberRangeField(props: {
+  label: string
+  minValue: number
+  maxValue: number
+  onMinChange: (value: number) => void
+  onMaxChange: (value: number) => void
+  min?: number
+  max?: number
+}) {
+  const { label, minValue, maxValue, onMinChange, onMaxChange, min = 0, max = 999 } = props
+  return (
+    <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
+      <div className="text-xs tracking-[0.18em] text-textMuted">{label}</div>
+      <div className="mt-3 flex items-center gap-2">
+        <input type="number" min={min} max={max} value={minValue} onChange={(event) => onMinChange(Math.max(min, Number(event.target.value) || min))} className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+        <span className="text-textMuted">-</span>
+        <input type="number" min={min} max={max} value={maxValue} onChange={(event) => onMaxChange(Math.max(min, Number(event.target.value) || min))} className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+      </div>
+      <div className="mt-2 text-xs text-textMuted">单位：秒</div>
+    </label>
+  )
+}
+
 function readAccountLabel(account: { id: number; username?: string; phone?: string; userId?: string; profile?: Record<string, unknown> }) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
   const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
@@ -70,6 +93,12 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const setCreateMode = useBatchCreateStore((state) => state.setCreateMode)
   const countPerAccount = useBatchCreateStore((state) => state.countPerAccount)
   const setCountPerAccount = useBatchCreateStore((state) => state.setCountPerAccount)
+  const createIntervalMin = useBatchCreateStore((state) => state.createIntervalMin)
+  const createIntervalMax = useBatchCreateStore((state) => state.createIntervalMax)
+  const setCreateIntervalMin = useBatchCreateStore((state) => state.setCreateIntervalMin)
+  const setCreateIntervalMax = useBatchCreateStore((state) => state.setCreateIntervalMax)
+  const autoWaitOnFlood = useBatchCreateStore((state) => state.autoWaitOnFlood)
+  const setAutoWaitOnFlood = useBatchCreateStore((state) => state.setAutoWaitOnFlood)
   const titleTemplate = useBatchCreateStore((state) => state.titleTemplate)
   const setTitleTemplate = useBatchCreateStore((state) => state.setTitleTemplate)
   const aboutTemplate = useBatchCreateStore((state) => state.aboutTemplate)
@@ -161,7 +190,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               </button>
 
               <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">每号创建数量</div>
+                <div className="text-xs tracking-[0.18em] text-textMuted">单号创建数量</div>
                 <input type="number" min={1} max={50} value={countPerAccount} onChange={(event) => setCountPerAccount(Number(event.target.value) || 1)} className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
                 <div className="mt-2 text-xs text-textMuted">批量时会按账号顺序一个个创建</div>
               </label>
@@ -176,6 +205,19 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 <div className="text-xs tracking-[0.18em] text-textMuted">预计创建</div>
                 <div className="mt-2 text-2xl font-semibold text-white">{totalWillCreate}</div>
                 <div className="mt-1 text-xs text-textMuted">当前配置下会创建这么多个公开目标</div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <NumberRangeField label="每次创建间隔" minValue={createIntervalMin} maxValue={createIntervalMax} onMinChange={setCreateIntervalMin} onMaxChange={setCreateIntervalMax} min={0} max={600} />
+
+              <label className="flex items-center gap-3 rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-slate-200">
+                <input type="checkbox" checked={autoWaitOnFlood} onChange={(event) => setAutoWaitOnFlood(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                创建频繁自动等待
+              </label>
+
+              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm text-textMuted">
+                如果 Telegram 提示创建太快，系统会按它要求的时间自动等待，再继续当前账号。
               </div>
             </div>
 
