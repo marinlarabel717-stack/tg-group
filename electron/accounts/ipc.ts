@@ -105,6 +105,40 @@ function serializeCheckStateForRenderer(state: ReturnType<CheckQueue['getState']
   }
 }
 
+function buildDeferredStartCheckState(current: ReturnType<CheckQueue['getState']>, ids: number[], mode: 'account-status' | 'account-survival') {
+  const acceptedIds = Array.from(new Set(ids.filter((id) => Number.isFinite(id))) )
+  const nextTotalCount = current.running ? current.totalCount + acceptedIds.length : acceptedIds.length
+
+  return {
+    ...current,
+    running: acceptedIds.length > 0 || current.running,
+    runMode: mode,
+    totalCount: nextTotalCount,
+    pendingCount: current.running ? current.pendingCount + acceptedIds.length : acceptedIds.length,
+    activeCount: current.activeCount,
+    completedCount: current.running ? current.completedCount : 0,
+    failedCount: current.running ? current.failedCount : 0,
+    queuedAccountIds: [],
+    activeAccountIds: current.activeAccountIds,
+    logs: current.running ? current.logs : [],
+    resultSummary: current.running ? current.resultSummary : {
+      total: 0,
+      alive: 0,
+      limited: 0,
+      temporary_limited: 0,
+      geo_restricted: 0,
+      frozen: 0,
+      banned: 0,
+      multi_ip: 0,
+      timeout: 0,
+      unknown: 0
+    },
+    lastUpdatedAt: new Date().toISOString()
+  }
+}
+
+const CHECK_START_CHUNK_SIZE = 100
+
 function buildStoredTwoFactor(account: ReturnType<AccountRepository['getByIds']>[number]) {
   const raw = account.profile?.twoFA
   return typeof raw === 'string' && raw.trim() ? raw.trim() : ''
@@ -205,6 +239,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   let profileOperationState = createEmptyProfileOperationState()
   let profileOperationStopRequested = false
   let checkStateEmitTimer: NodeJS.Timeout | null = null
+  let checkLaunchToken = 0
 
   const flushCheckState = () => {
     if (checkStateEmitTimer) {
@@ -347,11 +382,36 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }
 
     const mode = actions.includes('account-survival') ? 'account-survival' : 'account-status'
-    const state = checkQueue.enqueue(ids, mode)
-    emitCheckState(true)
-    return serializeCheckStateForRenderer(state)
+    const previewState = buildDeferredStartCheckState(checkQueue.getState(), ids, mode)
+    const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isFinite(id))))
+    checkLaunchToken += 1
+    const launchToken = checkLaunchToken
+
+    const enqueueChunk = (offset: number) => {
+      if (launchToken !== checkLaunchToken) return
+
+      const chunk = uniqueIds.slice(offset, offset + CHECK_START_CHUNK_SIZE)
+      if (chunk.length === 0) return
+
+      try {
+        checkQueue.enqueue(chunk, mode)
+        emitCheckState(true)
+      } catch (error) {
+        console.error('启动账号检测任务失败：', error)
+        return
+      }
+
+      if (offset + chunk.length < uniqueIds.length) {
+        setTimeout(() => enqueueChunk(offset + chunk.length), 0)
+      }
+    }
+
+    setTimeout(() => enqueueChunk(0), 0)
+
+    return serializeCheckStateForRenderer(previewState)
   })
   ipcMain.handle('accounts:stop-check', () => {
+    checkLaunchToken += 1
     const state = checkQueue.stop()
     emitCheckState(true)
     return serializeCheckStateForRenderer(state)
