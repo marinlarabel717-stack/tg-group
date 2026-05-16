@@ -11,13 +11,22 @@ interface TableFiltersProps {
   countryFilter: string
   statusFilter: string
   proxyFilter: string
+  twoFactorFilter: string
+  avatarFilter: string
+  taskFilter: string
+  usernameFilter: string
   countries: FilterOption[]
   statuses: FilterOption[]
   proxies: FilterOption[]
+  presences: FilterOption[]
   onSearchChange: (value: string) => void
   onCountryChange: (value: string) => void
   onStatusChange: (value: string) => void
   onProxyChange: (value: string) => void
+  onTwoFactorChange: (value: string) => void
+  onAvatarChange: (value: string) => void
+  onTaskChange: (value: string) => void
+  onUsernameChange: (value: string) => void
   onRefresh: () => void
 }
 
@@ -74,6 +83,10 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
       <FilterSelect label="国家" value={props.countryFilter} options={props.countries} onChange={props.onCountryChange} />
       <FilterSelect label="状态" value={props.statusFilter} options={props.statuses} onChange={props.onStatusChange} />
       <FilterSelect label="网络" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
+      <FilterSelect label="有无 2FA" value={props.twoFactorFilter} options={props.presences} onChange={props.onTwoFactorChange} />
+      <FilterSelect label="有无头像" value={props.avatarFilter} options={props.presences} onChange={props.onAvatarChange} />
+      <FilterSelect label="有无任务中" value={props.taskFilter} options={props.presences} onChange={props.onTaskChange} />
+      <FilterSelect label="有无用户名" value={props.usernameFilter} options={props.presences} onChange={props.onUsernameChange} />
 
       <button
         type="button"

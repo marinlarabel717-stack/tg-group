@@ -69,6 +69,7 @@ function profileActionNeedsDialog(action: ProfileOperationAction) {
 
 type BulkOperationSubmenu = 'two-fa' | 'profile' | null
 type PremiumFilter = 'all' | 'premium' | 'non-premium'
+type PresenceFilter = 'all' | 'has' | 'none'
 
 interface AccountFilterShortcut {
   id: string
@@ -77,6 +78,10 @@ interface AccountFilterShortcut {
   statusFilter: AccountStatusFilter
   proxyFilter: string
   premiumFilter: PremiumFilter
+  twoFactorFilter: PresenceFilter
+  avatarFilter: PresenceFilter
+  taskFilter: PresenceFilter
+  usernameFilter: PresenceFilter
 }
 
 const ACCOUNT_FILTER_SHORTCUT_STORAGE_KEY = 'tg-group-account-filter-shortcuts-v1'
@@ -126,7 +131,11 @@ function loadAccountFilterShortcuts(): AccountFilterShortcut[] {
         countryFilter: typeof item?.countryFilter === 'string' ? item.countryFilter : '',
         statusFilter: typeof item?.statusFilter === 'string' ? item.statusFilter as AccountStatusFilter : 'all',
         proxyFilter: typeof item?.proxyFilter === 'string' ? item.proxyFilter : '',
-        premiumFilter: item?.premiumFilter === 'premium' || item?.premiumFilter === 'non-premium' ? item.premiumFilter : 'all'
+        premiumFilter: item?.premiumFilter === 'premium' || item?.premiumFilter === 'non-premium' ? item.premiumFilter : 'all',
+        twoFactorFilter: item?.twoFactorFilter === 'has' || item?.twoFactorFilter === 'none' ? item.twoFactorFilter : 'all',
+        avatarFilter: item?.avatarFilter === 'has' || item?.avatarFilter === 'none' ? item.avatarFilter : 'all',
+        taskFilter: item?.taskFilter === 'has' || item?.taskFilter === 'none' ? item.taskFilter : 'all',
+        usernameFilter: item?.usernameFilter === 'has' || item?.usernameFilter === 'none' ? item.usernameFilter : 'all'
       }))
       .filter((item) => item.id && item.name)
   } catch {
@@ -320,6 +329,14 @@ function readTwoFactor(account: AccountRecord) {
   return ''
 }
 
+function hasAvatar(account: AccountRecord) {
+  return Boolean(readAvatarSrc(account) || account.profile?.has_profile_pic || account.profile?.hasProfilePhoto)
+}
+
+function hasUsername(account: AccountRecord) {
+  return readUsername(account) !== '-'
+}
+
 function readLastLogin(account: AccountRecord) {
   return formatDateTime(account.lastOnlineTime || account.lastCheckTime)
 }
@@ -353,6 +370,18 @@ function readPremiumFilterLabel(value: PremiumFilter) {
   if (value === 'premium') return '会员'
   if (value === 'non-premium') return '非会员'
   return '全部会员状态'
+}
+
+function readPresenceFilterLabel(label: string, value: PresenceFilter) {
+  if (value === 'has') return `有${label}`
+  if (value === 'none') return `无${label}`
+  return `全部${label}`
+}
+
+function matchesPresenceFilter(hasValue: boolean, filter: PresenceFilter) {
+  if (filter === 'has') return hasValue
+  if (filter === 'none') return !hasValue
+  return true
 }
 
 function readStatusFilterLabel(value: AccountStatusFilter) {
@@ -394,6 +423,10 @@ function readShortcutSummary(shortcut: AccountFilterShortcut) {
   if (shortcut.statusFilter !== 'all') parts.push(readStatusFilterLabel(shortcut.statusFilter))
   if (shortcut.proxyFilter) parts.push(shortcut.proxyFilter)
   if (shortcut.premiumFilter !== 'all') parts.push(readPremiumFilterLabel(shortcut.premiumFilter))
+  if (shortcut.twoFactorFilter !== 'all') parts.push(readPresenceFilterLabel('2FA', shortcut.twoFactorFilter))
+  if (shortcut.avatarFilter !== 'all') parts.push(readPresenceFilterLabel('头像', shortcut.avatarFilter))
+  if (shortcut.taskFilter !== 'all') parts.push(readPresenceFilterLabel('任务', shortcut.taskFilter))
+  if (shortcut.usernameFilter !== 'all') parts.push(readPresenceFilterLabel('用户名', shortcut.usernameFilter))
   return parts.length > 0 ? parts.join(' + ') : '全部账号'
 }
 
@@ -612,6 +645,10 @@ export const AccountTable = memo(function AccountTable() {
   const [sourceFilter, setSourceFilter] = useState('')
   const [proxyFilter, setProxyFilter] = useState('')
   const [premiumFilter, setPremiumFilter] = useState<PremiumFilter>('all')
+  const [twoFactorFilter, setTwoFactorFilter] = useState<PresenceFilter>('all')
+  const [avatarFilter, setAvatarFilter] = useState<PresenceFilter>('all')
+  const [taskFilter, setTaskFilter] = useState<PresenceFilter>('all')
+  const [usernameFilter, setUsernameFilter] = useState<PresenceFilter>('all')
   const [savedShortcuts, setSavedShortcuts] = useState<AccountFilterShortcut[]>(loadAccountFilterShortcuts)
   const [activeShortcutId, setActiveShortcutId] = useState<string | null>(null)
   const [shortcutDialogOpen, setShortcutDialogOpen] = useState(false)
@@ -620,6 +657,10 @@ export const AccountTable = memo(function AccountTable() {
   const [shortcutStatusFilter, setShortcutStatusFilter] = useState<AccountStatusFilter>('all')
   const [shortcutProxyFilter, setShortcutProxyFilter] = useState('')
   const [shortcutPremiumFilter, setShortcutPremiumFilter] = useState<PremiumFilter>('all')
+  const [shortcutTwoFactorFilter, setShortcutTwoFactorFilter] = useState<PresenceFilter>('all')
+  const [shortcutAvatarFilter, setShortcutAvatarFilter] = useState<PresenceFilter>('all')
+  const [shortcutTaskFilter, setShortcutTaskFilter] = useState<PresenceFilter>('all')
+  const [shortcutUsernameFilter, setShortcutUsernameFilter] = useState<PresenceFilter>('all')
   const [sorting, setSorting] = useState(createDefaultSorting)
   const [pagination, setPagination] = useState(createDefaultPagination)
   const [tableLoading, setTableLoading] = useState(true)
@@ -650,9 +691,13 @@ export const AccountTable = memo(function AccountTable() {
       baseData.filter((account) => {
         if (sourceFilter && account.profileSource !== sourceFilter) return false
         if (proxyFilter && readProxy(account) !== proxyFilter) return false
+        if (!matchesPresenceFilter(Boolean(readTwoFactor(account)), twoFactorFilter)) return false
+        if (!matchesPresenceFilter(hasAvatar(account), avatarFilter)) return false
+        if (!matchesPresenceFilter(getAccountTaskMeta(accountTaskStatusMap, account.id).occupied, taskFilter)) return false
+        if (!matchesPresenceFilter(hasUsername(account), usernameFilter)) return false
         return true
       }),
-    [baseData, sourceFilter, proxyFilter]
+    [accountTaskStatusMap, avatarFilter, baseData, proxyFilter, sourceFilter, taskFilter, twoFactorFilter, usernameFilter]
   )
   const scopedData = useMemo(
     () => summaryScopedData.filter((account) => matchesPremiumFilter(account, premiumFilter)),
@@ -665,7 +710,7 @@ export const AccountTable = memo(function AccountTable() {
 
   useEffect(() => {
     setPagination((previous) => ({ ...previous, pageIndex: 0 }))
-  }, [deferredSearch, statusFilter, countryFilter, sourceFilter, proxyFilter, premiumFilter])
+  }, [deferredSearch, statusFilter, countryFilter, sourceFilter, proxyFilter, premiumFilter, twoFactorFilter, avatarFilter, taskFilter, usernameFilter])
 
   useEffect(() => {
     saveAccountFilterShortcuts(savedShortcuts)
@@ -683,11 +728,15 @@ export const AccountTable = memo(function AccountTable() {
       && activeShortcut.statusFilter === statusFilter
       && activeShortcut.proxyFilter === proxyFilter
       && activeShortcut.premiumFilter === premiumFilter
+      && activeShortcut.twoFactorFilter === twoFactorFilter
+      && activeShortcut.avatarFilter === avatarFilter
+      && activeShortcut.taskFilter === taskFilter
+      && activeShortcut.usernameFilter === usernameFilter
 
     if (!matched) {
       setActiveShortcutId(null)
     }
-  }, [activeShortcutId, countryFilter, premiumFilter, proxyFilter, savedShortcuts, statusFilter])
+  }, [activeShortcutId, avatarFilter, countryFilter, premiumFilter, proxyFilter, savedShortcuts, statusFilter, taskFilter, twoFactorFilter, usernameFilter])
 
   useEffect(() => {
     setTableLoading(true)
@@ -976,6 +1025,13 @@ export const AccountTable = memo(function AccountTable() {
     () => Array.from(new Set(accounts.map((account) => readProxy(account)))).filter(Boolean).map((value) => ({ label: value, value })),
     [accounts]
   )
+  const presenceOptions = useMemo(
+    () => [
+      { label: '有', value: 'has' },
+      { label: '无', value: 'none' }
+    ],
+    []
+  )
 
   const selectedCount = selectedIds.length
   const totalCount = data.length
@@ -1021,6 +1077,10 @@ export const AccountTable = memo(function AccountTable() {
         }
         if (shortcut.proxyFilter && readProxy(account) !== shortcut.proxyFilter) return false
         if (!matchesPremiumFilter(account, shortcut.premiumFilter)) return false
+        if (!matchesPresenceFilter(Boolean(readTwoFactor(account)), shortcut.twoFactorFilter)) return false
+        if (!matchesPresenceFilter(hasAvatar(account), shortcut.avatarFilter)) return false
+        if (!matchesPresenceFilter(getAccountTaskMeta(accountTaskStatusMap, account.id).occupied, shortcut.taskFilter)) return false
+        if (!matchesPresenceFilter(hasUsername(account), shortcut.usernameFilter)) return false
         return true
       }).length
 
@@ -1030,7 +1090,7 @@ export const AccountTable = memo(function AccountTable() {
         summary: readShortcutSummary(shortcut)
       }
     })
-  ), [accounts, savedShortcuts])
+  ), [accountTaskStatusMap, accounts, savedShortcuts])
 
   useEffect(() => {
     if (selectedCount > 0) return
@@ -1069,8 +1129,12 @@ export const AccountTable = memo(function AccountTable() {
     setShortcutStatusFilter(statusFilter)
     setShortcutProxyFilter(proxyFilter)
     setShortcutPremiumFilter(premiumFilter)
+    setShortcutTwoFactorFilter(twoFactorFilter)
+    setShortcutAvatarFilter(avatarFilter)
+    setShortcutTaskFilter(taskFilter)
+    setShortcutUsernameFilter(usernameFilter)
     setShortcutDialogOpen(true)
-  }, [countryFilter, premiumFilter, proxyFilter, statusFilter])
+  }, [avatarFilter, countryFilter, premiumFilter, proxyFilter, statusFilter, taskFilter, twoFactorFilter, usernameFilter])
 
   const handleSaveShortcut = useCallback(() => {
     const name = shortcutName.trim()
@@ -1085,7 +1149,11 @@ export const AccountTable = memo(function AccountTable() {
       countryFilter: shortcutCountryFilter,
       statusFilter: shortcutStatusFilter,
       proxyFilter: shortcutProxyFilter,
-      premiumFilter: shortcutPremiumFilter
+      premiumFilter: shortcutPremiumFilter,
+      twoFactorFilter: shortcutTwoFactorFilter,
+      avatarFilter: shortcutAvatarFilter,
+      taskFilter: shortcutTaskFilter,
+      usernameFilter: shortcutUsernameFilter
     }
 
     setSavedShortcuts((previous) => [...previous, nextShortcut])
@@ -1095,9 +1163,13 @@ export const AccountTable = memo(function AccountTable() {
     setStatusFilter(nextShortcut.statusFilter)
     setProxyFilter(nextShortcut.proxyFilter)
     setPremiumFilter(nextShortcut.premiumFilter)
+    setTwoFactorFilter(nextShortcut.twoFactorFilter)
+    setAvatarFilter(nextShortcut.avatarFilter)
+    setTaskFilter(nextShortcut.taskFilter)
+    setUsernameFilter(nextShortcut.usernameFilter)
     setShortcutDialogOpen(false)
     setBulkActionHint(`已把“${name}”固定到顶部。`)
-  }, [setCountryFilter, setSearch, setStatusFilter, shortcutCountryFilter, shortcutName, shortcutPremiumFilter, shortcutProxyFilter, shortcutStatusFilter])
+  }, [setCountryFilter, setSearch, setStatusFilter, shortcutAvatarFilter, shortcutCountryFilter, shortcutName, shortcutPremiumFilter, shortcutProxyFilter, shortcutStatusFilter, shortcutTaskFilter, shortcutTwoFactorFilter, shortcutUsernameFilter])
 
   const handleApplyShortcut = useCallback((shortcut: AccountFilterShortcut) => {
     setActiveShortcutId(shortcut.id)
@@ -1106,6 +1178,10 @@ export const AccountTable = memo(function AccountTable() {
     setStatusFilter(shortcut.statusFilter)
     setProxyFilter(shortcut.proxyFilter)
     setPremiumFilter(shortcut.premiumFilter)
+    setTwoFactorFilter(shortcut.twoFactorFilter)
+    setAvatarFilter(shortcut.avatarFilter)
+    setTaskFilter(shortcut.taskFilter)
+    setUsernameFilter(shortcut.usernameFilter)
     setPagination(createDefaultPagination())
     setSelectedIds([])
   }, [setCountryFilter, setSearch, setSelectedIds, setStatusFilter])
@@ -1257,6 +1333,10 @@ export const AccountTable = memo(function AccountTable() {
     setSourceFilter('')
     setProxyFilter('')
     setPremiumFilter('all')
+    setTwoFactorFilter('all')
+    setAvatarFilter('all')
+    setTaskFilter('all')
+    setUsernameFilter('all')
     setActiveShortcutId(null)
     setSelectedIds([])
     setSorting(createDefaultSorting())
@@ -1319,6 +1399,10 @@ export const AccountTable = memo(function AccountTable() {
           setCountryFilter('')
           setProxyFilter('')
           setPremiumFilter('all')
+          setTwoFactorFilter('all')
+          setAvatarFilter('all')
+          setTaskFilter('all')
+          setUsernameFilter('all')
           setStatusFilter(value)
         }}
         action={(
@@ -1420,13 +1504,22 @@ export const AccountTable = memo(function AccountTable() {
         countryFilter={countryFilter}
         statusFilter={statusFilter === 'all' ? '' : statusFilter}
         proxyFilter={proxyFilter}
+        twoFactorFilter={twoFactorFilter}
+        avatarFilter={avatarFilter}
+        taskFilter={taskFilter}
+        usernameFilter={usernameFilter}
         countries={countries}
         statuses={statuses}
         proxies={proxies}
+        presences={presenceOptions}
         onSearchChange={handleSearchChange}
         onCountryChange={setCountryFilter}
         onStatusChange={(value) => setStatusFilter((value || 'all') as AccountStatusFilter)}
         onProxyChange={setProxyFilter}
+        onTwoFactorChange={(value) => setTwoFactorFilter((value || 'all') as PresenceFilter)}
+        onAvatarChange={(value) => setAvatarFilter((value || 'all') as PresenceFilter)}
+        onTaskChange={(value) => setTaskFilter((value || 'all') as PresenceFilter)}
+        onUsernameChange={(value) => setUsernameFilter((value || 'all') as PresenceFilter)}
         onRefresh={handleRefresh}
       />
 
@@ -1719,10 +1812,30 @@ export const AccountTable = memo(function AccountTable() {
                   <option value="premium">只看会员</option>
                   <option value="non-premium">只看非会员</option>
                 </select>
+
+                <select value={shortcutTwoFactorFilter} onChange={(event) => setShortcutTwoFactorFilter(event.target.value as PresenceFilter)} className="h-11 rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-textMain outline-none transition focus:border-white/[0.12] focus:bg-hover">
+                  <option value="all">2FA（不限）</option>
+                  {presenceOptions.map((option) => <option key={`shortcut-twofa-${option.value}`} value={option.value}>{option.label}</option>)}
+                </select>
+
+                <select value={shortcutAvatarFilter} onChange={(event) => setShortcutAvatarFilter(event.target.value as PresenceFilter)} className="h-11 rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-textMain outline-none transition focus:border-white/[0.12] focus:bg-hover">
+                  <option value="all">头像（不限）</option>
+                  {presenceOptions.map((option) => <option key={`shortcut-avatar-${option.value}`} value={option.value}>{option.label}</option>)}
+                </select>
+
+                <select value={shortcutTaskFilter} onChange={(event) => setShortcutTaskFilter(event.target.value as PresenceFilter)} className="h-11 rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-textMain outline-none transition focus:border-white/[0.12] focus:bg-hover">
+                  <option value="all">任务（不限）</option>
+                  {presenceOptions.map((option) => <option key={`shortcut-task-${option.value}`} value={option.value}>{option.label}</option>)}
+                </select>
+
+                <select value={shortcutUsernameFilter} onChange={(event) => setShortcutUsernameFilter(event.target.value as PresenceFilter)} className="h-11 rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-textMain outline-none transition focus:border-white/[0.12] focus:bg-hover">
+                  <option value="all">用户名（不限）</option>
+                  {presenceOptions.map((option) => <option key={`shortcut-username-${option.value}`} value={option.value}>{option.label}</option>)}
+                </select>
               </div>
 
               <div className="rounded-[12px] bg-panel px-4 py-3 text-sm text-textMuted">
-                保存后会固定在顶部：<span className="text-white">{readShortcutSummary({ id: '', name: shortcutName, countryFilter: shortcutCountryFilter, statusFilter: shortcutStatusFilter, proxyFilter: shortcutProxyFilter, premiumFilter: shortcutPremiumFilter })}</span>
+                保存后会固定在顶部：<span className="text-white">{readShortcutSummary({ id: '', name: shortcutName, countryFilter: shortcutCountryFilter, statusFilter: shortcutStatusFilter, proxyFilter: shortcutProxyFilter, premiumFilter: shortcutPremiumFilter, twoFactorFilter: shortcutTwoFactorFilter, avatarFilter: shortcutAvatarFilter, taskFilter: shortcutTaskFilter, usernameFilter: shortcutUsernameFilter })}</span>
               </div>
             </div>
 
