@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
+import type { AccountListQuery, CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
 import type { AppSettings } from '../app-settings-store'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
@@ -388,6 +388,14 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   })
 
   ipcMain.handle('accounts:list', async () => serializeAccountsForRenderer(accountRepository.list()))
+  ipcMain.handle('accounts:list-page', async (_event, query: AccountListQuery) => {
+    const result = accountRepository.listPage(query)
+    return {
+      accounts: serializeAccountsForRenderer(result.accounts),
+      total: result.total
+    }
+  })
+  ipcMain.handle('accounts:list-ids', async (_event, query: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter'>) => accountRepository.listIds(query))
   ipcMain.handle('accounts:get-check-state', () => serializeCheckStateForRenderer(checkQueue.getSummaryState()))
   ipcMain.handle('accounts:get-check-logs', () => checkQueue.getLogs())
   ipcMain.handle('app-settings:get', () => appSettingsStore.get())

@@ -167,6 +167,21 @@ export interface StatusUpdateResult {
   accounts: AccountRecord[]
 }
 
+export type AccountListStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
+
+export interface AccountListQuery {
+  search: string
+  statusFilter: AccountListStatusFilter
+  countryFilter: string
+  pageIndex: number
+  pageSize: number
+}
+
+export interface AccountListPageResult {
+  accounts: AccountRecord[]
+  total: number
+}
+
 export interface PremiumExpiryReadResult {
   ok: boolean
   premiumExpiry: string | null

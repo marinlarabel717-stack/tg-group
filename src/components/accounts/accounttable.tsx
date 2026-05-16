@@ -22,7 +22,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, CircleAlert, HeartPulse, KeyRound, Loader2, LockKeyhole, Settings2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
-import type { AccountRecord, AccountStatus, CheckAction, ProfileOperationAction, ProfileOperationPayload, TwoFactorAction, TwoFactorOperationPayload } from '../../types'
+import type { AccountListPageResult, AccountRecord, AccountStatus, CheckAction, ProfileOperationAction, ProfileOperationPayload, TwoFactorAction, TwoFactorOperationPayload } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
 import { AccountSummaryCards } from './accountsummarycards'
@@ -113,6 +113,13 @@ function createDefaultSorting() {
 
 function createDefaultPagination() {
   return { pageIndex: 0, pageSize: 20 }
+}
+
+function createEmptyAccountPage(): AccountListPageResult {
+  return {
+    accounts: [],
+    total: 0
+  }
 }
 
 function loadAccountFilterShortcuts(): AccountFilterShortcut[] {
@@ -664,6 +671,8 @@ export const AccountTable = memo(function AccountTable() {
   const [sorting, setSorting] = useState(createDefaultSorting)
   const [pagination, setPagination] = useState(createDefaultPagination)
   const [tableLoading, setTableLoading] = useState(true)
+  const [serverPage, setServerPage] = useState<AccountListPageResult>(createEmptyAccountPage)
+  const [serverPageLoading, setServerPageLoading] = useState(false)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [frozenDialogAccount, setFrozenDialogAccount] = useState<AccountRecord | null>(null)
   const [premiumDialogAccount, setPremiumDialogAccount] = useState<PremiumDialogState | null>(null)
@@ -681,6 +690,15 @@ export const AccountTable = memo(function AccountTable() {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const scrollbarRef = useRef<HTMLDivElement | null>(null)
   const bulkMenuRef = useRef<HTMLDivElement | null>(null)
+  const serverPageRequestRef = useRef(0)
+
+  const canUseServerPage = !sourceFilter
+    && !proxyFilter
+    && premiumFilter === 'all'
+    && twoFactorFilter === 'all'
+    && avatarFilter === 'all'
+    && taskFilter === 'all'
+    && usernameFilter === 'all'
 
   const baseData = useMemo(
     () => filterAccounts(accounts, { search: deferredSearch, statusFilter: 'all', countryFilter }),
@@ -707,6 +725,52 @@ export const AccountTable = memo(function AccountTable() {
     () => filterAccounts(scopedData, { search: '', statusFilter, countryFilter: '' }),
     [scopedData, statusFilter]
   )
+
+  useEffect(() => {
+    if (!canUseServerPage || !window.desktopAccounts?.listPage) {
+      setServerPage(createEmptyAccountPage())
+      setServerPageLoading(false)
+      return
+    }
+
+    const requestId = serverPageRequestRef.current + 1
+    serverPageRequestRef.current = requestId
+    setServerPageLoading(true)
+
+    void window.desktopAccounts.listPage({
+      search: deferredSearch,
+      statusFilter,
+      countryFilter,
+      pageIndex: pagination.pageIndex,
+      pageSize: pagination.pageSize
+    }).then((result) => {
+      if (serverPageRequestRef.current !== requestId) return
+      setServerPage(result)
+    }).catch(() => {
+      if (serverPageRequestRef.current !== requestId) return
+      setServerPage(createEmptyAccountPage())
+    }).finally(() => {
+      if (serverPageRequestRef.current === requestId) {
+        setServerPageLoading(false)
+      }
+    })
+  }, [canUseServerPage, countryFilter, deferredSearch, pagination.pageIndex, pagination.pageSize, statusFilter])
+
+  const tableData = canUseServerPage ? serverPage.accounts : data
+  const visibleTotalCount = canUseServerPage ? serverPage.total : data.length
+
+  useEffect(() => {
+    if (!canUseServerPage) return
+    if (visibleTotalCount <= 0) return
+
+    const maxPageIndex = Math.max(0, Math.ceil(visibleTotalCount / Math.max(1, pagination.pageSize)) - 1)
+    if (pagination.pageIndex <= maxPageIndex) return
+
+    setPagination((previous) => ({
+      ...previous,
+      pageIndex: maxPageIndex
+    }))
+  }, [canUseServerPage, pagination.pageIndex, pagination.pageSize, visibleTotalCount])
 
   useEffect(() => {
     setPagination((previous) => ({ ...previous, pageIndex: 0 }))
@@ -742,7 +806,7 @@ export const AccountTable = memo(function AccountTable() {
     setTableLoading(true)
     const timer = window.setTimeout(() => setTableLoading(false), 160)
     return () => window.clearTimeout(timer)
-  }, [data, sorting, pagination.pageIndex, pagination.pageSize, loading])
+  }, [canUseServerPage, loading, pagination.pageIndex, pagination.pageSize, serverPageLoading, sorting, tableData])
 
   useEffect(() => {
     if (scrollbarRef.current) {
@@ -864,21 +928,21 @@ export const AccountTable = memo(function AccountTable() {
               title="全选当前页"
               className={checkboxClass()}
               checked={(() => {
-                const pageIds = table.getPaginationRowModel().rows
+                const pageIds = (canUseServerPage ? table.getRowModel().rows : table.getPaginationRowModel().rows)
                   .filter((pageRow) => !getAccountTaskMeta(accountTaskStatusMap, pageRow.original.id).occupied)
                   .map((pageRow) => pageRow.original.id)
                 return pageIds.length > 0 && pageIds.every((id) => selectedIdSet.has(id))
               })()}
               ref={(input) => {
                 if (!input) return
-                const pageIds = table.getPaginationRowModel().rows
+                const pageIds = (canUseServerPage ? table.getRowModel().rows : table.getPaginationRowModel().rows)
                   .filter((pageRow) => !getAccountTaskMeta(accountTaskStatusMap, pageRow.original.id).occupied)
                   .map((pageRow) => pageRow.original.id)
                 const selectedCountOnPage = pageIds.filter((id) => selectedIdSet.has(id)).length
                 input.indeterminate = selectedCountOnPage > 0 && selectedCountOnPage < pageIds.length
               }}
               onChange={(event) => {
-                const pageIds = table.getPaginationRowModel().rows
+                const pageIds = (canUseServerPage ? table.getRowModel().rows : table.getPaginationRowModel().rows)
                   .filter((pageRow) => !getAccountTaskMeta(accountTaskStatusMap, pageRow.original.id).occupied)
                   .map((pageRow) => pageRow.original.id)
                 handleTogglePageSelection(pageIds, event.currentTarget.checked)
@@ -993,18 +1057,20 @@ export const AccountTable = memo(function AccountTable() {
   )
 
   const table = useReactTable({
-    data,
+    data: tableData,
     columns,
     state: { sorting, pagination },
     onSortingChange: setSorting,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getPaginationRowModel: canUseServerPage ? undefined : getPaginationRowModel(),
+    manualPagination: canUseServerPage,
+    pageCount: canUseServerPage ? Math.max(1, Math.ceil(serverPage.total / Math.max(1, pagination.pageSize))) : undefined,
     getRowId: (row) => String(row.id)
   })
 
-  const rows = table.getPaginationRowModel().rows
+  const rows = canUseServerPage ? table.getRowModel().rows : table.getPaginationRowModel().rows
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => viewportRef.current,
@@ -1116,7 +1182,7 @@ export const AccountTable = memo(function AccountTable() {
   )
 
   const selectedCount = selectedIds.length
-  const totalCount = data.length
+  const totalCount = visibleTotalCount
   const deletePresetCounts = accountUiMeta.deletePresetCounts
   const summaryCards = useMemo(() => {
     let aliveCount = 0
@@ -1223,10 +1289,17 @@ export const AccountTable = memo(function AccountTable() {
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [bulkMenuOpen])
 
-  const readOrderedIds = useCallback(
-    () => table.getSortedRowModel().rows.map((row) => row.original.id),
-    [table]
-  )
+  const readOrderedIds = useCallback(async () => {
+    if (canUseServerPage && window.desktopAccounts?.listIds) {
+      return window.desktopAccounts.listIds({
+        search: deferredSearch,
+        statusFilter,
+        countryFilter
+      })
+    }
+
+    return table.getSortedRowModel().rows.map((row) => row.original.id)
+  }, [canUseServerPage, countryFilter, deferredSearch, statusFilter, table])
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)
@@ -1315,18 +1388,18 @@ export const AccountTable = memo(function AccountTable() {
     })
   }, [])
 
-  const handleSelectAll = useCallback(() => {
-    setSelectedIds(readOrderedIds())
+  const handleSelectAll = useCallback(async () => {
+    setSelectedIds(await readOrderedIds())
   }, [readOrderedIds, setSelectedIds])
 
   const handleClearSelection = useCallback(() => {
     setSelectedIds([])
   }, [setSelectedIds])
 
-  const handleSelectRange = useCallback((start: number, end: number) => {
+  const handleSelectRange = useCallback(async (start: number, end: number) => {
     const normalizedStart = Math.max(1, Math.min(start, end))
     const normalizedEnd = Math.max(start, end)
-    const ids = readOrderedIds().slice(normalizedStart - 1, normalizedEnd)
+    const ids = (await readOrderedIds()).slice(normalizedStart - 1, normalizedEnd)
     setSelectedIds(ids)
   }, [readOrderedIds, setSelectedIds])
 
@@ -1862,9 +1935,9 @@ export const AccountTable = memo(function AccountTable() {
         pageIndex={table.getState().pagination.pageIndex}
         pageCount={table.getPageCount()}
         pageSize={table.getState().pagination.pageSize}
-        totalRows={data.length}
-        canPreviousPage={table.getCanPreviousPage()}
-        canNextPage={table.getCanNextPage()}
+        totalRows={visibleTotalCount}
+        canPreviousPage={canUseServerPage ? pagination.pageIndex > 0 : table.getCanPreviousPage()}
+        canNextPage={canUseServerPage ? pagination.pageIndex + 1 < Math.max(1, Math.ceil(visibleTotalCount / Math.max(1, pagination.pageSize))) : table.getCanNextPage()}
         onPreviousPage={() => table.previousPage()}
         onNextPage={() => table.nextPage()}
         onPageSizeChange={(size) => table.setPageSize(size)}

@@ -164,6 +164,21 @@ export interface StatusUpdateResult {
   accounts: AccountRecord[]
 }
 
+export type AccountListStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
+
+export interface AccountListQuery {
+  search: string
+  statusFilter: AccountListStatusFilter
+  countryFilter: string
+  pageIndex: number
+  pageSize: number
+}
+
+export interface AccountListPageResult {
+  accounts: AccountRecord[]
+  total: number
+}
+
 export interface ExportAccountsResult {
   exportedCount: number
   targetDirectory: string
@@ -387,6 +402,8 @@ export interface CheckQueueState {
 
 export interface DesktopAccountsApi {
   list: () => Promise<AccountRecord[]>
+  listPage: (query: AccountListQuery) => Promise<AccountListPageResult>
+  listIds: (query: Omit<AccountListQuery, 'pageIndex' | 'pageSize'>) => Promise<number[]>
   pickImportFiles: () => Promise<ImportAccountsResult | null>
   pickImportFolder: () => Promise<ImportAccountsResult | null>
   scanFolder: (folderPath: string) => Promise<ScanResult>

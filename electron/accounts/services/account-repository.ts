@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type Database from 'better-sqlite3'
-import type { AccountJsonProfile, AccountRecord, AccountStatus, CheckResultInput, UpsertAccountInput } from '../types'
+import type { AccountJsonProfile, AccountListPageResult, AccountListQuery, AccountListStatusFilter, AccountRecord, AccountStatus, CheckResultInput, UpsertAccountInput } from '../types'
 
 interface AccountRow {
   id: number
@@ -50,6 +50,75 @@ function mapRow(row: AccountRow): AccountRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }
+}
+
+function buildAccountListWhereClause(filters: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter'>) {
+  const clauses: string[] = []
+  const params: Record<string, unknown> = {}
+
+  applyStatusFilterClause(filters.statusFilter, clauses)
+  if (filters.statusFilter !== 'all' && filters.statusFilter !== 'premium' && filters.statusFilter !== 'alive' && filters.statusFilter !== 'limited-group' && filters.statusFilter !== 'timeout-group') {
+    params.statusFilter = filters.statusFilter
+  }
+
+  if (filters.countryFilter.trim()) {
+    clauses.push('country = @countryFilter')
+    params.countryFilter = filters.countryFilter.trim()
+  }
+
+  const keyword = filters.search.trim().toLowerCase()
+  if (keyword) {
+    params.keyword = `%${keyword}%`
+    const searchColumns = [
+      'phone',
+      'username',
+      'user_id',
+      'country',
+      'session_path',
+      'json_path',
+      'profile_source',
+      `COALESCE(json_extract(profile_json, '$.first_name'), '')`,
+      `COALESCE(json_extract(profile_json, '$.last_name'), '')`,
+      `COALESCE(json_extract(profile_json, '$.bio'), '')`,
+      `COALESCE(json_extract(profile_json, '$.premium_expiry'), '')`,
+      `COALESCE(json_extract(profile_json, '$.freeze_since_date'), '')`,
+      `COALESCE(json_extract(profile_json, '$.freeze_until_date'), '')`,
+      `COALESCE(json_extract(profile_json, '$.check_error'), '')`
+    ]
+
+    clauses.push(`(${searchColumns.map((column) => `LOWER(CAST(${column} AS TEXT)) LIKE @keyword`).join(' OR ')})`)
+  }
+
+  return {
+    whereSql: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '',
+    params
+  }
+}
+
+function applyStatusFilterClause(statusFilter: AccountListStatusFilter, clauses: string[]) {
+  if (statusFilter === 'all') return
+
+  if (statusFilter === 'premium') {
+    clauses.push(`COALESCE(json_extract(profile_json, '$.is_premium'), 0) = 1`)
+    return
+  }
+
+  if (statusFilter === 'alive') {
+    clauses.push(`status IN ('alive', 'geo_restricted')`)
+    return
+  }
+
+  if (statusFilter === 'limited-group') {
+    clauses.push(`status IN ('limited', 'temporary_limited')`)
+    return
+  }
+
+  if (statusFilter === 'timeout-group') {
+    clauses.push(`status IN ('timeout', 'unknown', 'checking')`)
+    return
+  }
+
+  clauses.push('status = @statusFilter')
 }
 
 export class AccountRepository {
@@ -118,6 +187,42 @@ export class AccountRepository {
 
   list() {
     return (this.listStatement.all() as AccountRow[]).map(mapRow)
+  }
+
+  listPage(query: AccountListQuery): AccountListPageResult {
+    const pageSize = Math.max(1, Math.min(200, Math.trunc(query.pageSize || 20)))
+    const pageIndex = Math.max(0, Math.trunc(query.pageIndex || 0))
+    const offset = pageIndex * pageSize
+    const { whereSql, params } = buildAccountListWhereClause(query)
+
+    const totalStatement = this.database.prepare(`SELECT COUNT(*) as total FROM accounts ${whereSql}`)
+    const totalRow = totalStatement.get(params) as { total: number } | undefined
+
+    const rowsStatement = this.database.prepare(`
+      SELECT id, phone, username, user_id, country, proxy_display, session_path, json_path, status, profile_json, profile_source, last_check_time, last_online_time, created_at, updated_at
+      FROM accounts
+      ${whereSql}
+      ORDER BY created_at DESC, id DESC
+      LIMIT @limit OFFSET @offset
+    `)
+
+    const rows = rowsStatement.all({ ...params, limit: pageSize, offset }) as AccountRow[]
+    return {
+      accounts: rows.map(mapRow),
+      total: totalRow?.total ?? 0
+    }
+  }
+
+  listIds(query: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter'>) {
+    const { whereSql, params } = buildAccountListWhereClause(query)
+    const statement = this.database.prepare(`
+      SELECT id
+      FROM accounts
+      ${whereSql}
+      ORDER BY created_at DESC, id DESC
+    `)
+
+    return (statement.all(params) as Array<{ id: number }>).map((row) => row.id)
   }
 
   upsertMany(items: UpsertAccountInput[], options?: { returnAccounts?: boolean }) {
