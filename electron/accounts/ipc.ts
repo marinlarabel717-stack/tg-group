@@ -559,7 +559,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }
   })
 
-  ipcMain.handle('accounts:manage-two-factor', async (_event, payload: TwoFactorOperationPayload): Promise<TwoFactorOperationResult> => {
+  ipcMain.handle('accounts:manage-two-factor', async (_event, payload: TwoFactorOperationPayload): Promise<TwoFactorOperationResult> => withManagedSessionsWatcherSuspended(async () => {
     const accountIds = Array.isArray(payload?.accountIds) ? payload.accountIds.filter((id) => Number.isFinite(id)) : []
     const action = payload?.action
     const phase: TwoFactorOperationPhase = payload?.phase ?? 'apply'
@@ -734,9 +734,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       results,
       message: finalMessage
     }
-  })
+  }))
 
-  ipcMain.handle('accounts:manage-profile-operation', async (_event, payload: ProfileOperationPayload): Promise<ProfileOperationResult> => {
+  ipcMain.handle('accounts:manage-profile-operation', async (_event, payload: ProfileOperationPayload): Promise<ProfileOperationResult> => withManagedSessionsWatcherSuspended(async () => {
     const accountIds = Array.isArray(payload?.accountIds) ? payload.accountIds.filter((id) => Number.isFinite(id)) : []
     const action = payload?.action
 
@@ -896,5 +896,5 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       results,
       message: finalMessage
     }
-  })
+  }))
 }

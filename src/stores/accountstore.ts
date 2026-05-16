@@ -125,6 +125,13 @@ function createEmptyProfileOperationState(): ProfileOperationProgressState {
   }
 }
 
+function hasRunningAccountTask(state: Pick<AccountStoreState, 'checkState' | 'twoFactorState' | 'profileOperationState' | 'importProgress'>) {
+  return state.checkState.running
+    || state.twoFactorState.running
+    || state.profileOperationState.running
+    || Boolean(state.importProgress)
+}
+
 function applyAccountSnapshot(
   accounts: AccountRecord[],
   set: (partial: Partial<AccountStoreState>) => void,
@@ -320,9 +327,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         }
       })
       window.desktopAccounts?.onAccountsUpdated((accounts) => {
-        const isChecking = get().checkState.running
-        const isTransferringAccounts = Boolean(get().importProgress)
-        if (isChecking || isTransferringAccounts) {
+        if (hasRunningAccountTask(get())) {
           return
         }
         applyAccountSnapshot(accounts, set, get, { lastActionMessage: 'sessions 目录检测到变更，列表已自动同步。' })
@@ -335,10 +340,32 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         })
       })
       window.desktopAccounts?.onTwoFactorProgress?.((twoFactorState) => {
+        const previousState = get().twoFactorState
         set({ twoFactorState })
+
+        if (previousState.running && !twoFactorState.running) {
+          void syncAccounts(set, get).then(() => {
+            set({
+              lastActionMessage: twoFactorState.stopRequested
+                ? '2FA 任务已收尾完成，账号列表已统一刷新。'
+                : '2FA 任务已完成，账号列表已统一刷新。'
+            })
+          })
+        }
       })
       window.desktopAccounts?.onProfileOperationProgress?.((profileOperationState) => {
+        const previousState = get().profileOperationState
         set({ profileOperationState })
+
+        if (previousState.running && !profileOperationState.running) {
+          void syncAccounts(set, get).then(() => {
+            set({
+              lastActionMessage: profileOperationState.stopRequested
+                ? '个人资料任务已收尾完成，账号列表已统一刷新。'
+                : '个人资料任务已完成，账号列表已统一刷新。'
+            })
+          })
+        }
       })
       subscribed = true
     }
