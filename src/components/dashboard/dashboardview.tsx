@@ -29,7 +29,7 @@ export function DashboardView() {
   const accountCheckRunning = useAccountStore((state) => state.checkState.running)
   const accountCheckCompletedCount = useAccountStore((state) => state.checkState.completedCount)
   const accountCheckTotalCount = useAccountStore((state) => state.checkState.totalCount)
-  const accountCheckLatestMessage = useAccountStore((state) => state.checkState.logs[state.checkState.logs.length - 1]?.message || '账号检测任务进行中')
+  const accountCheckLatestMessage = useAccountStore((state) => state.checkLogs[state.checkLogs.length - 1]?.message || '账号检测任务进行中')
 
   const broadcastTasks = useBroadcastStore((state) => state.tasks)
   const broadcastPreviewItems = useBroadcastStore((state) => state.previewItems)

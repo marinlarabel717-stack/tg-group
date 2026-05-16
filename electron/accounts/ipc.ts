@@ -240,6 +240,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   let profileOperationState = createEmptyProfileOperationState()
   let profileOperationStopRequested = false
   let checkStateEmitTimer: NodeJS.Timeout | null = null
+  let checkLogsEmitTimer: NodeJS.Timeout | null = null
   let checkLaunchToken = 0
 
   const flushCheckState = () => {
@@ -250,7 +251,18 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('accounts:check-state', serializeCheckStateForRenderer(checkQueue.getState()))
+    mainWindow.webContents.send('accounts:check-state', serializeCheckStateForRenderer(checkQueue.getSummaryState()))
+  }
+
+  const flushCheckLogs = () => {
+    if (checkLogsEmitTimer) {
+      clearTimeout(checkLogsEmitTimer)
+      checkLogsEmitTimer = null
+    }
+
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('accounts:check-logs', checkQueue.getLogs())
   }
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
@@ -273,6 +285,23 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     checkStateEmitTimer = setTimeout(() => {
       flushCheckState()
     }, 280)
+  }
+
+  const emitCheckLogs = (force = false) => {
+    if (force) {
+      flushCheckLogs()
+      return
+    }
+
+    if (!checkQueue.isRunning()) {
+      flushCheckLogs()
+      return
+    }
+
+    if (checkLogsEmitTimer) return
+    checkLogsEmitTimer = setTimeout(() => {
+      flushCheckLogs()
+    }, 420)
   }
 
   const emitImportProgress = (payload: ImportProgressPayload) => {
@@ -353,21 +382,27 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     emitProfileOperationProgress()
   }
 
-  checkQueue.on('state', () => emitCheckState())
+  checkQueue.on('state', () => {
+    emitCheckState()
+    emitCheckLogs()
+  })
 
   ipcMain.handle('accounts:list', async () => serializeAccountsForRenderer(accountRepository.list()))
-  ipcMain.handle('accounts:get-check-state', () => serializeCheckStateForRenderer(checkQueue.getState()))
+  ipcMain.handle('accounts:get-check-state', () => serializeCheckStateForRenderer(checkQueue.getSummaryState()))
+  ipcMain.handle('accounts:get-check-logs', () => checkQueue.getLogs())
   ipcMain.handle('app-settings:get', () => appSettingsStore.get())
   ipcMain.handle('app-settings:update', (_event, patch: Partial<AppSettings>) => {
     const next = appSettingsStore.update(patch)
     checkQueue.updateOptions({ concurrency: next.checkConcurrency })
     emitCheckState(true)
+    emitCheckLogs(true)
     return next
   })
   ipcMain.handle('accounts:clear-check-logs', () => {
     checkQueue.clearLogs()
     emitCheckState(true)
-    return serializeCheckStateForRenderer(checkQueue.getState())
+    emitCheckLogs(true)
+    return serializeCheckStateForRenderer(checkQueue.getSummaryState())
   })
   ipcMain.handle('accounts:start-check', (_event, payload: number[] | { ids: number[]; actions?: CheckAction[] }) => {
     const ids = Array.isArray(payload) ? payload : payload?.ids ?? []
@@ -382,7 +417,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }
 
     const mode = actions.includes('account-survival') ? 'account-survival' : 'account-status'
-    const previewState = buildDeferredStartCheckState(checkQueue.getState(), ids, mode)
+    const previewState = buildDeferredStartCheckState(checkQueue.getSummaryState(), ids, mode)
     const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isFinite(id))))
     checkLaunchToken += 1
     const launchToken = checkLaunchToken
@@ -411,9 +446,10 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   })
   ipcMain.handle('accounts:stop-check', () => {
     checkLaunchToken += 1
-    const state = checkQueue.stop()
+    checkQueue.stop()
     emitCheckState(true)
-    return serializeCheckStateForRenderer(state)
+    emitCheckLogs(true)
+    return serializeCheckStateForRenderer(checkQueue.getSummaryState())
   })
 
   ipcMain.handle('accounts:pick-import-files', async () => {

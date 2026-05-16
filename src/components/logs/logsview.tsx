@@ -390,7 +390,7 @@ export default memo(function LogsView() {
   const clearCheckLogs = useAccountStore((state) => state.clearCheckLogs)
   const initProxyPool = useProxyPoolStore((state) => state.init)
   const checkRunning = useAccountStore((state) => state.checkState.running)
-  const checkLogs = useAccountStore((state) => state.checkState.logs)
+  const checkLogs = useAccountStore((state) => state.checkLogs)
   const twoFactorState = useAccountStore((state) => state.twoFactorState)
   const profileOperationState = useAccountStore((state) => state.profileOperationState)
   const logsContext = useUIStore((state) => state.logsContext)

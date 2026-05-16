@@ -399,8 +399,10 @@ export interface DesktopAccountsApi {
   startCheck: (payload: { ids: number[]; actions: CheckAction[] }) => Promise<CheckQueueState>
   stopCheck: () => Promise<CheckQueueState>
   getCheckState: () => Promise<CheckQueueState>
+  getCheckLogs: () => Promise<CheckLogEntry[]>
   clearCheckLogs: () => Promise<CheckQueueState>
   onCheckState: (callback: (state: CheckQueueState) => void) => () => void
+  onCheckLogs: (callback: (logs: CheckLogEntry[]) => void) => () => void
   onAccountsUpdated: (callback: (accounts: AccountRecord[]) => void) => () => void
   onImportProgress: (callback: (payload: ImportProgressPayload) => void) => () => void
   exportByIds: (ids: number[]) => Promise<ExportAccountsResult>

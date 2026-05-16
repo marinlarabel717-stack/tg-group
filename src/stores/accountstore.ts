@@ -195,6 +195,7 @@ interface AccountStoreState {
   selectedIds: number[]
   selectedProfileAccountId: number | null
   checkState: CheckQueueState
+  checkLogs: CheckQueueState['logs']
   checkTaskAccountIds: number[]
   twoFactorState: TwoFactorProgressState
   profileOperationState: ProfileOperationProgressState
@@ -241,14 +242,16 @@ async function syncAccounts(set: (partial: Partial<AccountStoreState>) => void, 
     return
   }
 
-  const [accounts, checkState, twoFactorState, profileOperationState] = await Promise.all([
+  const [accounts, checkState, checkLogs, twoFactorState, profileOperationState] = await Promise.all([
     api.list(),
     api.getCheckState(),
+    api.getCheckLogs ? api.getCheckLogs() : Promise.resolve([]),
     api.getTwoFactorState ? api.getTwoFactorState() : Promise.resolve(createEmptyTwoFactorState()),
     api.getProfileOperationState ? api.getProfileOperationState() : Promise.resolve(createEmptyProfileOperationState())
   ])
   applyAccountSnapshot(accounts, set, get, {
     checkState,
+    checkLogs,
     checkTaskAccountIds: checkState.running ? checkState.activeAccountIds : [],
     twoFactorState,
     profileOperationState
@@ -282,6 +285,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   selectedIds: [],
   selectedProfileAccountId: null,
   checkState: createEmptyCheckState(),
+  checkLogs: [],
   checkTaskAccountIds: [],
   twoFactorState: createEmptyTwoFactorState(),
   profileOperationState: createEmptyProfileOperationState(),
@@ -364,6 +368,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
             lastActionMessage: '批量检测已完成，账号资料已刷新。'
           })
         }
+      })
+      window.desktopAccounts?.onCheckLogs?.((checkLogs) => {
+        set({ checkLogs })
       })
       window.desktopAccounts?.onAccountsUpdated((accounts) => {
         if (hasRunningAccountTask(get())) {
@@ -716,6 +723,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
       const actionLabel = normalizedActions.includes('account-survival') ? '账号存活检测' : '账号状态检测'
       set({
         checkState,
+        checkLogs: [],
         checkTaskAccountIds: normalizedIds,
         checkResultDialog: {
           open: false,
@@ -756,7 +764,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   clearCheckLogs: async () => {
     const checkState = await getDesktopAccountsApi()?.clearCheckLogs()
     if (checkState) {
-      set({ checkState, lastActionMessage: '检测日志已清空。' })
+      set({ checkState, checkLogs: [], lastActionMessage: '检测日志已清空。' })
     }
   },
   stopTwoFactorTask: async () => {

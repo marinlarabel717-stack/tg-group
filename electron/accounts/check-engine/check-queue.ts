@@ -163,6 +163,19 @@ export class CheckQueue extends EventEmitter {
     }
   }
 
+  getSummaryState() {
+    return {
+      ...this.state,
+      queuedAccountIds: [],
+      activeAccountIds: [...this.state.activeAccountIds],
+      logs: []
+    }
+  }
+
+  getLogs() {
+    return [...this.state.logs]
+  }
+
   isRunning() {
     return this.state.running
   }

@@ -44,11 +44,17 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
   startCheck: (payload: { ids: number[]; actions: CheckAction[] }) => ipcRenderer.invoke('accounts:start-check', payload),
   stopCheck: () => ipcRenderer.invoke('accounts:stop-check'),
   getCheckState: () => ipcRenderer.invoke('accounts:get-check-state'),
+  getCheckLogs: () => ipcRenderer.invoke('accounts:get-check-logs'),
   clearCheckLogs: () => ipcRenderer.invoke('accounts:clear-check-logs'),
   onCheckState: (callback: (state: CheckQueueState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: CheckQueueState) => callback(state)
     ipcRenderer.on('accounts:check-state', listener)
     return () => ipcRenderer.removeListener('accounts:check-state', listener)
+  },
+  onCheckLogs: (callback: (logs: CheckQueueState['logs']) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, logs: CheckQueueState['logs']) => callback(logs)
+    ipcRenderer.on('accounts:check-logs', listener)
+    return () => ipcRenderer.removeListener('accounts:check-logs', listener)
   },
   onAccountsUpdated: (callback: (accounts: AccountRecord[]) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, accounts: AccountRecord[]) => callback(accounts)
