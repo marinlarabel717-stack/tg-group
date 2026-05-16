@@ -1,7 +1,6 @@
 import { memo } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { useAccountStore } from '../../stores/accountstore'
-import { formatDateTimeFull } from '../../lib/ui-text'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from './resultdialog'
 
 export const CheckResultDialog = memo(function CheckResultDialog() {
@@ -45,22 +44,6 @@ export const CheckResultDialog = memo(function CheckResultDialog() {
           <ResultStatCard label="超时" value={checkResultDialog.timeout} tone="violet" />
         </div>
       )}
-
-      {checkResultDialog.frozenDetails.length > 0 ? (
-        <div className="space-y-3 rounded-[14px] border border-cyan-300/12 bg-cyan-300/6 px-4 py-4 text-sm">
-          <div className="text-sm font-semibold text-white">本次冻结时间</div>
-          <div className="space-y-2">
-            {checkResultDialog.frozenDetails.map((item) => (
-              <div key={item.id} className="rounded-[12px] bg-black/10 px-4 py-3">
-                <div className="text-sm font-medium text-white">{item.phone}</div>
-                <div className="mt-2 text-xs text-cyan-100/85">冻结开始：{formatDateTimeFull(item.freezeSince)}</div>
-                <div className="mt-1 text-xs text-cyan-100/85">冻结结束：{formatDateTimeFull(item.freezeUntil)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
       <ResultPrimaryButton label="知道了" onClick={closeCheckResultDialog} tone="violet" />
     </ResultDialogShell>
   )

@@ -71,14 +71,46 @@ function createQueueTimeoutResult(task: QueueTask, timeoutMs: number): AccountCh
   }
 }
 
-function formatFrozenSince(value: unknown) {
+function formatFreezeTime(value: unknown) {
   if (typeof value !== 'string' && typeof value !== 'number') return ''
 
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
+  let date: Date | null = null
+
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    date = new Date(value > 1e12 ? value : value * 1000)
+  } else if (typeof value === 'string' && value.trim()) {
+    const trimmed = value.trim()
+    const numeric = Number(trimmed)
+    if (Number.isFinite(numeric) && numeric > 0) {
+      date = new Date(numeric > 1e12 ? numeric : numeric * 1000)
+    } else {
+      date = new Date(trimmed.replace(' UTC', 'Z'))
+    }
+  }
+
+  if (!date || Number.isNaN(date.getTime())) return ''
 
   const pad = (part: number) => String(part).padStart(2, '0')
   return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+function buildFrozenTimeSuffix(profile: AccountCheckResult['profile'] | null | undefined) {
+  const freezeSince = formatFreezeTime(profile?.freeze_since_date)
+  const freezeUntil = formatFreezeTime(profile?.freeze_until_date)
+
+  if (freezeSince && freezeUntil) {
+    return `（开始：${freezeSince}｜结束：${freezeUntil}）`
+  }
+
+  if (freezeSince) {
+    return `（${freezeSince}）`
+  }
+
+  if (freezeUntil) {
+    return `（结束：${freezeUntil}）`
+  }
+
+  return ''
 }
 
 function createInitialState(options: Required<CheckQueueOptions>): CheckQueueState {
@@ -400,8 +432,7 @@ export class CheckQueue extends EventEmitter {
     const reasonSuffix = (displayStatus === 'timeout' || displayStatus === 'unknown') && !shouldHideReasonSuffix
       ? `（${this.formatFailureReason(result)}）`
       : ''
-    const frozenSince = displayStatus === 'frozen' ? formatFrozenSince(result.profile?.freeze_since_date) : ''
-    const frozenSinceSuffix = frozenSince ? `（${frozenSince}）` : ''
+    const frozenSinceSuffix = displayStatus === 'frozen' ? buildFrozenTimeSuffix(result.profile) : ''
     const progressPrefix = `${this.state.completedCount}/${this.state.totalCount}`
     this.appendLog(level, task.accountId, formatAccountResultLogLine({
       phoneLabel,
