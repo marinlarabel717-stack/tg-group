@@ -1,5 +1,5 @@
-import { memo } from 'react'
-import { RefreshCw, Search, X } from 'lucide-react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, RefreshCw, Search, X } from 'lucide-react'
 
 interface FilterOption {
   label: string
@@ -57,7 +57,66 @@ function FilterSelect({
   )
 }
 
+function readPresenceSummary(label: string, value: string) {
+  if (value === 'has') return `有${label}`
+  if (value === 'none') return `无${label}`
+  return ''
+}
+
 export const TableFilters = memo(function TableFilters(props: TableFiltersProps) {
+  const [otherFiltersOpen, setOtherFiltersOpen] = useState(false)
+  const otherFiltersRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!otherFiltersOpen) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!otherFiltersRef.current?.contains(event.target as Node)) {
+        setOtherFiltersOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [otherFiltersOpen])
+
+  const activePresenceFilters = useMemo(
+    () => [
+      readPresenceSummary('2FA', props.twoFactorFilter),
+      readPresenceSummary('头像', props.avatarFilter),
+      readPresenceSummary('任务中', props.taskFilter),
+      readPresenceSummary('用户名', props.usernameFilter)
+    ].filter(Boolean),
+    [props.avatarFilter, props.taskFilter, props.twoFactorFilter, props.usernameFilter]
+  )
+
+  const presenceRows = [
+    {
+      key: 'twofa',
+      label: '2FA',
+      value: props.twoFactorFilter,
+      onChange: props.onTwoFactorChange
+    },
+    {
+      key: 'avatar',
+      label: '头像',
+      value: props.avatarFilter,
+      onChange: props.onAvatarChange
+    },
+    {
+      key: 'task',
+      label: '任务中',
+      value: props.taskFilter,
+      onChange: props.onTaskChange
+    },
+    {
+      key: 'username',
+      label: '用户名',
+      value: props.usernameFilter,
+      onChange: props.onUsernameChange
+    }
+  ]
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div className="relative w-full min-w-[180px] md:w-[220px] xl:w-[260px]">
@@ -83,10 +142,79 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
       <FilterSelect label="国家" value={props.countryFilter} options={props.countries} onChange={props.onCountryChange} />
       <FilterSelect label="状态" value={props.statusFilter} options={props.statuses} onChange={props.onStatusChange} />
       <FilterSelect label="网络" value={props.proxyFilter} options={props.proxies} onChange={props.onProxyChange} />
-      <FilterSelect label="有无 2FA" value={props.twoFactorFilter} options={props.presences} onChange={props.onTwoFactorChange} />
-      <FilterSelect label="有无头像" value={props.avatarFilter} options={props.presences} onChange={props.onAvatarChange} />
-      <FilterSelect label="有无任务中" value={props.taskFilter} options={props.presences} onChange={props.onTaskChange} />
-      <FilterSelect label="有无用户名" value={props.usernameFilter} options={props.presences} onChange={props.onUsernameChange} />
+
+      <div className="relative" ref={otherFiltersRef}>
+        <button
+          type="button"
+          onClick={() => setOtherFiltersOpen((value) => !value)}
+          className="inline-flex h-11 min-w-[132px] items-center justify-center gap-2 rounded-[12px] bg-card px-4 text-sm text-textMain transition hover:bg-hover"
+        >
+          <span>{activePresenceFilters.length > 0 ? `其他筛选（${activePresenceFilters.length}）` : '其他筛选'}</span>
+          <ChevronDown size={15} className={`transition ${otherFiltersOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {otherFiltersOpen ? (
+          <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[280px] rounded-[14px] border border-white/8 bg-card p-3 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-white">其他筛选</div>
+                <div className="mt-1 text-xs text-textMuted">点哪个条件，账号列表就按哪个条件显示。</div>
+              </div>
+              {activePresenceFilters.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    props.onTwoFactorChange('all')
+                    props.onAvatarChange('all')
+                    props.onTaskChange('all')
+                    props.onUsernameChange('all')
+                  }}
+                  className="rounded-[8px] px-2.5 py-1 text-xs text-textMuted transition hover:bg-white/8 hover:text-white"
+                >
+                  清空
+                </button>
+              ) : null}
+            </div>
+
+            <div className="space-y-3">
+              {presenceRows.map((row) => (
+                <div key={row.key} className="rounded-[12px] bg-panel/70 px-3 py-3">
+                  <div className="mb-2 text-sm font-medium text-white">{row.label}</div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => row.onChange('all')}
+                      className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === 'all' ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+                    >
+                      全部
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => row.onChange('has')}
+                      className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === 'has' ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+                    >
+                      有
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => row.onChange('none')}
+                      className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === 'none' ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+                    >
+                      无
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {activePresenceFilters.length > 0 ? (
+              <div className="mt-3 rounded-[12px] bg-panel px-3 py-2 text-xs text-textMuted">
+                当前：<span className="text-white">{activePresenceFilters.join(' / ')}</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       <button
         type="button"
