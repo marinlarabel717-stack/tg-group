@@ -384,7 +384,7 @@ export default memo(function BotCenterView() {
     setAutoStart(activeBot.config.autoStart)
     setGuestReplyEnabled(activeBot.config.guestReplyEnabled)
     setKeywordRules(activeBot.config.keywordRules.map((item) => ({ ...item, buttons: item.buttons.map((button) => ({ ...button })) })))
-  }, [activeBot])
+  }, [activeBot?.id])
 
   useEffect(() => {
     if (keywordRules.length === 0) {
