@@ -168,11 +168,19 @@ export interface StatusUpdateResult {
 }
 
 export type AccountListStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
+export type AccountListPremiumFilter = 'all' | 'premium' | 'non-premium'
+export type AccountListPresenceFilter = 'all' | 'has' | 'none'
 
 export interface AccountListQuery {
   search: string
   statusFilter: AccountListStatusFilter
   countryFilter: string
+  sourceFilter: string
+  proxyFilter: string
+  premiumFilter: AccountListPremiumFilter
+  twoFactorFilter: AccountListPresenceFilter
+  avatarFilter: AccountListPresenceFilter
+  usernameFilter: AccountListPresenceFilter
   pageIndex: number
   pageSize: number
 }

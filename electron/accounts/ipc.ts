@@ -395,7 +395,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       total: result.total
     }
   })
-  ipcMain.handle('accounts:list-ids', async (_event, query: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter'>) => accountRepository.listIds(query))
+  ipcMain.handle('accounts:list-ids', async (_event, query: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter' | 'sourceFilter' | 'proxyFilter' | 'premiumFilter' | 'twoFactorFilter' | 'avatarFilter' | 'usernameFilter'>) => accountRepository.listIds(query))
   ipcMain.handle('accounts:get-check-state', () => serializeCheckStateForRenderer(checkQueue.getSummaryState()))
   ipcMain.handle('accounts:get-check-logs', () => checkQueue.getLogs())
   ipcMain.handle('app-settings:get', () => appSettingsStore.get())

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type Database from 'better-sqlite3'
-import type { AccountJsonProfile, AccountListPageResult, AccountListQuery, AccountListStatusFilter, AccountRecord, AccountStatus, CheckResultInput, UpsertAccountInput } from '../types'
+import type { AccountJsonProfile, AccountListPageResult, AccountListPresenceFilter, AccountListPremiumFilter, AccountListQuery, AccountListStatusFilter, AccountRecord, AccountStatus, CheckResultInput, UpsertAccountInput } from '../types'
 
 interface AccountRow {
   id: number
@@ -52,7 +52,7 @@ function mapRow(row: AccountRow): AccountRecord {
   }
 }
 
-function buildAccountListWhereClause(filters: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter'>) {
+function buildAccountListWhereClause(filters: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter' | 'sourceFilter' | 'proxyFilter' | 'premiumFilter' | 'twoFactorFilter' | 'avatarFilter' | 'usernameFilter'>) {
   const clauses: string[] = []
   const params: Record<string, unknown> = {}
 
@@ -65,6 +65,21 @@ function buildAccountListWhereClause(filters: Pick<AccountListQuery, 'search' | 
     clauses.push('country = @countryFilter')
     params.countryFilter = filters.countryFilter.trim()
   }
+
+  if (filters.sourceFilter.trim()) {
+    clauses.push('profile_source = @sourceFilter')
+    params.sourceFilter = filters.sourceFilter.trim()
+  }
+
+  if (filters.proxyFilter.trim()) {
+    clauses.push('proxy_display = @proxyFilter')
+    params.proxyFilter = filters.proxyFilter.trim()
+  }
+
+  applyPremiumFilterClause(filters.premiumFilter, clauses)
+  applyPresenceFilterClause(`json_extract(profile_json, '$.twoFA')`, filters.twoFactorFilter, clauses)
+  applyPresenceFilterClause(`json_extract(profile_json, '$.has_profile_pic')`, filters.avatarFilter, clauses, { treatBoolean: true })
+  applyPresenceFilterClause('username', filters.usernameFilter, clauses)
 
   const keyword = filters.search.trim().toLowerCase()
   if (keyword) {
@@ -93,6 +108,32 @@ function buildAccountListWhereClause(filters: Pick<AccountListQuery, 'search' | 
     whereSql: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '',
     params
   }
+}
+
+function applyPremiumFilterClause(premiumFilter: AccountListPremiumFilter, clauses: string[]) {
+  if (premiumFilter === 'premium') {
+    clauses.push(`COALESCE(json_extract(profile_json, '$.is_premium'), 0) = 1`)
+    return
+  }
+
+  if (premiumFilter === 'non-premium') {
+    clauses.push(`COALESCE(json_extract(profile_json, '$.is_premium'), 0) != 1`)
+  }
+}
+
+function applyPresenceFilterClause(column: string, presenceFilter: AccountListPresenceFilter, clauses: string[], options?: { treatBoolean?: boolean }) {
+  if (presenceFilter === 'all') return
+
+  if (options?.treatBoolean) {
+    clauses.push(presenceFilter === 'has'
+      ? `COALESCE(${column}, 0) = 1`
+      : `COALESCE(${column}, 0) != 1`)
+    return
+  }
+
+  clauses.push(presenceFilter === 'has'
+    ? `TRIM(COALESCE(CAST(${column} AS TEXT), '')) != ''`
+    : `TRIM(COALESCE(CAST(${column} AS TEXT), '')) = ''`)
 }
 
 function applyStatusFilterClause(statusFilter: AccountListStatusFilter, clauses: string[]) {
@@ -213,7 +254,7 @@ export class AccountRepository {
     }
   }
 
-  listIds(query: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter'>) {
+  listIds(query: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter' | 'sourceFilter' | 'proxyFilter' | 'premiumFilter' | 'twoFactorFilter' | 'avatarFilter' | 'usernameFilter'>) {
     const { whereSql, params } = buildAccountListWhereClause(query)
     const statement = this.database.prepare(`
       SELECT id

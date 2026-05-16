@@ -693,12 +693,7 @@ export const AccountTable = memo(function AccountTable() {
   const serverPageRequestRef = useRef(0)
 
   const canUseServerPage = !sourceFilter
-    && !proxyFilter
-    && premiumFilter === 'all'
-    && twoFactorFilter === 'all'
-    && avatarFilter === 'all'
     && taskFilter === 'all'
-    && usernameFilter === 'all'
 
   const baseData = useMemo(
     () => filterAccounts(accounts, { search: deferredSearch, statusFilter: 'all', countryFilter }),
@@ -741,6 +736,12 @@ export const AccountTable = memo(function AccountTable() {
       search: deferredSearch,
       statusFilter,
       countryFilter,
+      sourceFilter,
+      proxyFilter,
+      premiumFilter,
+      twoFactorFilter,
+      avatarFilter,
+      usernameFilter,
       pageIndex: pagination.pageIndex,
       pageSize: pagination.pageSize
     }).then((result) => {
@@ -754,7 +755,7 @@ export const AccountTable = memo(function AccountTable() {
         setServerPageLoading(false)
       }
     })
-  }, [canUseServerPage, countryFilter, deferredSearch, pagination.pageIndex, pagination.pageSize, statusFilter])
+  }, [avatarFilter, canUseServerPage, countryFilter, deferredSearch, pagination.pageIndex, pagination.pageSize, premiumFilter, proxyFilter, sourceFilter, statusFilter, twoFactorFilter, usernameFilter])
 
   const tableData = canUseServerPage ? serverPage.accounts : data
   const visibleTotalCount = canUseServerPage ? serverPage.total : data.length
@@ -1294,12 +1295,18 @@ export const AccountTable = memo(function AccountTable() {
       return window.desktopAccounts.listIds({
         search: deferredSearch,
         statusFilter,
-        countryFilter
+        countryFilter,
+        sourceFilter,
+        proxyFilter,
+        premiumFilter,
+        twoFactorFilter,
+        avatarFilter,
+        usernameFilter
       })
     }
 
     return table.getSortedRowModel().rows.map((row) => row.original.id)
-  }, [canUseServerPage, countryFilter, deferredSearch, statusFilter, table])
+  }, [avatarFilter, canUseServerPage, countryFilter, deferredSearch, premiumFilter, proxyFilter, sourceFilter, statusFilter, table, twoFactorFilter, usernameFilter])
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)
