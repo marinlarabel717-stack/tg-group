@@ -13,7 +13,6 @@ import {
 import { createPortal } from 'react-dom'
 import {
   type ColumnDef,
-  type RowSelectionState,
   flexRender,
   getCoreRowModel,
   getPaginationRowModel,
@@ -818,7 +817,39 @@ export const AccountTable = memo(function AccountTable() {
     }
   }, [])
 
-  const rowSelection = useMemo<RowSelectionState>(() => Object.fromEntries(selectedIds.map((id) => [String(id), true])), [selectedIds])
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
+
+  const handleToggleSingleSelection = useCallback((accountId: number, checked: boolean) => {
+    if (!Number.isFinite(accountId)) return
+    if (checked) {
+      if (selectedIdSet.has(accountId)) return
+      setSelectedIds([...selectedIds, accountId])
+      return
+    }
+
+    if (!selectedIdSet.has(accountId)) return
+    setSelectedIds(selectedIds.filter((id) => id !== accountId))
+  }, [selectedIdSet, selectedIds, setSelectedIds])
+
+  const handleTogglePageSelection = useCallback((pageAccountIds: number[], checked: boolean) => {
+    const normalizedIds = Array.from(new Set(pageAccountIds.filter((id) => Number.isFinite(id))))
+    if (normalizedIds.length === 0) return
+
+    if (checked) {
+      const nextIds = [...selectedIds]
+      const seen = new Set(nextIds)
+      for (const accountId of normalizedIds) {
+        if (seen.has(accountId)) continue
+        seen.add(accountId)
+        nextIds.push(accountId)
+      }
+      setSelectedIds(nextIds)
+      return
+    }
+
+    const removable = new Set(normalizedIds)
+    setSelectedIds(selectedIds.filter((id) => !removable.has(id)))
+  }, [selectedIds, setSelectedIds])
 
   const columns = useMemo<ColumnDef<AccountRecord>[]>(
     () => [
@@ -831,11 +862,26 @@ export const AccountTable = memo(function AccountTable() {
               type="checkbox"
               title="全选当前页"
               className={checkboxClass()}
-              checked={table.getIsAllPageRowsSelected()}
+              checked={(() => {
+                const pageIds = table.getPaginationRowModel().rows
+                  .filter((pageRow) => !getAccountTaskMeta(accountTaskStatusMap, pageRow.original.id).occupied)
+                  .map((pageRow) => pageRow.original.id)
+                return pageIds.length > 0 && pageIds.every((id) => selectedIdSet.has(id))
+              })()}
               ref={(input) => {
-                if (input) input.indeterminate = table.getIsSomePageRowsSelected()
+                if (!input) return
+                const pageIds = table.getPaginationRowModel().rows
+                  .filter((pageRow) => !getAccountTaskMeta(accountTaskStatusMap, pageRow.original.id).occupied)
+                  .map((pageRow) => pageRow.original.id)
+                const selectedCountOnPage = pageIds.filter((id) => selectedIdSet.has(id)).length
+                input.indeterminate = selectedCountOnPage > 0 && selectedCountOnPage < pageIds.length
               }}
-              onChange={table.getToggleAllPageRowsSelectedHandler()}
+              onChange={(event) => {
+                const pageIds = table.getPaginationRowModel().rows
+                  .filter((pageRow) => !getAccountTaskMeta(accountTaskStatusMap, pageRow.original.id).occupied)
+                  .map((pageRow) => pageRow.original.id)
+                handleTogglePageSelection(pageIds, event.currentTarget.checked)
+              }}
             />
           </div>
         ),
@@ -845,9 +891,9 @@ export const AccountTable = memo(function AccountTable() {
               type="checkbox"
               title="选择当前行"
               className={checkboxClass()}
-              checked={row.getIsSelected()}
-              disabled={!row.getCanSelect()}
-              onChange={row.getToggleSelectedHandler()}
+              checked={selectedIdSet.has(row.original.id)}
+              disabled={getAccountTaskMeta(accountTaskStatusMap, row.original.id).occupied}
+              onChange={(event) => handleToggleSingleSelection(row.original.id, event.currentTarget.checked)}
             />
           </div>
         ),
@@ -942,23 +988,15 @@ export const AccountTable = memo(function AccountTable() {
           cell: ({ row }) => <TableRowActions account={row.original} onOpenPremium={handleOpenPremiumDialog} />
         }
     ],
-    [accountTaskStatusMap, copiedPhone, handlePhoneCopy, setFrozenDialogAccount]
+    [accountTaskStatusMap, copiedPhone, handlePhoneCopy, handleTogglePageSelection, handleToggleSingleSelection, selectedIdSet, setFrozenDialogAccount]
   )
 
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, pagination, rowSelection },
-    enableRowSelection: (row) => !getAccountTaskMeta(accountTaskStatusMap, row.original.id).occupied,
+    state: { sorting, pagination },
     onSortingChange: setSorting,
     onPaginationChange: setPagination,
-    onRowSelectionChange: (updater) => {
-      const nextState = typeof updater === 'function' ? updater(rowSelection) : updater
-      const nextIds = Object.entries(nextState)
-        .filter(([, selected]) => Boolean(selected))
-        .map(([id]) => Number(id))
-      setSelectedIds(nextIds)
-    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -1035,18 +1073,53 @@ export const AccountTable = memo(function AccountTable() {
 
   const selectedCount = selectedIds.length
   const totalCount = data.length
-  const deletePresetCounts = useMemo(() => ({
-    flagged: accounts.filter((account) => ['banned', 'frozen', 'multi_ip', 'session_expired', 'not_logged_in'].includes(account.status)).length,
-    banned: accounts.filter((account) => account.status === 'banned').length,
-    frozen: accounts.filter((account) => account.status === 'frozen').length,
-    multiIp: accounts.filter((account) => account.status === 'multi_ip').length
-  }), [accounts])
+  const deletePresetCounts = useMemo(() => {
+    const counts = {
+      flagged: 0,
+      banned: 0,
+      frozen: 0,
+      multiIp: 0
+    }
+
+    for (const account of accounts) {
+      if (account.status === 'banned') counts.banned += 1
+      if (account.status === 'frozen') counts.frozen += 1
+      if (account.status === 'multi_ip') counts.multiIp += 1
+      if (account.status === 'banned' || account.status === 'frozen' || account.status === 'multi_ip' || account.status === 'session_expired' || account.status === 'not_logged_in') {
+        counts.flagged += 1
+      }
+    }
+
+    return counts
+  }, [accounts])
   const summaryCards = useMemo(() => {
-    const aliveCount = summaryScopedData.filter((account) => account.status === 'alive' || account.status === 'geo_restricted').length
-    const limitedCount = summaryScopedData.filter((account) => account.status === 'limited' || account.status === 'temporary_limited').length
-    const frozenCount = summaryScopedData.filter((account) => account.status === 'frozen').length
-    const bannedCount = summaryScopedData.filter((account) => account.status === 'banned').length
-    const timeoutCount = summaryScopedData.filter((account) => account.status === 'timeout' || account.status === 'unknown' || account.status === 'checking').length
+    let aliveCount = 0
+    let limitedCount = 0
+    let frozenCount = 0
+    let bannedCount = 0
+    let timeoutCount = 0
+
+    for (const account of summaryScopedData) {
+      if (account.status === 'alive' || account.status === 'geo_restricted') {
+        aliveCount += 1
+        continue
+      }
+      if (account.status === 'limited' || account.status === 'temporary_limited') {
+        limitedCount += 1
+        continue
+      }
+      if (account.status === 'frozen') {
+        frozenCount += 1
+        continue
+      }
+      if (account.status === 'banned') {
+        bannedCount += 1
+        continue
+      }
+      if (account.status === 'timeout' || account.status === 'unknown' || account.status === 'checking') {
+        timeoutCount += 1
+      }
+    }
 
     return [
       { key: 'all' as AccountStatusFilter, label: '总数量', count: summaryScopedData.length },
