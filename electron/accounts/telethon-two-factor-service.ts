@@ -35,10 +35,13 @@ function formatTwoFactorError(error: string) {
   if (lower.includes('session_not_authorized') || upper.includes('AUTH_KEY_UNREGISTERED') || upper.includes('SESSION_REVOKED') || upper.includes('SESSION_EXPIRED')) {
     return '当前账号 Session 已失效或未登录，无法执行 2FA 操作。'
   }
-  if (upper.includes('PASSWORD_HASH_INVALID')) {
+  if (upper.includes('USERDEACTIVATEDBANERROR') || upper.includes('USER_DEACTIVATED_BAN') || upper.includes('USERDEACTIVATEDERROR') || upper.includes('USER_DEACTIVATED') || upper.includes('PHONE_NUMBER_BANNED')) {
+    return '这个账号已经被 Telegram 封掉/注销了，不是 2FA 密码填错。'
+  }
+  if (upper.includes('PASSWORDHASHINVALIDERROR') || upper.includes('PASSWORD_HASH_INVALID')) {
     return '旧 2FA 不正确，Telegram 拒绝了这次操作。'
   }
-  if (upper.includes('PASSWORD_MISSING') || upper.includes('SESSION_PASSWORD_NEEDED')) {
+  if (upper.includes('SESSIONPASSWORDNEEDEDERROR') || upper.includes('PASSWORD_MISSING') || upper.includes('SESSION_PASSWORD_NEEDED')) {
     return '这个账号当前需要正确的旧 2FA 才能继续操作。'
   }
   if (upper.includes('PASSWORD_RECOVERY_NA')) {
@@ -69,6 +72,9 @@ function formatTwoFactorError(error: string) {
   }
   if (lower.includes('timeout')) {
     return '这次 2FA 操作超时了，请稍后重试。'
+  }
+  if (upper.includes('BADREQUESTERROR') || upper === 'BAD_REQUEST') {
+    return 'Telegram 拒绝了这次 2FA 请求，但没给清楚原因；现在请重点排查旧 2FA 是否填错，或这个号当前状态是否不支持这次操作。'
   }
 
   return normalized || '2FA 操作失败，Telegram 没有返回更明确的原因。'

@@ -54,6 +54,28 @@ def _format_datetime(value: Any) -> str:
     return str(value)
 
 
+def _format_error_reason(exc: Exception) -> str:
+    pieces = []
+
+    error_class = exc.__class__.__name__
+    if error_class:
+        pieces.append(error_class)
+
+    error_name = getattr(exc, 'name', None)
+    if isinstance(error_name, str) and error_name.strip() and error_name.strip() not in pieces:
+        pieces.append(error_name.strip())
+
+    error_message = getattr(exc, 'message', None)
+    if isinstance(error_message, str) and error_message.strip() and error_message.strip() not in pieces:
+        pieces.append(error_message.strip())
+
+    stringified = str(exc).strip()
+    if stringified and stringified not in pieces:
+        pieces.append(stringified)
+
+    return ' | '.join(pieces) or 'TWO_FACTOR_OPERATION_FAILED'
+
+
 async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
     session_path = str(payload.get('sessionPath') or '').strip()
     action = str(payload.get('action') or '').strip()
@@ -140,7 +162,7 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
             'ok': False,
             'action': action,
             'phase': phase,
-            'reason': getattr(exc, 'message', None) or getattr(exc, 'name', None) or str(exc) or exc.__class__.__name__,
+            'reason': _format_error_reason(exc),
         }
     finally:
         try:
