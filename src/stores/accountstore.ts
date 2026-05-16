@@ -163,20 +163,20 @@ function applyAccountSnapshot(
   })
 }
 
-function createPendingTransferProgress(mode: 'import' | 'export' | 'delete'): ImportProgressPayload {
+function createPendingTransferProgress(mode: 'import' | 'export' | 'delete', options?: { total?: number; current?: number; importedCount?: number; message?: string }): ImportProgressPayload {
   return {
     mode,
     phase: 'start',
-    total: 0,
-    current: 0,
-    importedCount: 0,
+    total: Math.max(0, options?.total ?? 0),
+    current: Math.max(0, options?.current ?? 0),
+    importedCount: Math.max(0, options?.importedCount ?? 0),
     generatedJsonCount: 0,
     skippedCount: 0,
-    message: mode === 'export'
+    message: options?.message ?? (mode === 'export'
       ? '正在准备导出账号...'
       : mode === 'delete'
         ? '正在准备删除账号...'
-        : '正在准备导入账号...'
+        : '正在准备导入账号...')
   }
 }
 
@@ -582,7 +582,12 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      set({ importProgress: createPendingTransferProgress('export') })
+      set({
+        importProgress: createPendingTransferProgress('export', {
+          total: ids.length,
+          message: ids.length > 0 ? `正在准备导出账号 0 / ${ids.length}` : '正在准备导出账号...'
+        })
+      })
       let result = null
       try {
         result = await getDesktopAccountsApi()?.exportByIds(ids)
@@ -616,7 +621,12 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      set({ importProgress: createPendingTransferProgress('delete') })
+      set({
+        importProgress: createPendingTransferProgress('delete', {
+          total: ids.length,
+          message: ids.length > 0 ? `正在准备删除账号 0 / ${ids.length}` : '正在准备删除账号...'
+        })
+      })
       let accounts = null
       try {
         accounts = await getDesktopAccountsApi()?.deleteByIds(ids)
@@ -644,7 +654,12 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   deleteAll: async () => {
     await runBusyAction(set, async () => {
       const deletedCount = get().accounts.length
-      set({ importProgress: createPendingTransferProgress('delete') })
+      set({
+        importProgress: createPendingTransferProgress('delete', {
+          total: deletedCount,
+          message: deletedCount > 0 ? `正在准备删除账号 0 / ${deletedCount}` : '正在准备删除账号...'
+        })
+      })
       let accounts = null
       try {
         accounts = await getDesktopAccountsApi()?.deleteAll()
@@ -681,7 +696,12 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      set({ importProgress: createPendingTransferProgress('delete') })
+      set({
+        importProgress: createPendingTransferProgress('delete', {
+          total: ids.length,
+          message: ids.length > 0 ? `正在准备删除账号 0 / ${ids.length}` : '正在准备删除账号...'
+        })
+      })
       let accounts = null
       try {
         accounts = await getDesktopAccountsApi()?.deleteByIds(ids)
