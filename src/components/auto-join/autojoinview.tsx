@@ -120,19 +120,25 @@ function NumberRangeField(props: {
 
 function FoldSection(props: { title: string; hint?: string; defaultOpen?: boolean; children: ReactNode }) {
   const { title, hint, defaultOpen = true, children } = props
+  const [open, setOpen] = useState(defaultOpen)
   return (
-    <details open={defaultOpen} className="rounded-[18px] border border-white/[0.06] bg-panel/60 px-4 py-4">
-      <summary className="cursor-pointer list-none">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium text-white">{title}</div>
-            {hint ? <div className="mt-1 text-xs text-textMuted">{hint}</div> : null}
-          </div>
-          <div className="text-xs text-textMuted">展开 / 收起</div>
+    <div className="rounded-[18px] border border-white/[0.06] bg-panel/60 p-2">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 rounded-[14px] bg-black/10 px-4 py-3 text-left transition hover:bg-white/[0.03]"
+      >
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-white">{title}</div>
+          {hint ? <div className="mt-1 text-xs text-textMuted">{hint}</div> : null}
         </div>
-      </summary>
-      <div className="mt-4 space-y-3">{children}</div>
-    </details>
+        <div className="flex items-center gap-2 text-xs text-textMuted">
+          <span>{open ? '收起' : '展开'}</span>
+          {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </div>
+      </button>
+      {open ? <div className="mt-3 space-y-3 px-1 pb-1">{children}</div> : null}
+    </div>
   )
 }
 
