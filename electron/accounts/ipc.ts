@@ -13,6 +13,7 @@ import type { TelegramDesktopPremiumService } from './telegram-desktop-premium-s
 import type { ProxyPoolService } from '../proxy-pool/service'
 import type { TelethonTwoFactorService } from './telethon-two-factor-service'
 import type { TelethonProfileService } from './telethon-profile-service'
+import { serializeAccountsForRenderer } from './services/account-renderer-serializer'
 
 interface RegisterAccountIpcOptions {
   getMainWindow: () => BrowserWindow | null
@@ -355,7 +356,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
   checkQueue.on('state', () => emitCheckState())
 
-  ipcMain.handle('accounts:list', async () => accountRepository.list())
+  ipcMain.handle('accounts:list', async () => serializeAccountsForRenderer(accountRepository.list()))
   ipcMain.handle('accounts:get-check-state', () => serializeCheckStateForRenderer(checkQueue.getState()))
   ipcMain.handle('app-settings:get', () => appSettingsStore.get())
   ipcMain.handle('app-settings:update', (_event, patch: Partial<AppSettings>) => {
@@ -428,7 +429,11 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     })
 
     if (result.canceled || result.filePaths.length === 0) return null
-    return withManagedSessionsWatcherSuspended(() => accountImportService.importFromPaths(result.filePaths, emitImportProgress))
+    const importResult = await withManagedSessionsWatcherSuspended(() => accountImportService.importFromPaths(result.filePaths, emitImportProgress))
+    return {
+      ...importResult,
+      accounts: undefined
+    }
   })
 
   ipcMain.handle('accounts:pick-import-folder', async () => {
@@ -438,7 +443,11 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     })
 
     if (result.canceled || result.filePaths.length === 0) return null
-    return withManagedSessionsWatcherSuspended(() => accountImportService.importFromFolder(result.filePaths[0], emitImportProgress))
+    const importResult = await withManagedSessionsWatcherSuspended(() => accountImportService.importFromFolder(result.filePaths[0], emitImportProgress))
+    return {
+      ...importResult,
+      accounts: undefined
+    }
   })
 
   ipcMain.handle('accounts:scan-folder', async (_event, folderPath: string) => {
@@ -446,19 +455,29 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   })
 
   ipcMain.handle('accounts:import-dropped-paths', async (_event, inputPaths: string[]) => {
-    return withManagedSessionsWatcherSuspended(() => accountImportService.importFromPaths(inputPaths, emitImportProgress))
+    const importResult = await withManagedSessionsWatcherSuspended(() => accountImportService.importFromPaths(inputPaths, emitImportProgress))
+    return {
+      ...importResult,
+      accounts: undefined
+    }
   })
 
   ipcMain.handle('accounts:delete', async (_event, ids: number[]) => {
     const accounts = accountRepository.getByIds(ids)
-    await accountImportService.deleteManagedAccounts(accounts)
-    return accountRepository.deleteByIds(ids)
+    const emitDeleteProgress = (payload: ImportProgressPayload) => {
+      emitImportProgress({ ...payload, mode: 'delete' })
+    }
+    await accountImportService.deleteManagedAccounts(accounts, emitDeleteProgress)
+    return serializeAccountsForRenderer(accountRepository.deleteByIds(ids))
   })
 
   ipcMain.handle('accounts:delete-all', async () => {
     const accounts = accountRepository.list()
-    await accountImportService.deleteManagedAccounts(accounts)
-    return accountRepository.deleteAll()
+    const emitDeleteProgress = (payload: ImportProgressPayload) => {
+      emitImportProgress({ ...payload, mode: 'delete' })
+    }
+    await accountImportService.deleteManagedAccounts(accounts, emitDeleteProgress)
+    return serializeAccountsForRenderer(accountRepository.deleteAll())
   })
 
   ipcMain.handle('accounts:mark-checking', (_event, ids: number[]) => {
@@ -475,7 +494,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
   ipcMain.handle('accounts:export', async (_event, ids: number[]) => {
     if (ids.length === 0) {
-      return { exportedCount: 0, targetDirectory: '', accounts: accountRepository.list() }
+      return { exportedCount: 0, targetDirectory: '', accounts: undefined }
     }
 
     const result = await showOpenDialog({
@@ -484,7 +503,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     })
 
     if (result.canceled || result.filePaths.length === 0) {
-      return { exportedCount: 0, targetDirectory: '', accounts: accountRepository.list() }
+      return { exportedCount: 0, targetDirectory: '', accounts: undefined }
     }
 
     const targetDirectory = result.filePaths[0]
@@ -493,8 +512,8 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       emitImportProgress({ ...payload, mode: 'export' })
     }
     const exportedCount = await withManagedSessionsWatcherSuspended(() => accountImportService.exportManagedAccounts(accounts, targetDirectory, emitExportProgress))
-    const remainingAccounts = accountRepository.deleteByIds(ids)
-    return { exportedCount, targetDirectory, accounts: remainingAccounts }
+    accountRepository.deleteByIds(ids)
+    return { exportedCount, targetDirectory, accounts: undefined }
   })
 
   ipcMain.handle('accounts:reveal-path', async (_event, targetPath: string) => {

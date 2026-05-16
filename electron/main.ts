@@ -16,6 +16,7 @@ import { TelethonSpamBotChecker } from './accounts/check-engine/telethon-spambot
 import { AccountUpdateService } from './accounts/check-engine/account-update-service'
 import { AccountImportService } from './accounts/services/account-import-service'
 import { AccountRepository } from './accounts/services/account-repository'
+import { serializeAccountsForRenderer } from './accounts/services/account-renderer-serializer'
 import type { AccountRecord } from './accounts/types'
 import { AccountStatusService } from './accounts/services/account-status-service'
 import { createAccountsDatabase } from './accounts/services/database'
@@ -173,7 +174,7 @@ function createWindow() {
 
 function emitAccountsUpdated(accounts: AccountRecord[]) {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  mainWindow.webContents.send('accounts:updated', accounts)
+  mainWindow.webContents.send('accounts:updated', serializeAccountsForRenderer(accounts))
 }
 
 async function withManagedSessionsWatcherSuspended<T>(action: () => Promise<T>) {

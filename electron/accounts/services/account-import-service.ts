@@ -10,6 +10,7 @@ import { JsonTemplateService } from './json-template-service'
 const FILE_IO_CONCURRENCY = Math.max(8, (typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length || 4) * 4)
 const IMPORT_PROGRESS_CHUNK = 200
 const EXPORT_PROGRESS_CHUNK = 25
+const DELETE_PROGRESS_CHUNK = 25
 
 function readStringField(profile: AccountJsonProfile, ...keys: string[]) {
   for (const key of keys) {
@@ -159,8 +160,26 @@ export class AccountImportService {
     }
   }
 
-  async deleteManagedAccounts(accounts: AccountRecord[]) {
-    for (const account of accounts) {
+  async deleteManagedAccounts(accounts: AccountRecord[], onProgress?: (payload: ImportProgressPayload) => void) {
+    let deletedCount = 0
+    const total = accounts.length
+
+    const emitProgress = (phase: ImportProgressPayload['phase'], current: number, message: string) => {
+      onProgress?.({
+        mode: 'delete',
+        phase,
+        total,
+        current,
+        importedCount: deletedCount,
+        generatedJsonCount: 0,
+        skippedCount: Math.max(total - deletedCount, 0),
+        message
+      })
+    }
+
+    emitProgress('start', 0, total > 0 ? `正在删除账号，准备处理 0 / ${total}` : '正在删除账号')
+
+    const deleteAccountFiles = async (account: AccountRecord) => {
       if (account.sessionPath && isInsideDirectory(account.sessionPath, this.managedSessionsDirectory)) {
         await fs.rm(account.sessionPath, { force: true })
       }
@@ -169,6 +188,18 @@ export class AccountImportService {
         await fs.rm(account.jsonPath, { force: true })
       }
     }
+
+    for (let startIndex = 0; startIndex < accounts.length; startIndex += FILE_IO_CONCURRENCY) {
+      const batch = accounts.slice(startIndex, startIndex + FILE_IO_CONCURRENCY)
+      await Promise.all(batch.map((account) => deleteAccountFiles(account)))
+      deletedCount += batch.length
+
+      if (deletedCount === total || deletedCount === batch.length || deletedCount % DELETE_PROGRESS_CHUNK === 0) {
+        emitProgress('progress', deletedCount, `正在删除账号 ${deletedCount} / ${total}`)
+      }
+    }
+
+    emitProgress('completed', total, total > 0 ? `本次成功删除 ${deletedCount} 个账号` : '删除完成')
   }
 
   async exportManagedAccounts(accounts: AccountRecord[], targetDirectory: string, onProgress?: (payload: ImportProgressPayload) => void) {
@@ -323,7 +354,9 @@ export class AccountImportService {
       }
     }
 
-    const accounts = inputs.length > 0 ? this.repository.upsertMany(inputs) : this.repository.list()
+    if (inputs.length > 0) {
+      this.repository.upsertMany(inputs)
+    }
 
     skippedCount = Math.max(candidates.length - importedCount, 0)
     emitProgress('completed', candidates.length, `本次成功导入 ${inputs.length} 个账号`)
@@ -333,8 +366,7 @@ export class AccountImportService {
       importedCount: inputs.length,
       generatedJsonCount,
       skippedCount,
-      warnings,
-      accounts
+      warnings: warnings.slice(0, 50)
     }
   }
 }

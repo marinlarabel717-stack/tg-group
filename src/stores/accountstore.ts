@@ -163,7 +163,7 @@ function applyAccountSnapshot(
   })
 }
 
-function createPendingTransferProgress(mode: 'import' | 'export'): ImportProgressPayload {
+function createPendingTransferProgress(mode: 'import' | 'export' | 'delete'): ImportProgressPayload {
   return {
     mode,
     phase: 'start',
@@ -172,7 +172,11 @@ function createPendingTransferProgress(mode: 'import' | 'export'): ImportProgres
     importedCount: 0,
     generatedJsonCount: 0,
     skippedCount: 0,
-    message: mode === 'export' ? '正在准备导出账号...' : '正在准备导入账号...'
+    message: mode === 'export'
+      ? '正在准备导出账号...'
+      : mode === 'delete'
+        ? '正在准备删除账号...'
+        : '正在准备导入账号...'
   }
 }
 
@@ -427,9 +431,19 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   setSelectedProfileAccountId: (id) => set({ selectedProfileAccountId: id }),
   importFiles: async () => {
     await runBusyAction(set, async () => {
-      const result = await getDesktopAccountsApi()?.pickImportFiles()
-      if (!result) return
-      applyAccountSnapshot(result.accounts, set, get)
+      set({ importProgress: createPendingTransferProgress('import') })
+      let result = null
+      try {
+        result = await getDesktopAccountsApi()?.pickImportFiles()
+      } finally {
+        if (!result) {
+          set({ importProgress: null })
+        }
+      }
+      if (!result) {
+        return
+      }
+      await syncAccounts(set, get)
       set({
         importProgress: null,
         importResultDialog: {
@@ -447,9 +461,19 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   },
   importFolder: async () => {
     await runBusyAction(set, async () => {
-      const result = await getDesktopAccountsApi()?.pickImportFolder()
-      if (!result) return
-      applyAccountSnapshot(result.accounts, set, get)
+      set({ importProgress: createPendingTransferProgress('import') })
+      let result = null
+      try {
+        result = await getDesktopAccountsApi()?.pickImportFolder()
+      } finally {
+        if (!result) {
+          set({ importProgress: null })
+        }
+      }
+      if (!result) {
+        return
+      }
+      await syncAccounts(set, get)
       set({
         importProgress: null,
         importResultDialog: {
@@ -478,7 +502,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         }
       }
       if (!result) return
-      applyAccountSnapshot(result.accounts, set, get)
+      await syncAccounts(set, get)
       set({
         importProgress: null,
         importResultDialog: {
@@ -534,9 +558,20 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      const result = await getDesktopAccountsApi()?.exportByIds(ids)
-      if (!result || !result.targetDirectory) return
-      applyAccountSnapshot(result.accounts, set, get)
+      set({ importProgress: createPendingTransferProgress('export') })
+      let result = null
+      try {
+        result = await getDesktopAccountsApi()?.exportByIds(ids)
+      } finally {
+        if (!result) {
+          set({ importProgress: null })
+        }
+      }
+      if (!result || !result.targetDirectory) {
+        set({ importProgress: null })
+        return
+      }
+      await syncAccounts(set, get)
       set({
         importProgress: null,
         selectedIds: [],
@@ -557,10 +592,21 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      const accounts = await getDesktopAccountsApi()?.deleteByIds(ids)
-      if (!accounts) return
+      set({ importProgress: createPendingTransferProgress('delete') })
+      let accounts = null
+      try {
+        accounts = await getDesktopAccountsApi()?.deleteByIds(ids)
+      } finally {
+        if (!accounts) {
+          set({ importProgress: null })
+        }
+      }
+      if (!accounts) {
+        return
+      }
       applyAccountSnapshot(accounts, set, get)
       set({
+        importProgress: null,
         selectedIds: [],
         deleteResultDialog: {
           open: true,
@@ -574,10 +620,21 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   deleteAll: async () => {
     await runBusyAction(set, async () => {
       const deletedCount = get().accounts.length
-      const accounts = await getDesktopAccountsApi()?.deleteAll()
-      if (!accounts) return
+      set({ importProgress: createPendingTransferProgress('delete') })
+      let accounts = null
+      try {
+        accounts = await getDesktopAccountsApi()?.deleteAll()
+      } finally {
+        if (!accounts) {
+          set({ importProgress: null })
+        }
+      }
+      if (!accounts) {
+        return
+      }
       applyAccountSnapshot(accounts, set, get)
       set({
+        importProgress: null,
         selectedIds: [],
         deleteResultDialog: {
           open: true,
@@ -600,10 +657,21 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         return
       }
 
-      const accounts = await getDesktopAccountsApi()?.deleteByIds(ids)
-      if (!accounts) return
+      set({ importProgress: createPendingTransferProgress('delete') })
+      let accounts = null
+      try {
+        accounts = await getDesktopAccountsApi()?.deleteByIds(ids)
+      } finally {
+        if (!accounts) {
+          set({ importProgress: null })
+        }
+      }
+      if (!accounts) {
+        return
+      }
       applyAccountSnapshot(accounts, set, get)
       set({
+        importProgress: null,
         selectedIds: get().selectedIds.filter((id) => !ids.includes(id)),
         deleteResultDialog: {
           open: true,

@@ -119,11 +119,11 @@ export interface ImportAccountsResult {
   generatedJsonCount: number
   skippedCount: number
   warnings: string[]
-  accounts: AccountRecord[]
+  accounts?: AccountRecord[]
 }
 
 export interface ImportProgressPayload {
-  mode?: 'import' | 'export'
+  mode?: 'import' | 'export' | 'delete'
   phase: 'start' | 'progress' | 'completed'
   total: number
   current: number
