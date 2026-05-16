@@ -395,7 +395,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       if (chunk.length === 0) return
 
       try {
-        checkQueue.enqueue(chunk, mode)
+        checkQueue.enqueue(chunk, mode, offset === 0 ? uniqueIds.length : undefined)
         emitCheckState(true)
       } catch (error) {
         console.error('启动账号检测任务失败：', error)

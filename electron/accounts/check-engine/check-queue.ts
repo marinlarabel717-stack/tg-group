@@ -202,7 +202,7 @@ export class CheckQueue extends EventEmitter {
     this.bump()
   }
 
-  enqueue(accountIds: number[], mode: 'account-status' | 'account-survival' = 'account-status') {
+  enqueue(accountIds: number[], mode: 'account-status' | 'account-survival' = 'account-status', announcedTotalCount?: number) {
     const uniqueIds = Array.from(new Set(accountIds))
     let addedCount = 0
 
@@ -228,7 +228,10 @@ export class CheckQueue extends EventEmitter {
       }
       if (uniqueIds.length > 0) {
         const taskLabel = mode === 'account-survival' ? '账号存活检测' : '账号状态检测'
-        this.appendLog('info', null, `已选择 ${uniqueIds.length} 个账号，${taskLabel}任务进行中，请稍等（当前并发 ${this.state.concurrency}）`)
+        const displayedCount = Number.isFinite(announcedTotalCount) && (announcedTotalCount ?? 0) > 0
+          ? Math.trunc(announcedTotalCount as number)
+          : uniqueIds.length
+        this.appendLog('info', null, `已选择 ${displayedCount} 个账号，${taskLabel}任务进行中，请稍等（当前并发 ${this.state.concurrency}）`)
       }
     }
 
