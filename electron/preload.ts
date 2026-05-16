@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountListPageResult, AccountListQuery, AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BotCenterConfig, BotCenterState, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, ImportProgressPayload, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationStopResult, ProxyPoolSettings, ProxyPoolState, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState, TwoFactorStopResult } from '../src/types'
+import type { AccountListPageResult, AccountListQuery, AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BatchCreatePayload, BatchCreateProgress, BatchCreateStopResult, BatchCreateTaskResult, BotCenterConfig, BotCenterState, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, ImportProgressPayload, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationStopResult, ProxyPoolSettings, ProxyPoolState, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState, TwoFactorStopResult } from '../src/types'
 
 const runtimeAppVersion = String(ipcRenderer.sendSync('desktop-info:get-version') || '').trim()
 
@@ -181,5 +181,15 @@ contextBridge.exposeInMainWorld('desktopAutoJoin', {
     const listener = (_event: Electron.IpcRendererEvent, payload: AutoJoinProgress) => callback(payload)
     ipcRenderer.on('auto-join:progress', listener)
     return () => ipcRenderer.removeListener('auto-join:progress', listener)
+  }
+})
+
+contextBridge.exposeInMainWorld('desktopBatchCreate', {
+  start: (payload: BatchCreatePayload) => ipcRenderer.invoke('batch-create:start', payload) as Promise<BatchCreateTaskResult>,
+  stop: () => ipcRenderer.invoke('batch-create:stop') as Promise<BatchCreateStopResult>,
+  onProgress: (callback: (payload: BatchCreateProgress) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: BatchCreateProgress) => callback(payload)
+    ipcRenderer.on('batch-create:progress', listener)
+    return () => ipcRenderer.removeListener('batch-create:progress', listener)
   }
 })

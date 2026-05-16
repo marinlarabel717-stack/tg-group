@@ -4,6 +4,7 @@ export type ModuleKey =
   | 'automation'
   | 'bot-center'
   | 'auto-join'
+  | 'batch-create'
   | 'direct-message'
   | 'proxy-pool'
   | 'session-manager'
@@ -1013,6 +1014,67 @@ export interface AutoJoinProgress {
   waitSeconds?: number | null
 }
 
+export type BatchCreateMode = 'group' | 'channel' | 'both'
+
+export interface BatchCreatePayload {
+  taskId: string
+  accountIds: number[]
+  createMode: BatchCreateMode
+  countPerAccount: number
+  titleTemplate: string
+  aboutTemplate: string
+  usernameTemplate: string
+  randomTitleEnabled: boolean
+  randomAboutEnabled: boolean
+  randomUsernameEnabled: boolean
+  randomLength: number
+}
+
+export interface BatchCreateResultItem {
+  id: string
+  accountId: number
+  accountLabel: string
+  entityType: 'group' | 'channel'
+  title: string
+  about: string
+  username: string
+  publicLink: string
+  status: 'success' | 'failed'
+  message: string
+  createdAt: string
+}
+
+export interface BatchCreateTaskResult {
+  taskId: string
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  groupCount: number
+  channelCount: number
+  items: BatchCreateResultItem[]
+  message: string
+  stopped?: boolean
+}
+
+export interface BatchCreateStopResult {
+  stopped: boolean
+  message: string
+}
+
+export interface BatchCreateProgress {
+  taskId: string
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  groupCount: number
+  channelCount: number
+  running: boolean
+  item?: BatchCreateResultItem | null
+  message: string
+}
+
 export interface DesktopSettingsApi {
   get: () => Promise<DesktopAppSettings>
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
@@ -1076,6 +1138,12 @@ export interface DesktopAutoJoinApi {
   onProgress: (callback: (payload: AutoJoinProgress) => void) => () => void
 }
 
+export interface DesktopBatchCreateApi {
+  start: (payload: BatchCreatePayload) => Promise<BatchCreateTaskResult>
+  stop: () => Promise<BatchCreateStopResult>
+  onProgress: (callback: (payload: BatchCreateProgress) => void) => () => void
+}
+
 export type AppUpdaterStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'unsupported'
 
 export interface AppUpdaterState {
@@ -1117,6 +1185,7 @@ declare global {
     desktopBroadcast?: DesktopBroadcastApi
     desktopDirectMessage?: DesktopDirectMessageApi
     desktopAutoJoin?: DesktopAutoJoinApi
+    desktopBatchCreate?: DesktopBatchCreateApi
     desktopUpdater?: DesktopUpdaterApi
     desktopWindow?: DesktopWindowApi
     desktopInfo?: {

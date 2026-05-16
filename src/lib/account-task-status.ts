@@ -2,10 +2,11 @@ import { useMemo } from 'react'
 import type { CheckQueueState } from '../types'
 import { useAccountStore } from '../stores/accountstore'
 import { useAutoJoinStore } from '../stores/autojoinstore'
+import { useBatchCreateStore } from '../stores/batchcreatestore'
 import { useBroadcastStore } from '../stores/broadcaststore'
 import { useDirectMessageStore } from '../stores/directmessagestore'
 
-export type AccountTaskKind = 'idle' | 'checking' | 'direct-message' | 'broadcast' | 'auto-join' | 'two-factor' | 'profile'
+export type AccountTaskKind = 'idle' | 'checking' | 'direct-message' | 'broadcast' | 'auto-join' | 'batch-create' | 'two-factor' | 'profile'
 
 export interface AccountTaskMeta {
   kind: AccountTaskKind
@@ -45,6 +46,12 @@ const ACCOUNT_TASK_META: Record<AccountTaskKind, AccountTaskMeta> = {
     tone: 'border-violet-400/18 bg-violet-400/12 text-violet-200',
     occupied: true
   },
+  'batch-create': {
+    kind: 'batch-create',
+    label: '创建中',
+    tone: 'border-cyan-400/18 bg-cyan-400/12 text-cyan-200',
+    occupied: true
+  },
   'two-factor': {
     kind: 'two-factor',
     label: '2FA 中',
@@ -73,6 +80,7 @@ export function buildAccountTaskStatusMap(input: {
   directMessage: { sending: boolean; stopping: boolean; runningAccountIds: number[] }
   broadcast: { syncing: boolean; stopping: boolean; syncingAccountIds: number[] }
   autoJoin: { running: boolean; stopping: boolean; runningAccountIds: number[] }
+  batchCreate: { running: boolean; stopping: boolean; runningAccountIds: number[] }
   twoFactor: { running: boolean; stopping: boolean; runningAccountIds: number[] }
   profile: { running: boolean; stopping: boolean; runningAccountIds: number[] }
 }) {
@@ -92,6 +100,10 @@ export function buildAccountTaskStatusMap(input: {
 
   if (input.autoJoin.running || input.autoJoin.stopping) {
     assignTask(map, input.autoJoin.runningAccountIds, 'auto-join')
+  }
+
+  if (input.batchCreate.running || input.batchCreate.stopping) {
+    assignTask(map, input.batchCreate.runningAccountIds, 'batch-create')
   }
 
   if (input.twoFactor.running || input.twoFactor.stopping) {
@@ -125,6 +137,9 @@ export function useAccountTaskStatusMap() {
   const autoJoinRunning = useAutoJoinStore((state) => state.running)
   const autoJoinStopping = useAutoJoinStore((state) => state.stopping)
   const autoJoinRunningAccountIds = useAutoJoinStore((state) => state.runningAccountIds)
+  const batchCreateRunning = useBatchCreateStore((state) => state.running)
+  const batchCreateStopping = useBatchCreateStore((state) => state.stopping)
+  const batchCreateRunningAccountIds = useBatchCreateStore((state) => state.runningAccountIds)
   const twoFactorState = useAccountStore((state) => state.twoFactorState)
   const profileOperationState = useAccountStore((state) => state.profileOperationState)
 
@@ -149,6 +164,11 @@ export function useAccountTaskStatusMap() {
       stopping: autoJoinStopping,
       runningAccountIds: autoJoinRunningAccountIds
     },
+    batchCreate: {
+      running: batchCreateRunning,
+      stopping: batchCreateStopping,
+      runningAccountIds: batchCreateRunningAccountIds
+    },
     twoFactor: {
       running: twoFactorState.running,
       stopping: twoFactorState.stopRequested,
@@ -163,6 +183,9 @@ export function useAccountTaskStatusMap() {
     autoJoinRunning,
     autoJoinRunningAccountIds,
     autoJoinStopping,
+    batchCreateRunning,
+    batchCreateRunningAccountIds,
+    batchCreateStopping,
     broadcastSyncing,
     broadcastSyncingAccountIds,
     broadcastStopping,

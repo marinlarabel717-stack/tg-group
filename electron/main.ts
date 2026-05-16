@@ -45,6 +45,8 @@ import { registerDirectMessageIpc } from './direct-message/ipc'
 import { AutoJoinService } from './auto-join/service'
 import { TelethonAutoJoiner } from './auto-join/telethon-auto-joiner'
 import { registerAutoJoinIpc } from './auto-join/ipc'
+import { BatchCreateService } from './batch-create/service'
+import { registerBatchCreateIpc } from './batch-create/ipc'
 import { DesktopAppUpdater } from './app-updater'
 import { BotCenterService } from './bot-center/service'
 import { registerBotCenterIpc } from './bot-center/ipc'
@@ -312,6 +314,7 @@ async function bootstrap() {
   const telethonAutoJoiner = new TelethonAutoJoiner()
   const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager, proxyPoolService, telethonGroupCollector, telethonDirectMessageSender)
   const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager, proxyPoolService, telethonFreezeChecker, telethonAutoJoiner)
+  const batchCreateService = new BatchCreateService(repository, sessionLoader, clientManager, proxyPoolService)
   botCenterService = new BotCenterService(botCenterStoragePath)
   const resultWriter = new CheckResultWriter(repository)
   const checkEngine = new AccountCheckEngine(
@@ -390,6 +393,9 @@ async function bootstrap() {
   })
   registerAutoJoinIpc({
     autoJoinService
+  })
+  registerBatchCreateIpc({
+    batchCreateService
   })
   registerBotCenterIpc({
     botCenterService,
