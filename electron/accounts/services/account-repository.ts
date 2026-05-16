@@ -158,7 +158,7 @@ export class AccountRepository {
     return this.list()
   }
 
-  updateStatus(ids: number[], status: AccountStatus) {
+  updateStatus(ids: number[], status: AccountStatus, options?: { returnAccounts?: boolean }) {
     const now = new Date().toISOString()
     const lastOnlineTime = status === 'alive' ? now : null
 
@@ -175,10 +175,14 @@ export class AccountRepository {
     })
 
     transaction(ids)
+    if (options?.returnAccounts === false) {
+      return []
+    }
+
     return this.list()
   }
 
-  applyCheckResults(items: CheckResultInput[]) {
+  applyCheckResults(items: CheckResultInput[], options?: { returnAccounts?: boolean }) {
     const now = new Date().toISOString()
 
     const transaction = this.database.transaction((batch: CheckResultInput[]) => {
@@ -200,6 +204,10 @@ export class AccountRepository {
     })
 
     transaction(items)
+    if (options?.returnAccounts === false) {
+      return []
+    }
+
     return this.list()
   }
 

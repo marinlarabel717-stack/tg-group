@@ -13,8 +13,13 @@ export class CheckResultWriter {
   }
 
   write(result: CheckResultInput) {
-    const accounts = this.repository.applyCheckResults([result])
-    this.onWrite?.(accounts)
-    return accounts
+    if (this.onWrite) {
+      const accounts = this.repository.applyCheckResults([result])
+      this.onWrite(accounts)
+      return accounts
+    }
+
+    this.repository.applyCheckResults([result], { returnAccounts: false })
+    return []
   }
 }
