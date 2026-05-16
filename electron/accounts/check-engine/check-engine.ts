@@ -999,6 +999,21 @@ export class AccountCheckEngine {
       const clientProxy = proxy ? this.toClientProxyOptions(proxy) : null
       let client: TelegramClient | null = null
 
+      if (!directOnly) {
+        try {
+          const telethonFrozen = await withStepTimeout(
+            this.telethonFreezeChecker.check(account.sessionPath, Math.ceil(this.timeoutMs / 1000), clientProxy),
+            this.timeoutMs,
+            'Telethon 冻结预检查'
+          )
+          if (telethonFrozen?.status === 'frozen') {
+            return this.buildFrozenResultFromTelethon(account, telethonFrozen, startedAt, proxyMeta, 'Telethon 冻结预检查', mode)
+          }
+        } catch {
+          // ignore precheck failure and continue with main flow
+        }
+      }
+
       const telethonOutcome = mode === 'account-survival'
         ? await this.runAccountSurvivalCheckViaTelethon(account, startedAt, logger, proxyMeta, clientProxy)
         : await this.runAccountStatusCheckViaTelethon(account, startedAt, logger, proxyMeta, clientProxy)

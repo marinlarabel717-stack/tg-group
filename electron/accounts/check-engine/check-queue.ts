@@ -96,18 +96,9 @@ function formatFreezeTime(value: unknown) {
 
 function buildFrozenTimeSuffix(profile: AccountCheckResult['profile'] | null | undefined) {
   const freezeSince = formatFreezeTime(profile?.freeze_since_date)
-  const freezeUntil = formatFreezeTime(profile?.freeze_until_date)
-
-  if (freezeSince && freezeUntil) {
-    return `（开始：${freezeSince}｜结束：${freezeUntil}）`
-  }
 
   if (freezeSince) {
-    return `（${freezeSince}）`
-  }
-
-  if (freezeUntil) {
-    return `（结束：${freezeUntil}）`
+    return `（开始：${freezeSince}）`
   }
 
   return ''
