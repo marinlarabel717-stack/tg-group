@@ -157,7 +157,7 @@ export class CheckQueue extends EventEmitter {
   getState() {
     return {
       ...this.state,
-      queuedAccountIds: [...this.state.queuedAccountIds],
+      queuedAccountIds: [],
       activeAccountIds: [...this.state.activeAccountIds],
       logs: [...this.state.logs]
     }
@@ -232,12 +232,16 @@ export class CheckQueue extends EventEmitter {
       }
     }
 
+    const existingAccountIds = new Set<number>([
+      ...this.pending.map((task) => task.accountId),
+      ...this.active.keys()
+    ])
+
     for (const accountId of uniqueIds) {
-      const alreadyQueued = this.pending.some((task) => task.accountId === accountId)
-      const alreadyRunning = this.active.has(accountId)
-      if (alreadyQueued || alreadyRunning) continue
+      if (existingAccountIds.has(accountId)) continue
 
       this.pending.push({ accountId, attempt: 0, mode })
+      existingAccountIds.add(accountId)
       addedCount += 1
     }
 
@@ -272,17 +276,21 @@ export class CheckQueue extends EventEmitter {
   }
 
   private async drain() {
+    let activated = false
+
     while (this.active.size < this.options.concurrency && this.pending.length > 0) {
       const task = this.pending.shift()
       if (!task) break
 
       this.active.set(task.accountId, task)
-      this.syncCounters()
+      activated = true
       void this.runTask(task)
     }
 
-    this.syncCounters()
-    this.bump()
+    if (activated || this.state.pendingCount !== this.pending.length || this.state.activeCount !== this.active.size || this.state.running !== (this.pending.length > 0 || this.active.size > 0)) {
+      this.syncCounters()
+      this.bump()
+    }
   }
 
   private async runTask(task: QueueTask) {
@@ -457,7 +465,7 @@ export class CheckQueue extends EventEmitter {
     const wasRunning = this.state.running
     this.state.pendingCount = this.pending.length
     this.state.activeCount = this.active.size
-    this.state.queuedAccountIds = this.pending.map((task) => task.accountId)
+    this.state.queuedAccountIds = []
     this.state.activeAccountIds = Array.from(this.active.keys())
     this.state.running = this.pending.length > 0 || this.active.size > 0
 
