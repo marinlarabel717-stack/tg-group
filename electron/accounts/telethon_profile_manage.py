@@ -19,6 +19,7 @@ DEFAULT_PROFILE_EMOJI_BACKGROUND_COLORS = [
     [0xA35BFF, 0xEC5FA3],
     [0x4AAE62, 0x9ED65D],
 ]
+DEFAULT_PROFILE_EMOJI_FALLBACK_COLORS = [0x7A5CFA]
 
 
 def _emit(payload: dict):
@@ -119,6 +120,54 @@ async def _read_final_profile(client: TelegramClient):
     }
 
 
+def _is_emoji_markup_invalid_error(error: Exception) -> bool:
+    message = str(error or '').strip().upper()
+    return 'EMOJI_MARKUP_INVALID' in message or 'VIDEO_EMOJI_MARKUP_INVALID' in message
+
+
+def _build_background_variants(colors):
+    unique_variants = []
+
+    def _push(candidate):
+        normalized = [int(color) for color in (candidate or []) if isinstance(color, int)]
+        if not normalized:
+            return
+        key = tuple(normalized)
+        if key not in unique_variants:
+            unique_variants.append(key)
+
+    _push(colors)
+    if len(colors or []) >= 2:
+        _push(list(reversed(colors)))
+    if colors:
+        _push([int(colors[0])])
+        _push([int(colors[-1])])
+    _push(DEFAULT_PROFILE_EMOJI_FALLBACK_COLORS)
+    return [list(item) for item in unique_variants]
+
+
+async def _upload_emoji_profile_photo(client: TelegramClient, emoji_id: int, background_colors):
+    last_error = None
+    for candidate_colors in _build_background_variants(background_colors):
+        try:
+            await client(functions.photos.UploadProfilePhotoRequest(
+                fallback=True,
+                video_emoji_markup=types.VideoSizeEmojiMarkup(
+                    emoji_id=emoji_id,
+                    background_colors=candidate_colors,
+                )
+            ))
+            return
+        except Exception as error:
+            last_error = error
+            if not _is_emoji_markup_invalid_error(error):
+                raise
+
+    if last_error:
+        raise last_error
+    raise RuntimeError('EMOJI_MARKUP_INVALID')
+
+
 async def _apply_random_emoji_profile_photo(client: TelegramClient):
     emoji_list = await client(functions.account.GetDefaultProfilePhotoEmojisRequest(hash=0))
     document_ids = list(getattr(emoji_list, 'document_id', None) or [])
@@ -127,12 +176,7 @@ async def _apply_random_emoji_profile_photo(client: TelegramClient):
 
     emoji_id = int(random.choice(document_ids))
     background_colors = random.choice(DEFAULT_PROFILE_EMOJI_BACKGROUND_COLORS)
-    await client(functions.photos.UploadProfilePhotoRequest(
-        video_emoji_markup=types.VideoSizeEmojiMarkup(
-            emoji_id=emoji_id,
-            background_colors=background_colors,
-        )
-    ))
+    await _upload_emoji_profile_photo(client, emoji_id, background_colors)
 
 
 async def _apply_action(client: TelegramClient, action: str, value: str, avatar_path: str, first_name: str, last_name: str):
