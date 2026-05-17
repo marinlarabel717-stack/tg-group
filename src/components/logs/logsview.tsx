@@ -390,10 +390,22 @@ function BatchCreateSummary({ scrollContainerRef, onScroll }: { scrollContainerR
   const stopping = useBatchCreateStore((state) => state.stopping)
   const logs = useBatchCreateStore((state) => state.logs)
   const tasks = useBatchCreateStore((state) => state.tasks)
+  const taskSnapshots = useBatchCreateStore((state) => state.taskSnapshots)
   const clearLogs = useBatchCreateStore((state) => state.clearLogs)
   const stopTask = useBatchCreateStore((state) => state.stopTask)
+  const setActiveModule = useUIStore((state) => state.setActiveModule)
 
   const latestTask = tasks[0] ?? null
+  const latestSnapshot = taskSnapshots[0] ?? null
+  const allLogText = useMemo(() => logs
+    .slice()
+    .reverse()
+    .map((log) => `${formatLogTimestamp(log.createdAt)} ${log.message}`)
+    .join('\n'), [logs])
+  const linkLines = useMemo(() => (latestSnapshot?.items ?? [])
+    .filter((item) => item.status === 'success' && item.publicLink)
+    .map((item) => `${item.publicLink} | ${item.title || '未命名目标'} | ${item.entityType === 'group' ? '公开群组' : '公开频道'}`), [latestSnapshot])
+  const allLinkText = linkLines.join('\n')
 
   return (
     <GlassPanel className="min-h-[520px] bg-card p-0">
@@ -404,6 +416,13 @@ function BatchCreateSummary({ scrollContainerRef, onScroll }: { scrollContainerR
             <div className="mt-1 text-xs text-textMuted">开始任务后会自动跳到这里，逐条显示创建、等待、重试、成功和失败。</div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveModule('batch-create')}
+              className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-200 transition hover:bg-violet-400/18"
+            >
+              回到批量创建
+            </button>
             <button
               type="button"
               disabled={!running || stopping}
@@ -442,6 +461,24 @@ function BatchCreateSummary({ scrollContainerRef, onScroll }: { scrollContainerR
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/5 px-5 py-4">
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard.writeText(allLogText || '暂无日志')}
+          className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-200 transition hover:bg-violet-400/18"
+        >
+          复制全部日志
+        </button>
+        <button
+          type="button"
+          disabled={!allLinkText}
+          onClick={() => void navigator.clipboard.writeText(allLinkText)}
+          className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          一键复制全部链接
+        </button>
+      </div>
+
       <div ref={scrollContainerRef as RefObject<HTMLDivElement>} onScroll={onScroll} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">
         {logs.length === 0 ? (
           <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center text-textMuted">
@@ -451,6 +488,49 @@ function BatchCreateSummary({ scrollContainerRef, onScroll }: { scrollContainerR
         ) : (
           <IncrementalLogLines logs={logs.slice().reverse()} lineClassResolver={(log) => getLevelClass(log.level)} />
         )}
+
+        <div className="mt-5 border-t border-white/5 pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm font-medium text-white">本轮结果</div>
+            <div className="text-xs text-textMuted">这里保留和批量创建页一致的结果视角，避免你找不到。</div>
+          </div>
+
+          {allLinkText ? (
+            <div className="mt-4 rounded-[14px] bg-panel/70 px-4 py-4 text-sm">
+              <div className="mb-2 text-xs tracking-[0.16em] text-textMuted">链接清单</div>
+              <div className="max-h-[180px] overflow-y-auto whitespace-pre-wrap break-all text-slate-200">{allLinkText}</div>
+            </div>
+          ) : null}
+
+          <div className="mt-4 space-y-2">
+            {!latestSnapshot || latestSnapshot.items.length === 0 ? (
+              <div className="rounded-[14px] bg-panel/70 px-4 py-4 text-sm text-textMuted">完成后这里会显示创建结果。</div>
+            ) : latestSnapshot.items.map((item) => (
+              <div key={item.id} className="rounded-[14px] bg-panel/70 px-4 py-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-white">{item.title || '未命名目标'} <span className="ml-2 text-xs text-textMuted">{item.entityType === 'group' ? '公开群组' : '公开频道'}</span></div>
+                    <div className="mt-1 text-xs text-textMuted">{item.accountLabel}</div>
+                  </div>
+                  <div className={item.status === 'success' ? 'text-emerald-300' : 'text-rose-300'}>{item.status === 'success' ? '成功' : '失败'}</div>
+                </div>
+                <div className="mt-2 text-xs text-textMuted">{item.message}</div>
+                {item.publicLink ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="rounded-[10px] bg-black/10 px-3 py-2 text-xs text-slate-200">{item.publicLink}</div>
+                    <button
+                      type="button"
+                      onClick={() => void navigator.clipboard.writeText(item.publicLink)}
+                      className="inline-flex items-center gap-1 rounded-[10px] bg-white/[0.05] px-3 py-2 text-xs text-white transition hover:bg-white/[0.08]"
+                    >
+                      复制
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </GlassPanel>
   )
