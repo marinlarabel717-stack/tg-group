@@ -11,7 +11,8 @@ import type {
   OtherToolsUsernameFilterResult,
   OtherToolsSniperCandidateItem,
   OtherToolsSniperPayload,
-  OtherToolsSniperResult
+  OtherToolsSniperResult,
+  OtherToolsSourceSubscribeItem
 } from '../../src/types'
 
 function toClientProxy(proxy: AccountCheckProxy | null): AccountClientProxyOptions | null {
@@ -128,6 +129,11 @@ type PoolCarrier = {
   entity: unknown
   input: unknown
   currentUsername: string
+}
+
+type SourceExpandResult = {
+  sources: ExpandedSource[]
+  chatlistJoinCount: number
 }
 
 function normalizeCandidate(raw: string): NormalizedCandidate {
@@ -312,10 +318,11 @@ function buildExpandedSource(entity: unknown, fallbackRef: string): ExpandedSour
   }
 }
 
-async function expandSourceRefsWithChatlists(client: TelegramClient, refs: string[]) {
+async function expandSourceRefsWithChatlists(client: TelegramClient, refs: string[], options?: { joinChatlists?: boolean }): Promise<SourceExpandResult> {
   const expandedSources: ExpandedSource[] = []
   const seen = new Set<string>()
   let chatlistJoinCount = 0
+  const joinChatlists = options?.joinChatlists !== false
 
   for (const ref of refs) {
     const slug = extractChatlistSlug(ref)
@@ -342,7 +349,7 @@ async function expandSourceRefsWithChatlists(client: TelegramClient, refs: strin
 
     const peersToJoin = inviteChats.filter((entity) => missingPeerKeys.size === 0 || missingPeerKeys.has(readEntityPeerKey(entity)))
 
-    if (peersToJoin.length > 0) {
+    if (joinChatlists && peersToJoin.length > 0) {
       await client.invoke(new Api.chatlists.JoinChatlistInvite({
         slug,
         peers: peersToJoin as never
@@ -677,6 +684,140 @@ function formatSniperClaimError(error: unknown) {
   return `抢注失败：${message}`
 }
 
+async function isAlreadyInChannel(client: TelegramClient, entity: unknown) {
+  try {
+    await client.invoke(new Api.channels.GetParticipant({
+      channel: entity as never,
+      participant: new Api.InputPeerSelf()
+    }))
+    return true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/USER_NOT_PARTICIPANT|PARTICIPANT_ID_INVALID|not a member of the specified megagroup or channel|target user is not a member/i.test(message)) {
+      return false
+    }
+    throw error
+  }
+}
+
+async function joinPublicSource(client: TelegramClient, ref: string) {
+  const resolved = await resolvePeer(client, ref)
+  if (!['channel', 'group'].includes(resolved.kind)) {
+    return {
+      status: 'skipped' as const,
+      source: resolved,
+      message: '这个来源不是可加入的频道/群，已跳过。'
+    }
+  }
+  if (await isAlreadyInChannel(client, resolved.entity)) {
+    return {
+      status: 'already' as const,
+      source: resolved,
+      message: '这个账号已经在该频道/群里了。'
+    }
+  }
+  await client.invoke(new Api.channels.JoinChannel({ channel: resolved.entity as never }))
+  return {
+    status: 'joined' as const,
+    source: resolved,
+    message: '已成功加入这个频道/群。'
+  }
+}
+
+function formatSourceSubscribeError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/USER_ALREADY_PARTICIPANT/i.test(message)) return '这个账号已经在目标里了。'
+  if (/CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(message)) return '这个账号加入得太多了，Telegram 不让继续加。'
+  if (/INVITE_SLUG_EXPIRED|SLUG_EXPIRED/i.test(message)) return '这个分组分享链接已经失效了。'
+  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(message)) return '这个账号登录已经失效。'
+  if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(message)) return '这个账号已经被封。'
+  if (/ACCOUNT_RESTRICTED/i.test(message)) return '这个账号当前受限。'
+  return `加入失败：${message}`
+}
+
+async function subscribeSourcesForAccount(client: TelegramClient, account: AccountRecord, refs: string[]): Promise<OtherToolsSourceSubscribeItem[]> {
+  const items: OtherToolsSourceSubscribeItem[] = []
+  for (const ref of refs) {
+    const slug = extractChatlistSlug(ref)
+    if (slug) {
+      try {
+        const invite = await client.invoke(new Api.chatlists.CheckChatlistInvite({ slug }))
+        const inviteChats = Array.isArray((invite as { chats?: unknown[] })?.chats)
+          ? ((invite as { chats?: unknown[] }).chats ?? []).filter((entity) => ['channel', 'group'].includes(readPeerKind(entity)))
+          : []
+        const missingPeerKeys = new Set(
+          Array.isArray((invite as { missingPeers?: unknown[] })?.missingPeers)
+            ? ((invite as { missingPeers?: unknown[] }).missingPeers ?? []).map(readPeerKey).filter(Boolean)
+            : []
+        )
+        const peersToJoin = inviteChats.filter((entity) => missingPeerKeys.size === 0 || missingPeerKeys.has(readEntityPeerKey(entity)))
+        if (peersToJoin.length === 0) {
+          items.push({
+            id: createId('subscribe-item'),
+            accountId: account.id,
+            accountLabel: readCheckResultTitle(account),
+            sourceRef: ref,
+            sourceTitle: '分组分享链接',
+            sourceKind: 'chatlist',
+            status: 'already',
+            message: '这个账号已经导入过该分组里的目标，当前没有新的频道/群需要加入。'
+          })
+          continue
+        }
+        await client.invoke(new Api.chatlists.JoinChatlistInvite({ slug, peers: peersToJoin as never }))
+        items.push({
+          id: createId('subscribe-item'),
+          accountId: account.id,
+          accountLabel: readCheckResultTitle(account),
+          sourceRef: ref,
+          sourceTitle: '分组分享链接',
+          sourceKind: 'chatlist',
+          status: 'joined',
+          message: `已通过分组链接导入 ${peersToJoin.length} 个频道/群。`
+        })
+      } catch (error) {
+        items.push({
+          id: createId('subscribe-item'),
+          accountId: account.id,
+          accountLabel: readCheckResultTitle(account),
+          sourceRef: ref,
+          sourceTitle: '分组分享链接',
+          sourceKind: 'chatlist',
+          status: 'failed',
+          message: formatSourceSubscribeError(error)
+        })
+      }
+      continue
+    }
+
+    try {
+      const joined = await joinPublicSource(client, ref)
+      items.push({
+        id: createId('subscribe-item'),
+        accountId: account.id,
+        accountLabel: readCheckResultTitle(account),
+        sourceRef: joined.source.ref,
+        sourceTitle: joined.source.title,
+        sourceKind: joined.source.kind === 'channel' || joined.source.kind === 'group' ? joined.source.kind : 'unknown',
+        status: joined.status,
+        message: joined.message
+      })
+    } catch (error) {
+      items.push({
+        id: createId('subscribe-item'),
+        accountId: account.id,
+        accountLabel: readCheckResultTitle(account),
+        sourceRef: ref,
+        sourceTitle: ref,
+        sourceKind: 'unknown',
+        status: 'failed',
+        message: formatSourceSubscribeError(error)
+      })
+    }
+  }
+  return items
+}
+
 export class OtherToolsService {
   constructor(
     private readonly repository: AccountRepository,
@@ -758,6 +899,12 @@ export class OtherToolsService {
         poolCount: 0,
         inspectedMessageCount: 0,
         candidateCount: 0,
+        subscribeAccountCount: 0,
+        subscribeJoinedCount: 0,
+        subscribeAlreadyCount: 0,
+        subscribeFailedCount: 0,
+        subscribeSkippedCount: 0,
+        subscribeItems: [],
         occupied: [],
         claimable: [],
         forbidden: [],
@@ -777,6 +924,10 @@ export class OtherToolsService {
     const claimAccount = payload.autoClaim
       ? pickCheckAccount(accounts, payload.claimAccountId ?? payload.scanAccountId ?? null)
       : null
+    const subscribeAccountIds = Array.from(new Set((payload.subscribeAccountIds ?? []).filter((item): item is number => typeof item === 'number')))
+    const subscribeAccounts = payload.autoSubscribeSources
+      ? accounts.filter((account) => subscribeAccountIds.includes(account.id) && !['banned', 'frozen', 'session_expired', 'not_logged_in'].includes(account.status))
+      : []
     if (payload.autoClaim && !claimAccount) {
       throw new Error('当前没有可用抢注账号。')
     }
@@ -793,17 +944,44 @@ export class OtherToolsService {
     const claimClient = payload.autoClaim
       ? (claimAccount && claimAccount.id === scanAccount.id ? scanClient : await ensureAuthorizedClient(claimAccount as AccountRecord, this.sessionLoader, this.clientManager, this.proxyPoolService))
       : null
+    const subscribeClients = new Map<number, TelegramClient>()
 
     try {
       const items: OtherToolsSniperCandidateItem[] = []
+      const subscribeItems: OtherToolsSourceSubscribeItem[] = []
       const seenCandidates = new Set<string>()
       let inspectedMessageCount = 0
       let expandedSourceCount = 0
       let chatlistJoinCount = 0
 
+      if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
+        for (const account of subscribeAccounts) {
+          try {
+            const client = account.id === scanAccount.id ? scanClient : await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+            if (client !== scanClient) {
+              subscribeClients.set(account.id, client)
+            }
+            const accountItems = await subscribeSourcesForAccount(client, account, sourceRefs)
+            subscribeItems.push(...accountItems)
+          } catch (error) {
+            subscribeItems.push({
+              id: createId('subscribe-item'),
+              accountId: account.id,
+              accountLabel: readCheckResultTitle(account),
+              sourceRef: '批量订阅',
+              sourceTitle: '批量订阅',
+              sourceKind: 'unknown',
+              status: 'failed',
+              message: formatSourceSubscribeError(error)
+            })
+          }
+        }
+      }
+
       let expandedSourceEntries: ExpandedSource[] = []
       try {
-        const expanded = await expandSourceRefsWithChatlists(scanClient, sourceRefs)
+        const shouldJoinChatlistsForScan = !payload.autoSubscribeSources || !subscribeAccounts.some((account) => account.id === scanAccount.id)
+        const expanded = await expandSourceRefsWithChatlists(scanClient, sourceRefs, { joinChatlists: shouldJoinChatlistsForScan })
         expandedSourceEntries = expanded.sources
         expandedSourceCount = expanded.sources.length
         chatlistJoinCount = expanded.chatlistJoinCount
@@ -941,6 +1119,10 @@ export class OtherToolsService {
       const forbidden = items.filter((item) => item.category === 'forbidden')
       const uncertain = items.filter((item) => item.category === 'uncertain')
       const claimed = items.filter((item) => item.claimStatus === 'claimed')
+      const subscribeJoinedCount = subscribeItems.filter((item) => item.status === 'joined').length
+      const subscribeAlreadyCount = subscribeItems.filter((item) => item.status === 'already').length
+      const subscribeFailedCount = subscribeItems.filter((item) => item.status === 'failed').length
+      const subscribeSkippedCount = subscribeItems.filter((item) => item.status === 'skipped').length
 
       const summaryParts = [
         `已处理 ${sourceRefs.length} 个白名单来源`,
@@ -948,8 +1130,11 @@ export class OtherToolsService {
         `命中 ${items.filter((item) => item.sourceMessageId).length} 条候选`,
         `可抢 ${claimable.length} 条`
       ]
+      if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
+        summaryParts.push(`订阅账号 ${subscribeAccounts.length} 个，成功 ${subscribeJoinedCount}，已在内 ${subscribeAlreadyCount}，失败 ${subscribeFailedCount}`)
+      }
       if (chatlistJoinCount > 0) {
-        summaryParts.push(`分组链接本轮自动导入 ${chatlistJoinCount} 个目标`)
+        summaryParts.push(`监听账号经分组链接导入 ${chatlistJoinCount} 个目标`)
       }
       if (payload.autoClaim) {
         summaryParts.push(`已抢到 ${claimed.length} 条`)
@@ -964,6 +1149,12 @@ export class OtherToolsService {
         poolCount: carriers.length,
         inspectedMessageCount,
         candidateCount: items.length,
+        subscribeAccountCount: subscribeAccounts.length,
+        subscribeJoinedCount,
+        subscribeAlreadyCount,
+        subscribeFailedCount,
+        subscribeSkippedCount,
+        subscribeItems,
         occupied,
         claimable,
         forbidden,
@@ -977,6 +1168,7 @@ export class OtherToolsService {
       if (claimClient && claimClient !== scanClient) {
         await this.clientManager.destroyClient(claimClient)
       }
+      await Promise.all(Array.from(subscribeClients.values()).map((client) => this.clientManager.destroyClient(client).catch(() => undefined)))
     }
   }
 }

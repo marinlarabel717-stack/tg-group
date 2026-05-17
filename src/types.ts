@@ -1119,9 +1119,11 @@ export interface OtherToolsSniperPayload {
   excludeKeywords: string
   scanAccountId?: number | null
   claimAccountId?: number | null
+  subscribeAccountIds?: number[]
   sourceMessageLimit: number
   candidateLimit: number
   autoClaim: boolean
+  autoSubscribeSources: boolean
 }
 
 export interface OtherToolsSniperCandidateItem {
@@ -1147,6 +1149,19 @@ export interface OtherToolsSniperCandidateItem {
   claimAccountLabel?: string | null
 }
 
+export type OtherToolsSourceSubscribeStatus = 'joined' | 'already' | 'failed' | 'skipped'
+
+export interface OtherToolsSourceSubscribeItem {
+  id: string
+  accountId: number
+  accountLabel: string
+  sourceRef: string
+  sourceTitle: string
+  sourceKind: 'channel' | 'group' | 'chatlist' | 'bot' | 'unknown'
+  status: OtherToolsSourceSubscribeStatus
+  message: string
+}
+
 export interface OtherToolsSniperResult {
   scanAccountId: number | null
   scanAccountLabel: string
@@ -1156,6 +1171,12 @@ export interface OtherToolsSniperResult {
   poolCount: number
   inspectedMessageCount: number
   candidateCount: number
+  subscribeAccountCount: number
+  subscribeJoinedCount: number
+  subscribeAlreadyCount: number
+  subscribeFailedCount: number
+  subscribeSkippedCount: number
+  subscribeItems: OtherToolsSourceSubscribeItem[]
   occupied: OtherToolsSniperCandidateItem[]
   claimable: OtherToolsSniperCandidateItem[]
   forbidden: OtherToolsSniperCandidateItem[]

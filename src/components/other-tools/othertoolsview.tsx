@@ -1,6 +1,6 @@
 import { Copy, Filter, Loader2, Radar } from 'lucide-react'
 import { memo, useEffect, useMemo, useState } from 'react'
-import type { AccountRecord, OtherToolsSniperCandidateItem, OtherToolsSniperResult, OtherToolsUsernameFilterItem, OtherToolsUsernameFilterResult } from '../../types'
+import type { AccountRecord, OtherToolsSniperCandidateItem, OtherToolsSniperResult, OtherToolsSourceSubscribeItem, OtherToolsUsernameFilterItem, OtherToolsUsernameFilterResult } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_SELECT_OPTION_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 
@@ -267,6 +267,41 @@ function SniperResultBlock(props: { title: string; items: OtherToolsSniperCandid
   )
 }
 
+function SubscribeResultBlock(props: { title: string; items: OtherToolsSourceSubscribeItem[] }) {
+  const { title, items } = props
+
+  const copyAll = async () => {
+    await copyLines(items.map((item) => `${item.accountLabel} | ${item.sourceRef} | ${item.message}`))
+  }
+
+  return (
+    <GlassPanel className="bg-card">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-base font-semibold text-white">{title}</div>
+          <div className="mt-1 text-sm text-textMuted">共 {items.length} 条</div>
+        </div>
+        <button type="button" onClick={() => void copyAll()} disabled={items.length === 0} className="inline-flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50">
+          <Copy size={14} />
+          复制
+        </button>
+      </div>
+      <div className="mt-4 space-y-2">
+        {items.length === 0 ? <div className="rounded-[14px] bg-panel/70 px-4 py-4 text-sm text-textMuted">当前没有内容。</div> : items.map((item) => (
+          <div key={item.id} className="rounded-[14px] bg-panel/70 px-4 py-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-white break-all">{item.accountLabel} → {item.sourceTitle}</div>
+              <div className={`text-xs ${item.status === 'joined' ? 'text-emerald-300' : item.status === 'already' ? 'text-cyan-300' : item.status === 'failed' ? 'text-rose-300' : 'text-amber-200'}`}>{item.status === 'joined' ? '已加入' : item.status === 'already' ? '已在内' : item.status === 'failed' ? '失败' : '跳过'}</div>
+            </div>
+            <div className="mt-2 text-xs text-textMuted break-all">{item.sourceRef}</div>
+            <div className="mt-2 text-xs text-slate-300">{item.message}</div>
+          </div>
+        ))}
+      </div>
+    </GlassPanel>
+  )
+}
+
 function SniperWorkbench() {
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
   const [sourceInput, setSourceInput] = useState('')
@@ -275,9 +310,11 @@ function SniperWorkbench() {
   const [excludeKeywords, setExcludeKeywords] = useState('')
   const [scanAccountId, setScanAccountId] = useState('')
   const [claimAccountId, setClaimAccountId] = useState('')
+  const [subscribeAccountIds, setSubscribeAccountIds] = useState<number[]>([])
   const [sourceMessageLimit, setSourceMessageLimit] = useState(20)
   const [candidateLimit, setCandidateLimit] = useState(80)
   const [autoClaim, setAutoClaim] = useState(true)
+  const [autoSubscribeSources, setAutoSubscribeSources] = useState(true)
   const [running, setRunning] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [summary, setSummary] = useState<OtherToolsSniperResult | null>(null)
@@ -300,6 +337,7 @@ function SniperWorkbench() {
 
   const sourcePreviewCount = useMemo(() => splitPreviewInput(sourceInput).length, [sourceInput])
   const poolPreviewCount = useMemo(() => splitPreviewInput(poolInput).length, [poolInput])
+  const subscribeSelectedAccounts = useMemo(() => accounts.filter((account) => subscribeAccountIds.includes(account.id)), [accounts, subscribeAccountIds])
 
   const handleRun = async () => {
     const api = window.desktopOtherTools
@@ -322,9 +360,11 @@ function SniperWorkbench() {
         excludeKeywords,
         scanAccountId: scanAccountId ? Number(scanAccountId) : null,
         claimAccountId: claimAccountId ? Number(claimAccountId) : null,
+        subscribeAccountIds,
         sourceMessageLimit,
         candidateLimit,
-        autoClaim
+        autoClaim,
+        autoSubscribeSources
       })
       setSummary(result)
     } catch (error) {
@@ -357,6 +397,36 @@ function SniperWorkbench() {
             </ConfigRow>
             <ConfigRow label="排除关键词" hint="命中这些词的消息会直接跳过。" wide>
               <input value={excludeKeywords} onChange={(event) => setExcludeKeywords(event.target.value)} placeholder="广告 无码 回收" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            </ConfigRow>
+            <ConfigRow label="订阅账号" hint="这些账号会对白名单里的普通频道链接和 addlist 分组链接一起去加入/订阅。" wide>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setSubscribeAccountIds(accounts.map((account) => account.id))} className="rounded-[12px] bg-white/[0.05] px-3 py-2 text-xs text-white transition hover:bg-white/[0.08]">全选账号</button>
+                  <button type="button" onClick={() => setSubscribeAccountIds([])} className="rounded-[12px] bg-white/[0.05] px-3 py-2 text-xs text-white transition hover:bg-white/[0.08]">清空</button>
+                  <div className="text-xs text-textMuted self-center">已选 {subscribeSelectedAccounts.length} 个</div>
+                </div>
+                <div className="max-h-44 space-y-2 overflow-auto rounded-[12px] border border-white/[0.06] bg-black/[0.08] p-3">
+                  {accounts.map((account) => {
+                    const checked = subscribeAccountIds.includes(account.id)
+                    return (
+                      <label key={`subscribe_${account.id}`} className="flex items-center justify-between gap-3 rounded-[10px] bg-white/[0.03] px-3 py-2 text-sm text-slate-200">
+                        <span className="min-w-0 truncate">{readAccountOptionLabel(account)}</span>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => setSubscribeAccountIds((current) => event.target.checked ? [...current, account.id].filter((value, index, array) => array.indexOf(value) === index) : current.filter((id) => id !== account.id))}
+                        />
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            </ConfigRow>
+            <ConfigRow label="自动订阅来源" hint="开启后，选中的账号会先去加入普通频道链接和 addlist 分组里的目标。" wide>
+              <label className="inline-flex items-center gap-3 text-sm text-white">
+                <input type="checkbox" checked={autoSubscribeSources} onChange={(event) => setAutoSubscribeSources(event.target.checked)} />
+                白名单来源先批量订阅，再继续巡检
+              </label>
             </ConfigRow>
             <ConfigRow label="监听账号" hint="不选就自动拿第一个可用账号。" wide>
               <select value={scanAccountId} onChange={(event) => setScanAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
@@ -416,6 +486,10 @@ function SniperWorkbench() {
                     <div className="mt-2 text-2xl font-semibold text-white">{summary?.sourceCount ?? 0} / {summary?.poolCount ?? 0}</div>
                   </div>
                   <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-slate-200/80">订阅账号 / 已加入</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{summary?.subscribeAccountCount ?? 0} / {summary?.subscribeJoinedCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
                     <div className="text-xs tracking-[0.16em] text-slate-200/80">已巡检消息</div>
                     <div className="mt-2 text-2xl font-semibold text-white">{summary?.inspectedMessageCount ?? 0}</div>
                   </div>
@@ -447,6 +521,7 @@ function SniperWorkbench() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
+        <SubscribeResultBlock title="订阅结果" items={summary?.subscribeItems ?? []} />
         <SniperResultBlock title="已抢到" items={summary?.claimed ?? []} />
         <SniperResultBlock title="可抢注" items={summary?.claimable ?? []} />
         <SniperResultBlock title="已占用" items={summary?.occupied ?? []} />
