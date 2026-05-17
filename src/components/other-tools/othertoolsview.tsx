@@ -133,7 +133,7 @@ function FilterWorkbench() {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <GlassPanel className="bg-card">
           <FoldSection title="筛选配置" hint="这次改成 Telegram 实查，不再只按字符串格式猜。">
             <ConfigRow label="原始内容" hint="一行一个，支持 @username / username / t.me/username / https://t.me/username。" wide>
@@ -167,8 +167,9 @@ function FilterWorkbench() {
         <div className="space-y-5">
           <GlassPanel className="bg-card">
             <FoldSection title="统计" hint="直接按你要的三类出结果。">
-              <ConfigRow label="数量统计" wide>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="space-y-3 px-3 py-3 text-sm">
+                <div className="text-sm text-white">数量统计</div>
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
                     <div className="text-xs tracking-[0.16em] text-emerald-200/80">有效用户名</div>
                     <div className="mt-2 text-2xl font-semibold text-emerald-300">{summary?.valid.length ?? 0}</div>
@@ -182,19 +183,20 @@ function FilterWorkbench() {
                     <div className="mt-2 text-2xl font-semibold text-rose-300">{summary?.forbidden.length ?? 0}</div>
                   </div>
                 </div>
-              </ConfigRow>
+              </div>
             </FoldSection>
           </GlassPanel>
 
           <GlassPanel className="bg-card">
             <FoldSection title="规则说明" hint="现在按 Telegram 实际状态分，不再单纯看格式。" defaultOpen={false}>
-              <ConfigRow label="分类口径" wide>
+              <div className="space-y-3 px-3 py-3 text-sm">
+                <div className="text-sm text-white">分类口径</div>
                 <div className="space-y-2 text-sm text-textMuted">
                   <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">有效用户名：</span>已经能查到真实目标，或这个公开用户名当前已被占用。</div>
                   <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">可占位用户名：</span>当前没人占用，或者清洗后可以继续拿来占位。</div>
                   <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">无效且不可占位：</span>违禁、保留、规则不允许，或根本整理不成合法用户名。</div>
                 </div>
-              </ConfigRow>
+              </div>
             </FoldSection>
           </GlassPanel>
         </div>
