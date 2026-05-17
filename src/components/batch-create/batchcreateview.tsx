@@ -166,7 +166,6 @@ const TasksWorkbench = memo(function TasksWorkbench() {
     [accountTaskStatusMap, filteredAccounts]
   )
   const selectedAccounts = useMemo(() => accounts.filter((account) => selectedAccountIds.includes(account.id)), [accounts, selectedAccountIds])
-  const latestTask = tasks[0] ?? null
   const totalWillCreate = selectedAccountIds.length * countPerAccount * (createMode === 'both' ? 2 : 1)
 
   const applyPicker = () => {
@@ -297,26 +296,6 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               {errorMessage ? <div className="mt-3 rounded-[12px] bg-rose-400/10 px-3 py-3 text-rose-200">{errorMessage}</div> : null}
             </div>
 
-            {latestTask ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
-                  <div className="text-xs tracking-[0.16em] text-emerald-200/80">成功</div>
-                  <div className="mt-2 text-2xl font-semibold text-emerald-300">{latestTask.successCount}</div>
-                </div>
-                <div className="rounded-[14px] bg-rose-400/8 px-4 py-3">
-                  <div className="text-xs tracking-[0.16em] text-rose-200/80">失败</div>
-                  <div className="mt-2 text-2xl font-semibold text-rose-300">{latestTask.failedCount}</div>
-                </div>
-                <div className="rounded-[14px] bg-sky-400/8 px-4 py-3">
-                  <div className="text-xs tracking-[0.16em] text-sky-200/80">公开群组</div>
-                  <div className="mt-2 text-2xl font-semibold text-sky-300">{latestTask.groupCount}</div>
-                </div>
-                <div className="rounded-[14px] bg-violet-400/8 px-4 py-3">
-                  <div className="text-xs tracking-[0.16em] text-violet-200/80">公开频道</div>
-                  <div className="mt-2 text-2xl font-semibold text-violet-300">{latestTask.channelCount}</div>
-                </div>
-              </div>
-            ) : null}
           </GlassPanel>
 
           <GlassPanel className="bg-card">
@@ -428,13 +407,28 @@ const LogsPanel = memo(function LogsPanel() {
 
   const latestTask = tasks[0] ?? null
   const latestSnapshot = taskSnapshots[0] ?? null
+  const allLogText = useMemo(() => logs
+    .slice()
+    .reverse()
+    .map((log) => {
+      const suffix = [log.accountLabel, log.targetLabel].filter(Boolean).join(' · ')
+      return `[${formatTime(log.createdAt)}] ${log.message}${suffix ? ` | ${suffix}` : ''}`
+    })
+    .join('\n'), [logs])
+  const linkLines = useMemo(() => (latestSnapshot?.items ?? [])
+    .filter((item) => item.status === 'success' && item.publicLink)
+    .map((item) => `${item.publicLink} | ${item.title || '未命名目标'} | ${item.entityType === 'group' ? '公开群组' : '公开频道'}`), [latestSnapshot])
+  const allLinkText = linkLines.join('\n')
 
   return (
     <div className="space-y-5">
       <GlassPanel className="bg-card">
         <div className="flex items-center justify-between gap-3">
           <div className="text-base font-semibold text-white">执行日志</div>
-          <button type="button" onClick={clearLogs} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => void navigator.clipboard.writeText(allLogText || '暂无日志')} className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18">复制全部日志</button>
+            <button type="button" onClick={clearLogs} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
+          </div>
         </div>
 
         {latestTask ? (
@@ -460,7 +454,16 @@ const LogsPanel = memo(function LogsPanel() {
       </GlassPanel>
 
       <GlassPanel className="bg-card">
-        <div className="text-base font-semibold text-white">本轮结果</div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-base font-semibold text-white">本轮结果</div>
+          <button type="button" disabled={!allLinkText} onClick={() => void navigator.clipboard.writeText(allLinkText)} className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-50">一键复制全部链接</button>
+        </div>
+        {allLinkText ? (
+          <div className="mt-4 rounded-[14px] bg-panel/70 px-4 py-4 text-sm">
+            <div className="mb-2 text-xs tracking-[0.16em] text-textMuted">链接清单</div>
+            <div className="max-h-[180px] overflow-y-auto whitespace-pre-wrap break-all text-slate-200">{allLinkText}</div>
+          </div>
+        ) : null}
         <div className="mt-4 space-y-2">
           {!latestSnapshot || latestSnapshot.items.length === 0 ? <div className="rounded-[14px] bg-panel/70 px-4 py-4 text-sm text-textMuted">完成后这里会显示创建结果。</div> : latestSnapshot.items.map((item) => (
             <div key={item.id} className="rounded-[14px] bg-panel/70 px-4 py-3 text-sm">

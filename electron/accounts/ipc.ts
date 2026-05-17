@@ -130,6 +130,8 @@ function buildDeferredStartCheckState(current: ReturnType<CheckQueue['getState']
       geo_restricted: 0,
       frozen: 0,
       banned: 0,
+      session_expired: 0,
+      not_logged_in: 0,
       multi_ip: 0,
       timeout: 0,
       unknown: 0

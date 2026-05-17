@@ -43,6 +43,8 @@ function readSummaryLabel(status: AccountCheckResult['status'], runMode: 'accoun
   if (status === 'geo_restricted') return '地理位置限制'
   if (status === 'frozen') return '冻结'
   if (status === 'banned') return '封禁'
+  if (status === 'session_expired') return 'Session 失效'
+  if (status === 'not_logged_in') return '未登录'
   if (status === 'multi_ip') return '多 IP 登录'
   if (status === 'timeout') return '超时'
   return '未知'
@@ -127,6 +129,8 @@ function createInitialState(options: Required<CheckQueueOptions>): CheckQueueSta
       geo_restricted: 0,
       frozen: 0,
       banned: 0,
+      session_expired: 0,
+      not_logged_in: 0,
       multi_ip: 0,
       timeout: 0,
       unknown: 0
@@ -211,6 +215,8 @@ export class CheckQueue extends EventEmitter {
       geo_restricted: 0,
       frozen: 0,
       banned: 0,
+      session_expired: 0,
+      not_logged_in: 0,
       multi_ip: 0,
       timeout: 0,
       unknown: 0
@@ -239,6 +245,8 @@ export class CheckQueue extends EventEmitter {
         geo_restricted: 0,
         frozen: 0,
         banned: 0,
+        session_expired: 0,
+        not_logged_in: 0,
         multi_ip: 0,
         timeout: 0,
         unknown: 0
@@ -364,12 +372,8 @@ export class CheckQueue extends EventEmitter {
   }
 
   private normalizeDisplayStatus(status: AccountCheckResult['status']) {
-    if (status === 'alive' || status === 'limited' || status === 'temporary_limited' || status === 'geo_restricted' || status === 'frozen' || status === 'banned' || status === 'multi_ip' || status === 'timeout' || status === 'unknown') {
+    if (status === 'alive' || status === 'limited' || status === 'temporary_limited' || status === 'geo_restricted' || status === 'frozen' || status === 'banned' || status === 'session_expired' || status === 'not_logged_in' || status === 'multi_ip' || status === 'timeout' || status === 'unknown') {
       return status
-    }
-
-    if (status === 'session_expired' || status === 'not_logged_in') {
-      return 'banned' as const
     }
 
     return 'timeout' as const
@@ -499,6 +503,8 @@ export class CheckQueue extends EventEmitter {
         { status: 'geo_restricted', count: this.state.resultSummary.geo_restricted },
         { status: 'frozen', count: this.state.resultSummary.frozen },
         { status: 'banned', count: this.state.resultSummary.banned },
+        { status: 'session_expired', count: this.state.resultSummary.session_expired },
+        { status: 'not_logged_in', count: this.state.resultSummary.not_logged_in },
         { status: 'multi_ip', count: this.state.resultSummary.multi_ip },
         { status: 'timeout', count: this.state.resultSummary.timeout }
       ]

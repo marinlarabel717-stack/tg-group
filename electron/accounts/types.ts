@@ -407,6 +407,8 @@ export interface CheckQueueState {
     geo_restricted: number
     frozen: number
     banned: number
+    session_expired: number
+    not_logged_in: number
     multi_ip: number
     timeout: number
     unknown: number
