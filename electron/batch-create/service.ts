@@ -99,6 +99,18 @@ function hasTemplateTokens(value: string) {
   return /\{(?:n|index|accountId|type|rand\d+)\}/i.test(value)
 }
 
+function readNonEmptyLines(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function pickSequentialValue(lines: string[], sequenceIndex: number) {
+  if (sequenceIndex < 0 || lines.length === 0) return ''
+  return lines[sequenceIndex] ?? ''
+}
+
 function expandTemplate(input: string, context: { accountId: number; index: number; type: 'group' | 'channel' }) {
   const base = input || ''
   return base
@@ -108,12 +120,13 @@ function expandTemplate(input: string, context: { accountId: number; index: numb
     .replace(/\{rand(\d+)\}/gi, (_matched, sizeText: string) => randomAlphaNumeric(Math.max(1, Math.min(24, Number(sizeText) || 6))))
 }
 
-function buildTitle(payload: BatchCreatePayload, context: { accountId: number; index: number; type: 'group' | 'channel' }) {
+function buildTitle(payload: BatchCreatePayload, context: { accountId: number; index: number; type: 'group' | 'channel' }, sequenceIndex: number, customTitles: string[]) {
   const typeLabel = context.type === 'group' ? '群组' : '频道'
   if (payload.randomTitleEnabled) {
     return `${typeLabel}_${randomAlphaNumeric(Math.max(4, Math.min(10, payload.randomLength)) )}`
   }
-  const template = payload.titleTemplate.trim()
+  const sequentialValue = pickSequentialValue(customTitles, sequenceIndex)
+  const template = sequentialValue || payload.titleTemplate.trim()
   if (!template) {
     return expandTemplate(`${typeLabel}_{accountId}_{index}`, context)
   }
@@ -130,7 +143,10 @@ function buildAbout(payload: BatchCreatePayload, context: { accountId: number; i
 }
 
 function normalizeUsername(raw: string) {
-  let value = raw.toLowerCase().replace(/[^a-z0-9_]+/g, '')
+  const trimmed = raw.trim()
+  const matchedLink = trimmed.match(/(?:https?:\/\/)?(?:www\.)?t\.me\/([a-zA-Z0-9_]+)/i)
+  const source = matchedLink?.[1] || trimmed.replace(/^@+/, '')
+  let value = source.toLowerCase().replace(/[^a-z0-9_]+/g, '')
   if (!/^[a-z]/.test(value)) {
     value = `tg${value}`
   }
@@ -140,13 +156,20 @@ function normalizeUsername(raw: string) {
   return value.slice(0, 32)
 }
 
-function buildUsername(payload: BatchCreatePayload, context: { accountId: number; index: number; type: 'group' | 'channel' }, retry: number) {
+function buildUsername(
+  payload: BatchCreatePayload,
+  context: { accountId: number; index: number; type: 'group' | 'channel' },
+  retry: number,
+  sequenceIndex: number,
+  customUsernames: string[]
+) {
   const typePrefix = context.type === 'group' ? 'g' : 'c'
   if (payload.randomUsernameEnabled) {
     return normalizeUsername(`tg${typePrefix}${randomAlphaNumeric(Math.max(5, Math.min(20, payload.randomLength + retry)))}`)
   }
 
-  const sourceTemplate = payload.usernameTemplate.trim() || `tg${typePrefix}_{accountId}_{index}`
+  const sequentialValue = pickSequentialValue(customUsernames, sequenceIndex)
+  const sourceTemplate = sequentialValue || payload.usernameTemplate.trim() || `tg${typePrefix}_{accountId}_{index}`
   const expanded = hasTemplateTokens(sourceTemplate) ? expandTemplate(sourceTemplate, context) : sourceTemplate
   let value = normalizeUsername(expanded)
   if (retry > 0) {
@@ -254,6 +277,9 @@ export class BatchCreateService {
     let failedCount = 0
     let groupCount = 0
     let channelCount = 0
+    let sequenceIndex = 0
+    const customTitles = readNonEmptyLines(payload.titleTemplate)
+    const customUsernames = readNonEmptyLines(payload.usernameTemplate)
 
     const emit = (message: string, item?: BatchCreateResultItem | null, running = true, waitSeconds?: number | null) => {
       onProgress?.({
@@ -286,6 +312,7 @@ export class BatchCreateService {
           }
           for (let index = 0; index < payload.countPerAccount; index += 1) {
             for (const type of types) {
+              sequenceIndex += 1
               completed += 1
               failedCount += 1
               const item: BatchCreateResultItem = {
@@ -312,14 +339,16 @@ export class BatchCreateService {
           for (const type of types) {
             if (task.cancelled) break
             const context = { accountId: account.id, index, type }
-            const title = buildTitle(payload, context)
+            const currentSequenceIndex = sequenceIndex
+            sequenceIndex += 1
+            const title = buildTitle(payload, context, currentSequenceIndex, customTitles)
             const about = buildAbout(payload, context, title)
             let lastError: unknown = null
             let emittedItem: BatchCreateResultItem | null = null
 
             for (let retry = 0; retry < 4; retry += 1) {
               let createdEntity: unknown = null
-              const username = buildUsername(payload, context, retry)
+              const username = buildUsername(payload, context, retry, currentSequenceIndex, customUsernames)
               try {
                 const createResult = await client.invoke(new Api.channels.CreateChannel({
                   title,

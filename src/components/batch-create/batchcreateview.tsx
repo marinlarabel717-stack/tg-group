@@ -215,13 +215,25 @@ const TasksWorkbench = memo(function TasksWorkbench() {
 
             <div className="mt-4" />
 
-            <FoldSection title="自定义数据" hint="关闭随机后，就按你填写的数据创建；不会偷偷给自定义值补 accountId 或 index。" defaultOpen>
-              <ConfigRow label="群名 / 频道名" hint="不勾随机时，默认直接用这里的内容。占位符可选，不强制。">
-                <input value={titleTemplate} onChange={(event) => setTitleTemplate(event.target.value)} placeholder="例如：品牌交流群" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            <FoldSection title="自定义数据" hint="关闭随机后，就按你填写的数据创建；支持一行一个顺序取用，不会偷偷给自定义值补 accountId 或 index。" defaultOpen>
+              <ConfigRow label="群名 / 频道名" hint="支持多行输入，一行一个。创建时会按顺序依次取用；占位符可选，不强制。" wide>
+                <textarea
+                  value={titleTemplate}
+                  onChange={(event) => setTitleTemplate(event.target.value)}
+                  rows={4}
+                  placeholder={`例如：品牌交流群1\n品牌交流群2\n品牌交流群3`}
+                  className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`}
+                />
               </ConfigRow>
 
-              <ConfigRow label="公开链接" hint="不勾随机时，默认直接按这里创建公开链接。">
-                <input value={usernameTemplate} onChange={(event) => setUsernameTemplate(event.target.value)} placeholder="例如：brandgroup01" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+              <ConfigRow label="公开链接" hint="支持多行输入，一行一个。创建时会按顺序依次取用；不够时再回退到默认规则。" wide>
+                <textarea
+                  value={usernameTemplate}
+                  onChange={(event) => setUsernameTemplate(event.target.value)}
+                  rows={4}
+                  placeholder={`例如：brandgroup01\nbrandgroup02\nbrandgroup03`}
+                  className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`}
+                />
               </ConfigRow>
 
               <ConfigRow label="简介" hint="不勾随机时，默认直接用这里的简介。" wide>
@@ -254,7 +266,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               </ConfigRow>
 
               <div className="rounded-[14px] bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
-                支持公开群组 / 公开频道。若公开链接撞名，系统只会在重试时补随机后缀，不会在第一次创建时私自改你的自定义值。
+                支持公开群组 / 公开频道。群名和公开链接现在都支持一行一个顺序取用；若公开链接撞名，系统只会在重试时补随机后缀，不会在第一次创建时私自改你的自定义值。
               </div>
             </FoldSection>
           </GlassPanel>
