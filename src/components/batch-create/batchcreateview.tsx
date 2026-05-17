@@ -32,7 +32,7 @@ function NumberRangeField(props: {
           <div className="text-sm text-white">{label}</div>
           <div className="mt-1 text-xs text-textMuted">最小 - 最大（秒）</div>
         </div>
-        <div className="flex max-w-[280px] items-center gap-2">
+        <div className="flex max-w-[180px] items-center gap-2">
           <input type="number" min={min} max={max} value={minValue} onChange={(event) => onMinChange(Math.max(min, Number(event.target.value) || min))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
           <span className="text-textMuted">-</span>
           <input type="number" min={min} max={max} value={maxValue} onChange={(event) => onMaxChange(Math.max(min, Number(event.target.value) || min))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
@@ -75,7 +75,7 @@ function ConfigRow(props: { label: string; hint?: string; children: ReactNode; w
           <div className="text-sm text-white">{label}</div>
           {hint ? <div className="mt-1 text-xs text-textMuted">{hint}</div> : null}
         </div>
-        <div className={wide ? 'w-full' : 'w-full max-w-[280px]'}>{children}</div>
+        <div className={wide ? 'w-full' : 'w-full max-w-[140px]'}>{children}</div>
       </div>
     </div>
   )
