@@ -6,7 +6,8 @@ import { useAccountStore } from '../../stores/accountstore'
 import { useProxyPoolStore } from '../../stores/proxypoolstore'
 import { useUIStore } from '../../stores/uistore'
 import { useBatchCreateStore } from '../../stores/batchcreatestore'
-import type { CheckLogEntry, CheckLogLevel, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationProgressState, ProxyCheckLogEntry, TwoFactorAction, TwoFactorLogEntry, TwoFactorProgressState } from '../../types'
+import { useOtherToolsStore } from '../../stores/othertoolsstore'
+import type { CheckLogEntry, CheckLogLevel, OtherToolsSniperListenerLogEntry, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationProgressState, ProxyCheckLogEntry, TwoFactorAction, TwoFactorLogEntry, TwoFactorProgressState } from '../../types'
 import { isGeoRestrictedError } from '../../lib/ui-text'
 
 function formatLogTimestamp(value: string) {
@@ -56,6 +57,10 @@ function getProxyLogLineClass(log: ProxyCheckLogEntry) {
   if (log.level === 'error') return 'text-rose-300'
   if (log.level === 'warning') return 'text-amber-200'
   return 'text-white'
+}
+
+function getSniperLogLineClass(log: OtherToolsSniperListenerLogEntry) {
+  return getLevelClass(log.level)
 }
 
 function readTwoFactorActionLabel(action: TwoFactorAction | null) {
@@ -536,6 +541,105 @@ function BatchCreateSummary({ scrollContainerRef, onScroll }: { scrollContainerR
   )
 }
 
+const OtherToolsSniperSummary = memo(function OtherToolsSniperSummary() {
+  const initOtherTools = useOtherToolsStore((state) => state.init)
+  const summary = useOtherToolsStore((state) => state.sniperSummary)
+  const manualRunning = useOtherToolsStore((state) => state.manualRunning)
+  const manualMessage = useOtherToolsStore((state) => state.manualMessage)
+  const manualErrorMessage = useOtherToolsStore((state) => state.manualErrorMessage)
+  const listenerState = useOtherToolsStore((state) => state.listenerState)
+  const setActiveModule = useUIStore((state) => state.setActiveModule)
+
+  useEffect(() => {
+    initOtherTools()
+  }, [initOtherTools])
+
+  return (
+    <div className="space-y-5 contain-layout">
+      <GlassPanel className="bg-card p-0">
+        <div className="border-b border-white/5 px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-white">抢注日志中心</div>
+              <div className="mt-1 text-xs text-textMuted">开始后会自动跳来这里。手动巡检和实时监听都统一看这一页。</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveModule('other-tools')}
+              className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]"
+            >
+              返回抢注页
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 border-b border-white/5 px-5 py-4 md:grid-cols-4">
+          <div className="rounded-[14px] bg-panel px-4 py-4">
+            <div className="text-xs tracking-[0.16em] text-textMuted">手动巡检</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{manualRunning ? '进行中' : summary ? '已完成' : '未开始'}</div>
+            <div className="mt-2 text-xs text-textMuted">{manualErrorMessage || manualMessage || summary?.message || '点“开始巡检”后，这里会显示结果。'}</div>
+          </div>
+          <div className="rounded-[14px] bg-panel px-4 py-4">
+            <div className="text-xs tracking-[0.16em] text-textMuted">实时监听</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{listenerState?.running ? '运行中' : '未运行'}</div>
+            <div className="mt-2 text-xs text-textMuted">{listenerState?.message || '点“启动实时监听”后，这里会持续刷新。'}</div>
+          </div>
+          <div className="rounded-[14px] bg-panel px-4 py-4">
+            <div className="text-xs tracking-[0.16em] text-textMuted">手动已抢到</div>
+            <div className="mt-2 text-2xl font-semibold text-emerald-300">{summary?.claimed.length ?? 0}</div>
+            <div className="mt-2 text-xs text-textMuted">可抢注 {summary?.claimable.length ?? 0}</div>
+          </div>
+          <div className="rounded-[14px] bg-panel px-4 py-4">
+            <div className="text-xs tracking-[0.16em] text-textMuted">监听已抢到</div>
+            <div className="mt-2 text-2xl font-semibold text-emerald-300">{listenerState?.claimedCount ?? 0}</div>
+            <div className="mt-2 text-xs text-textMuted">自动建频道 {listenerState?.createdCarrierCount ?? 0}</div>
+          </div>
+        </div>
+      </GlassPanel>
+
+      <GlassPanel className="bg-card p-0">
+        <div className="border-b border-white/5 px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-white">手动巡检日志</div>
+              <div className="mt-1 text-xs text-textMuted">最近 {summary?.logs.length ?? 0} 条</div>
+            </div>
+            <div className="text-xs text-textMuted">{manualRunning ? '巡检中' : '等待执行'}</div>
+          </div>
+        </div>
+        <div className="max-h-[420px] overflow-y-auto px-5 py-4 select-text">
+          {manualErrorMessage ? (
+            <div className="rounded-[14px] bg-rose-400/10 px-4 py-4 text-sm text-rose-200">{manualErrorMessage}</div>
+          ) : !summary || summary.logs.length === 0 ? (
+            <div className="flex min-h-[180px] items-center justify-center text-sm text-textMuted">点一次“开始巡检”后，这里会显示完整执行日志。</div>
+          ) : (
+            <IncrementalLogLines logs={[...summary.logs].reverse()} lineClassResolver={getSniperLogLineClass} />
+          )}
+        </div>
+      </GlassPanel>
+
+      <GlassPanel className="bg-card p-0">
+        <div className="border-b border-white/5 px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-white">实时监听日志</div>
+              <div className="mt-1 text-xs text-textMuted">最近 {listenerState?.logs.length ?? 0} 条</div>
+            </div>
+            <div className="text-xs text-textMuted">{listenerState?.running ? '监听中' : '已停止'}</div>
+          </div>
+        </div>
+        <div className="max-h-[420px] overflow-y-auto px-5 py-4 select-text">
+          {!listenerState || listenerState.logs.length === 0 ? (
+            <div className="flex min-h-[180px] items-center justify-center text-sm text-textMuted">启动实时监听后，这里会持续追加命中、抢注、发帖结果。</div>
+          ) : (
+            <IncrementalLogLines logs={[...listenerState.logs].reverse()} lineClassResolver={getSniperLogLineClass} />
+          )}
+        </div>
+      </GlassPanel>
+    </div>
+  )
+})
+
 export default memo(function LogsView() {
   const initAccounts = useAccountStore((state) => state.init)
   const stopCheck = useAccountStore((state) => state.stopCheck)
@@ -555,13 +659,17 @@ export default memo(function LogsView() {
     void initProxyPool()
   }, [initAccounts, initProxyPool])
 
+  const otherToolsSummaryLogs = useOtherToolsStore((state) => state.sniperSummary?.logs.length ?? 0)
+  const otherToolsListenerLogs = useOtherToolsStore((state) => state.listenerState?.logs.length ?? 0)
+
   const activeLogCount = useMemo(() => {
     if (logsContext === 'accounts') return checkLogs.length
     if (logsContext === 'accounts-two-factor') return twoFactorState.logs.length
     if (logsContext === 'accounts-profile') return profileOperationState.logs.length
     if (logsContext === 'batch-create') return batchCreateLogs.length
+    if (logsContext === 'other-tools-sniper') return otherToolsSummaryLogs + otherToolsListenerLogs
     return 0
-  }, [batchCreateLogs.length, checkLogs.length, logsContext, profileOperationState.logs.length, twoFactorState.logs.length])
+  }, [batchCreateLogs.length, checkLogs.length, logsContext, otherToolsListenerLogs, otherToolsSummaryLogs, profileOperationState.logs.length, twoFactorState.logs.length])
 
   useEffect(() => {
     const element = scrollContainerRef.current
@@ -591,6 +699,10 @@ export default memo(function LogsView() {
 
   if (logsContext === 'batch-create') {
     return <BatchCreateSummary scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
+  }
+
+  if (logsContext === 'other-tools-sniper') {
+    return <OtherToolsSniperSummary />
   }
 
   return (

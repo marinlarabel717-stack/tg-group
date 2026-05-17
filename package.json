@@ -1,6 +1,6 @@
 {
   "name": "telegram-multi-account-manager",
-  "version": "0.1.76",
+  "version": "0.1.77",
   "private": true,
   "description": "TG-Matrix desktop manager",
   "author": "TG-Matrix",
@@ -91,6 +91,10 @@
       {
         "from": "electron/broadcast/telethon_scheduled_messages.py",
         "to": "runtime/broadcast/telethon_scheduled_messages.py"
+      },
+      {
+        "from": "electron/other-tools/telethon_sniper.py",
+        "to": "runtime/other-tools/telethon_sniper.py"
       },
       {
         "from": "build/runtime/python",

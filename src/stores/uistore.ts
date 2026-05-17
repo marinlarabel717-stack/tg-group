@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { ModuleKey } from '../types'
 
-type LogsContext = 'accounts' | 'proxy-pool' | 'accounts-two-factor' | 'accounts-profile' | 'batch-create'
+type LogsContext = 'accounts' | 'proxy-pool' | 'accounts-two-factor' | 'accounts-profile' | 'batch-create' | 'other-tools-sniper'
 
 interface UIState {
   activeModule: ModuleKey

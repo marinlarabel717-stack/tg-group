@@ -4,6 +4,8 @@ import type { AccountRecord, BatchCreatePostType, OtherToolsSniperCandidateItem,
 import { GlassPanel } from '../common/glasspanel'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
+import { useUIStore } from '../../stores/uistore'
+import { useOtherToolsStore } from '../../stores/othertoolsstore'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_SELECT_OPTION_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 
 type OtherToolsTabKey = 'filter' | 'sniper'
@@ -12,6 +14,30 @@ const tabs: Array<{ key: OtherToolsTabKey; label: string; icon: typeof Filter }>
   { key: 'filter', label: '筛选', icon: Filter },
   { key: 'sniper', label: '抢注系统', icon: Radar }
 ]
+
+function createEmptySniperListenerState(message = '监听未启动。'): OtherToolsSniperListenerState {
+  return {
+    running: false,
+    scanAccountId: null,
+    scanAccountLabel: '',
+    claimAccountId: null,
+    claimAccountLabel: '',
+    createCarrierAccountId: null,
+    createCarrierAccountLabel: '',
+    pollIntervalSeconds: 15,
+    sourceCount: 0,
+    expandedSourceCount: 0,
+    checkedMessageCount: 0,
+    candidateCount: 0,
+    claimedCount: 0,
+    createdCarrierCount: 0,
+    seenMessageCount: 0,
+    startedAt: null,
+    lastTickAt: null,
+    logs: [],
+    message
+  }
+}
 
 function splitPreviewInput(input: string) {
   return input
@@ -372,6 +398,17 @@ function SubscribeResultBlock(props: { title: string; items: OtherToolsSourceSub
 
 function SniperWorkbench() {
   const accountTaskStatusMap = useAccountTaskStatusMap()
+  const setActiveModule = useUIStore((state) => state.setActiveModule)
+  const setLogsContext = useUIStore((state) => state.setLogsContext)
+  const initOtherToolsStore = useOtherToolsStore((state) => state.init)
+  const summary = useOtherToolsStore((state) => state.sniperSummary)
+  const manualRunning = useOtherToolsStore((state) => state.manualRunning)
+  const manualErrorMessage = useOtherToolsStore((state) => state.manualErrorMessage)
+  const listenerState = useOtherToolsStore((state) => state.listenerState)
+  const setListenerState = useOtherToolsStore((state) => state.setListenerState)
+  const startManualRun = useOtherToolsStore((state) => state.startManualRun)
+  const finishManualRun = useOtherToolsStore((state) => state.finishManualRun)
+  const failManualRun = useOtherToolsStore((state) => state.failManualRun)
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
   const [sourceInput, setSourceInput] = useState('')
   const [poolInput, setPoolInput] = useState('')
@@ -397,11 +434,6 @@ function SniperWorkbench() {
   const [postType, setPostType] = useState<BatchCreatePostType>('none')
   const [postText, setPostText] = useState('')
   const [postImageData, setPostImageData] = useState('')
-  const [running, setRunning] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
-  const [listenerErrorMessage, setListenerErrorMessage] = useState('')
-  const [listenerState, setListenerState] = useState<OtherToolsSniperListenerState | null>(null)
-  const [summary, setSummary] = useState<OtherToolsSniperResult | null>(null)
 
   useEffect(() => {
     let active = true
@@ -420,22 +452,8 @@ function SniperWorkbench() {
   }, [])
 
   useEffect(() => {
-    const api = window.desktopOtherTools
-    if (!api) return
-    let active = true
-    api.getSniperListenerState()
-      .then((state) => {
-        if (active) setListenerState(state)
-      })
-      .catch(() => undefined)
-    const unsubscribe = api.onSniperListenerState((state) => {
-      setListenerState(state)
-    })
-    return () => {
-      active = false
-      unsubscribe?.()
-    }
-  }, [])
+    initOtherToolsStore()
+  }, [initOtherToolsStore])
 
   useEffect(() => {
     if (!pickerOpen) {
@@ -464,6 +482,11 @@ function SniperWorkbench() {
   )
   const listening = Boolean(listenerState?.running)
 
+  const openSniperLogs = () => {
+    setLogsContext('other-tools-sniper')
+    setActiveModule('logs')
+  }
+
   const applySubscribePicker = () => {
     setSubscribeAccountIds(draftSubscribeIds.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied))
     setPickerOpen(false)
@@ -483,16 +506,16 @@ function SniperWorkbench() {
   const handleRun = async () => {
     const api = window.desktopOtherTools
     if (!api) {
-      setErrorMessage('当前运行环境不支持抢注系统。')
+      failManualRun('当前运行环境不支持抢注系统。')
       return
     }
     if (!sourceInput.trim()) {
-      setErrorMessage('先填白名单来源。')
+      failManualRun('先填白名单来源。')
       return
     }
 
-    setRunning(true)
-    setErrorMessage('')
+    startManualRun('抢注巡检已开始，正在整理日志…')
+    openSniperLogs()
     try {
       const result = await api.scanAndClaim({
         sourceInput,
@@ -514,27 +537,30 @@ function SniperWorkbench() {
         postText,
         postImageData
       })
-      setSummary(result)
+      finishManualRun(result)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setErrorMessage(message || '巡检失败')
-    } finally {
-      setRunning(false)
+      failManualRun(message || '巡检失败')
     }
   }
 
   const handleStartListener = async () => {
     const api = window.desktopOtherTools
     if (!api) {
-      setListenerErrorMessage('当前运行环境不支持监听任务。')
+      setListenerState(createEmptySniperListenerState('当前运行环境不支持监听任务。'))
       return
     }
     if (!sourceInput.trim()) {
-      setListenerErrorMessage('先填白名单来源，再启动监听。')
+      setListenerState(createEmptySniperListenerState('先填白名单来源，再启动监听。'))
       return
     }
 
-    setListenerErrorMessage('')
+    setListenerState({
+      ...(listenerState ?? createEmptySniperListenerState('实时监听启动中…')),
+      running: false,
+      message: '实时监听启动中…'
+    })
+    openSniperLogs()
     try {
       const state = await api.startSniperListener({
         sourceInput,
@@ -560,19 +586,27 @@ function SniperWorkbench() {
       setListenerState(state)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setListenerErrorMessage(message || '启动监听失败')
+      setListenerState({
+        ...(listenerState ?? createEmptySniperListenerState(message || '启动监听失败')),
+        running: false,
+        message: message || '启动监听失败'
+      })
     }
   }
 
   const handleStopListener = async () => {
     const api = window.desktopOtherTools
     if (!api) return
-    setListenerErrorMessage('')
     try {
-      await api.stopSniperListener()
+      const result = await api.stopSniperListener()
+      setListenerState(createEmptySniperListenerState(result.message || '监听任务已停止。'))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setListenerErrorMessage(message || '停止监听失败')
+      setListenerState({
+        ...(listenerState ?? createEmptySniperListenerState(message || '停止监听失败')),
+        running: false,
+        message: message || '停止监听失败'
+      })
     }
   }
 
@@ -727,11 +761,11 @@ function SniperWorkbench() {
                   <button
                     type="button"
                     onClick={() => void handleRun()}
-                    disabled={running || sourcePreviewCount === 0}
+                    disabled={manualRunning || sourcePreviewCount === 0}
                     className="inline-flex min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-[12px] border border-white/[0.08] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {running ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
-                    {running ? '巡检中…' : '开始巡检'}
+                    {manualRunning ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
+                    {manualRunning ? '巡检中…' : '开始巡检'}
                   </button>
                   <button
                     type="button"
@@ -752,8 +786,7 @@ function SniperWorkbench() {
                   </button>
                 </div>
                 <div className="text-xs text-textMuted">手动巡检适合立刻扫一轮；实时监听会常驻轮询新帖，命中可抢名时优先用池子，不够就自动建频道秒占。</div>
-                {errorMessage ? <div className="rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{errorMessage}</div> : null}
-                {listenerErrorMessage ? <div className="rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{listenerErrorMessage}</div> : null}
+                {manualErrorMessage ? <div className="rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{manualErrorMessage}</div> : null}
                 {summary?.message ? <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.12] px-3 py-2 text-xs text-textMuted">{summary.message}</div> : null}
                 {listenerState?.message ? <div className="rounded-[12px] border border-emerald-400/10 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-100">{listenerState.message}</div> : null}
               </div>
@@ -826,7 +859,7 @@ function SniperWorkbench() {
             <div className="text-base font-semibold text-white">巡检执行日志</div>
             <div className="mt-1 text-sm text-textMuted">最近 {summary?.logs.length ?? 0} 条</div>
           </div>
-          <div className="text-xs text-textMuted">{running ? '巡检中' : '等待执行'}</div>
+          <div className="text-xs text-textMuted">{manualRunning ? '巡检中' : '等待执行'}</div>
         </div>
         <div className="mt-4 space-y-2">
           {!summary || summary.logs.length === 0 ? <div className="rounded-[14px] bg-panel/70 px-4 py-4 text-sm text-textMuted">点一次“开始巡检”后，这里会把订阅、展开来源、抢注成功/失败这些步骤按日志列出来。</div> : summary.logs.map((log) => (

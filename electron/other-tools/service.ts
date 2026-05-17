@@ -6,6 +6,7 @@ import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
+import { TelethonSniperService } from './telethon-sniper-service'
 import type {
   OtherToolsUsernameFilterItem,
   OtherToolsUsernameFilterPayload,
@@ -30,6 +31,14 @@ function toClientProxy(proxy: AccountCheckProxy | null): AccountClientProxyOptio
     password: proxy.password,
     ipVersion: proxy.ipVersion
   }
+}
+
+function readCurrentProxyOrThrow(proxyPoolService: ProxyPoolService) {
+  const proxy = proxyPoolService.isEnabled() ? proxyPoolService.getAccountCheckProxy() : null
+  if (proxyPoolService.isEnabled() && !proxy) {
+    throw new Error('GLOBAL_PROXY_REQUIRED')
+  }
+  return proxy
 }
 
 async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: SessionLoader, clientManager: TelegramClientManager, proxyPoolService: ProxyPoolService) {
@@ -1007,6 +1016,8 @@ export class OtherToolsService {
 
   private sniperListenerStateSink: ((state: OtherToolsSniperListenerState) => void) | null = null
 
+  private readonly telethonSniperService = new TelethonSniperService()
+
   constructor(
     private readonly repository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
@@ -1249,34 +1260,20 @@ export class OtherToolsService {
     this.emitSniperListenerState(task)
 
     void (async () => {
-      let expandedSourceEntries: ExpandedSource[] = []
-      let carriers: PoolCarrier[] = []
       let carrierIndex = 0
       let createdCarrierIndex = 0
+      let joinChatlistsOnFirstTick = !payload.autoSubscribeSources || !subscribeAccounts.some((account) => account.id === scanAccount.id)
 
       try {
-        task.scanClient = await ensureAuthorizedClient(scanAccount, this.sessionLoader, this.clientManager, this.proxyPoolService)
-        task.claimClient = payload.autoClaim && claimAccount
-          ? (claimAccount.id === scanAccount.id ? task.scanClient : await ensureAuthorizedClient(claimAccount, this.sessionLoader, this.clientManager, this.proxyPoolService))
-          : null
-        task.createCarrierClient = payload.autoCreateCarrier && createCarrierAccount
-          ? (createCarrierAccount.id === scanAccount.id
-            ? task.scanClient
-            : task.claimClient && createCarrierAccount.id === claimAccount?.id
-              ? task.claimClient
-              : await ensureAuthorizedClient(createCarrierAccount, this.sessionLoader, this.clientManager, this.proxyPoolService))
-          : null
+        if (!this.telethonSniperService.isAvailable()) {
+          throw new Error('TELETHON_SNIPER_SERVICE_UNAVAILABLE')
+        }
 
         if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
           for (const account of subscribeAccounts) {
-            const client: TelegramClient = account.id === scanAccount.id
-              ? (task.scanClient as TelegramClient)
-              : task.claimClient && account.id === claimAccount?.id
-                ? task.claimClient
-                : task.createCarrierClient && account.id === createCarrierAccount?.id
-                  ? task.createCarrierClient
-                  : await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
-            if (client !== task.scanClient && client !== task.claimClient && client !== task.createCarrierClient) {
+            let client = task.subscribeClients.get(account.id) ?? null
+            if (!client) {
+              client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
               task.subscribeClients.set(account.id, client)
             }
             const subscribeItems = await subscribeSourcesForAccount(client, account, sourceRefs)
@@ -1301,29 +1298,10 @@ export class OtherToolsService {
           }
         }
 
-        const shouldJoinChatlistsForScan = !payload.autoSubscribeSources || !subscribeAccounts.some((account) => account.id === scanAccount.id)
-        const expanded = await expandSourceRefsWithChatlists(task.scanClient as TelegramClient, sourceRefs, { joinChatlists: shouldJoinChatlistsForScan })
-        expandedSourceEntries = expanded.sources
-        task.state.expandedSourceCount = expanded.sources.length
-
-        if (poolRefs.length > 0 && task.claimClient) {
-          carriers = await readPoolCarriers(task.claimClient, poolRefs)
-        }
-
-        for (const sourceEntry of expandedSourceEntries) {
-          const messages = await (task.scanClient as TelegramClient).getMessages(sourceEntry.entity as never, { limit: sourceLimit })
-          for (const message of messages) {
-            const key = `${sourceEntry.ref}:${readMessageId(message)}`
-            if (!key.endsWith(':')) {
-              task.seenMessageKeys.add(key)
-            }
-          }
-        }
-        task.state.seenMessageCount = task.seenMessageKeys.size
-        task.state.message = `监听已启动，当前盯着 ${expandedSourceEntries.length} 个实际来源。`
+        task.state.message = '监听已启动，正在进入 Telethon 主链路…'
         this.pushSniperListenerLog(task, {
           level: 'success',
-          message: `监听已启动：${readCheckResultTitle(scanAccount)} 正在盯 ${expandedSourceEntries.length} 个来源，新帖会自动检查用户名。`,
+          message: `监听已启动：${readCheckResultTitle(scanAccount)} 已切到 Telethon 主链路。`,
           accountId: scanAccount.id,
           accountLabel: readCheckResultTitle(scanAccount)
         })
@@ -1332,163 +1310,182 @@ export class OtherToolsService {
           task.state.lastTickAt = new Date().toISOString()
           this.emitSniperListenerState(task)
 
-          for (const sourceEntry of expandedSourceEntries) {
+          const scanResult = await this.telethonSniperService.scanSources({
+            sessionPath: scanAccount.sessionPath,
+            sourceRefs,
+            sourceMessageLimit: sourceLimit,
+            includeKeywords,
+            excludeKeywords,
+            seenMessageKeys: Array.from(task.seenMessageKeys),
+            handledCandidateKeys: Array.from(task.handledCandidateKeys),
+            joinChatlists: joinChatlistsOnFirstTick,
+            proxy: readCurrentProxyOrThrow(this.proxyPoolService)
+          })
+          joinChatlistsOnFirstTick = false
+
+          task.state.expandedSourceCount = scanResult.expandedSourceCount
+          task.state.checkedMessageCount += scanResult.checkedMessageCount
+          task.state.candidateCount += scanResult.candidateCount
+          for (const key of scanResult.newSeenMessageKeys) {
+            task.seenMessageKeys.add(key)
+          }
+          task.state.seenMessageCount = task.seenMessageKeys.size
+          task.state.message = `监听运行中：当前盯着 ${scanResult.expandedSourceCount} 个实际来源。`
+
+          if (scanResult.chatlistJoinCount > 0) {
+            this.pushSniperListenerLog(task, {
+              level: 'success',
+              message: `已自动加入 addlist 里的 ${scanResult.chatlistJoinCount} 个实际来源。`,
+              accountId: scanAccount.id,
+              accountLabel: readCheckResultTitle(scanAccount)
+            })
+          }
+
+          for (const detected of scanResult.items) {
             if (task.cancelled) break
+            const candidateKey = detected.normalized.toLowerCase()
+            if (task.handledCandidateKeys.has(candidateKey)) continue
+            task.handledCandidateKeys.add(candidateKey)
+
+            if (detected.category !== 'occupiable') continue
+
+            const item = buildCandidateItem({
+              raw: detected.raw,
+              normalized: detected.normalized,
+              kind: detected.kind,
+              category: detected.category,
+              reason: detected.reason,
+              entityType: detected.entityType,
+              sourceRef: detected.sourceRef,
+              sourceTitle: detected.sourceTitle,
+              sourceExcerpt: detected.sourceExcerpt,
+              sourceMessageId: detected.sourceMessageId,
+              sourceDate: detected.sourceDate
+            })
+            item.checkedAccountId = scanAccount.id
+            item.checkedAccountLabel = readCheckResultTitle(scanAccount)
+
+            if (!payload.autoClaim) {
+              this.pushSniperListenerLog(task, {
+                level: 'info',
+                message: `新帖命中可占位用户名 ${item.normalized}，但当前没开自动抢注。`,
+                sourceRef: item.sourceRef,
+                sourceTitle: item.sourceTitle,
+                candidate: item.normalized,
+                accountId: scanAccount.id,
+                accountLabel: readCheckResultTitle(scanAccount)
+              })
+              continue
+            }
+
             try {
-              const messages = await (task.scanClient as TelegramClient).getMessages(sourceEntry.entity as never, { limit: sourceLimit })
-              const orderedMessages = [...messages].reverse()
-              for (const message of orderedMessages) {
-                if (task.cancelled) break
-                const messageId = readMessageId(message)
-                const key = `${sourceEntry.ref}:${messageId}`
-                if (messageId && task.seenMessageKeys.has(key)) continue
-                if (messageId) {
-                  task.seenMessageKeys.add(key)
-                  task.state.seenMessageCount = task.seenMessageKeys.size
+              let claimed: ListenerClaimResult | null = null
+              let claimByAccount: AccountRecord | null = claimAccount
+              const proxy = readCurrentProxyOrThrow(this.proxyPoolService)
+
+              if (carrierIndex < poolRefs.length && claimAccount) {
+                const poolClaimed = await this.telethonSniperService.claimWithPool({
+                  sessionPath: claimAccount.sessionPath,
+                  carrierRef: poolRefs[carrierIndex],
+                  normalizedCandidate: item.normalized,
+                  proxy
+                })
+                claimed = {
+                  ...poolClaimed,
+                  createdCarrier: false
                 }
-
-                const blob = readSourceBlob(message)
-                if (!blob || !matchesKeywords(blob, includeKeywords, excludeKeywords)) continue
-                task.state.checkedMessageCount += 1
-
-                const extracted = extractCandidatesFromText(blob)
-                for (const found of extracted) {
-                  if (task.cancelled) break
-                  const normalized = normalizeCandidate(found)
-                  if (!normalized.candidate) continue
-                  const candidateKey = normalized.normalized.toLowerCase()
-                  if (task.handledCandidateKeys.has(candidateKey)) continue
-                  const resolved = await resolveUsernameState(task.scanClient as TelegramClient, normalized)
-                  task.state.candidateCount += 1
-                  if (resolved.category !== 'occupiable') continue
-
-                  const item = buildCandidateItem({
-                    raw: normalized.raw,
-                    normalized: normalized.normalized,
-                    kind: normalized.kind,
-                    category: resolved.category,
-                    reason: resolved.reason,
-                    entityType: resolved.entityType,
-                    sourceRef: sourceEntry.ref,
-                    sourceTitle: sourceEntry.title,
-                    sourceExcerpt: makeExcerpt(readMessageText(message), found),
-                    sourceMessageId: messageId,
-                    sourceDate: readMessageDate(message)
-                  })
-                  item.checkedAccountId = scanAccount.id
-                  item.checkedAccountLabel = readCheckResultTitle(scanAccount)
-                  task.handledCandidateKeys.add(candidateKey)
-
-                  if (!payload.autoClaim) {
-                    this.pushSniperListenerLog(task, {
-                      level: 'info',
-                      message: `新帖命中可占位用户名 ${item.normalized}，但当前没开自动抢注。`,
-                      sourceRef: sourceEntry.ref,
-                      sourceTitle: sourceEntry.title,
-                      candidate: item.normalized,
-                      accountId: scanAccount.id,
-                      accountLabel: readCheckResultTitle(scanAccount)
-                    })
-                    continue
-                  }
-
-                  try {
-                    let claimed: ListenerClaimResult | null = null
-                    let claimByAccount: AccountRecord | null = claimAccount
-
-                    if (carrierIndex < carriers.length && task.claimClient) {
-                      const poolClaimed = await claimCandidateWithPool(task.claimClient, carriers[carrierIndex], item)
-                      claimed = {
-                        ...poolClaimed,
-                        createdCarrier: false
-                      }
-                      carrierIndex += 1
-                    } else if (payload.autoCreateCarrier && task.createCarrierClient && createCarrierAccount) {
-                      claimed = await createCarrierAndClaim(task.createCarrierClient, item, payload, createCarrierAccount.id, createdCarrierIndex)
-                      createdCarrierIndex += 1
-                      claimByAccount = createCarrierAccount
-                      task.state.createdCarrierCount += 1
-                    } else {
-                      item.claimStatus = 'skipped'
-                      item.claimMessage = '可抢名已发现，但当前没有可用池子，也没开自动建频道占位。'
-                      this.pushSniperListenerLog(task, {
-                        level: 'warning',
-                        message: `发现 ${item.normalized} 可抢，但没有可用池子/建池账号。`,
-                        sourceRef: sourceEntry.ref,
-                        sourceTitle: sourceEntry.title,
-                        candidate: item.normalized
-                      })
-                      continue
-                    }
-
-                    item.claimStatus = 'claimed'
-                    item.claimMessage = claimed.claimMessage
-                    item.claimTargetRef = claimed.claimTargetRef
-                    item.claimTargetTitle = claimed.claimTargetTitle
-                    item.claimAccountId = claimByAccount?.id ?? null
-                    item.claimAccountLabel = readCheckResultTitle(claimByAccount)
-                    task.state.claimedCount += 1
-                    this.pushSniperListenerLog(task, {
-                      level: 'success',
-                      message: claimed.createdCarrier
-                        ? claimed.postFailureMessage
-                          ? `命中 ${item.normalized}，已自动创建频道并抢到，但首帖发送失败。`
-                          : payload.postType !== 'none' && claimed.postSent
-                            ? `命中 ${item.normalized}，已自动创建频道、抢到并发出首帖。`
-                            : `命中 ${item.normalized}，已自动创建频道并抢到。`
-                        : `命中 ${item.normalized}，已用池子载体抢到。`,
-                      sourceRef: sourceEntry.ref,
-                      sourceTitle: sourceEntry.title,
-                      candidate: item.normalized,
-                      targetRef: claimed.claimTargetRef,
-                      accountId: claimByAccount?.id ?? null,
-                      accountLabel: readCheckResultTitle(claimByAccount)
-                    })
-                    if (claimed.createdCarrier && claimed.postFailureMessage) {
-                      this.pushSniperListenerLog(task, {
-                        level: 'warning',
-                        message: `${item.normalized} 的首帖没发出去：${claimed.postFailureMessage}`,
-                        sourceRef: sourceEntry.ref,
-                        sourceTitle: sourceEntry.title,
-                        candidate: item.normalized,
-                        targetRef: claimed.claimTargetRef,
-                        accountId: claimByAccount?.id ?? null,
-                        accountLabel: readCheckResultTitle(claimByAccount)
-                      })
-                    }
-                  } catch (error) {
-                    const fatal = isFatalAccountError(error)
-                    if (fatal) {
-                      const fatalAccountId = createCarrierAccount?.id ?? claimAccount?.id ?? null
-                      if (fatalAccountId) {
-                        this.repository.updateStatus([fatalAccountId], fatal.status)
-                      }
-                    }
-                    this.pushSniperListenerLog(task, {
-                      level: 'error',
-                      message: `命中 ${item.normalized} 但抢注失败：${fatal ? `账号已停用（${fatal.message}）` : formatSniperClaimError(error)}`,
-                      sourceRef: sourceEntry.ref,
-                      sourceTitle: sourceEntry.title,
-                      candidate: item.normalized,
-                      accountId: createCarrierAccount?.id ?? claimAccount?.id ?? null,
-                      accountLabel: readCheckResultTitle(createCarrierAccount ?? claimAccount)
-                    })
-                  }
-
-                  if (task.state.claimedCount >= candidateLimit) {
-                    this.pushSniperListenerLog(task, {
-                      level: 'warning',
-                      message: `本轮监听自动抢注已达到上限 ${candidateLimit} 条，继续监听但不再重复处理旧候选。`
-                    })
-                  }
+                carrierIndex += 1
+              } else if (payload.autoCreateCarrier && createCarrierAccount) {
+                const createdClaim = await this.telethonSniperService.createCarrierAndClaim({
+                  sessionPath: createCarrierAccount.sessionPath,
+                  normalizedCandidate: item.normalized,
+                  accountId: createCarrierAccount.id,
+                  createdIndex: createdCarrierIndex,
+                  createCarrierTitleTemplate: payload.createCarrierTitleTemplate,
+                  createCarrierAboutTemplate: payload.createCarrierAboutTemplate,
+                  postType: payload.postType,
+                  postText: payload.postText,
+                  postImageData: payload.postImageData,
+                  proxy
+                })
+                claimed = {
+                  ...createdClaim,
+                  createdCarrier: true
                 }
+                createdCarrierIndex += 1
+                claimByAccount = createCarrierAccount
+                task.state.createdCarrierCount += 1
+              } else {
+                item.claimStatus = 'skipped'
+                item.claimMessage = '可抢名已发现，但当前没有可用池子，也没开自动建频道占位。'
+                this.pushSniperListenerLog(task, {
+                  level: 'warning',
+                  message: `发现 ${item.normalized} 可抢，但没有可用池子/建池账号。`,
+                  sourceRef: item.sourceRef,
+                  sourceTitle: item.sourceTitle,
+                  candidate: item.normalized
+                })
+                continue
+              }
+
+              item.claimStatus = 'claimed'
+              item.claimMessage = claimed.claimMessage
+              item.claimTargetRef = claimed.claimTargetRef
+              item.claimTargetTitle = claimed.claimTargetTitle
+              item.claimAccountId = claimByAccount?.id ?? null
+              item.claimAccountLabel = readCheckResultTitle(claimByAccount)
+              task.state.claimedCount += 1
+              this.pushSniperListenerLog(task, {
+                level: 'success',
+                message: claimed.createdCarrier
+                  ? claimed.postFailureMessage
+                    ? `命中 ${item.normalized}，已自动创建频道并抢到，但首帖发送失败。`
+                    : payload.postType !== 'none' && claimed.postSent
+                      ? `命中 ${item.normalized}，已自动创建频道、抢到并发出首帖。`
+                      : `命中 ${item.normalized}，已自动创建频道并抢到。`
+                  : `命中 ${item.normalized}，已用池子载体抢到。`,
+                sourceRef: item.sourceRef,
+                sourceTitle: item.sourceTitle,
+                candidate: item.normalized,
+                targetRef: claimed.claimTargetRef,
+                accountId: claimByAccount?.id ?? null,
+                accountLabel: readCheckResultTitle(claimByAccount)
+              })
+              if (claimed.createdCarrier && claimed.postFailureMessage) {
+                this.pushSniperListenerLog(task, {
+                  level: 'warning',
+                  message: `${item.normalized} 的首帖没发出去：${claimed.postFailureMessage}`,
+                  sourceRef: item.sourceRef,
+                  sourceTitle: item.sourceTitle,
+                  candidate: item.normalized,
+                  targetRef: claimed.claimTargetRef,
+                  accountId: claimByAccount?.id ?? null,
+                  accountLabel: readCheckResultTitle(claimByAccount)
+                })
               }
             } catch (error) {
+              const fatal = isFatalAccountError(error)
+              if (fatal) {
+                const fatalAccountId = createCarrierAccount?.id ?? claimAccount?.id ?? null
+                if (fatalAccountId) {
+                  this.repository.updateStatus([fatalAccountId], fatal.status)
+                }
+              }
               this.pushSniperListenerLog(task, {
                 level: 'error',
-                message: `监听来源 ${sourceEntry.title || sourceEntry.ref} 时失败：${error instanceof Error ? error.message : String(error)}`,
-                sourceRef: sourceEntry.ref,
-                sourceTitle: sourceEntry.title
+                message: `命中 ${item.normalized} 但抢注失败：${fatal ? `账号已停用（${fatal.message}）` : formatSniperClaimError(error)}`,
+                sourceRef: item.sourceRef,
+                sourceTitle: item.sourceTitle,
+                candidate: item.normalized,
+                accountId: createCarrierAccount?.id ?? claimAccount?.id ?? null,
+                accountLabel: readCheckResultTitle(createCarrierAccount ?? claimAccount)
+              })
+            }
+
+            if (task.state.claimedCount >= candidateLimit) {
+              this.pushSniperListenerLog(task, {
+                level: 'warning',
+                message: `本轮监听自动抢注已达到上限 ${candidateLimit} 条，继续监听但不再重复处理旧候选。`
               })
             }
           }
