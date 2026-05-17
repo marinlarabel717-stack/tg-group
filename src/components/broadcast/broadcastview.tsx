@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CopyPlus, Eye, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Search, Send, Trash2, Users, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
-import { ConfigRow, FoldSection, SOFT_INPUT_CLASS } from '../common/settings-ui'
+import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_SELECT_OPTION_CLASS } from '../common/settings-ui'
 import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useAccountStore } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
@@ -561,20 +561,42 @@ const CreativesWorkbench = memo(function CreativesWorkbench() {
               <div className="text-lg font-semibold text-white">文案编辑器</div>
               <div className="mt-1 text-sm text-textMuted">第一版先把图、文、每日条数这些核心信息管起来。</div>
             </div>
-            <label className="block space-y-2 text-sm"><span className="text-textMuted">标题</span><input value={selectedCreative.title} onChange={(event) => updateCreative(selectedCreative.id, { title: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-            <label className="block space-y-2 text-sm"><span className="text-textMuted">图片 URL</span><input value={selectedCreative.imageUrl} onChange={(event) => updateCreative(selectedCreative.id, { imageUrl: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-            <label className="block space-y-2 text-sm"><span className="text-textMuted">正文</span><textarea value={selectedCreative.text} rows={8} onChange={(event) => updateCreative(selectedCreative.id, { text: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="space-y-2 text-sm"><span className="text-textMuted">每日条数</span><input type="number" min={1} value={selectedCreative.dailyQuota} onChange={(event) => updateCreative(selectedCreative.id, { dailyQuota: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">权重</span><input type="number" min={1} value={selectedCreative.weight} onChange={(event) => updateCreative(selectedCreative.id, { weight: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">状态</span><select value={selectedCreative.enabled ? 'enabled' : 'disabled'} onChange={(event) => updateCreative(selectedCreative.id, { enabled: event.target.value === 'enabled' })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]"><option value="enabled">启用</option><option value="disabled">停用</option></select></label>
-            </div>
-            <label className="block space-y-2 text-sm"><span className="text-textMuted">备注</span><textarea value={selectedCreative.note} rows={3} onChange={(event) => updateCreative(selectedCreative.id, { note: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-            <div className="rounded-[16px] bg-panel p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><LayoutTemplate size={16} /> Telegram 预览</div>
-              {selectedCreative.imageUrl ? <img src={selectedCreative.imageUrl} alt={readCreativeTitle(selectedCreative)} className="h-40 w-full rounded-[12px] object-cover" /> : <div className="flex h-40 w-full items-center justify-center rounded-[12px] bg-card text-sm text-textMuted">还没设置图片</div>}
-              <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-200">{selectedCreative.text || '文案正文为空，后面这里会直接按 Telegram 图文样式预览。'}</div>
-            </div>
+            <FoldSection title="文案设置" hint="标题、图片、正文和投放参数继续统一成设置页布局。" defaultOpen>
+              <ConfigRow label="标题">
+                <input value={selectedCreative.title} onChange={(event) => updateCreative(selectedCreative.id, { title: event.target.value })} className={COMPACT_INPUT_CLASS} />
+              </ConfigRow>
+              <ConfigRow label="图片 URL" wide>
+                <input value={selectedCreative.imageUrl} onChange={(event) => updateCreative(selectedCreative.id, { imageUrl: event.target.value })} className={COMPACT_INPUT_CLASS} />
+              </ConfigRow>
+              <ConfigRow label="正文" wide>
+                <textarea value={selectedCreative.text} rows={8} onChange={(event) => updateCreative(selectedCreative.id, { text: event.target.value })} className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+              </ConfigRow>
+              <ConfigRow label="每日条数">
+                <input type="number" min={1} value={selectedCreative.dailyQuota} onChange={(event) => updateCreative(selectedCreative.id, { dailyQuota: Number(event.target.value) || 1 })} className={COMPACT_INPUT_CLASS} />
+              </ConfigRow>
+              <ConfigRow label="权重">
+                <input type="number" min={1} value={selectedCreative.weight} onChange={(event) => updateCreative(selectedCreative.id, { weight: Number(event.target.value) || 1 })} className={COMPACT_INPUT_CLASS} />
+              </ConfigRow>
+              <ConfigRow label="状态">
+                <select value={selectedCreative.enabled ? 'enabled' : 'disabled'} onChange={(event) => updateCreative(selectedCreative.id, { enabled: event.target.value === 'enabled' })} className={COMPACT_INPUT_CLASS}>
+                  <option value="enabled" className={SOFT_SELECT_OPTION_CLASS}>启用</option>
+                  <option value="disabled" className={SOFT_SELECT_OPTION_CLASS}>停用</option>
+                </select>
+              </ConfigRow>
+              <ConfigRow label="备注" wide>
+                <textarea value={selectedCreative.note} rows={3} onChange={(event) => updateCreative(selectedCreative.id, { note: event.target.value })} className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+              </ConfigRow>
+            </FoldSection>
+
+            <FoldSection title="Telegram 预览" hint="右侧预览保持所见即所得，不再单独一块旧卡片。" defaultOpen>
+              <div className="px-3 py-3">
+                <div className="rounded-[16px] bg-panel p-4">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><LayoutTemplate size={16} /> Telegram 预览</div>
+                  {selectedCreative.imageUrl ? <img src={selectedCreative.imageUrl} alt={readCreativeTitle(selectedCreative)} className="h-40 w-full rounded-[12px] object-cover" /> : <div className="flex h-40 w-full items-center justify-center rounded-[12px] bg-card text-sm text-textMuted">还没设置图片</div>}
+                  <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-200">{selectedCreative.text || '文案正文为空，后面这里会直接按 Telegram 图文样式预览。'}</div>
+                </div>
+              </div>
+            </FoldSection>
           </div>
         )}
       </GlassPanel>
@@ -787,16 +809,22 @@ const TargetsWorkbench = memo(function TargetsWorkbench() {
             </GlassPanel>
 
             <GlassPanel className="bg-card">
-              <div className="text-lg font-semibold text-white">手动补一个群</div>
-              <div className="mt-1 text-sm text-textMuted">如果某个群没读出来，再手动补。</div>
-              <div className="mt-4 space-y-3">
-                <label className="block space-y-2 text-sm"><span className="text-textMuted">群名称</span><input value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-                <label className="block space-y-2 text-sm"><span className="text-textMuted">群目标引用</span><input value={groupUsername} onChange={(event) => setGroupUsername(event.target.value)} placeholder="@username / t.me/... / 私密邀请链接" className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-                <label className="block space-y-2 text-sm"><span className="text-textMuted">成员数</span><input type="number" value={groupMembers} onChange={(event) => setGroupMembers(event.target.value)} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-                <button type="button" onClick={() => { createGroup({ title: groupTitle, username: groupUsername, targetRef: groupUsername, memberCount: Number(groupMembers) || 0 }); setGroupTitle(''); setGroupUsername(''); setGroupMembers('0') }} className="flex w-full items-center justify-center gap-2 rounded-[12px] bg-white/[0.06] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.1]">
-                  <Plus size={16} /> 手动添加
-                </button>
-              </div>
+              <FoldSection title="手动补一个群" hint="如果某个群没读出来，再手动补到当前账号下面。" defaultOpen>
+                <ConfigRow label="群名称">
+                  <input value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+                <ConfigRow label="群目标引用" wide>
+                  <input value={groupUsername} onChange={(event) => setGroupUsername(event.target.value)} placeholder="@username / t.me/... / 私密邀请链接" className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+                <ConfigRow label="成员数">
+                  <input type="number" value={groupMembers} onChange={(event) => setGroupMembers(event.target.value)} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+                <ConfigRow label="添加操作" hint="补完后会直接加入当前群组列表。">
+                  <button type="button" onClick={() => { createGroup({ title: groupTitle, username: groupUsername, targetRef: groupUsername, memberCount: Number(groupMembers) || 0 }); setGroupTitle(''); setGroupUsername(''); setGroupMembers('0') }} className="flex w-full items-center justify-center gap-2 rounded-[12px] bg-white/[0.06] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.1]">
+                    <Plus size={16} /> 手动添加
+                  </button>
+                </ConfigRow>
+              </FoldSection>
             </GlassPanel>
           </div>
         </div>
@@ -1269,18 +1297,18 @@ const BroadcastConsole = memo(function BroadcastConsole() {
               {hasSelectedChannelForwardCreative ? <div className="mt-3 text-xs text-amber-200">当前选中的文案里有频道转发。现在也会尝试走 Telegram 官方每天重复；是否真正生效，以写入后的真实回读结果为准。</div> : null}
               {selectedTask.scheduleMode === 'date_range' ? (
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">开始日期</span><input type="date" value={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { startDate: event.target.value || selectedTask.startDate })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">结束日期</span><input type="date" value={selectedTask.endDate} min={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { endDate: event.target.value || selectedTask.startDate })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">开始日期</span><input type="date" value={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { startDate: event.target.value || selectedTask.startDate })} className={COMPACT_INPUT_CLASS} /></label>
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">结束日期</span><input type="date" value={selectedTask.endDate} min={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { endDate: event.target.value || selectedTask.startDate })} className={COMPACT_INPUT_CLASS} /></label>
                 </div>
               ) : (
                 <div className="mt-4 grid gap-4 md:grid-cols-1">
-                  <label className="space-y-2 text-sm"><span className="text-textMuted">首发日期</span><input type="date" value={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { startDate: event.target.value || selectedTask.startDate, endDate: event.target.value || selectedTask.startDate })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                  <label className="space-y-2 text-sm"><span className="text-textMuted">首发日期</span><input type="date" value={selectedTask.startDate} onChange={(event) => updateTask(selectedTask.id, { startDate: event.target.value || selectedTask.startDate, endDate: event.target.value || selectedTask.startDate })} className={COMPACT_INPUT_CLASS} /></label>
                 </div>
               )}
               <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-                <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-                <label className="space-y-2 text-sm"><span className="text-textMuted">单群当天条数（每日上限 100）</span><input type="number" min={1} max={100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Math.min(Number(event.target.value) || 1, 100) })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className={COMPACT_INPUT_CLASS} /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className={COMPACT_INPUT_CLASS} /></label>
+                <label className="space-y-2 text-sm"><span className="text-textMuted">单群当天条数（每日上限 100）</span><input type="number" min={1} max={100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Math.min(Number(event.target.value) || 1, 100) })} className={COMPACT_INPUT_CLASS} /></label>
               </div>
               {selectedPreview.length > 0 ? (
                 <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
@@ -1399,7 +1427,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                   value={accountSearch}
                   onChange={(event) => setAccountSearch(event.target.value)}
                   placeholder="搜索账号名 / 手机号 / 用户名"
-                  className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-white outline-none focus:border-white/[0.12] lg:max-w-[360px]"
+                  className={`h-11 w-full rounded-[12px] px-4 text-sm lg:max-w-[360px] ${SOFT_INPUT_CLASS}`}
                 />
                 <div className="flex flex-wrap gap-3">
                   <button type="button" onClick={() => setDraftAccountIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
@@ -1416,7 +1444,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     value={rangeStart}
                     onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
                     placeholder="开始"
-                    className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
+                    className={`h-10 w-20 rounded-[12px] px-3 text-sm ${SOFT_INPUT_CLASS}`}
                   />
                   <span className="text-textMuted">-</span>
                   <input
@@ -1424,7 +1452,7 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                     value={rangeEnd}
                     onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
                     placeholder="结束"
-                    className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
+                    className={`h-10 w-20 rounded-[12px] px-3 text-sm ${SOFT_INPUT_CLASS}`}
                   />
                   <button
                     type="button"
