@@ -638,6 +638,17 @@ function readMessageText(message: unknown) {
   return ''
 }
 
+function normalizeMessageCompareText(input: string) {
+  return input.replace(/\s+/g, ' ').trim()
+}
+
+function readMessageId(message: unknown) {
+  const source = message as { id?: unknown; message?: { id?: unknown } } | null
+  if (typeof source?.id === 'number' && source.id > 0) return source.id
+  if (typeof source?.message?.id === 'number' && source.message.id > 0) return source.message.id
+  return null
+}
+
 function readMessageDateMs(message: unknown) {
   const source = message as { date?: unknown } | null
   const raw = source?.date
@@ -651,26 +662,44 @@ function readMessageDateMs(message: unknown) {
   return null
 }
 
-async function wasMessageActuallySent(client: TelegramClient, entity: unknown, payload: AutoJoinPayload, startedAtMs: number) {
-  const expectedText = payload.messageText.trim()
+async function findActuallySentMessage(client: TelegramClient, entity: unknown, payload: AutoJoinPayload, startedAtMs: number) {
+  const expectedText = normalizeMessageCompareText(payload.messageText.trim())
   const expectedHasMedia = Boolean(payload.imageData.trim())
-  const messages = await ((client as TelegramClient) as TelegramClient & {
-    getMessages: (peer: unknown, params: Record<string, unknown>) => Promise<Array<{ out?: unknown; media?: unknown; message?: unknown; text?: unknown; rawText?: unknown; date?: unknown }>>
-  }).getMessages(entity as never, { limit: 6 })
 
-  if (!Array.isArray(messages) || messages.length === 0) return false
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const messages = await ((client as TelegramClient) as TelegramClient & {
+      getMessages: (peer: unknown, params: Record<string, unknown>) => Promise<Array<{ id?: unknown; out?: unknown; media?: unknown; message?: unknown; text?: unknown; rawText?: unknown; date?: unknown }>>
+    }).getMessages(entity as never, { limit: 8 })
 
-  return messages.some((message) => {
-    const out = Boolean((message as { out?: unknown }).out)
-    if (!out) return false
-    const sentAtMs = readMessageDateMs(message)
-    if (typeof sentAtMs === 'number' && sentAtMs + 15_000 < startedAtMs) return false
-    const actualText = readMessageText(message)
-    const actualHasMedia = Boolean((message as { media?: unknown }).media)
-    const textMatched = expectedText ? actualText === expectedText : true
-    const mediaMatched = expectedHasMedia ? actualHasMedia : true
-    return textMatched && mediaMatched
-  })
+    if (Array.isArray(messages) && messages.length > 0) {
+      const matched = messages.find((message) => {
+        const out = Boolean((message as { out?: unknown }).out)
+        if (!out) return false
+        const sentAtMs = readMessageDateMs(message)
+        if (typeof sentAtMs === 'number' && sentAtMs + 20_000 < startedAtMs) return false
+        const actualText = normalizeMessageCompareText(readMessageText(message))
+        const actualHasMedia = Boolean((message as { media?: unknown }).media)
+        const textMatched = expectedText ? actualText === expectedText || actualText.includes(expectedText) || expectedText.includes(actualText) : true
+        const mediaMatched = expectedHasMedia ? actualHasMedia : true
+        return textMatched && mediaMatched
+      })
+      if (matched) {
+        return {
+          sent: true,
+          messageId: readMessageId(matched)
+        }
+      }
+    }
+
+    if (attempt < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 450))
+    }
+  }
+
+  return {
+    sent: false,
+    messageId: null
+  }
 }
 
 export class AutoJoinService {
@@ -874,6 +903,7 @@ export class AutoJoinService {
 
     const sendToResolvedTarget = async (client: TelegramClient, accountId: number, accountLabel: string, sourceItem: AutoJoinPayloadItem, targetLabel: string, resultItem: AutoJoinResultItem, roundLabel?: string) => {
       let resolvedEntity: unknown | null = null
+      const sendStartedAtMs = Date.now()
       try {
         resolvedEntity = await resolveSendEntity(client, sourceItem)
         const sentMessageId = await sendContentToJoinedTarget(client, resolvedEntity, payload, targetLabel)
@@ -885,9 +915,12 @@ export class AutoJoinService {
       } catch (sendError) {
         try {
           const verifyEntity = resolvedEntity ?? await resolveSendEntity(client, sourceItem)
-          const confirmedSent = await wasMessageActuallySent(client, verifyEntity, payload, Date.now() - 3_000)
-          if (confirmedSent) {
+          const confirmed = await findActuallySentMessage(client, verifyEntity, payload, sendStartedAtMs)
+          if (confirmed.sent) {
             finalizeSendState(resultItem, 'sent', `${accountLabel} 已向 ${targetLabel} 发出内容；虽然 Telegram 回了异常，但实际已经发成功${roundLabel ? `（${roundLabel}）` : ''}。`)
+            if (confirmed.messageId) {
+              scheduleDeleteAfterSend(client, verifyEntity, confirmed.messageId, accountLabel, targetLabel)
+            }
             return
           }
           resolvedEntity = verifyEntity
