@@ -340,10 +340,10 @@ function SniperWorkbench() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <GlassPanel className="bg-card">
           <FoldSection title="抢注配置" hint="第一版先做白名单来源巡检 + 可抢名自动占位，不做常驻后台监听。">
-            <ConfigRow label="白名单来源" hint="一行一个，支持频道 / 群 / 机器人用户名或 t.me 链接。" wide>
+            <ConfigRow label="白名单来源" hint="一行一个，支持频道 / 群 / 机器人用户名、普通 t.me 链接，以及分组分享链接 t.me/addlist/...。" wide>
               <div className="space-y-2">
-                <textarea value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} rows={8} placeholder="如：@nav_bot / https://t.me/xxxx_channel / @supply_group" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
-                <div className="text-xs text-textMuted">当前 {sourcePreviewCount} 个来源。系统会逐个抓最近消息并提取其中出现的用户名 / t.me 链接。</div>
+                <textarea value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} rows={8} placeholder="如：@nav_bot / https://t.me/xxxx_channel / https://t.me/addlist/xxxxxx / @supply_group" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+                <div className="text-xs text-textMuted">当前 {sourcePreviewCount} 个来源。混着填 addlist 分组链接和频道链接也行，系统会先自动识别分组链接并把里面的频道/群导进监听来源。</div>
               </div>
             </ConfigRow>
             <ConfigRow label="池子载体" hint="一行一个，填你自己能改用户名的公开群 / 频道。抢到后会直接改它们的公开用户名。" wide>
@@ -437,7 +437,7 @@ function SniperWorkbench() {
               <ConfigRow label="第一版边界" wide>
                 <div className="space-y-2 text-sm text-textMuted">
                   <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">主体：</span>走用户号，不走 Bot API。</div>
-                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">入口：</span>只扫你填的频道 / 群 / 机器人白名单。</div>
+                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">入口：</span>支持你混填频道 / 群 / 机器人白名单，以及 `t.me/addlist/...` 分组分享链接。</div>
                   <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">抢注：</span>当前通过你手动提供的池子载体秒改用户名；后面再补自动维护空频道池。</div>
                 </div>
               </ConfigRow>

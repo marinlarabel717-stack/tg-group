@@ -114,6 +114,13 @@ type ResolvedPeer = {
   entity: unknown
 }
 
+type ExpandedSource = {
+  ref: string
+  title: string
+  kind: ResolvedPeer['kind']
+  entity: unknown
+}
+
 type PoolCarrier = {
   ref: string
   title: string
@@ -258,6 +265,104 @@ function buildPeerRef(entity: unknown, fallback: string) {
 
 function normalizeKeywordSet(input: string) {
   return splitInput(input).map((item) => item.toLowerCase())
+}
+
+function extractChatlistSlug(ref: string) {
+  const trimmed = ref.trim()
+  if (!trimmed) return ''
+  const matched = trimmed.match(/(?:https?:\/\/)?(?:www\.)?t\.me\/addlist\/([A-Za-z0-9_-]+)/i)
+  if (matched?.[1]) return matched[1].trim()
+  return ''
+}
+
+function readEntityPeerKey(entity: unknown) {
+  const className = typeof (entity as { className?: unknown })?.className === 'string' ? String((entity as { className?: string }).className) : ''
+  const rawId = (entity as { id?: unknown })?.id
+  const id = typeof rawId === 'bigint' || typeof rawId === 'number' || typeof rawId === 'string' ? String(rawId) : ''
+  if (!id) return ''
+  if (className === 'Channel') return `channel:${id}`
+  if (className === 'Chat') return `chat:${id}`
+  if (className === 'User') return `user:${id}`
+  return ''
+}
+
+function readPeerKey(peer: unknown) {
+  const className = typeof (peer as { className?: unknown })?.className === 'string' ? String((peer as { className?: string }).className) : ''
+  if (className === 'PeerChannel') {
+    const value = (peer as { channelId?: unknown }).channelId
+    if (typeof value === 'bigint' || typeof value === 'number' || typeof value === 'string') return `channel:${String(value)}`
+  }
+  if (className === 'PeerChat') {
+    const value = (peer as { chatId?: unknown }).chatId
+    if (typeof value === 'bigint' || typeof value === 'number' || typeof value === 'string') return `chat:${String(value)}`
+  }
+  if (className === 'PeerUser') {
+    const value = (peer as { userId?: unknown }).userId
+    if (typeof value === 'bigint' || typeof value === 'number' || typeof value === 'string') return `user:${String(value)}`
+  }
+  return ''
+}
+
+function buildExpandedSource(entity: unknown, fallbackRef: string): ExpandedSource {
+  return {
+    ref: buildPeerRef(entity, fallbackRef),
+    title: readTitleFromEntity(entity),
+    kind: readPeerKind(entity),
+    entity
+  }
+}
+
+async function expandSourceRefsWithChatlists(client: TelegramClient, refs: string[]) {
+  const expandedSources: ExpandedSource[] = []
+  const seen = new Set<string>()
+  let chatlistJoinCount = 0
+
+  for (const ref of refs) {
+    const slug = extractChatlistSlug(ref)
+    if (!slug) {
+      const resolved = await resolvePeer(client, ref)
+      const key = `${resolved.kind}:${resolved.ref}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        expandedSources.push({ ref: resolved.ref, title: resolved.title, kind: resolved.kind, entity: resolved.entity })
+      }
+      continue
+    }
+
+    const invite = await client.invoke(new Api.chatlists.CheckChatlistInvite({ slug }))
+    const inviteChats = Array.isArray((invite as { chats?: unknown[] })?.chats)
+      ? ((invite as { chats?: unknown[] }).chats ?? []).filter((entity) => ['channel', 'group'].includes(readPeerKind(entity)))
+      : []
+
+    const missingPeerKeys = new Set(
+      Array.isArray((invite as { missingPeers?: unknown[] })?.missingPeers)
+        ? ((invite as { missingPeers?: unknown[] }).missingPeers ?? []).map(readPeerKey).filter(Boolean)
+        : []
+    )
+
+    const peersToJoin = inviteChats.filter((entity) => missingPeerKeys.size === 0 || missingPeerKeys.has(readEntityPeerKey(entity)))
+
+    if (peersToJoin.length > 0) {
+      await client.invoke(new Api.chatlists.JoinChatlistInvite({
+        slug,
+        peers: peersToJoin as never
+      }))
+      chatlistJoinCount += peersToJoin.length
+    }
+
+    for (const entity of inviteChats) {
+      const source = buildExpandedSource(entity, `https://t.me/addlist/${slug}`)
+      const key = `${source.kind}:${source.ref}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      expandedSources.push(source)
+    }
+  }
+
+  return {
+    sources: expandedSources,
+    chatlistJoinCount
+  }
 }
 
 function readMessageText(message: unknown) {
@@ -693,12 +798,42 @@ export class OtherToolsService {
       const items: OtherToolsSniperCandidateItem[] = []
       const seenCandidates = new Set<string>()
       let inspectedMessageCount = 0
+      let expandedSourceCount = 0
+      let chatlistJoinCount = 0
 
-      for (const sourceRef of sourceRefs) {
-        let resolvedSource: ResolvedPeer | null = null
+      let expandedSourceEntries: ExpandedSource[] = []
+      try {
+        const expanded = await expandSourceRefsWithChatlists(scanClient, sourceRefs)
+        expandedSourceEntries = expanded.sources
+        expandedSourceCount = expanded.sources.length
+        chatlistJoinCount = expanded.chatlistJoinCount
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        items.push({
+          id: createId('sniper-item'),
+          raw: 'addlist',
+          normalized: 'addlist',
+          kind: 'link',
+          category: 'uncertain',
+          entityType: 'unknown',
+          reason: `分组链接处理失败：${message}`,
+          sourceRef: 'addlist',
+          sourceTitle: '分组链接',
+          sourceExcerpt: '这次分组链接没有成功导入。',
+          sourceMessageId: '',
+          sourceDate: new Date().toISOString(),
+          claimStatus: null,
+          claimMessage: '',
+          claimTargetRef: '',
+          claimTargetTitle: '',
+          checkedAccountId: scanAccount.id,
+          checkedAccountLabel: readCheckResultTitle(scanAccount)
+        })
+      }
+
+      for (const sourceEntry of expandedSourceEntries) {
         try {
-          resolvedSource = await resolvePeer(scanClient, sourceRef)
-          const messages = await scanClient.getMessages(resolvedSource.entity as never, { limit: sourceLimit })
+          const messages = await scanClient.getMessages(sourceEntry.entity as never, { limit: sourceLimit })
           for (const message of messages) {
             const blob = readSourceBlob(message)
             if (!blob || !matchesKeywords(blob, includeKeywords, excludeKeywords)) continue
@@ -717,8 +852,8 @@ export class OtherToolsService {
                 category: resolved.category,
                 reason: resolved.reason,
                 entityType: resolved.entityType,
-                sourceRef: resolvedSource.ref,
-                sourceTitle: resolvedSource.title,
+                sourceRef: sourceEntry.ref,
+                sourceTitle: sourceEntry.title,
                 sourceExcerpt: makeExcerpt(readMessageText(message), found),
                 sourceMessageId: readMessageId(message),
                 sourceDate: readMessageDate(message)
@@ -735,14 +870,14 @@ export class OtherToolsService {
           const message = error instanceof Error ? error.message : String(error)
           items.push({
             id: createId('sniper-item'),
-            raw: sourceRef,
-            normalized: sourceRef,
+            raw: sourceEntry.ref,
+            normalized: sourceEntry.ref,
             kind: 'link',
             category: 'uncertain',
             entityType: 'unknown',
             reason: `来源读取失败：${message}`,
-            sourceRef,
-            sourceTitle: resolvedSource?.title || sourceRef,
+            sourceRef: sourceEntry.ref,
+            sourceTitle: sourceEntry.title || sourceEntry.ref,
             sourceExcerpt: '这个来源本轮没有成功读取。',
             sourceMessageId: '',
             sourceDate: new Date().toISOString(),
@@ -808,10 +943,14 @@ export class OtherToolsService {
       const claimed = items.filter((item) => item.claimStatus === 'claimed')
 
       const summaryParts = [
-        `已巡检 ${sourceRefs.length} 个白名单来源`,
+        `已处理 ${sourceRefs.length} 个白名单来源`,
+        `展开成 ${expandedSourceCount} 个实际频道/群/机器人来源`,
         `命中 ${items.filter((item) => item.sourceMessageId).length} 条候选`,
         `可抢 ${claimable.length} 条`
       ]
+      if (chatlistJoinCount > 0) {
+        summaryParts.push(`分组链接本轮自动导入 ${chatlistJoinCount} 个目标`)
+      }
       if (payload.autoClaim) {
         summaryParts.push(`已抢到 ${claimed.length} 条`)
       }
