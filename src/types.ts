@@ -1191,6 +1191,7 @@ export interface OtherToolsSniperResult {
   uncertain: OtherToolsSniperCandidateItem[]
   claimed: OtherToolsSniperCandidateItem[]
   items: OtherToolsSniperCandidateItem[]
+  logs: OtherToolsSniperListenerLogEntry[]
   message: string
 }
 
@@ -1200,6 +1201,9 @@ export interface OtherToolsSniperListenerPayload extends OtherToolsSniperPayload
   createCarrierAccountId?: number | null
   createCarrierTitleTemplate: string
   createCarrierAboutTemplate: string
+  postType: BatchCreatePostType
+  postText: string
+  postImageData: string
 }
 
 export interface OtherToolsSniperListenerLogEntry {

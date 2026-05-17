@@ -1,6 +1,6 @@
-import { Copy, Filter, Loader2, Radar, Search, X } from 'lucide-react'
-import { memo, useEffect, useMemo, useState } from 'react'
-import type { AccountRecord, OtherToolsSniperCandidateItem, OtherToolsSniperListenerState, OtherToolsSniperResult, OtherToolsSourceSubscribeItem, OtherToolsUsernameFilterItem, OtherToolsUsernameFilterResult } from '../../types'
+import { Copy, Filter, ImageIcon, Loader2, Radar, Search, SquareTerminal, Type, X } from 'lucide-react'
+import { type ChangeEvent, memo, useEffect, useMemo, useState } from 'react'
+import type { AccountRecord, BatchCreatePostType, OtherToolsSniperCandidateItem, OtherToolsSniperListenerState, OtherToolsSniperResult, OtherToolsSourceSubscribeItem, OtherToolsUsernameFilterItem, OtherToolsUsernameFilterResult } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
@@ -18,6 +18,34 @@ function splitPreviewInput(input: string) {
     .split(/[\n,\r\t ]+/)
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function PostTypeTabs({ value, onChange }: { value: BatchCreatePostType; onChange: (value: BatchCreatePostType) => void }) {
+  const items = [
+    { value: 'none' as const, label: '不发', icon: SquareTerminal },
+    { value: 'text' as const, label: '纯文', icon: Type },
+    { value: 'photo' as const, label: '图文', icon: ImageIcon }
+  ]
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item) => {
+        const Icon = item.icon
+        const active = value === item.value
+        return (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => onChange(item.value)}
+            className={`inline-flex h-10 items-center gap-2 rounded-[12px] px-4 text-sm ${SOFT_TAB_CLASS} ${active ? 'border-white/[0.12] bg-violet-400/10 text-violet-200' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
+          >
+            <Icon size={15} />
+            {item.label}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 const TabBar = memo(function TabBar(props: { activeTab: OtherToolsTabKey; onChange: (tab: OtherToolsTabKey) => void }) {
@@ -366,6 +394,9 @@ function SniperWorkbench() {
   const [createCarrierAccountId, setCreateCarrierAccountId] = useState('')
   const [createCarrierTitleTemplate, setCreateCarrierTitleTemplate] = useState('监听占位_{candidate}')
   const [createCarrierAboutTemplate, setCreateCarrierAboutTemplate] = useState('自动监听命中 {candidate} 后创建的占位频道。')
+  const [postType, setPostType] = useState<BatchCreatePostType>('none')
+  const [postText, setPostText] = useState('')
+  const [postImageData, setPostImageData] = useState('')
   const [running, setRunning] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [listenerErrorMessage, setListenerErrorMessage] = useState('')
@@ -438,6 +469,17 @@ function SniperWorkbench() {
     setPickerOpen(false)
   }
 
+  const handlePostImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      setPostImageData(typeof reader.result === 'string' ? reader.result : '')
+    }
+    reader.readAsDataURL(file)
+    event.target.value = ''
+  }
+
   const handleRun = async () => {
     const api = window.desktopOtherTools
     if (!api) {
@@ -503,7 +545,10 @@ function SniperWorkbench() {
         autoCreateCarrier,
         createCarrierAccountId: createCarrierAccountId ? Number(createCarrierAccountId) : null,
         createCarrierTitleTemplate,
-        createCarrierAboutTemplate
+        createCarrierAboutTemplate,
+        postType,
+        postText,
+        postImageData
       })
       setListenerState(state)
     } catch (error) {
@@ -638,6 +683,31 @@ function SniperWorkbench() {
             <ConfigRow label="自动新建频道简介" hint="支持 {candidate} / {accountId} / {index}。" wide>
               <textarea value={createCarrierAboutTemplate} onChange={(event) => setCreateCarrierAboutTemplate(event.target.value)} rows={3} className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
+            <ConfigRow label="建频道后自动发首帖" hint="只对自动新建出来的抢注频道生效。" wide>
+              <PostTypeTabs value={postType} onChange={setPostType} />
+            </ConfigRow>
+            {postType !== 'none' ? (
+              <>
+                <ConfigRow label="首帖文案" hint="可以发纯文字，或者当图文 caption。" wide>
+                  <textarea value={postText} onChange={(event) => setPostText(event.target.value)} rows={4} placeholder="例如：频道已抢到，后续内容会持续更新。" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+                </ConfigRow>
+                {postType === 'photo' ? (
+                  <ConfigRow label="首帖图片" hint="上传后，频道创建成功会自动发图文 post。" wide>
+                    <div className="space-y-3">
+                      <label className="inline-flex h-10 cursor-pointer items-center rounded-[12px] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08]">
+                        选择图片
+                        <input type="file" accept="image/*" className="hidden" onChange={handlePostImageUpload} />
+                      </label>
+                      <div className="flex items-center justify-between rounded-[12px] bg-black/10 px-4 py-3 text-xs text-textMuted">
+                        <span>{postImageData ? '已选择首帖图片' : '暂未选择图片'}</span>
+                        {postImageData ? <button type="button" onClick={() => setPostImageData('')} className="text-white transition hover:text-rose-200">删除</button> : null}
+                      </div>
+                      {postImageData ? <img src={postImageData} alt="首帖预览" className="max-h-[220px] rounded-[14px] border border-white/8 object-contain" /> : null}
+                    </div>
+                  </ConfigRow>
+                ) : null}
+              </>
+            ) : null}
           </FoldSection>
         </GlassPanel>
 
@@ -742,6 +812,27 @@ function SniperWorkbench() {
         <SniperResultBlock title="已占用" items={summary?.occupied ?? []} />
         <SniperResultBlock title="不可用" items={summary?.forbidden ?? []} />
       </div>
+
+      <GlassPanel className="bg-card">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-base font-semibold text-white">巡检执行日志</div>
+            <div className="mt-1 text-sm text-textMuted">最近 {summary?.logs.length ?? 0} 条</div>
+          </div>
+          <div className="text-xs text-textMuted">{running ? '巡检中' : '等待执行'}</div>
+        </div>
+        <div className="mt-4 space-y-2">
+          {!summary || summary.logs.length === 0 ? <div className="rounded-[14px] bg-panel/70 px-4 py-4 text-sm text-textMuted">点一次“开始巡检”后，这里会把订阅、展开来源、抢注成功/失败这些步骤按日志列出来。</div> : summary.logs.map((log) => (
+            <div key={log.id} className="rounded-[14px] bg-panel/70 px-4 py-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className={log.level === 'success' ? 'text-emerald-300' : log.level === 'error' ? 'text-rose-300' : log.level === 'warning' ? 'text-amber-200' : 'text-slate-200'}>{log.message}</div>
+                <div className="text-xs text-textMuted">{new Date(log.createdAt).toLocaleTimeString('zh-CN', { hour12: false })}</div>
+              </div>
+              {(log.sourceTitle || log.candidate || log.targetRef || log.accountLabel) ? <div className="mt-1 text-xs text-textMuted break-all">{[log.sourceTitle, log.candidate, log.targetRef, log.accountLabel].filter(Boolean).join(' · ')}</div> : null}
+            </div>
+          ))}
+        </div>
+      </GlassPanel>
 
       <GlassPanel className="bg-card">
         <div className="flex items-center justify-between gap-3">

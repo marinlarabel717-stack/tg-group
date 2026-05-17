@@ -1,5 +1,6 @@
 import { Api } from 'telegram'
 import type { TelegramClient } from 'telegram'
+import { CustomFile } from 'telegram/client/uploads'
 import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
@@ -70,9 +71,45 @@ function createId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
 }
 
+function createSniperLogEntry(entry: Omit<OtherToolsSniperListenerLogEntry, 'id' | 'createdAt'>): OtherToolsSniperListenerLogEntry {
+  return {
+    id: createId('sniper-log'),
+    createdAt: new Date().toISOString(),
+    ...entry
+  }
+}
+
 function sleep(ms: number) {
   if (ms <= 0) return Promise.resolve()
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function slugifyFileName(input: string) {
+  const value = input.trim().replace(/[^\p{L}\p{N}._-]+/gu, '_').replace(/^_+|_+$/g, '')
+  return value || 'sniper_post'
+}
+
+function inferImageExtension(mimeType: string) {
+  if (mimeType.includes('png')) return 'png'
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg'
+  if (mimeType.includes('webp')) return 'webp'
+  if (mimeType.includes('gif')) return 'gif'
+  return 'bin'
+}
+
+function resolveMediaFile(imageData: string, title: string) {
+  const value = imageData.trim()
+  if (!value) return undefined
+  if (value.startsWith('data:')) {
+    const matched = value.match(/^data:([^;,]+)?(;base64)?,(.*)$/s)
+    if (!matched) throw new Error('图片 Data URL 格式不正确')
+    const mimeType = matched[1] || 'application/octet-stream'
+    const encoded = matched[3] || ''
+    const buffer = matched[2] ? Buffer.from(encoded, 'base64') : Buffer.from(decodeURIComponent(encoded), 'utf8')
+    const extension = inferImageExtension(mimeType)
+    return new CustomFile(`${slugifyFileName(title)}.${extension}`, buffer.length, '', buffer)
+  }
+  return value
 }
 
 function readEntityType(entity: unknown): OtherToolsUsernameFilterItem['entityType'] {
@@ -150,6 +187,8 @@ type ListenerClaimResult = {
   claimTargetRef: string
   claimMessage: string
   createdCarrier: boolean
+  postSent?: boolean
+  postFailureMessage?: string
 }
 
 interface ActiveSniperListenerTask {
@@ -728,6 +767,27 @@ async function rollbackCreatedEntity(client: TelegramClient, entity: unknown) {
   await client.invoke(new Api.channels.DeleteChannel({ channel: input as never }))
 }
 
+async function sendInitialPostToChannel(client: TelegramClient, entity: unknown, payload: OtherToolsSniperListenerPayload, title: string) {
+  if (payload.postType === 'none') return
+  const message = payload.postText.trim() || undefined
+  const file = payload.postType === 'photo' ? resolveMediaFile(payload.postImageData, title) : undefined
+  await (((client as TelegramClient) as TelegramClient & {
+    sendMessage: (peer: unknown, options: Record<string, unknown>) => Promise<unknown>
+  }).sendMessage(entity as never, {
+    message,
+    file
+  }))
+}
+
+function formatSniperPostError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/PHOTO_INVALID|MEDIA_INVALID|IMAGE_PROCESS_FAILED/i.test(message)) return '图片格式不对，Telegram 没收下。'
+  if (/MESSAGE_TOO_LONG|MEDIA_CAPTION_TOO_LONG/i.test(message)) return '文案太长了，发不出去。'
+  if (/CHAT_SEND_MEDIA_FORBIDDEN/i.test(message)) return '这个频道当前不允许发媒体。'
+  if (/CHAT_WRITE_FORBIDDEN|CHAT_ADMIN_REQUIRED/i.test(message)) return '这个频道当前没有发帖权限。'
+  return `首帖发送失败：${message}`
+}
+
 async function createCarrierAndClaim(
   client: TelegramClient,
   candidate: OtherToolsSniperCandidateItem,
@@ -766,11 +826,28 @@ async function createCarrierAndClaim(
       username
     }))
 
+    let postFailureMessage = ''
+    let postSent = false
+    if (payload.postType !== 'none') {
+      try {
+        await sendInitialPostToChannel(client, createdEntity, payload, title)
+        postSent = true
+      } catch (postError) {
+        postFailureMessage = formatSniperPostError(postError)
+      }
+    }
+
     return {
       claimTargetTitle: readTitleFromEntity(createdEntity) || title,
       claimTargetRef: `https://t.me/${username}`,
-      claimMessage: `已自动创建频道 ${title} 并绑定成 @${username}。`,
-      createdCarrier: true
+      claimMessage: payload.postType === 'none'
+        ? `已自动创建频道 ${title} 并绑定成 @${username}。`
+        : postFailureMessage
+          ? `已自动创建频道 ${title} 并绑定成 @${username}，但首帖发送失败：${postFailureMessage}`
+          : `已自动创建频道 ${title} 并绑定成 @${username}，并已发送首帖。`,
+      createdCarrier: true,
+      postSent,
+      postFailureMessage
     }
   } catch (error) {
     await rollbackCreatedEntity(client, createdEntity).catch(() => undefined)
@@ -982,11 +1059,7 @@ export class OtherToolsService {
   }
 
   private pushSniperListenerLog(task: ActiveSniperListenerTask, entry: Omit<OtherToolsSniperListenerLogEntry, 'id' | 'createdAt'>) {
-    const next: OtherToolsSniperListenerLogEntry = {
-      id: createId('sniper-listener-log'),
-      createdAt: new Date().toISOString(),
-      ...entry
-    }
+    const next = createSniperLogEntry(entry)
     task.state.logs = [next, ...task.state.logs].slice(0, 80)
     task.state.message = next.message
     this.emitSniperListenerState(task)
@@ -1103,6 +1176,12 @@ export class OtherToolsService {
     const poolRefs = splitLines(payload.poolInput)
     if (sourceRefs.length === 0) {
       throw new Error('先填白名单来源，再启动监听。')
+    }
+    if (payload.postType === 'photo' && !payload.postImageData.trim()) {
+      throw new Error('你选了图文 post，但还没上传图片。')
+    }
+    if (payload.postType !== 'none' && !payload.postText.trim() && !(payload.postType === 'photo' && payload.postImageData.trim())) {
+      throw new Error('你开了自动发帖，但文案和图片至少要填一个。')
     }
 
     const accounts = this.repository.list()
@@ -1352,7 +1431,11 @@ export class OtherToolsService {
                     this.pushSniperListenerLog(task, {
                       level: 'success',
                       message: claimed.createdCarrier
-                        ? `命中 ${item.normalized}，已自动创建频道并抢到。`
+                        ? claimed.postFailureMessage
+                          ? `命中 ${item.normalized}，已自动创建频道并抢到，但首帖发送失败。`
+                          : payload.postType !== 'none' && claimed.postSent
+                            ? `命中 ${item.normalized}，已自动创建频道、抢到并发出首帖。`
+                            : `命中 ${item.normalized}，已自动创建频道并抢到。`
                         : `命中 ${item.normalized}，已用池子载体抢到。`,
                       sourceRef: sourceEntry.ref,
                       sourceTitle: sourceEntry.title,
@@ -1361,6 +1444,18 @@ export class OtherToolsService {
                       accountId: claimByAccount?.id ?? null,
                       accountLabel: readCheckResultTitle(claimByAccount)
                     })
+                    if (claimed.createdCarrier && claimed.postFailureMessage) {
+                      this.pushSniperListenerLog(task, {
+                        level: 'warning',
+                        message: `${item.normalized} 的首帖没发出去：${claimed.postFailureMessage}`,
+                        sourceRef: sourceEntry.ref,
+                        sourceTitle: sourceEntry.title,
+                        candidate: item.normalized,
+                        targetRef: claimed.claimTargetRef,
+                        accountId: claimByAccount?.id ?? null,
+                        accountLabel: readCheckResultTitle(claimByAccount)
+                      })
+                    }
                   } catch (error) {
                     const fatal = isFatalAccountError(error)
                     if (fatal) {
@@ -1429,6 +1524,7 @@ export class OtherToolsService {
     const sourceRefs = splitLines(payload.sourceInput)
     const poolRefs = splitLines(payload.poolInput)
     if (sourceRefs.length === 0) {
+      const emptyLogs = [createSniperLogEntry({ level: 'warning', message: '还没有白名单来源，先填频道 / 群 / 机器人再巡检。' })]
       return {
         scanAccountId: null,
         scanAccountLabel: '',
@@ -1450,6 +1546,7 @@ export class OtherToolsService {
         uncertain: [],
         claimed: [],
         items: [],
+        logs: emptyLogs,
         message: '还没有白名单来源，先填频道 / 群 / 机器人再巡检。'
       }
     }
@@ -1488,10 +1585,22 @@ export class OtherToolsService {
     try {
       const items: OtherToolsSniperCandidateItem[] = []
       const subscribeItems: OtherToolsSourceSubscribeItem[] = []
+      const logs: OtherToolsSniperListenerLogEntry[] = []
+      const pushRunLog = (entry: Omit<OtherToolsSniperListenerLogEntry, 'id' | 'createdAt'>) => {
+        logs.unshift(createSniperLogEntry(entry))
+        if (logs.length > 120) logs.length = 120
+      }
       const seenCandidates = new Set<string>()
       let inspectedMessageCount = 0
       let expandedSourceCount = 0
       let chatlistJoinCount = 0
+
+      pushRunLog({
+        level: 'info',
+        message: `开始巡检：${readCheckResultTitle(scanAccount)} 正在检查 ${sourceRefs.length} 个来源。`,
+        accountId: scanAccount.id,
+        accountLabel: readCheckResultTitle(scanAccount)
+      })
 
       if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
         for (const account of subscribeAccounts) {
@@ -1502,7 +1611,22 @@ export class OtherToolsService {
             }
             const accountItems = await subscribeSourcesForAccount(client, account, sourceRefs)
             subscribeItems.push(...accountItems)
+            const joinedCount = accountItems.filter((item) => item.status === 'joined').length
+            const alreadyCount = accountItems.filter((item) => item.status === 'already').length
+            const failedCount = accountItems.filter((item) => item.status === 'failed').length
+            pushRunLog({
+              level: failedCount > 0 ? 'warning' : 'success',
+              message: `${readCheckResultTitle(account)} 来源订阅完成：成功 ${joinedCount}，已在内 ${alreadyCount}，失败 ${failedCount}。`,
+              accountId: account.id,
+              accountLabel: readCheckResultTitle(account)
+            })
           } catch (error) {
+            pushRunLog({
+              level: 'error',
+              message: `${readCheckResultTitle(account)} 来源订阅失败：${formatSourceSubscribeError(error)}`,
+              accountId: account.id,
+              accountLabel: readCheckResultTitle(account)
+            })
             subscribeItems.push({
               id: createId('subscribe-item'),
               accountId: account.id,
@@ -1524,8 +1648,20 @@ export class OtherToolsService {
         expandedSourceEntries = expanded.sources
         expandedSourceCount = expanded.sources.length
         chatlistJoinCount = expanded.chatlistJoinCount
+        pushRunLog({
+          level: 'success',
+          message: `来源展开完成：${sourceRefs.length} 个入口共得到 ${expandedSourceEntries.length} 个实际来源。${chatlistJoinCount > 0 ? ` 其中 addlist 导入 ${chatlistJoinCount} 个。` : ''}`,
+          accountId: scanAccount.id,
+          accountLabel: readCheckResultTitle(scanAccount)
+        })
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
+        pushRunLog({
+          level: 'error',
+          message: `分组链接展开失败：${message}`,
+          accountId: scanAccount.id,
+          accountLabel: readCheckResultTitle(scanAccount)
+        })
         items.push({
           id: createId('sniper-item'),
           raw: 'addlist',
@@ -1585,6 +1721,14 @@ export class OtherToolsService {
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
+          pushRunLog({
+            level: 'error',
+            message: `读取来源 ${sourceEntry.title || sourceEntry.ref} 失败：${message}`,
+            sourceRef: sourceEntry.ref,
+            sourceTitle: sourceEntry.title || sourceEntry.ref,
+            accountId: scanAccount.id,
+            accountLabel: readCheckResultTitle(scanAccount)
+          })
           items.push({
             id: createId('sniper-item'),
             raw: sourceEntry.ref,
@@ -1613,11 +1757,24 @@ export class OtherToolsService {
       let carriers: PoolCarrier[] = []
       if (payload.autoClaim && claimClient) {
         carriers = await readPoolCarriers(claimClient, poolRefs)
+        pushRunLog({
+          level: 'info',
+          message: `本轮可用抢注池子 ${carriers.length} 个。`,
+          accountId: claimAccount?.id ?? null,
+          accountLabel: readCheckResultTitle(claimAccount)
+        })
         let carrierIndex = 0
         for (const item of claimableItems) {
           if (carrierIndex >= carriers.length) {
             item.claimStatus = 'skipped'
             item.claimMessage = '当前池子载体已经用完了，剩余可抢名先保留在结果里。'
+            pushRunLog({
+              level: 'warning',
+              message: `${item.normalized} 可抢，但池子已经用完，先跳过。`,
+              sourceRef: item.sourceRef,
+              sourceTitle: item.sourceTitle,
+              candidate: item.normalized
+            })
             continue
           }
 
@@ -1631,6 +1788,16 @@ export class OtherToolsService {
             item.claimAccountId = claimAccount?.id ?? null
             item.claimAccountLabel = readCheckResultTitle(claimAccount)
             carrierIndex += 1
+            pushRunLog({
+              level: 'success',
+              message: `${item.normalized} 已抢到：${claimed.claimTargetRef}`,
+              sourceRef: item.sourceRef,
+              sourceTitle: item.sourceTitle,
+              candidate: item.normalized,
+              targetRef: claimed.claimTargetRef,
+              accountId: claimAccount?.id ?? null,
+              accountLabel: readCheckResultTitle(claimAccount)
+            })
           } catch (error) {
             const fatal = isFatalAccountError(error)
             if (fatal && claimAccount) {
@@ -1640,6 +1807,15 @@ export class OtherToolsService {
             item.claimMessage = fatal ? `抢注账号已自动停用：${fatal.message}` : formatSniperClaimError(error)
             item.claimAccountId = claimAccount?.id ?? null
             item.claimAccountLabel = readCheckResultTitle(claimAccount)
+            pushRunLog({
+              level: 'error',
+              message: `${item.normalized} 抢注失败：${item.claimMessage}`,
+              sourceRef: item.sourceRef,
+              sourceTitle: item.sourceTitle,
+              candidate: item.normalized,
+              accountId: claimAccount?.id ?? null,
+              accountLabel: readCheckResultTitle(claimAccount)
+            })
             if (fatal) {
               for (const rest of claimableItems.slice(claimableItems.indexOf(item) + 1)) {
                 if (!rest.claimStatus) {
@@ -1679,6 +1855,13 @@ export class OtherToolsService {
         summaryParts.push(`已抢到 ${claimed.length} 条`)
       }
 
+      pushRunLog({
+        level: 'success',
+        message: `${summaryParts.join('，')}。`,
+        accountId: scanAccount.id,
+        accountLabel: readCheckResultTitle(scanAccount)
+      })
+
       return {
         scanAccountId: scanAccount.id,
         scanAccountLabel: readCheckResultTitle(scanAccount),
@@ -1700,6 +1883,7 @@ export class OtherToolsService {
         uncertain,
         claimed,
         items,
+        logs,
         message: `${summaryParts.join('，')}。`
       }
     } finally {
