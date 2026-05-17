@@ -524,7 +524,7 @@ function SniperWorkbench() {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <GlassPanel className="bg-card">
           <FoldSection title="傻瓜式设置" hint="就按下面 4 步填，别的默认不用管。">
             <ConfigRow label="最简单用法" wide>
@@ -642,50 +642,50 @@ function SniperWorkbench() {
         <div className="space-y-5">
           <GlassPanel className="bg-card">
             <FoldSection title="执行" hint="先做一键巡检版，把闭环跑通。">
-              <ConfigRow label="开始执行" wide>
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void handleRun()}
-                      disabled={running || sourcePreviewCount === 0}
-                      className="inline-flex items-center gap-2 rounded-[12px] border border-white/[0.08] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {running ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
-                      {running ? '巡检中…' : '开始巡检'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleStartListener()}
-                      disabled={listening || sourcePreviewCount === 0}
-                      className="inline-flex items-center gap-2 rounded-[12px] border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {listening ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
-                      {listening ? '监听运行中' : '启动实时监听'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleStopListener()}
-                      disabled={!listening}
-                      className="inline-flex items-center gap-2 rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      停止监听
-                    </button>
-                  </div>
-                  <div className="text-xs text-textMuted">手动巡检适合立刻扫一轮；实时监听会常驻轮询新帖，命中可抢名时优先用池子，不够就自动建频道秒占。</div>
-                  {errorMessage ? <div className="rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{errorMessage}</div> : null}
-                  {listenerErrorMessage ? <div className="rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{listenerErrorMessage}</div> : null}
-                  {summary?.message ? <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.12] px-3 py-2 text-xs text-textMuted">{summary.message}</div> : null}
-                  {listenerState?.message ? <div className="rounded-[12px] border border-emerald-400/10 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-100">{listenerState.message}</div> : null}
+              <div className="space-y-3 px-3 py-3 text-sm">
+                <div className="text-sm text-white">开始执行</div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleRun()}
+                    disabled={running || sourcePreviewCount === 0}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-[12px] border border-white/[0.08] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {running ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
+                    {running ? '巡检中…' : '开始巡检'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleStartListener()}
+                    disabled={listening || sourcePreviewCount === 0}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-[12px] border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {listening ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
+                    {listening ? '监听运行中' : '启动实时监听'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleStopListener()}
+                    disabled={!listening}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+                  >
+                    停止监听
+                  </button>
                 </div>
-              </ConfigRow>
+                <div className="text-xs text-textMuted">手动巡检适合立刻扫一轮；实时监听会常驻轮询新帖，命中可抢名时优先用池子，不够就自动建频道秒占。</div>
+                {errorMessage ? <div className="rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{errorMessage}</div> : null}
+                {listenerErrorMessage ? <div className="rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{listenerErrorMessage}</div> : null}
+                {summary?.message ? <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.12] px-3 py-2 text-xs text-textMuted">{summary.message}</div> : null}
+                {listenerState?.message ? <div className="rounded-[12px] border border-emerald-400/10 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-100">{listenerState.message}</div> : null}
+              </div>
             </FoldSection>
           </GlassPanel>
 
           <GlassPanel className="bg-card">
             <FoldSection title="统计" hint="本轮巡检与抢注汇总。">
-              <ConfigRow label="数量统计" wide>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="space-y-3 px-3 py-3 text-sm">
+                <div className="text-sm text-white">数量统计</div>
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
                     <div className="text-xs tracking-[0.16em] text-slate-200/80">来源 / 池子</div>
                     <div className="mt-2 text-2xl font-semibold text-white">{summary?.sourceCount ?? 0} / {summary?.poolCount ?? 0}</div>
@@ -715,7 +715,7 @@ function SniperWorkbench() {
                     <div className="mt-2 text-2xl font-semibold text-violet-300">{listenerState?.createdCarrierCount ?? 0}</div>
                   </div>
                 </div>
-              </ConfigRow>
+              </div>
             </FoldSection>
           </GlassPanel>
 
