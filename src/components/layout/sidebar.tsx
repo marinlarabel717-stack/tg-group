@@ -124,7 +124,7 @@ export const Sidebar = memo(function Sidebar() {
       </div>
 
       <div className={`min-h-0 flex-1 ${sidebarCollapsed ? 'mt-2' : 'mt-3'}`}>
-        <div className="h-full space-y-2 overflow-y-auto pr-1">
+        <div className="sidebar-scrollbar h-full space-y-2 overflow-y-auto pr-1">
           {items.map((item) => (
             <SidebarNavItem key={item.key} moduleKey={item.key} label={item.label} icon={item.icon} collapsed={sidebarCollapsed} />
           ))}
