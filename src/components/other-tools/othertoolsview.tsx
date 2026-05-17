@@ -526,33 +526,29 @@ function SniperWorkbench() {
     <div className="space-y-5">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <GlassPanel className="bg-card">
-          <FoldSection title="抢注配置" hint="第一版先做白名单来源巡检 + 可抢名自动占位，不做常驻后台监听。">
-            <ConfigRow label="白名单来源" hint="一行一个，支持频道 / 群 / 机器人用户名、普通 t.me 链接，以及分组分享链接 t.me/addlist/...。" wide>
-              <div className="space-y-2">
-                <textarea value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} rows={8} placeholder="如：@nav_bot / https://t.me/xxxx_channel / https://t.me/addlist/xxxxxx / @supply_group" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
-                <div className="text-xs text-textMuted">当前 {sourcePreviewCount} 个来源。混着填 addlist 分组链接和频道链接也行，系统会先自动识别分组链接并把里面的频道/群导进监听来源。</div>
+          <FoldSection title="傻瓜式设置" hint="就按下面 4 步填，别的默认不用管。">
+            <ConfigRow label="最简单用法" wide>
+              <div className="space-y-2 text-sm text-textMuted">
+                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">1.</span> 把你要盯的频道 / 群 / addlist 链接贴进去。</div>
+                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">2.</span> 选一批账号先去加入这些来源。</div>
+                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">3.</span> 选一个负责盯新帖的账号，再选一个负责抢名字的账号。</div>
+                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">4.</span> 点 <span className="text-emerald-200">启动实时监听</span>，命中可抢名就自动抢；池子不够时会自动新建频道占位。</div>
               </div>
             </ConfigRow>
-            <ConfigRow label="池子载体" hint="一行一个，填你自己能改用户名的公开群 / 频道。抢到后会直接改它们的公开用户名。" wide>
+            <ConfigRow label="监听哪些来源" hint="一行一个。支持频道、群、机器人链接，也支持 t.me/addlist/...。" wide>
               <div className="space-y-2">
-                <textarea value={poolInput} onChange={(event) => setPoolInput(event.target.value)} rows={6} placeholder="如：@pool_holder_1 / https://t.me/pool_holder_2" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
-                <div className="text-xs text-textMuted">当前 {poolPreviewCount} 个池子载体。建议只放真正的空壳频道/群，避免误改正式业务号。</div>
+                <textarea value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} rows={8} placeholder="例如：@channel_name\nhttps://t.me/xxxx_channel\nhttps://t.me/addlist/xxxxxx" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+                <div className="text-xs text-textMuted">当前 {sourcePreviewCount} 个来源。</div>
               </div>
             </ConfigRow>
-            <ConfigRow label="包含关键词" hint="可留空；填了后只巡检包含这些词的消息。" wide>
-              <input value={includeKeywords} onChange={(event) => setIncludeKeywords(event.target.value)} placeholder="品牌词 行业词 区域词" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-            </ConfigRow>
-            <ConfigRow label="排除关键词" hint="命中这些词的消息会直接跳过。" wide>
-              <input value={excludeKeywords} onChange={(event) => setExcludeKeywords(event.target.value)} placeholder="广告 无码 回收" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-            </ConfigRow>
-            <ConfigRow label="订阅账号" hint="这些账号会对白名单里的普通频道链接和 addlist 分组链接一起去加入/订阅。" wide>
+            <ConfigRow label="先去加入来源的账号" hint="这些账号会先把来源加进去，后面监听更稳。" wide>
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="text-sm text-white">已选 {subscribeSelectedAccounts.length} 个账号</div>
                   <button type="button" onClick={() => setPickerOpen(true)} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">选择账号</button>
                 </div>
                 {subscribeSelectedAccounts.length === 0 ? (
-                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-sm text-textMuted">还没选订阅账号。</div>
+                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-sm text-textMuted">还没选账号。</div>
                 ) : (
                   <div className="space-y-2 rounded-[12px] border border-white/[0.06] bg-black/[0.08] p-3">
                     {subscribeSelectedAccounts.slice(0, 6).map((account) => {
@@ -572,55 +568,72 @@ function SniperWorkbench() {
                 )}
               </div>
             </ConfigRow>
-            <ConfigRow label="自动订阅来源" hint="开启后，选中的账号会先去加入普通频道链接和 addlist 分组里的目标。" wide>
-              <label className="inline-flex items-center gap-3 text-sm text-white">
-                <input type="checkbox" checked={autoSubscribeSources} onChange={(event) => setAutoSubscribeSources(event.target.checked)} />
-                白名单来源先批量订阅，再继续巡检
-              </label>
-            </ConfigRow>
-            <ConfigRow label="监听账号" hint="不选就自动拿第一个可用账号。" wide>
+            <ConfigRow label="谁来盯新帖" hint="不懂就留空，系统自动挑一个能用的。" wide>
               <select value={scanAccountId} onChange={(event) => setScanAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
                 <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
                 {accounts.map((account) => <option key={`scan_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}
               </select>
             </ConfigRow>
-            <ConfigRow label="抢注账号" hint="不选默认跟监听账号共用；建议后面单独拆抢注号。" wide>
+            <ConfigRow label="谁来抢名字" hint="命中可抢名后，用这个账号去占。" wide>
               <select value={claimAccountId} onChange={(event) => setClaimAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
                 <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
                 {accounts.map((account) => <option key={`claim_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}
               </select>
             </ConfigRow>
-            <ConfigRow label="每源读取条数" hint="每个来源抓最近多少条消息。">
-              <input type="number" min={1} max={100} value={sourceMessageLimit} onChange={(event) => setSourceMessageLimit(Math.max(1, Math.min(100, Number(event.target.value) || 20)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            <ConfigRow label="备用空频道（可选）" hint="有的话就填进去；不填也行，系统会自动新建频道去占。" wide>
+              <div className="space-y-2">
+                <textarea value={poolInput} onChange={(event) => setPoolInput(event.target.value)} rows={4} placeholder="例如：@empty_pool_1\nhttps://t.me/empty_pool_2" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+                <div className="text-xs text-textMuted">当前 {poolPreviewCount} 个备用池子。</div>
+              </div>
             </ConfigRow>
-            <ConfigRow label="候选上限" hint="本轮最多处理多少个候选名。">
-              <input type="number" min={1} max={500} value={candidateLimit} onChange={(event) => setCandidateLimit(Math.max(1, Math.min(500, Number(event.target.value) || 80)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-            </ConfigRow>
-            <ConfigRow label="自动抢注" hint="关闭后只巡检和判定，不会改池子载体的用户名。" wide>
+            <ConfigRow label="发现可抢名就自动处理" hint="建议保持开启。" wide>
               <label className="inline-flex items-center gap-3 text-sm text-white">
                 <input type="checkbox" checked={autoClaim} onChange={(event) => setAutoClaim(event.target.checked)} />
-                命中可抢名后，立即用池子载体占位
+                自动抢注
               </label>
             </ConfigRow>
-            <ConfigRow label="监听间隔" hint="常驻监听时，每隔多久轮询一次新帖。">
-              <input type="number" min={5} max={300} value={listenerPollSeconds} onChange={(event) => setListenerPollSeconds(Math.max(5, Math.min(300, Number(event.target.value) || 15)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
-            </ConfigRow>
-            <ConfigRow label="自动建频道占位" hint="池子不够时，直接用指定账号新建频道并立刻绑定用户名。" wide>
+            <ConfigRow label="池子不够就自动新建频道" hint="建议保持开启。" wide>
               <label className="inline-flex items-center gap-3 text-sm text-white">
                 <input type="checkbox" checked={autoCreateCarrier} onChange={(event) => setAutoCreateCarrier(event.target.checked)} />
-                没有可用池子时自动创建频道秒占
+                自动新建频道占位
               </label>
             </ConfigRow>
-            <ConfigRow label="建池账号" hint="自动建频道时优先用这个账号；不选就自动回退到抢注账号/监听账号。" wide>
+          </FoldSection>
+
+          <div className="mt-4" />
+
+          <FoldSection title="高级设置" hint="看不懂就别动，默认值已经能跑。" defaultOpen={false}>
+            <ConfigRow label="先帮账号加入来源" hint="建议保持开启。" wide>
+              <label className="inline-flex items-center gap-3 text-sm text-white">
+                <input type="checkbox" checked={autoSubscribeSources} onChange={(event) => setAutoSubscribeSources(event.target.checked)} />
+                启动前先批量加入来源
+              </label>
+            </ConfigRow>
+            <ConfigRow label="只盯这些关键词（可空）" hint="留空就是全部都看。" wide>
+              <input value={includeKeywords} onChange={(event) => setIncludeKeywords(event.target.value)} placeholder="例如：品牌词 产品词" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            </ConfigRow>
+            <ConfigRow label="跳过这些关键词（可空）" hint="命中这些词就不处理。" wide>
+              <input value={excludeKeywords} onChange={(event) => setExcludeKeywords(event.target.value)} placeholder="例如：广告 回收" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            </ConfigRow>
+            <ConfigRow label="监听间隔（秒）" hint="多久检查一次新帖。">
+              <input type="number" min={5} max={300} value={listenerPollSeconds} onChange={(event) => setListenerPollSeconds(Math.max(5, Math.min(300, Number(event.target.value) || 15)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            </ConfigRow>
+            <ConfigRow label="每次读取多少条" hint="每个来源每轮看最近多少条消息。">
+              <input type="number" min={1} max={100} value={sourceMessageLimit} onChange={(event) => setSourceMessageLimit(Math.max(1, Math.min(100, Number(event.target.value) || 20)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            </ConfigRow>
+            <ConfigRow label="单轮最多处理多少个名字" hint="防止一次扫太多。">
+              <input type="number" min={1} max={500} value={candidateLimit} onChange={(event) => setCandidateLimit(Math.max(1, Math.min(500, Number(event.target.value) || 80)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            </ConfigRow>
+            <ConfigRow label="自动建频道用哪个账号" hint="不选就自动回退到抢注账号 / 监听账号。" wide>
               <select value={createCarrierAccountId} onChange={(event) => setCreateCarrierAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
                 <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
                 {accounts.map((account) => <option key={`create_carrier_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}
               </select>
             </ConfigRow>
-            <ConfigRow label="新频道名称" hint="自动建频道时用这个标题；支持 {candidate} / {accountId} / {index}。" wide>
+            <ConfigRow label="自动新建频道名称" hint="支持 {candidate} / {accountId} / {index}。" wide>
               <input value={createCarrierTitleTemplate} onChange={(event) => setCreateCarrierTitleTemplate(event.target.value)} placeholder="监听占位_{candidate}" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
-            <ConfigRow label="新频道简介" hint="自动建频道时写入的简介；支持 {candidate} / {accountId} / {index}。" wide>
+            <ConfigRow label="自动新建频道简介" hint="支持 {candidate} / {accountId} / {index}。" wide>
               <textarea value={createCarrierAboutTemplate} onChange={(event) => setCreateCarrierAboutTemplate(event.target.value)} rows={3} className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
           </FoldSection>
