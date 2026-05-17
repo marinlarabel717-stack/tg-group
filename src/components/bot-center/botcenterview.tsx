@@ -16,6 +16,7 @@ import {
   Wand2
 } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
+import { ConfigRow, FoldSection } from '../common/settings-ui'
 import { useBotCenterStore } from '../../stores/botcenterstore'
 import { formatDateTimeFull } from '../../lib/ui-text'
 import type {
@@ -615,47 +616,44 @@ export default memo(function BotCenterView() {
           {!loading && activePage === 'basic' ? (
             <div className="grid gap-5 xl:grid-cols-[1fr_0.8fr]">
               <div className={`${SOFT_CARD_CLASS} p-5`}>
-                <div className="text-sm font-semibold text-white">基础配置</div>
-                <div className="mt-2 text-sm leading-6 text-textMuted">这一页只保留最核心的身份配置，不再和关键词、日志混在一起。</div>
-
-                <div className="mt-4 grid gap-4">
-                  <label className="flex flex-col gap-2 text-sm text-textMuted">
-                    <span>机器人名称</span>
+                <FoldSection title="基础配置" hint="身份信息、Token 和读取动作统一收在这里。">
+                  <ConfigRow label="机器人名称">
                     <input value={name} onChange={(event) => setName(event.target.value)} placeholder="比如：客服机器人 1" className={SOFT_INPUT_CLASS} />
-                  </label>
-
-                  <label className="flex flex-col gap-2 text-sm text-textMuted">
-                    <span>Bot Token</span>
-                    <textarea value={botToken} onChange={(event) => setBotToken(event.target.value)} rows={4} placeholder="把 BotFather 给你的 Token 粘贴到这里" className={SOFT_TEXTAREA_CLASS} />
-                  </label>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={openBotFather} className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08]">
-                      <Bot size={15} />打开 BotFather
-                    </button>
-                    <button type="button" onClick={() => void refreshProfile(activeBot.id)} disabled={saving || !botToken.trim()} className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-violet-400/10 px-4 text-sm text-violet-200 transition hover:bg-violet-400/16 disabled:cursor-not-allowed disabled:opacity-60">
-                      <RefreshCw size={15} />读取机器人信息
-                    </button>
-                  </div>
-                </div>
+                  </ConfigRow>
+                  <ConfigRow label="Bot Token" wide>
+                    <textarea value={botToken} onChange={(event) => setBotToken(event.target.value)} rows={4} placeholder="把 BotFather 给你的 Token 粘贴到这里" className={`w-full ${SOFT_TEXTAREA_CLASS}`} />
+                  </ConfigRow>
+                  <ConfigRow label="快捷操作" wide>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={openBotFather} className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08]">
+                        <Bot size={15} />打开 BotFather
+                      </button>
+                      <button type="button" onClick={() => void refreshProfile(activeBot.id)} disabled={saving || !botToken.trim()} className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-violet-400/10 px-4 text-sm text-violet-200 transition hover:bg-violet-400/16 disabled:cursor-not-allowed disabled:opacity-60">
+                        <RefreshCw size={15} />读取机器人信息
+                      </button>
+                    </div>
+                  </ConfigRow>
+                </FoldSection>
               </div>
 
               <div className="space-y-5">
                 <div className={`${SOFT_CARD_CLASS} p-5`}>
-                  <div className="text-sm font-semibold text-white">启动行为</div>
-                  <div className="mt-4 space-y-3">
-                    <ToggleRow label="开机后自动启动" hint="保存后，下次进入软件会自动拉起这个机器人。" checked={autoStart} onChange={setAutoStart} />
-                  </div>
+                  <FoldSection title="启动行为" hint="控制这个机器人怎么随软件一起启动。">
+                    <div className="p-3">
+                      <ToggleRow label="开机后自动启动" hint="保存后，下次进入软件会自动拉起这个机器人。" checked={autoStart} onChange={setAutoStart} />
+                    </div>
+                  </FoldSection>
                 </div>
 
                 <div className={`${SOFT_CARD_CLASS} p-5`}>
-                  <div className="text-sm font-semibold text-white">当前识别结果</div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <StatCard label="验证状态" value={activeBot.profile.valid ? '已连通' : '未验证'} tone={activeBot.profile.valid ? 'success' : 'danger'} />
-                    <StatCard label="用户名" value={activeBot.profile.username ? `@${activeBot.profile.username}` : '-'} />
-                    <StatCard label="显示名称" value={activeBot.profile.firstName || '-'} />
-                    <StatCard label="上次读取" value={formatDateTimeFull(activeBot.profile.fetchedAt)} />
-                  </div>
+                  <FoldSection title="当前识别结果" hint="连通状态和识别结果分开展示，更直观点。" defaultOpen={false}>
+                    <div className="grid gap-3 p-3 sm:grid-cols-2">
+                      <StatCard label="验证状态" value={activeBot.profile.valid ? '已连通' : '未验证'} tone={activeBot.profile.valid ? 'success' : 'danger'} />
+                      <StatCard label="用户名" value={activeBot.profile.username ? `@${activeBot.profile.username}` : '-'} />
+                      <StatCard label="显示名称" value={activeBot.profile.firstName || '-'} />
+                      <StatCard label="上次读取" value={formatDateTimeFull(activeBot.profile.fetchedAt)} />
+                    </div>
+                  </FoldSection>
                 </div>
               </div>
             </div>
@@ -664,47 +662,50 @@ export default memo(function BotCenterView() {
           {!loading && activePage === 'guest' ? (
             <div className="grid gap-5 xl:grid-cols-[1fr_0.92fr]">
               <div className={`${SOFT_CARD_CLASS} p-5`}>
-                <div className="text-sm font-semibold text-white">默认回复</div>
-                <div className="mt-2 text-sm leading-6 text-textMuted">陌生人发消息但没命中关键词时，就用这一套回复。先把基础默认话术收好，再去配更细的关键词规则。</div>
-
-                <div className="mt-4 space-y-4">
-                  <ToggleRow label="开启游客自动回复" hint="关闭后，机器人只会接收消息，不主动回复陌生人。" checked={guestReplyEnabled} onChange={setGuestReplyEnabled} />
-
-                  <label className="flex flex-col gap-2 text-sm text-textMuted">
-                    <span>回复标题</span>
-                    <input value={guestReplyTitle} onChange={(event) => setGuestReplyTitle(event.target.value)} placeholder="TG-Matrix" className={SOFT_INPUT_CLASS} />
-                  </label>
-
-                  <div>
-                    <div className="mb-2 text-sm text-textMuted">回复类型</div>
-                    <ReplyTypeTabs value={guestReplyType} onChange={setGuestReplyType} />
+                <FoldSection title="默认回复配置" hint="开关、标题、类型、图片和文案都统一收进一个折叠组。">
+                  <div className="space-y-2">
+                    <div className="p-3">
+                      <ToggleRow label="开启游客自动回复" hint="关闭后，机器人只会接收消息，不主动回复陌生人。" checked={guestReplyEnabled} onChange={setGuestReplyEnabled} />
+                    </div>
+                    <ConfigRow label="回复标题">
+                      <input value={guestReplyTitle} onChange={(event) => setGuestReplyTitle(event.target.value)} placeholder="TG-Matrix" className={SOFT_INPUT_CLASS} />
+                    </ConfigRow>
+                    <ConfigRow label="回复类型" wide>
+                      <ReplyTypeTabs value={guestReplyType} onChange={setGuestReplyType} />
+                    </ConfigRow>
+                    {guestReplyType === 'photo' ? (
+                      <ConfigRow label="回复图片" wide>
+                        <ImageUploadField
+                          label="上传图片"
+                          value={guestReplyImageUrl}
+                          onChange={setGuestReplyImageUrl}
+                          onClear={() => setGuestReplyImageUrl('')}
+                          hint="这里改成直接上传本地图片，不用再填 URL。保存后会跟默认回复一起走。"
+                        />
+                      </ConfigRow>
+                    ) : null}
+                    <ConfigRow label={guestReplyType === 'photo' ? '图片说明 / 文案' : '回复内容'} wide>
+                      <textarea value={guestReplyText} onChange={(event) => setGuestReplyText(event.target.value)} rows={8} className={`w-full ${SOFT_TEXTAREA_CLASS}`} />
+                    </ConfigRow>
                   </div>
-
-                  {guestReplyType === 'photo' ? (
-                    <ImageUploadField
-                      label="上传图片"
-                      value={guestReplyImageUrl}
-                      onChange={setGuestReplyImageUrl}
-                      onClear={() => setGuestReplyImageUrl('')}
-                      hint="这里改成直接上传本地图片，不用再填 URL。保存后会跟默认回复一起走。"
-                    />
-                  ) : null}
-
-                  <label className="flex flex-col gap-2 text-sm text-textMuted">
-                    <span>{guestReplyType === 'photo' ? '图片说明 / 文案' : '回复内容'}</span>
-                    <textarea value={guestReplyText} onChange={(event) => setGuestReplyText(event.target.value)} rows={8} className={SOFT_TEXTAREA_CLASS} />
-                  </label>
-                </div>
+                </FoldSection>
               </div>
 
               <div className="space-y-5">
-                <ButtonsEditor title="默认回复按钮" buttons={guestReplyButtons} onChange={setGuestReplyButtons} />
                 <div className={`${SOFT_CARD_CLASS} p-5`}>
-                  <div className="text-sm font-semibold text-white">写法提醒</div>
-                  <div className="mt-3 space-y-3 text-sm leading-6 text-textMuted">
-                    <div className="rounded-[14px] bg-black/10 px-4 py-3">支持在文案里使用 <span className="text-white">{'{text}'}</span>，自动带上用户刚发来的原消息。</div>
-                    <div className="rounded-[14px] bg-black/10 px-4 py-3">如果你只需要一个统一接待口径，默认回复就够了，不一定要一开始就堆很多关键词。</div>
-                  </div>
+                  <FoldSection title="默认回复按钮" hint="按钮编辑也统一进折叠风格。">
+                    <div className="p-3">
+                      <ButtonsEditor title="默认回复按钮" buttons={guestReplyButtons} onChange={setGuestReplyButtons} />
+                    </div>
+                  </FoldSection>
+                </div>
+                <div className={`${SOFT_CARD_CLASS} p-5`}>
+                  <FoldSection title="写法提醒" hint="把接待口径和变量说明也统一收口。" defaultOpen={false}>
+                    <div className="space-y-3 p-3 text-sm leading-6 text-textMuted">
+                      <div className="rounded-[14px] bg-black/10 px-4 py-3">支持在文案里使用 <span className="text-white">{'{text}'}</span>，自动带上用户刚发来的原消息。</div>
+                      <div className="rounded-[14px] bg-black/10 px-4 py-3">如果你只需要一个统一接待口径，默认回复就够了，不一定要一开始就堆很多关键词。</div>
+                    </div>
+                  </FoldSection>
                 </div>
               </div>
             </div>
@@ -713,83 +714,67 @@ export default memo(function BotCenterView() {
           {!loading && activePage === 'keywords' ? (
             <div className="grid gap-5 xl:grid-cols-[0.78fr_1.22fr]">
               <div className={`${SOFT_CARD_CLASS} p-5`}>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-white">关键词列表</div>
-                    <div className="mt-2 text-sm leading-6 text-textMuted">左边只看规则清单，右边只改当前选中的那一条，避免一屏滚半天。</div>
-                  </div>
-                  <button type="button" onClick={addRule} className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-violet-400/10 px-4 text-sm text-violet-200 transition hover:bg-violet-400/16">
-                    <Plus size={16} />新增关键词
-                  </button>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {keywordRules.length === 0 ? (
-                    <div className="rounded-[14px] bg-black/10 px-4 py-8 text-center text-sm text-textMuted">还没有关键词规则。先点右上角新增一个就行。</div>
-                  ) : keywordRules.map((rule, index) => {
-                    const active = selectedRule?.id === rule.id
-                    return (
-                      <button
-                        key={rule.id}
-                        type="button"
-                        onClick={() => setSelectedRuleId(rule.id)}
-                        className={`w-full rounded-[14px] border px-4 py-4 text-left transition ${active ? 'border-white/[0.12] bg-violet-400/10' : 'border-white/[0.04] bg-black/10 hover:border-white/[0.08] hover:bg-black/20'}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm text-white">{rule.keyword.trim() || `未命名规则 #${index + 1}`}</div>
-                            <div className="mt-1 text-xs text-textMuted">{rule.matchType === 'contains' ? '包含匹配' : '完全匹配'} · {rule.replyType === 'photo' ? '图片回复' : '文字回复'}</div>
+                <FoldSection title="关键词列表" hint="左边只看规则清单，右边只改当前选中项。">
+                  <ConfigRow label="列表操作" wide>
+                    <button type="button" onClick={addRule} className="inline-flex h-10 items-center gap-2 rounded-[12px] bg-violet-400/10 px-4 text-sm text-violet-200 transition hover:bg-violet-400/16">
+                      <Plus size={16} />新增关键词
+                    </button>
+                  </ConfigRow>
+                  <div className="space-y-3 p-3">
+                    {keywordRules.length === 0 ? (
+                      <div className="rounded-[14px] bg-black/10 px-4 py-8 text-center text-sm text-textMuted">还没有关键词规则。先点上面新增一个就行。</div>
+                    ) : keywordRules.map((rule, index) => {
+                      const active = selectedRule?.id === rule.id
+                      return (
+                        <button
+                          key={rule.id}
+                          type="button"
+                          onClick={() => setSelectedRuleId(rule.id)}
+                          className={`w-full rounded-[14px] border px-4 py-4 text-left transition ${active ? 'border-white/[0.12] bg-violet-400/10' : 'border-white/[0.04] bg-black/10 hover:border-white/[0.08] hover:bg-black/20'}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm text-white">{rule.keyword.trim() || `未命名规则 #${index + 1}`}</div>
+                              <div className="mt-1 text-xs text-textMuted">{rule.matchType === 'contains' ? '包含匹配' : '完全匹配'} · {rule.replyType === 'photo' ? '图片回复' : '文字回复'}</div>
+                            </div>
+                            <StatusPill active={rule.enabled && rule.replyEnabled} text={rule.enabled && rule.replyEnabled ? '启用中' : '已停用'} />
                           </div>
-                          <StatusPill active={rule.enabled && rule.replyEnabled} text={rule.enabled && rule.replyEnabled ? '启用中' : '已停用'} />
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </FoldSection>
               </div>
 
               <div className={`${SOFT_CARD_CLASS} p-5`}>
                 {selectedRule ? (
                   <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-white">编辑当前关键词</div>
-                        <div className="mt-1 text-xs text-textMuted">优先级按左侧列表顺序决定，越靠上越先生效。</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => moveRule(selectedRule.id, -1)} disabled={keywordRules.findIndex((item) => item.id === selectedRule.id) === 0} className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] bg-white/[0.05] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35"><ArrowUp size={15} /></button>
-                        <button type="button" onClick={() => moveRule(selectedRule.id, 1)} disabled={keywordRules.findIndex((item) => item.id === selectedRule.id) === keywordRules.length - 1} className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] bg-white/[0.05] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35"><ArrowDown size={15} /></button>
-                        <button type="button" onClick={() => removeRule(selectedRule.id)} className="inline-flex h-9 items-center gap-1 rounded-[10px] bg-rose-500/12 px-3 text-xs text-rose-200 transition hover:bg-rose-500/18"><Trash2 size={14} />删除</button>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="flex flex-col gap-2 text-sm text-textMuted">
-                        <span>关键词</span>
+                    <FoldSection title="当前关键词配置" hint="关键词、优先级、匹配方式、回复内容统一折叠。">
+                      <ConfigRow label="规则操作" wide>
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={() => moveRule(selectedRule.id, -1)} disabled={keywordRules.findIndex((item) => item.id === selectedRule.id) === 0} className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] bg-white/[0.05] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35"><ArrowUp size={15} /></button>
+                          <button type="button" onClick={() => moveRule(selectedRule.id, 1)} disabled={keywordRules.findIndex((item) => item.id === selectedRule.id) === keywordRules.length - 1} className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] bg-white/[0.05] text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35"><ArrowDown size={15} /></button>
+                          <button type="button" onClick={() => removeRule(selectedRule.id)} className="inline-flex h-9 items-center gap-1 rounded-[10px] bg-rose-500/12 px-3 text-xs text-rose-200 transition hover:bg-rose-500/18"><Trash2 size={14} />删除</button>
+                        </div>
+                      </ConfigRow>
+                      <ConfigRow label="关键词">
                         <input value={selectedRule.keyword} onChange={(event) => updateRule(selectedRule.id, { keyword: event.target.value })} placeholder="比如：价格" className={SOFT_INPUT_CLASS} />
-                      </label>
-                      <label className="flex flex-col gap-2 text-sm text-textMuted">
-                        <span>回复标题</span>
+                      </ConfigRow>
+                      <ConfigRow label="回复标题">
                         <input value={selectedRule.title} onChange={(event) => updateRule(selectedRule.id, { title: event.target.value })} placeholder="TG-Matrix" className={SOFT_INPUT_CLASS} />
-                      </label>
-                    </div>
-
-                    <div className="grid gap-4 xl:grid-cols-[0.82fr_1fr]">
-                      <div className="space-y-4 rounded-[14px] bg-black/10 p-4">
-                        <div>
-                          <div className="mb-2 text-sm text-textMuted">匹配方式</div>
-                          <MatchTypeTabs value={selectedRule.matchType} onChange={(value) => updateRule(selectedRule.id, { matchType: value })} />
-                        </div>
-                        <div>
-                          <div className="mb-2 text-sm text-textMuted">回复类型</div>
-                          <ReplyTypeTabs value={selectedRule.replyType} onChange={(value) => updateRule(selectedRule.id, { replyType: value })} />
-                        </div>
+                      </ConfigRow>
+                      <ConfigRow label="匹配方式" wide>
+                        <MatchTypeTabs value={selectedRule.matchType} onChange={(value) => updateRule(selectedRule.id, { matchType: value })} />
+                      </ConfigRow>
+                      <ConfigRow label="回复类型" wide>
+                        <ReplyTypeTabs value={selectedRule.replyType} onChange={(value) => updateRule(selectedRule.id, { replyType: value })} />
+                      </ConfigRow>
+                      <div className="p-3 space-y-3">
                         <ToggleRow label="启用这条规则" hint="关闭后会保留内容，但不会参与匹配。" checked={selectedRule.enabled} onChange={(checked) => updateRule(selectedRule.id, { enabled: checked })} />
                         <ToggleRow label="命中后允许回复" hint="如果你只想做命中统计，不想回复，可以先关掉。" checked={selectedRule.replyEnabled} onChange={(checked) => updateRule(selectedRule.id, { replyEnabled: checked })} />
                       </div>
-
-                      <div className="space-y-4">
-                        {selectedRule.replyType === 'photo' ? (
+                      {selectedRule.replyType === 'photo' ? (
+                        <ConfigRow label="回复图片" wide>
                           <ImageUploadField
                             label="上传图片"
                             value={selectedRule.imageUrl}
@@ -797,16 +782,15 @@ export default memo(function BotCenterView() {
                             onClear={() => updateRule(selectedRule.id, { imageUrl: '' })}
                             hint="关键词命中后会直接用这张本地图片回复，不用再额外准备 URL。"
                           />
-                        ) : null}
-
-                        <label className="flex flex-col gap-2 text-sm text-textMuted">
-                          <span>{selectedRule.replyType === 'photo' ? '图片说明 / 文案' : '回复内容'}</span>
-                          <textarea value={selectedRule.text} onChange={(event) => updateRule(selectedRule.id, { text: event.target.value })} rows={7} className={SOFT_TEXTAREA_CLASS} />
-                        </label>
-
+                        </ConfigRow>
+                      ) : null}
+                      <ConfigRow label={selectedRule.replyType === 'photo' ? '图片说明 / 文案' : '回复内容'} wide>
+                        <textarea value={selectedRule.text} onChange={(event) => updateRule(selectedRule.id, { text: event.target.value })} rows={7} className={`w-full ${SOFT_TEXTAREA_CLASS}`} />
+                      </ConfigRow>
+                      <ConfigRow label="命中按钮" wide>
                         <ButtonsEditor title="关键词命中按钮" buttons={selectedRule.buttons} onChange={(buttons) => updateRule(selectedRule.id, { buttons })} />
-                      </div>
-                    </div>
+                      </ConfigRow>
+                    </FoldSection>
                   </div>
                 ) : (
                   <div className="flex min-h-[420px] items-center justify-center rounded-[14px] bg-black/10 text-sm text-textMuted">
@@ -820,36 +804,35 @@ export default memo(function BotCenterView() {
           {!loading && activePage === 'logs' ? (
             <div className="space-y-5">
               <div className={`${SOFT_CARD_CLASS} p-5`}>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-white">运行日志</div>
-                    <div className="mt-2 text-sm leading-6 text-textMuted">这里只看当前机器人最近 200 条日志，消息和错误都能直接选中复制。</div>
-                  </div>
-                  <button type="button" disabled={saving || activeBot.logs.length === 0} onClick={() => void clearLogs(activeBot.id)} className="inline-flex h-9 items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 text-xs text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60">
-                    <Trash2 size={14} />清空日志
-                  </button>
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <StatCard label="收到 Guest" value={activeBot.stats.receivedGuestCount} />
-                  <StatCard label="成功回复" value={activeBot.stats.answeredGuestCount} tone="success" />
-                  <StatCard label="回复失败" value={activeBot.stats.failedGuestCount} tone="danger" />
-                  <StatCard label="最近轮询" value={formatDateTimeFull(activeBot.lastPollAt)} />
-                </div>
-
-                {activeBot.lastActionMessage ? <div className="mt-4 rounded-[12px] bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200 select-text cursor-text">{activeBot.lastActionMessage}</div> : null}
-                {activeBot.lastError ? <div className="mt-4 rounded-[12px] bg-rose-400/10 px-4 py-3 text-sm text-rose-200 select-text cursor-text">{activeBot.lastError}</div> : null}
-
-                <div className="mt-4 max-h-[520px] space-y-2 overflow-auto pr-1 select-text">
-                  {activeBot.logs.length === 0 ? (
-                    <div className="rounded-[14px] bg-black/10 px-4 py-10 text-center text-sm text-textMuted">还没有日志。先保存 Token，再刷新机器人信息，最后开始监听。</div>
-                  ) : activeBot.logs.map((log) => (
-                    <div key={log.id} className={`rounded-[12px] px-4 py-3 text-sm cursor-text select-text ${formatLogTone(log.level)}`}>
-                      <div className="mb-1 text-[11px] text-white/45 select-text">{formatDateTimeFull(log.createdAt)}</div>
-                      <div className="leading-6 select-text">{log.message}</div>
+                <FoldSection title="运行日志" hint="统计、状态消息和日志列表统一改成折叠展示。">
+                  <ConfigRow label="日志操作" wide>
+                    <button type="button" disabled={saving || activeBot.logs.length === 0} onClick={() => void clearLogs(activeBot.id)} className="inline-flex h-9 items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 text-xs text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60">
+                      <Trash2 size={14} />清空日志
+                    </button>
+                  </ConfigRow>
+                  <ConfigRow label="统计概览" wide>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <StatCard label="收到 Guest" value={activeBot.stats.receivedGuestCount} />
+                      <StatCard label="成功回复" value={activeBot.stats.answeredGuestCount} tone="success" />
+                      <StatCard label="回复失败" value={activeBot.stats.failedGuestCount} tone="danger" />
+                      <StatCard label="最近轮询" value={formatDateTimeFull(activeBot.lastPollAt)} />
                     </div>
-                  ))}
-                </div>
+                  </ConfigRow>
+                  {activeBot.lastActionMessage ? <div className="mx-3 rounded-[12px] bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200 select-text cursor-text">{activeBot.lastActionMessage}</div> : null}
+                  {activeBot.lastError ? <div className="mx-3 rounded-[12px] bg-rose-400/10 px-4 py-3 text-sm text-rose-200 select-text cursor-text">{activeBot.lastError}</div> : null}
+                  <ConfigRow label="日志列表" wide>
+                    <div className="max-h-[520px] space-y-2 overflow-auto pr-1 select-text">
+                      {activeBot.logs.length === 0 ? (
+                        <div className="rounded-[14px] bg-black/10 px-4 py-10 text-center text-sm text-textMuted">还没有日志。先保存 Token，再刷新机器人信息，最后开始监听。</div>
+                      ) : activeBot.logs.map((log) => (
+                        <div key={log.id} className={`rounded-[12px] px-4 py-3 text-sm cursor-text select-text ${formatLogTone(log.level)}`}>
+                          <div className="mb-1 text-[11px] text-white/45 select-text">{formatDateTimeFull(log.createdAt)}</div>
+                          <div className="leading-6 select-text">{log.message}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </ConfigRow>
+                </FoldSection>
               </div>
             </div>
           ) : null}

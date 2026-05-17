@@ -316,40 +316,37 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   return (
     <div className="grid gap-5 xl:grid-cols-[300px_minmax(560px,1fr)_360px]">
       <GlassPanel className="bg-card">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-white">任务列表</div>
-            <div className="mt-1 text-xs text-textMuted">先选任务，再配置账号、群组和图文频率。</div>
+        <FoldSection title="任务列表" hint="先选任务，再展开中间配置。">
+          <ConfigRow label="任务操作" wide>
+            <button type="button" onClick={createTask} className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-violet-400/12 text-violet-300 transition hover:bg-violet-400/18">
+              <Plus size={18} />
+            </button>
+          </ConfigRow>
+          <div className="space-y-3 p-3">
+            {tasks.map((task) => {
+              const previewCount = previewItems.filter((item) => item.taskId === task.id).length
+              return (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => selectTask(task.id)}
+                  className={`w-full rounded-[16px] border px-4 py-4 text-left transition ${selectedTaskId === task.id ? 'border-violet-400/30 bg-violet-400/10' : 'border-white/5 bg-panel hover:border-white/10 hover:bg-white/[0.03]'}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-white">{task.name}</div>
+                    <div className={`rounded-full px-2.5 py-1 text-[11px] ${getTaskStatusTone(task.status)}`}>{task.status === 'active' ? '运行中' : task.status === 'paused' ? '已暂停' : '草稿'}</div>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-textMuted">
+                    <div>账号 {task.accountIds.length}</div>
+                    <div>群组 {task.groupIds.length}</div>
+                    <div>文案 {task.creativeIds.length}</div>
+                    <div>预览 {previewCount}</div>
+                  </div>
+                </button>
+              )
+            })}
           </div>
-          <button type="button" onClick={createTask} className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-violet-400/12 text-violet-300 transition hover:bg-violet-400/18">
-            <Plus size={18} />
-          </button>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          {tasks.map((task) => {
-            const previewCount = previewItems.filter((item) => item.taskId === task.id).length
-            return (
-              <button
-                key={task.id}
-                type="button"
-                onClick={() => selectTask(task.id)}
-                className={`w-full rounded-[16px] border px-4 py-4 text-left transition ${selectedTaskId === task.id ? 'border-violet-400/30 bg-violet-400/10' : 'border-white/5 bg-panel hover:border-white/10 hover:bg-white/[0.03]'}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold text-white">{task.name}</div>
-                  <div className={`rounded-full px-2.5 py-1 text-[11px] ${getTaskStatusTone(task.status)}`}>{task.status === 'active' ? '运行中' : task.status === 'paused' ? '已暂停' : '草稿'}</div>
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-textMuted">
-                  <div>账号 {task.accountIds.length}</div>
-                  <div>群组 {task.groupIds.length}</div>
-                  <div>文案 {task.creativeIds.length}</div>
-                  <div>预览 {previewCount}</div>
-                </div>
-              </button>
-            )
-          })}
-        </div>
+        </FoldSection>
       </GlassPanel>
 
       <GlassPanel className="bg-card">
@@ -487,18 +484,14 @@ const TasksWorkbench = memo(function TasksWorkbench() {
       </GlassPanel>
 
       <GlassPanel className="bg-card">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-white">今日排程预览</div>
-            <div className="mt-1 text-xs text-textMuted">先预览，再写入 Telegram 官方定时消息队列。</div>
-          </div>
-          <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted">{selectedPreview.length} 条</div>
-        </div>
-
-        <div className="mt-4 max-h-[780px] space-y-3 overflow-y-auto pr-1">
-          {selectedPreview.length === 0 ? (
-            <div className="flex min-h-[240px] items-center justify-center rounded-[16px] bg-panel text-sm text-textMuted">当前还没有预览结果</div>
-          ) : selectedPreview.map((item) => {
+        <FoldSection title="今日排程预览" hint="先预览，再写入 Telegram 官方定时消息队列。" defaultOpen={false}>
+          <ConfigRow label="预览数量" wide>
+            <div className="rounded-full bg-white/[0.04] px-3 py-1 text-xs text-textMuted inline-flex">{selectedPreview.length} 条</div>
+          </ConfigRow>
+          <div className="max-h-[780px] space-y-3 overflow-y-auto p-3 pr-1">
+            {selectedPreview.length === 0 ? (
+              <div className="flex min-h-[240px] items-center justify-center rounded-[16px] bg-panel text-sm text-textMuted">当前还没有预览结果</div>
+            ) : selectedPreview.map((item) => {
             const creative = creatives.find((entry) => entry.id === item.creativeId)
             const group = groups.find((entry) => entry.id === item.groupId)
             const account = accounts.find((entry) => entry.id === item.accountId)
@@ -519,7 +512,8 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               </div>
             )
           })}
-        </div>
+          </div>
+        </FoldSection>
       </GlassPanel>
     </div>
   )
