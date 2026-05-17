@@ -1,4 +1,4 @@
-import { CheckCircle2, Copy, Image as ImageIcon, PlusSquare, Search, SquareTerminal, StopCircle, Type, X } from 'lucide-react'
+import { CheckCircle2, Image as ImageIcon, PlusSquare, Search, SquareTerminal, StopCircle, Type, X } from 'lucide-react'
 import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, NumberRangeField, SOFT_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
@@ -6,12 +6,7 @@ import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } fr
 import { useAccountStore } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
-import { useBatchCreateStore, type BatchCreateTabKey } from '../../stores/batchcreatestore'
-
-const tabs: Array<{ key: BatchCreateTabKey; label: string; icon: typeof PlusSquare }> = [
-  { key: 'tasks', label: '创建任务', icon: PlusSquare },
-  { key: 'logs', label: '执行日志', icon: SquareTerminal }
-]
+import { useBatchCreateStore } from '../../stores/batchcreatestore'
 
 function PostTypeTabs({ value, onChange }: { value: 'none' | 'text' | 'photo'; onChange: (value: 'none' | 'text' | 'photo') => void }) {
   const items = [
@@ -53,12 +48,6 @@ function readAccountLabel(account: { id: number; username?: string; phone?: stri
   return `账号#${account.id}`
 }
 
-function formatTime(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleTimeString('zh-CN', { hour12: false })
-}
-
 function getAccountStatusTone(status?: string) {
   if (status === 'alive') return 'bg-emerald-400/12 text-emerald-300'
   if (status === 'limited') return 'bg-sky-400/12 text-sky-300'
@@ -94,31 +83,6 @@ function toggleAccountRange(currentIds: number[], rangeIds: number[]) {
   })
   return next
 }
-
-const TabBar = memo(function TabBar() {
-  const activeTab = useBatchCreateStore((state) => state.activeTab)
-  const setActiveTab = useBatchCreateStore((state) => state.setActiveTab)
-
-  return (
-    <div className="flex flex-wrap gap-3">
-      {tabs.map((tab) => {
-        const Icon = tab.icon
-        const active = activeTab === tab.key
-        return (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`inline-flex items-center gap-2 rounded-[14px] px-4 py-3 text-sm ${SOFT_TAB_CLASS} ${active ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
-          >
-            <Icon size={15} />
-            {tab.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-})
 
 const TasksWorkbench = memo(function TasksWorkbench() {
   const initAccounts = useAccountStore((state) => state.init)
@@ -482,98 +446,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   )
 })
 
-const LogsPanel = memo(function LogsPanel() {
-  const tasks = useBatchCreateStore((state) => state.tasks)
-  const logs = useBatchCreateStore((state) => state.logs)
-  const taskSnapshots = useBatchCreateStore((state) => state.taskSnapshots)
-  const clearLogs = useBatchCreateStore((state) => state.clearLogs)
-
-  const latestTask = tasks[0] ?? null
-  const latestSnapshot = taskSnapshots[0] ?? null
-  const allLogText = useMemo(() => logs
-    .slice()
-    .reverse()
-    .map((log) => {
-      const suffix = [log.accountLabel, log.targetLabel].filter(Boolean).join(' · ')
-      return `[${formatTime(log.createdAt)}] ${log.message}${suffix ? ` | ${suffix}` : ''}`
-    })
-    .join('\n'), [logs])
-  const linkLines = useMemo(() => (latestSnapshot?.items ?? [])
-    .filter((item) => item.status === 'success' && item.publicLink)
-    .map((item) => `${item.publicLink} | ${item.title || '未命名目标'} | ${item.entityType === 'group' ? '公开群组' : '公开频道'}`), [latestSnapshot])
-  const allLinkText = linkLines.join('\n')
-
-  return (
-    <div className="space-y-5">
-      <GlassPanel className="bg-card">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-base font-semibold text-white">执行日志</div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => void navigator.clipboard.writeText(allLogText || '暂无日志')} className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18">复制全部日志</button>
-            <button type="button" onClick={clearLogs} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空日志</button>
-          </div>
-        </div>
-
-        {latestTask ? (
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
-            <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3"><div className="text-xs tracking-[0.16em] text-emerald-200/80">成功</div><div className="mt-2 text-2xl font-semibold text-emerald-300">{latestTask.successCount}</div></div>
-            <div className="rounded-[14px] bg-rose-400/8 px-4 py-3"><div className="text-xs tracking-[0.16em] text-rose-200/80">失败</div><div className="mt-2 text-2xl font-semibold text-rose-300">{latestTask.failedCount}</div></div>
-            <div className="rounded-[14px] bg-sky-400/8 px-4 py-3"><div className="text-xs tracking-[0.16em] text-sky-200/80">公开群组</div><div className="mt-2 text-2xl font-semibold text-sky-300">{latestTask.groupCount}</div></div>
-            <div className="rounded-[14px] bg-violet-400/8 px-4 py-3"><div className="text-xs tracking-[0.16em] text-violet-200/80">公开频道</div><div className="mt-2 text-2xl font-semibold text-violet-300">{latestTask.channelCount}</div></div>
-          </div>
-        ) : null}
-
-        <div className="mt-4 space-y-2">
-          {logs.length === 0 ? <div className="rounded-[14px] bg-panel/70 px-4 py-4 text-sm text-textMuted">这里还没有日志。</div> : logs.map((log) => (
-            <div key={log.id} className="rounded-[14px] bg-panel/70 px-4 py-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className={log.level === 'success' ? 'text-emerald-300' : log.level === 'error' ? 'text-rose-300' : 'text-slate-200'}>{log.message}</div>
-                <div className="text-xs text-textMuted">{formatTime(log.createdAt)}</div>
-              </div>
-              {(log.accountLabel || log.targetLabel) ? <div className="mt-1 text-xs text-textMuted">{[log.accountLabel, log.targetLabel].filter(Boolean).join(' · ')}</div> : null}
-            </div>
-          ))}
-        </div>
-      </GlassPanel>
-
-      <GlassPanel className="bg-card">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-base font-semibold text-white">本轮结果</div>
-          <button type="button" disabled={!allLinkText} onClick={() => void navigator.clipboard.writeText(allLinkText)} className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-50">一键复制全部链接</button>
-        </div>
-        {allLinkText ? (
-          <div className="mt-4 rounded-[14px] bg-panel/70 px-4 py-4 text-sm">
-            <div className="mb-2 text-xs tracking-[0.16em] text-textMuted">链接清单</div>
-            <div className="max-h-[180px] overflow-y-auto whitespace-pre-wrap break-all text-slate-200">{allLinkText}</div>
-          </div>
-        ) : null}
-        <div className="mt-4 space-y-2">
-          {!latestSnapshot || latestSnapshot.items.length === 0 ? <div className="rounded-[14px] bg-panel/70 px-4 py-4 text-sm text-textMuted">完成后这里会显示创建结果。</div> : latestSnapshot.items.map((item) => (
-            <div key={item.id} className="rounded-[14px] bg-panel/70 px-4 py-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-white">{item.title || '未命名目标'} <span className="ml-2 text-xs text-textMuted">{item.entityType === 'group' ? '公开群组' : '公开频道'}</span></div>
-                  <div className="mt-1 text-xs text-textMuted">{item.accountLabel}</div>
-                </div>
-                <div className={item.status === 'success' ? 'text-emerald-300' : 'text-rose-300'}>{item.status === 'success' ? '成功' : '失败'}</div>
-              </div>
-              <div className="mt-2 text-xs text-textMuted">{item.message}</div>
-              {item.publicLink ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <div className="rounded-[10px] bg-black/10 px-3 py-2 text-xs text-slate-200">{item.publicLink}</div>
-                  <button type="button" onClick={() => void navigator.clipboard.writeText(item.publicLink)} className="inline-flex items-center gap-1 rounded-[10px] bg-white/[0.05] px-3 py-2 text-xs text-white transition hover:bg-white/[0.08]"><Copy size={13} />复制</button>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      </GlassPanel>
-    </div>
-  )
-})
-
 export default function BatchCreateView() {
-  const activeTab = useBatchCreateStore((state) => state.activeTab)
   const taskSnapshots = useBatchCreateStore((state) => state.taskSnapshots)
   const completionDialogTaskId = useBatchCreateStore((state) => state.completionDialogTaskId)
   const closeCompletionDialog = useBatchCreateStore((state) => state.closeCompletionDialog)
@@ -582,8 +455,7 @@ export default function BatchCreateView() {
 
   return (
     <>
-      <TabBar />
-      <div className="mt-5">{activeTab === 'tasks' ? <TasksWorkbench /> : <LogsPanel />}</div>
+      <TasksWorkbench />
 
       <ResultDialogShell
         open={Boolean(completionSnapshot)}

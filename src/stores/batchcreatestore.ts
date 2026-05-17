@@ -256,7 +256,7 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
       stopping: false,
       runningAccountIds: selectedAccountIds,
       currentTaskId: taskId,
-      activeTab: 'logs',
+      activeTab: 'tasks',
       lastActionMessage: '批量创建任务已启动。',
       tasks: upsertTask(state.tasks, createTaskRecord(taskId, total)),
       logs: [createLogEntry({
