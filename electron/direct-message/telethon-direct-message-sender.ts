@@ -12,6 +12,7 @@ interface TelethonDirectMessageRawResult {
   ok?: boolean
   reason?: string | null
   messageId?: number | null
+  recovered?: boolean
 }
 
 interface TelethonDirectMessageBasePayload {
@@ -54,7 +55,8 @@ export class TelethonDirectMessageSender {
   async send(payload: TelethonDirectMessageSendPayload) {
     const result = await this.runAction('send', { ...payload }, Math.max(20, payload.timeoutSeconds ?? 45))
     return {
-      messageId: typeof result.messageId === 'number' && Number.isFinite(result.messageId) ? result.messageId : null
+      messageId: typeof result.messageId === 'number' && Number.isFinite(result.messageId) ? result.messageId : null,
+      recovered: Boolean(result.recovered)
     }
   }
 

@@ -723,6 +723,71 @@ function createRandomId() {
   return bigInt(seed)
 }
 
+function normalizeMessageCompareText(input: string) {
+  return input.replace(/\s+/g, ' ').trim()
+}
+
+function readMessageId(message: unknown) {
+  const source = message as { id?: unknown; message?: { id?: unknown } } | null
+  if (typeof source?.id === 'number' && source.id > 0) return source.id
+  if (typeof source?.message?.id === 'number' && source.message.id > 0) return source.message.id
+  return null
+}
+
+function readMessageDateMs(message: unknown) {
+  const source = message as { date?: unknown } | null
+  const raw = source?.date
+  if (raw instanceof Date) return raw.getTime()
+  if (typeof raw === 'number') return raw > 1_000_000_000_000 ? raw : raw * 1000
+  if (typeof raw === 'bigint') return Number(raw) * 1000
+  if (typeof raw === 'string' && raw.trim()) {
+    const time = new Date(raw).getTime()
+    return Number.isFinite(time) ? time : null
+  }
+  return null
+}
+
+async function findActuallySentDirectMessage(client: TelegramClient, entity: unknown, payload: DirectMessageSendPayload, startedAtMs: number) {
+  const expectedText = normalizeMessageCompareText(payload.messageText.trim())
+  const expectedHasMedia = Boolean(payload.imageUrl.trim())
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const messages = await ((client as TelegramClient) as TelegramClient & {
+      getMessages: (peer: unknown, params: Record<string, unknown>) => Promise<Array<{ id?: unknown; out?: unknown; media?: unknown; message?: unknown; text?: unknown; rawText?: unknown; caption?: unknown; date?: unknown }>>
+    }).getMessages(entity as never, { limit: 8 })
+
+    if (Array.isArray(messages) && messages.length > 0) {
+      const matched = messages.find((message) => {
+        if (!Boolean((message as { out?: unknown }).out)) return false
+        const sentAtMs = readMessageDateMs(message)
+        if (typeof sentAtMs === 'number' && sentAtMs + 20_000 < startedAtMs) return false
+        const actualText = normalizeMessageCompareText(readMessageTextContent(message))
+        const actualHasMedia = Boolean((message as { media?: unknown }).media)
+        const textMatched = expectedText
+          ? actualText === expectedText || actualText.includes(expectedText) || expectedText.includes(actualText)
+          : true
+        const mediaMatched = expectedHasMedia ? actualHasMedia : true
+        return textMatched && mediaMatched
+      })
+      if (matched) {
+        return {
+          sent: true,
+          messageId: readMessageId(matched)
+        }
+      }
+    }
+
+    if (attempt < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 450))
+    }
+  }
+
+  return {
+    sent: false,
+    messageId: null
+  }
+}
+
 function extractResponseMessageId(result: unknown) {
   if (typeof (result as { id?: unknown } | null)?.id === 'number') {
     return (result as { id: number }).id
@@ -956,6 +1021,7 @@ export class DirectMessageService {
 
     return {
       remoteMessageId: sent.messageId,
+      recovered: sent.recovered,
       actionNotes
     }
   }
@@ -1195,15 +1261,20 @@ export class DirectMessageService {
         let resultItem: DirectMessageSendResultItem | null = null
 
         while (!task.cancelled) {
+          let resolved: { entity: unknown; cleanup?: (() => Promise<void>) | undefined } | null = null
+          const sendStartedAtMs = Date.now()
+
           try {
             const actionNotes: string[] = []
             let remoteMessageId: number | null = null
-            let resolved: { entity: unknown; cleanup?: (() => Promise<void>) | undefined } | null = null
 
             if (useTelethonPrimary) {
               const telethonResult = await this.sendViaTelethon(account, item, payload, task)
               remoteMessageId = telethonResult.remoteMessageId
               actionNotes.push(...telethonResult.actionNotes)
+              if (telethonResult.recovered) {
+                actionNotes.push('Telegram 返回异常，但已回查确认这条群发实际发出')
+              }
             } else {
               resolved = await resolveSendEntity(client as TelegramClient, item.targetValue)
               cleanup = resolved.cleanup
@@ -1374,6 +1445,42 @@ export class DirectMessageService {
             resultItem.errorMessage = actionNotes.join('；')
             break
           } catch (error) {
+            if (!useTelethonPrimary && resolved?.entity) {
+              try {
+                const confirmed = await findActuallySentDirectMessage(client as TelegramClient, resolved.entity, payload, sendStartedAtMs)
+                if (confirmed.sent) {
+                  resultItem = {
+                    previewItemId: item.id,
+                    targetId: item.targetId,
+                    targetValue: item.targetValue,
+                    status: 'sent',
+                    errorMessage: 'Telegram 返回异常，但已回查确认这条群发实际发出',
+                    remoteMessageId: confirmed.messageId,
+                    sentAt: new Date().toISOString(),
+                    accountId: item.accountId
+                  }
+
+                  if (confirmed.messageId && payload.deleteMode && payload.deleteMode !== 'none') {
+                    const waitSeconds = normalizeDelaySeconds(payload.deleteDelaySeconds, 0)
+                    if (waitSeconds > 0) {
+                      await this.sleepWithCancel(waitSeconds * 1000, task)
+                    }
+                    if (!task.cancelled) {
+                      try {
+                        await deleteSentMessage(client as TelegramClient, resolved.entity, confirmed.messageId, payload.deleteMode)
+                        resultItem.errorMessage = `${resultItem.errorMessage}；已在发送后 ${waitSeconds} 秒自动${readDeleteModeLabel(payload.deleteMode)}`
+                      } catch (deleteError) {
+                        resultItem.errorMessage = `${resultItem.errorMessage}；${readDeleteModeLabel(payload.deleteMode)}失败：${formatDirectMessageError(deleteError)}`
+                      }
+                    }
+                  }
+                  break
+                }
+              } catch {
+                // ignore verification failures and keep original handling
+              }
+            }
+
             await cleanup?.()
             cleanup = undefined
             const waitSeconds = readRiskPauseSeconds(error)

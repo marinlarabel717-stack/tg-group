@@ -210,6 +210,62 @@ def _extract_message_id(result: Any) -> int | None:
     return int(message_id) if isinstance(message_id, int) else None
 
 
+def _normalize_compare_text(value: str) -> str:
+    return re.sub(r'\s+', ' ', str(value or '')).strip()
+
+
+def _read_message_text(message: Any) -> str:
+    for key in ('raw_text', 'rawText', 'message', 'text'):
+        value = getattr(message, key, None)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ''
+
+
+def _read_message_date_ms(message: Any) -> int | None:
+    value = getattr(message, 'date', None)
+    if value is None:
+        return None
+    timestamp = getattr(value, 'timestamp', None)
+    if callable(timestamp):
+        try:
+            return int(timestamp() * 1000)
+        except Exception:
+            return None
+    return None
+
+
+async def _find_actually_sent_message_id(client: Any, entity: Any, payload: Dict[str, Any], started_at_ms: int) -> int | None:
+    expected_text = _normalize_compare_text(str(payload.get('messageText') or '').strip())
+    expected_has_media = bool(str(payload.get('imageUrl') or '').strip())
+
+    for attempt in range(4):
+        messages = await client.get_messages(entity, limit=8)
+        if messages:
+            for message in messages:
+                if not bool(getattr(message, 'out', False)):
+                    continue
+                sent_at_ms = _read_message_date_ms(message)
+                if isinstance(sent_at_ms, int) and sent_at_ms + 20000 < started_at_ms:
+                    continue
+
+                actual_text = _normalize_compare_text(_read_message_text(message))
+                actual_has_media = getattr(message, 'media', None) is not None
+                text_matched = True
+                if expected_text:
+                    text_matched = actual_text == expected_text or expected_text in actual_text or actual_text in expected_text
+                media_matched = actual_has_media if expected_has_media else True
+                if text_matched and media_matched:
+                    message_id = _extract_message_id(message)
+                    if isinstance(message_id, int) and message_id > 0:
+                        return message_id
+
+        if attempt < 3:
+            await asyncio.sleep(0.45)
+
+    return None
+
+
 async def _send_message(client: Any, entity: Any, payload: Dict[str, Any]) -> int | None:
     message_type = str(payload.get('messageType') or 'text').strip() or 'text'
     message_text = str(payload.get('messageText') or '').strip()
@@ -290,8 +346,15 @@ async def _run(command: Dict[str, Any]) -> Dict[str, Any]:
         entity, cleanup = await _resolve_send_entity(client, str(command.get('targetValue') or ''))
 
         if action == 'send':
-            message_id = await asyncio.wait_for(_send_message(client, entity, command), timeout=timeout_seconds)
-            return {'ok': True, 'messageId': message_id}
+            started_at_ms = int(time.time() * 1000)
+            try:
+                message_id = await asyncio.wait_for(_send_message(client, entity, command), timeout=timeout_seconds)
+                return {'ok': True, 'messageId': message_id}
+            except Exception:
+                recovered_message_id = await _find_actually_sent_message_id(client, entity, command, started_at_ms)
+                if isinstance(recovered_message_id, int) and recovered_message_id > 0:
+                    return {'ok': True, 'messageId': recovered_message_id, 'recovered': True}
+                raise
 
         message_id = _safe_int(command.get('messageId'), 0)
         if message_id <= 0:
