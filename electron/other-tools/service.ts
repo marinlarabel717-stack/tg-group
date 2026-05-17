@@ -1560,15 +1560,28 @@ export class OtherToolsService {
     const claimAccount = payload.autoClaim
       ? pickCheckAccount(accounts, payload.claimAccountId ?? payload.scanAccountId ?? null)
       : null
+    const autoCreateCarrier = Boolean(payload.autoCreateCarrier)
+    const createCarrierAccount = autoCreateCarrier
+      ? pickCheckAccount(accounts, payload.createCarrierAccountId ?? payload.claimAccountId ?? payload.scanAccountId ?? null)
+      : null
     const subscribeAccountIds = Array.from(new Set((payload.subscribeAccountIds ?? []).filter((item): item is number => typeof item === 'number')))
     const subscribeAccounts = payload.autoSubscribeSources
       ? accounts.filter((account) => subscribeAccountIds.includes(account.id) && !['banned', 'frozen', 'session_expired', 'not_logged_in'].includes(account.status))
       : []
-    if (payload.autoClaim && !claimAccount) {
+    if (payload.autoClaim && !claimAccount && !autoCreateCarrier) {
       throw new Error('当前没有可用抢注账号。')
     }
-    if (payload.autoClaim && poolRefs.length === 0) {
-      throw new Error('已开启自动抢注，但还没有填写池子载体。')
+    if (autoCreateCarrier && !createCarrierAccount) {
+      throw new Error('已开启自动建频道占位，但当前没有可用建池账号。')
+    }
+    if (payload.autoClaim && poolRefs.length === 0 && !autoCreateCarrier) {
+      throw new Error('已开启自动抢注，但还没有填写池子载体，也没开启自动建频道占位。')
+    }
+    if ((payload.postType ?? 'none') === 'photo' && !(payload.postImageData ?? '').trim()) {
+      throw new Error('你选了图文首帖，但还没上传图片。')
+    }
+    if ((payload.postType ?? 'none') !== 'none' && !(payload.postText ?? '').trim() && !((payload.postType ?? 'none') === 'photo' && (payload.postImageData ?? '').trim())) {
+      throw new Error('你已开启自动发首帖，但还没填内容。')
     }
 
     const includeKeywords = normalizeKeywordSet(payload.includeKeywords)
@@ -1577,8 +1590,15 @@ export class OtherToolsService {
     const candidateLimit = Math.max(1, Math.min(500, Math.trunc(payload.candidateLimit || 100)))
 
     const scanClient = await ensureAuthorizedClient(scanAccount, this.sessionLoader, this.clientManager, this.proxyPoolService)
-    const claimClient = payload.autoClaim
-      ? (claimAccount && claimAccount.id === scanAccount.id ? scanClient : await ensureAuthorizedClient(claimAccount as AccountRecord, this.sessionLoader, this.clientManager, this.proxyPoolService))
+    const claimClient = payload.autoClaim && claimAccount
+      ? (claimAccount.id === scanAccount.id ? scanClient : await ensureAuthorizedClient(claimAccount as AccountRecord, this.sessionLoader, this.clientManager, this.proxyPoolService))
+      : null
+    const createCarrierClient = autoCreateCarrier && createCarrierAccount
+      ? (createCarrierAccount.id === scanAccount.id
+        ? scanClient
+        : claimClient && createCarrierAccount.id === claimAccount?.id
+          ? claimClient
+          : await ensureAuthorizedClient(createCarrierAccount, this.sessionLoader, this.clientManager, this.proxyPoolService))
       : null
     const subscribeClients = new Map<number, TelegramClient>()
 
@@ -1755,66 +1775,102 @@ export class OtherToolsService {
 
       const claimableItems = items.filter((item) => item.category === 'claimable')
       let carriers: PoolCarrier[] = []
-      if (payload.autoClaim && claimClient) {
-        carriers = await readPoolCarriers(claimClient, poolRefs)
-        pushRunLog({
-          level: 'info',
-          message: `本轮可用抢注池子 ${carriers.length} 个。`,
-          accountId: claimAccount?.id ?? null,
-          accountLabel: readCheckResultTitle(claimAccount)
-        })
-        let carrierIndex = 0
-        for (const item of claimableItems) {
-          if (carrierIndex >= carriers.length) {
-            item.claimStatus = 'skipped'
-            item.claimMessage = '当前池子载体已经用完了，剩余可抢名先保留在结果里。'
-            pushRunLog({
-              level: 'warning',
-              message: `${item.normalized} 可抢，但池子已经用完，先跳过。`,
-              sourceRef: item.sourceRef,
-              sourceTitle: item.sourceTitle,
-              candidate: item.normalized
-            })
-            continue
-          }
+      if (payload.autoClaim) {
+        if (poolRefs.length > 0 && claimClient) {
+          carriers = await readPoolCarriers(claimClient, poolRefs)
+          pushRunLog({
+            level: 'info',
+            message: `本轮可用抢注池子 ${carriers.length} 个。`,
+            accountId: claimAccount?.id ?? null,
+            accountLabel: readCheckResultTitle(claimAccount)
+          })
+        } else if (autoCreateCarrier) {
+          pushRunLog({
+            level: 'info',
+            message: '这次没填池子载体，命中后会直接自动创建频道占位。',
+            accountId: createCarrierAccount?.id ?? null,
+            accountLabel: readCheckResultTitle(createCarrierAccount)
+          })
+        }
 
-          const carrier = carriers[carrierIndex]
+        let carrierIndex = 0
+        let createdCarrierIndex = 0
+        for (const item of claimableItems) {
           try {
-            const claimed = await claimCandidateWithPool(claimClient, carrier, item)
+            let claimed: ListenerClaimResult
+            let claimByAccount: AccountRecord | null = claimAccount
+
+            if (carrierIndex < carriers.length && claimClient) {
+              const carrier = carriers[carrierIndex]
+              const poolClaimed = await claimCandidateWithPool(claimClient, carrier, item)
+              claimed = {
+                claimTargetTitle: poolClaimed.claimTargetTitle,
+                claimTargetRef: poolClaimed.claimTargetRef,
+                claimMessage: poolClaimed.claimMessage,
+                createdCarrier: false
+              }
+              carrierIndex += 1
+            } else if (autoCreateCarrier && createCarrierClient && createCarrierAccount) {
+              claimed = await createCarrierAndClaim(createCarrierClient, item, payload as OtherToolsSniperListenerPayload, createCarrierAccount.id, createdCarrierIndex)
+              createdCarrierIndex += 1
+              claimByAccount = createCarrierAccount
+            } else {
+              item.claimStatus = 'skipped'
+              item.claimMessage = carriers.length > 0
+                ? '当前池子载体已经用完了，剩余可抢名先保留在结果里。'
+                : '当前没有池子载体，也没开自动建频道占位。'
+              pushRunLog({
+                level: 'warning',
+                message: carriers.length > 0
+                  ? `${item.normalized} 可抢，但池子已经用完，先跳过。`
+                  : `${item.normalized} 可抢，但没有可用池子/建池账号，先跳过。`,
+                sourceRef: item.sourceRef,
+                sourceTitle: item.sourceTitle,
+                candidate: item.normalized
+              })
+              continue
+            }
+
             item.claimStatus = 'claimed'
             item.claimMessage = claimed.claimMessage
             item.claimTargetRef = claimed.claimTargetRef
             item.claimTargetTitle = claimed.claimTargetTitle
-            item.claimAccountId = claimAccount?.id ?? null
-            item.claimAccountLabel = readCheckResultTitle(claimAccount)
-            carrierIndex += 1
+            item.claimAccountId = claimByAccount?.id ?? null
+            item.claimAccountLabel = readCheckResultTitle(claimByAccount)
             pushRunLog({
               level: 'success',
-              message: `${item.normalized} 已抢到：${claimed.claimTargetRef}`,
+              message: claimed.createdCarrier
+                ? claimed.postFailureMessage
+                  ? `${item.normalized} 已自动建频道并抢到，但首帖发送失败：${claimed.postFailureMessage}`
+                  : (payload.postType ?? 'none') !== 'none' && claimed.postSent
+                    ? `${item.normalized} 已自动建频道、抢到并发出首帖。`
+                    : `${item.normalized} 已自动建频道并抢到。`
+                : `${item.normalized} 已抢到：${claimed.claimTargetRef}`,
               sourceRef: item.sourceRef,
               sourceTitle: item.sourceTitle,
               candidate: item.normalized,
               targetRef: claimed.claimTargetRef,
-              accountId: claimAccount?.id ?? null,
-              accountLabel: readCheckResultTitle(claimAccount)
+              accountId: claimByAccount?.id ?? null,
+              accountLabel: readCheckResultTitle(claimByAccount)
             })
           } catch (error) {
             const fatal = isFatalAccountError(error)
-            if (fatal && claimAccount) {
-              this.repository.updateStatus([claimAccount.id], fatal.status)
+            const fatalAccount = createCarrierAccount ?? claimAccount
+            if (fatal && fatalAccount) {
+              this.repository.updateStatus([fatalAccount.id], fatal.status)
             }
             item.claimStatus = 'failed'
             item.claimMessage = fatal ? `抢注账号已自动停用：${fatal.message}` : formatSniperClaimError(error)
-            item.claimAccountId = claimAccount?.id ?? null
-            item.claimAccountLabel = readCheckResultTitle(claimAccount)
+            item.claimAccountId = (createCarrierAccount ?? claimAccount)?.id ?? null
+            item.claimAccountLabel = readCheckResultTitle(createCarrierAccount ?? claimAccount)
             pushRunLog({
               level: 'error',
               message: `${item.normalized} 抢注失败：${item.claimMessage}`,
               sourceRef: item.sourceRef,
               sourceTitle: item.sourceTitle,
               candidate: item.normalized,
-              accountId: claimAccount?.id ?? null,
-              accountLabel: readCheckResultTitle(claimAccount)
+              accountId: (createCarrierAccount ?? claimAccount)?.id ?? null,
+              accountLabel: readCheckResultTitle(createCarrierAccount ?? claimAccount)
             })
             if (fatal) {
               for (const rest of claimableItems.slice(claimableItems.indexOf(item) + 1)) {
@@ -1890,6 +1946,9 @@ export class OtherToolsService {
       await this.clientManager.destroyClient(scanClient)
       if (claimClient && claimClient !== scanClient) {
         await this.clientManager.destroyClient(claimClient)
+      }
+      if (createCarrierClient && createCarrierClient !== scanClient && createCarrierClient !== claimClient) {
+        await this.clientManager.destroyClient(createCarrierClient)
       }
       await Promise.all(Array.from(subscribeClients.values()).map((client) => this.clientManager.destroyClient(client).catch(() => undefined)))
     }

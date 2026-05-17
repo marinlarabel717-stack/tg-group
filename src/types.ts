@@ -1127,11 +1127,18 @@ export interface OtherToolsSniperPayload {
   excludeKeywords: string
   scanAccountId?: number | null
   claimAccountId?: number | null
+  createCarrierAccountId?: number | null
   subscribeAccountIds?: number[]
   sourceMessageLimit: number
   candidateLimit: number
   autoClaim: boolean
   autoSubscribeSources: boolean
+  autoCreateCarrier?: boolean
+  createCarrierTitleTemplate?: string
+  createCarrierAboutTemplate?: string
+  postType?: BatchCreatePostType
+  postText?: string
+  postImageData?: string
 }
 
 export interface OtherToolsSniperCandidateItem {

@@ -501,11 +501,18 @@ function SniperWorkbench() {
         excludeKeywords,
         scanAccountId: scanAccountId ? Number(scanAccountId) : null,
         claimAccountId: claimAccountId ? Number(claimAccountId) : null,
+        createCarrierAccountId: createCarrierAccountId ? Number(createCarrierAccountId) : null,
         subscribeAccountIds,
         sourceMessageLimit,
         candidateLimit,
         autoClaim,
-        autoSubscribeSources
+        autoSubscribeSources,
+        autoCreateCarrier,
+        createCarrierTitleTemplate,
+        createCarrierAboutTemplate,
+        postType,
+        postText,
+        postImageData
       })
       setSummary(result)
     } catch (error) {
