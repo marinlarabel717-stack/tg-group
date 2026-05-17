@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { OtherToolsUsernameFilterPayload } from '../../src/types'
+import type { OtherToolsSniperPayload, OtherToolsUsernameFilterPayload } from '../../src/types'
 import type { OtherToolsService } from './service'
 
 interface RegisterOtherToolsIpcOptions {
@@ -11,5 +11,9 @@ export function registerOtherToolsIpc(options: RegisterOtherToolsIpcOptions) {
 
   ipcMain.handle('other-tools:filter-usernames', async (_event, payload: OtherToolsUsernameFilterPayload) => {
     return otherToolsService.filterUsernames(payload)
+  })
+
+  ipcMain.handle('other-tools:scan-and-claim', async (_event, payload: OtherToolsSniperPayload) => {
+    return otherToolsService.scanAndClaim(payload)
   })
 }

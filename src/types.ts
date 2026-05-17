@@ -1109,6 +1109,62 @@ export interface OtherToolsUsernameFilterResult {
   message: string
 }
 
+export type OtherToolsSniperCandidateCategory = 'occupied' | 'claimable' | 'forbidden' | 'uncertain'
+export type OtherToolsSniperClaimStatus = 'claimed' | 'failed' | 'skipped'
+
+export interface OtherToolsSniperPayload {
+  sourceInput: string
+  poolInput: string
+  includeKeywords: string
+  excludeKeywords: string
+  scanAccountId?: number | null
+  claimAccountId?: number | null
+  sourceMessageLimit: number
+  candidateLimit: number
+  autoClaim: boolean
+}
+
+export interface OtherToolsSniperCandidateItem {
+  id: string
+  raw: string
+  normalized: string
+  kind: 'username' | 'link'
+  category: OtherToolsSniperCandidateCategory
+  entityType: 'user' | 'bot' | 'group' | 'channel' | 'unknown'
+  reason: string
+  sourceRef: string
+  sourceTitle: string
+  sourceExcerpt: string
+  sourceMessageId: string
+  sourceDate: string
+  claimStatus: OtherToolsSniperClaimStatus | null
+  claimMessage: string
+  claimTargetRef: string
+  claimTargetTitle: string
+  checkedAccountId?: number | null
+  checkedAccountLabel?: string | null
+  claimAccountId?: number | null
+  claimAccountLabel?: string | null
+}
+
+export interface OtherToolsSniperResult {
+  scanAccountId: number | null
+  scanAccountLabel: string
+  claimAccountId: number | null
+  claimAccountLabel: string
+  sourceCount: number
+  poolCount: number
+  inspectedMessageCount: number
+  candidateCount: number
+  occupied: OtherToolsSniperCandidateItem[]
+  claimable: OtherToolsSniperCandidateItem[]
+  forbidden: OtherToolsSniperCandidateItem[]
+  uncertain: OtherToolsSniperCandidateItem[]
+  claimed: OtherToolsSniperCandidateItem[]
+  items: OtherToolsSniperCandidateItem[]
+  message: string
+}
+
 export interface DesktopSettingsApi {
   get: () => Promise<DesktopAppSettings>
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
@@ -1180,6 +1236,7 @@ export interface DesktopBatchCreateApi {
 
 export interface DesktopOtherToolsApi {
   filterUsernames: (payload: OtherToolsUsernameFilterPayload) => Promise<OtherToolsUsernameFilterResult>
+  scanAndClaim: (payload: OtherToolsSniperPayload) => Promise<OtherToolsSniperResult>
 }
 
 export type AppUpdaterStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'unsupported'
