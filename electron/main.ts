@@ -401,7 +401,8 @@ async function bootstrap() {
     batchCreateService
   })
   registerOtherToolsIpc({
-    otherToolsService
+    otherToolsService,
+    getMainWindow: () => mainWindow
   })
   registerBotCenterIpc({
     botCenterService,

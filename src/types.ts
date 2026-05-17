@@ -1186,6 +1186,54 @@ export interface OtherToolsSniperResult {
   message: string
 }
 
+export interface OtherToolsSniperListenerPayload extends OtherToolsSniperPayload {
+  pollIntervalSeconds: number
+  autoCreateCarrier: boolean
+  createCarrierAccountId?: number | null
+  createCarrierTitleTemplate: string
+  createCarrierAboutTemplate: string
+}
+
+export interface OtherToolsSniperListenerLogEntry {
+  id: string
+  level: CheckLogLevel
+  message: string
+  createdAt: string
+  sourceRef?: string | null
+  sourceTitle?: string | null
+  candidate?: string | null
+  targetRef?: string | null
+  accountId?: number | null
+  accountLabel?: string | null
+}
+
+export interface OtherToolsSniperListenerState {
+  running: boolean
+  scanAccountId: number | null
+  scanAccountLabel: string
+  claimAccountId: number | null
+  claimAccountLabel: string
+  createCarrierAccountId: number | null
+  createCarrierAccountLabel: string
+  pollIntervalSeconds: number
+  sourceCount: number
+  expandedSourceCount: number
+  checkedMessageCount: number
+  candidateCount: number
+  claimedCount: number
+  createdCarrierCount: number
+  seenMessageCount: number
+  startedAt: string | null
+  lastTickAt: string | null
+  logs: OtherToolsSniperListenerLogEntry[]
+  message: string
+}
+
+export interface OtherToolsSniperListenerStopResult {
+  stopped: boolean
+  message: string
+}
+
 export interface DesktopSettingsApi {
   get: () => Promise<DesktopAppSettings>
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
@@ -1258,6 +1306,10 @@ export interface DesktopBatchCreateApi {
 export interface DesktopOtherToolsApi {
   filterUsernames: (payload: OtherToolsUsernameFilterPayload) => Promise<OtherToolsUsernameFilterResult>
   scanAndClaim: (payload: OtherToolsSniperPayload) => Promise<OtherToolsSniperResult>
+  startSniperListener: (payload: OtherToolsSniperListenerPayload) => Promise<OtherToolsSniperListenerState>
+  stopSniperListener: () => Promise<OtherToolsSniperListenerStopResult>
+  getSniperListenerState: () => Promise<OtherToolsSniperListenerState>
+  onSniperListenerState: (callback: (state: OtherToolsSniperListenerState) => void) => () => void
 }
 
 export type AppUpdaterStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'unsupported'

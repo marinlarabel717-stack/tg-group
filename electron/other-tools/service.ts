@@ -10,6 +10,10 @@ import type {
   OtherToolsUsernameFilterPayload,
   OtherToolsUsernameFilterResult,
   OtherToolsSniperCandidateItem,
+  OtherToolsSniperListenerLogEntry,
+  OtherToolsSniperListenerPayload,
+  OtherToolsSniperListenerState,
+  OtherToolsSniperListenerStopResult,
   OtherToolsSniperPayload,
   OtherToolsSniperResult,
   OtherToolsSourceSubscribeItem
@@ -64,6 +68,11 @@ function splitLines(input: string) {
 
 function createId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function sleep(ms: number) {
+  if (ms <= 0) return Promise.resolve()
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function readEntityType(entity: unknown): OtherToolsUsernameFilterItem['entityType'] {
@@ -134,6 +143,25 @@ type PoolCarrier = {
 type SourceExpandResult = {
   sources: ExpandedSource[]
   chatlistJoinCount: number
+}
+
+type ListenerClaimResult = {
+  claimTargetTitle: string
+  claimTargetRef: string
+  claimMessage: string
+  createdCarrier: boolean
+}
+
+interface ActiveSniperListenerTask {
+  id: string
+  cancelled: boolean
+  state: OtherToolsSniperListenerState
+  scanClient: TelegramClient | null
+  claimClient: TelegramClient | null
+  createCarrierClient: TelegramClient | null
+  subscribeClients: Map<number, TelegramClient>
+  seenMessageKeys: Set<string>
+  handledCandidateKeys: Set<string>
 }
 
 function normalizeCandidate(raw: string): NormalizedCandidate {
@@ -672,8 +700,87 @@ async function claimCandidateWithPool(client: TelegramClient, carrier: PoolCarri
   }
 }
 
+function expandListenerCarrierTemplate(input: string, context: { candidate: string; accountId: number; index: number }) {
+  return (input || '')
+    .replace(/\{candidate\}/gi, context.candidate)
+    .replace(/\{accountId\}/gi, String(context.accountId))
+    .replace(/\{index\}|\{n\}/gi, String(context.index + 1))
+}
+
+function buildListenerCarrierTitle(payload: OtherToolsSniperListenerPayload, candidate: string, accountId: number, index: number) {
+  const template = payload.createCarrierTitleTemplate.trim() || '监听占位_{candidate}'
+  return expandListenerCarrierTemplate(template, { candidate, accountId, index }).slice(0, 128) || `监听占位_${candidate}`
+}
+
+function buildListenerCarrierAbout(payload: OtherToolsSniperListenerPayload, candidate: string, accountId: number, index: number) {
+  const template = payload.createCarrierAboutTemplate.trim()
+  if (!template) return `自动监听命中 ${candidate} 后创建的占位频道。`
+  return expandListenerCarrierTemplate(template, { candidate, accountId, index }).slice(0, 255)
+}
+
+function extractCreatedChat(response: unknown) {
+  const value = response as { chats?: unknown[] } | null
+  return Array.isArray(value?.chats) ? value.chats[0] ?? null : null
+}
+
+async function rollbackCreatedEntity(client: TelegramClient, entity: unknown) {
+  const input = await client.getInputEntity(entity as never)
+  await client.invoke(new Api.channels.DeleteChannel({ channel: input as never }))
+}
+
+async function createCarrierAndClaim(
+  client: TelegramClient,
+  candidate: OtherToolsSniperCandidateItem,
+  payload: OtherToolsSniperListenerPayload,
+  accountId: number,
+  createdIndex: number
+): Promise<ListenerClaimResult> {
+  const username = readUsernameValue(candidate.normalized)
+  const title = buildListenerCarrierTitle(payload, username, accountId, createdIndex)
+  const about = buildListenerCarrierAbout(payload, username, accountId, createdIndex)
+  const response = await client.invoke(new Api.channels.CreateChannel({
+    title,
+    about,
+    broadcast: true,
+    megagroup: false
+  }))
+  const createdEntity = extractCreatedChat(response)
+  if (!createdEntity) {
+    throw new Error('CREATE_CARRIER_FAILED')
+  }
+
+  try {
+    const input = await client.getInputEntity(createdEntity as never)
+    const checkResult = await client.invoke(new Api.channels.CheckUsername({
+      channel: input as never,
+      username
+    }))
+    const checkResultMeta = checkResult as unknown as { className?: string }
+    const available = Boolean(checkResultMeta?.className === 'BoolTrue' || checkResult === true)
+    if (!available) {
+      throw new Error('USERNAME_OCCUPIED')
+    }
+
+    await client.invoke(new Api.channels.UpdateUsername({
+      channel: input as never,
+      username
+    }))
+
+    return {
+      claimTargetTitle: readTitleFromEntity(createdEntity) || title,
+      claimTargetRef: `https://t.me/${username}`,
+      claimMessage: `已自动创建频道 ${title} 并绑定成 @${username}。`,
+      createdCarrier: true
+    }
+  } catch (error) {
+    await rollbackCreatedEntity(client, createdEntity).catch(() => undefined)
+    throw error
+  }
+}
+
 function formatSniperClaimError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
+  if (/CREATE_CARRIER_FAILED/i.test(message)) return '自动创建占位频道失败了。'
   if (/USERNAME_OCCUPIED/i.test(message)) return '这个名字刚刚被别人占走了。'
   if (/USERNAME_INVALID|USERNAMES_UNAVAILABLE|USERNAME_PURCHASE_AVAILABLE/i.test(message)) return '这个名字现在不能普通占位。'
   if (/CHANNELS_ADMIN_PUBLIC_TOO_MUCH/i.test(message)) return '这个账号的公开群/频道用户名槽位已经到上限了。'
@@ -819,12 +926,113 @@ async function subscribeSourcesForAccount(client: TelegramClient, account: Accou
 }
 
 export class OtherToolsService {
+  private sniperListenerTask: ActiveSniperListenerTask | null = null
+
+  private sniperListenerStateSink: ((state: OtherToolsSniperListenerState) => void) | null = null
+
   constructor(
     private readonly repository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
     private readonly proxyPoolService: ProxyPoolService
   ) {}
+
+  setSniperListenerStateSink(sink: ((state: OtherToolsSniperListenerState) => void) | null) {
+    this.sniperListenerStateSink = sink
+  }
+
+  private createEmptySniperListenerState(message = '监听未启动。'): OtherToolsSniperListenerState {
+    return {
+      running: false,
+      scanAccountId: null,
+      scanAccountLabel: '',
+      claimAccountId: null,
+      claimAccountLabel: '',
+      createCarrierAccountId: null,
+      createCarrierAccountLabel: '',
+      pollIntervalSeconds: 15,
+      sourceCount: 0,
+      expandedSourceCount: 0,
+      checkedMessageCount: 0,
+      candidateCount: 0,
+      claimedCount: 0,
+      createdCarrierCount: 0,
+      seenMessageCount: 0,
+      startedAt: null,
+      lastTickAt: null,
+      logs: [],
+      message
+    }
+  }
+
+  private emitSniperListenerState(task: ActiveSniperListenerTask | null = this.sniperListenerTask) {
+    const state = task?.state ?? this.createEmptySniperListenerState()
+    this.sniperListenerStateSink?.({
+      ...state,
+      logs: [...state.logs]
+    })
+  }
+
+  getSniperListenerState(): OtherToolsSniperListenerState {
+    if (!this.sniperListenerTask) return this.createEmptySniperListenerState()
+    return {
+      ...this.sniperListenerTask.state,
+      logs: [...this.sniperListenerTask.state.logs]
+    }
+  }
+
+  private pushSniperListenerLog(task: ActiveSniperListenerTask, entry: Omit<OtherToolsSniperListenerLogEntry, 'id' | 'createdAt'>) {
+    const next: OtherToolsSniperListenerLogEntry = {
+      id: createId('sniper-listener-log'),
+      createdAt: new Date().toISOString(),
+      ...entry
+    }
+    task.state.logs = [next, ...task.state.logs].slice(0, 80)
+    task.state.message = next.message
+    this.emitSniperListenerState(task)
+  }
+
+  private async destroySniperListenerTask(task: ActiveSniperListenerTask | null) {
+    if (!task) return
+    const scanClient = task.scanClient
+    const claimClient = task.claimClient
+    const createCarrierClient = task.createCarrierClient
+    if (scanClient) {
+      await this.clientManager.destroyClient(scanClient).catch(() => undefined)
+    }
+    if (claimClient && claimClient !== scanClient) {
+      await this.clientManager.destroyClient(claimClient).catch(() => undefined)
+    }
+    if (createCarrierClient && createCarrierClient !== scanClient && createCarrierClient !== claimClient) {
+      await this.clientManager.destroyClient(createCarrierClient).catch(() => undefined)
+    }
+    task.scanClient = null
+    task.claimClient = null
+    task.createCarrierClient = null
+    await Promise.all(Array.from(task.subscribeClients.values()).map((client) => this.clientManager.destroyClient(client).catch(() => undefined)))
+    task.subscribeClients.clear()
+  }
+
+  async stopSniperListener(): Promise<OtherToolsSniperListenerStopResult> {
+    if (!this.sniperListenerTask) {
+      return {
+        stopped: false,
+        message: '当前没有在运行的监听任务。'
+      }
+    }
+
+    const task = this.sniperListenerTask
+    task.cancelled = true
+    task.state.running = false
+    task.state.message = '监听任务已停止。'
+    this.emitSniperListenerState(task)
+    await this.destroySniperListenerTask(task)
+    this.sniperListenerTask = null
+    return {
+      stopped: true,
+      message: '监听任务已停止。'
+    }
+  }
 
   async filterUsernames(payload: OtherToolsUsernameFilterPayload): Promise<OtherToolsUsernameFilterResult> {
     const values = splitInput(payload.input)
@@ -884,6 +1092,337 @@ export class OtherToolsService {
     } finally {
       await this.clientManager.destroyClient(client)
     }
+  }
+
+  async startSniperListener(payload: OtherToolsSniperListenerPayload): Promise<OtherToolsSniperListenerState> {
+    if (this.sniperListenerTask) {
+      throw new Error('已经有监听任务在运行了，请先停止当前监听。')
+    }
+
+    const sourceRefs = splitLines(payload.sourceInput)
+    const poolRefs = splitLines(payload.poolInput)
+    if (sourceRefs.length === 0) {
+      throw new Error('先填白名单来源，再启动监听。')
+    }
+
+    const accounts = this.repository.list()
+    const scanAccount = pickCheckAccount(accounts, payload.scanAccountId ?? null)
+    if (!scanAccount) {
+      throw new Error('当前没有可用监听账号。')
+    }
+
+    const claimAccount = payload.autoClaim
+      ? pickCheckAccount(accounts, payload.claimAccountId ?? payload.scanAccountId ?? null)
+      : null
+    if (payload.autoClaim && !claimAccount && !payload.autoCreateCarrier) {
+      throw new Error('当前没有可用抢注账号。')
+    }
+
+    const createCarrierAccount = payload.autoCreateCarrier
+      ? pickCheckAccount(accounts, payload.createCarrierAccountId ?? payload.claimAccountId ?? payload.scanAccountId ?? null)
+      : null
+    if (payload.autoCreateCarrier && !createCarrierAccount) {
+      throw new Error('已开启自动建频道占位，但当前没有可用建池账号。')
+    }
+
+    const subscribeAccountIds = Array.from(new Set((payload.subscribeAccountIds ?? []).filter((item): item is number => typeof item === 'number')))
+    const subscribeAccounts = payload.autoSubscribeSources
+      ? accounts.filter((account) => subscribeAccountIds.includes(account.id) && !['banned', 'frozen', 'session_expired', 'not_logged_in'].includes(account.status))
+      : []
+    const pollIntervalSeconds = Math.max(5, Math.min(300, Math.trunc(payload.pollIntervalSeconds || 15)))
+    const sourceLimit = Math.max(1, Math.min(100, Math.trunc(payload.sourceMessageLimit || 20)))
+    const candidateLimit = Math.max(1, Math.min(500, Math.trunc(payload.candidateLimit || 100)))
+    const includeKeywords = normalizeKeywordSet(payload.includeKeywords)
+    const excludeKeywords = normalizeKeywordSet(payload.excludeKeywords)
+
+    const task: ActiveSniperListenerTask = {
+      id: createId('sniper-listener'),
+      cancelled: false,
+      state: {
+        running: true,
+        scanAccountId: scanAccount.id,
+        scanAccountLabel: readCheckResultTitle(scanAccount),
+        claimAccountId: claimAccount?.id ?? null,
+        claimAccountLabel: readCheckResultTitle(claimAccount),
+        createCarrierAccountId: createCarrierAccount?.id ?? null,
+        createCarrierAccountLabel: readCheckResultTitle(createCarrierAccount),
+        pollIntervalSeconds,
+        sourceCount: sourceRefs.length,
+        expandedSourceCount: 0,
+        checkedMessageCount: 0,
+        candidateCount: 0,
+        claimedCount: 0,
+        createdCarrierCount: 0,
+        seenMessageCount: 0,
+        startedAt: new Date().toISOString(),
+        lastTickAt: null,
+        logs: [],
+        message: '监听准备启动中…'
+      },
+      scanClient: null,
+      claimClient: null,
+      createCarrierClient: null,
+      subscribeClients: new Map(),
+      seenMessageKeys: new Set(),
+      handledCandidateKeys: new Set()
+    }
+    this.sniperListenerTask = task
+    this.emitSniperListenerState(task)
+
+    void (async () => {
+      let expandedSourceEntries: ExpandedSource[] = []
+      let carriers: PoolCarrier[] = []
+      let carrierIndex = 0
+      let createdCarrierIndex = 0
+
+      try {
+        task.scanClient = await ensureAuthorizedClient(scanAccount, this.sessionLoader, this.clientManager, this.proxyPoolService)
+        task.claimClient = payload.autoClaim && claimAccount
+          ? (claimAccount.id === scanAccount.id ? task.scanClient : await ensureAuthorizedClient(claimAccount, this.sessionLoader, this.clientManager, this.proxyPoolService))
+          : null
+        task.createCarrierClient = payload.autoCreateCarrier && createCarrierAccount
+          ? (createCarrierAccount.id === scanAccount.id
+            ? task.scanClient
+            : task.claimClient && createCarrierAccount.id === claimAccount?.id
+              ? task.claimClient
+              : await ensureAuthorizedClient(createCarrierAccount, this.sessionLoader, this.clientManager, this.proxyPoolService))
+          : null
+
+        if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
+          for (const account of subscribeAccounts) {
+            const client: TelegramClient = account.id === scanAccount.id
+              ? (task.scanClient as TelegramClient)
+              : task.claimClient && account.id === claimAccount?.id
+                ? task.claimClient
+                : task.createCarrierClient && account.id === createCarrierAccount?.id
+                  ? task.createCarrierClient
+                  : await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+            if (client !== task.scanClient && client !== task.claimClient && client !== task.createCarrierClient) {
+              task.subscribeClients.set(account.id, client)
+            }
+            const subscribeItems = await subscribeSourcesForAccount(client, account, sourceRefs)
+            const joinedCount = subscribeItems.filter((item) => item.status === 'joined').length
+            const failedCount = subscribeItems.filter((item) => item.status === 'failed').length
+            if (joinedCount > 0) {
+              this.pushSniperListenerLog(task, {
+                level: 'success',
+                message: `${readCheckResultTitle(account)} 已预先订阅 ${joinedCount} 个来源目标。`,
+                accountId: account.id,
+                accountLabel: readCheckResultTitle(account)
+              })
+            }
+            if (failedCount > 0) {
+              this.pushSniperListenerLog(task, {
+                level: 'warning',
+                message: `${readCheckResultTitle(account)} 订阅来源时有 ${failedCount} 条失败。`,
+                accountId: account.id,
+                accountLabel: readCheckResultTitle(account)
+              })
+            }
+          }
+        }
+
+        const shouldJoinChatlistsForScan = !payload.autoSubscribeSources || !subscribeAccounts.some((account) => account.id === scanAccount.id)
+        const expanded = await expandSourceRefsWithChatlists(task.scanClient as TelegramClient, sourceRefs, { joinChatlists: shouldJoinChatlistsForScan })
+        expandedSourceEntries = expanded.sources
+        task.state.expandedSourceCount = expanded.sources.length
+
+        if (poolRefs.length > 0 && task.claimClient) {
+          carriers = await readPoolCarriers(task.claimClient, poolRefs)
+        }
+
+        for (const sourceEntry of expandedSourceEntries) {
+          const messages = await (task.scanClient as TelegramClient).getMessages(sourceEntry.entity as never, { limit: sourceLimit })
+          for (const message of messages) {
+            const key = `${sourceEntry.ref}:${readMessageId(message)}`
+            if (!key.endsWith(':')) {
+              task.seenMessageKeys.add(key)
+            }
+          }
+        }
+        task.state.seenMessageCount = task.seenMessageKeys.size
+        task.state.message = `监听已启动，当前盯着 ${expandedSourceEntries.length} 个实际来源。`
+        this.pushSniperListenerLog(task, {
+          level: 'success',
+          message: `监听已启动：${readCheckResultTitle(scanAccount)} 正在盯 ${expandedSourceEntries.length} 个来源，新帖会自动检查用户名。`,
+          accountId: scanAccount.id,
+          accountLabel: readCheckResultTitle(scanAccount)
+        })
+
+        while (!task.cancelled) {
+          task.state.lastTickAt = new Date().toISOString()
+          this.emitSniperListenerState(task)
+
+          for (const sourceEntry of expandedSourceEntries) {
+            if (task.cancelled) break
+            try {
+              const messages = await (task.scanClient as TelegramClient).getMessages(sourceEntry.entity as never, { limit: sourceLimit })
+              const orderedMessages = [...messages].reverse()
+              for (const message of orderedMessages) {
+                if (task.cancelled) break
+                const messageId = readMessageId(message)
+                const key = `${sourceEntry.ref}:${messageId}`
+                if (messageId && task.seenMessageKeys.has(key)) continue
+                if (messageId) {
+                  task.seenMessageKeys.add(key)
+                  task.state.seenMessageCount = task.seenMessageKeys.size
+                }
+
+                const blob = readSourceBlob(message)
+                if (!blob || !matchesKeywords(blob, includeKeywords, excludeKeywords)) continue
+                task.state.checkedMessageCount += 1
+
+                const extracted = extractCandidatesFromText(blob)
+                for (const found of extracted) {
+                  if (task.cancelled) break
+                  const normalized = normalizeCandidate(found)
+                  if (!normalized.candidate) continue
+                  const candidateKey = normalized.normalized.toLowerCase()
+                  if (task.handledCandidateKeys.has(candidateKey)) continue
+                  const resolved = await resolveUsernameState(task.scanClient as TelegramClient, normalized)
+                  task.state.candidateCount += 1
+                  if (resolved.category !== 'occupiable') continue
+
+                  const item = buildCandidateItem({
+                    raw: normalized.raw,
+                    normalized: normalized.normalized,
+                    kind: normalized.kind,
+                    category: resolved.category,
+                    reason: resolved.reason,
+                    entityType: resolved.entityType,
+                    sourceRef: sourceEntry.ref,
+                    sourceTitle: sourceEntry.title,
+                    sourceExcerpt: makeExcerpt(readMessageText(message), found),
+                    sourceMessageId: messageId,
+                    sourceDate: readMessageDate(message)
+                  })
+                  item.checkedAccountId = scanAccount.id
+                  item.checkedAccountLabel = readCheckResultTitle(scanAccount)
+                  task.handledCandidateKeys.add(candidateKey)
+
+                  if (!payload.autoClaim) {
+                    this.pushSniperListenerLog(task, {
+                      level: 'info',
+                      message: `新帖命中可占位用户名 ${item.normalized}，但当前没开自动抢注。`,
+                      sourceRef: sourceEntry.ref,
+                      sourceTitle: sourceEntry.title,
+                      candidate: item.normalized,
+                      accountId: scanAccount.id,
+                      accountLabel: readCheckResultTitle(scanAccount)
+                    })
+                    continue
+                  }
+
+                  try {
+                    let claimed: ListenerClaimResult | null = null
+                    let claimByAccount: AccountRecord | null = claimAccount
+
+                    if (carrierIndex < carriers.length && task.claimClient) {
+                      const poolClaimed = await claimCandidateWithPool(task.claimClient, carriers[carrierIndex], item)
+                      claimed = {
+                        ...poolClaimed,
+                        createdCarrier: false
+                      }
+                      carrierIndex += 1
+                    } else if (payload.autoCreateCarrier && task.createCarrierClient && createCarrierAccount) {
+                      claimed = await createCarrierAndClaim(task.createCarrierClient, item, payload, createCarrierAccount.id, createdCarrierIndex)
+                      createdCarrierIndex += 1
+                      claimByAccount = createCarrierAccount
+                      task.state.createdCarrierCount += 1
+                    } else {
+                      item.claimStatus = 'skipped'
+                      item.claimMessage = '可抢名已发现，但当前没有可用池子，也没开自动建频道占位。'
+                      this.pushSniperListenerLog(task, {
+                        level: 'warning',
+                        message: `发现 ${item.normalized} 可抢，但没有可用池子/建池账号。`,
+                        sourceRef: sourceEntry.ref,
+                        sourceTitle: sourceEntry.title,
+                        candidate: item.normalized
+                      })
+                      continue
+                    }
+
+                    item.claimStatus = 'claimed'
+                    item.claimMessage = claimed.claimMessage
+                    item.claimTargetRef = claimed.claimTargetRef
+                    item.claimTargetTitle = claimed.claimTargetTitle
+                    item.claimAccountId = claimByAccount?.id ?? null
+                    item.claimAccountLabel = readCheckResultTitle(claimByAccount)
+                    task.state.claimedCount += 1
+                    this.pushSniperListenerLog(task, {
+                      level: 'success',
+                      message: claimed.createdCarrier
+                        ? `命中 ${item.normalized}，已自动创建频道并抢到。`
+                        : `命中 ${item.normalized}，已用池子载体抢到。`,
+                      sourceRef: sourceEntry.ref,
+                      sourceTitle: sourceEntry.title,
+                      candidate: item.normalized,
+                      targetRef: claimed.claimTargetRef,
+                      accountId: claimByAccount?.id ?? null,
+                      accountLabel: readCheckResultTitle(claimByAccount)
+                    })
+                  } catch (error) {
+                    const fatal = isFatalAccountError(error)
+                    if (fatal) {
+                      const fatalAccountId = createCarrierAccount?.id ?? claimAccount?.id ?? null
+                      if (fatalAccountId) {
+                        this.repository.updateStatus([fatalAccountId], fatal.status)
+                      }
+                    }
+                    this.pushSniperListenerLog(task, {
+                      level: 'error',
+                      message: `命中 ${item.normalized} 但抢注失败：${fatal ? `账号已停用（${fatal.message}）` : formatSniperClaimError(error)}`,
+                      sourceRef: sourceEntry.ref,
+                      sourceTitle: sourceEntry.title,
+                      candidate: item.normalized,
+                      accountId: createCarrierAccount?.id ?? claimAccount?.id ?? null,
+                      accountLabel: readCheckResultTitle(createCarrierAccount ?? claimAccount)
+                    })
+                  }
+
+                  if (task.state.claimedCount >= candidateLimit) {
+                    this.pushSniperListenerLog(task, {
+                      level: 'warning',
+                      message: `本轮监听自动抢注已达到上限 ${candidateLimit} 条，继续监听但不再重复处理旧候选。`
+                    })
+                  }
+                }
+              }
+            } catch (error) {
+              this.pushSniperListenerLog(task, {
+                level: 'error',
+                message: `监听来源 ${sourceEntry.title || sourceEntry.ref} 时失败：${error instanceof Error ? error.message : String(error)}`,
+                sourceRef: sourceEntry.ref,
+                sourceTitle: sourceEntry.title
+              })
+            }
+          }
+
+          if (!task.cancelled) {
+            await sleep(pollIntervalSeconds * 1000)
+          }
+        }
+      } catch (error) {
+        task.state.running = false
+        this.pushSniperListenerLog(task, {
+          level: 'error',
+          message: `监听启动失败：${error instanceof Error ? error.message : String(error)}`
+        })
+      } finally {
+        task.state.running = false
+        task.state.lastTickAt = new Date().toISOString()
+        if (!task.cancelled && !task.state.message) {
+          task.state.message = '监听任务已结束。'
+        }
+        this.emitSniperListenerState(task)
+        await this.destroySniperListenerTask(task)
+        if (this.sniperListenerTask?.id === task.id) {
+          this.sniperListenerTask = null
+        }
+      }
+    })()
+
+    return this.getSniperListenerState()
   }
 
   async scanAndClaim(payload: OtherToolsSniperPayload): Promise<OtherToolsSniperResult> {
