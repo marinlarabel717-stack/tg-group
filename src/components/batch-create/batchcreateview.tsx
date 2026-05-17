@@ -208,9 +208,9 @@ const TasksWorkbench = memo(function TasksWorkbench() {
 
               <ConfigRow label="创建类型" hint="公开群组、公开频道，或两种都建。">
                 <select value={createMode} onChange={(event) => setCreateMode(event.target.value as typeof createMode)} disabled={running || stopping} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
-                  <option value="group">公开群组</option>
-                  <option value="channel">公开频道</option>
-                  <option value="both">两种都建</option>
+                  <option value="group" className="bg-white text-slate-950">公开群组</option>
+                  <option value="channel" className="bg-white text-slate-950">公开频道</option>
+                  <option value="both" className="bg-white text-slate-950">两种都建</option>
                 </select>
               </ConfigRow>
 

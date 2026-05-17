@@ -369,18 +369,18 @@ const TasksWorkbench = memo(function TasksWorkbench() {
 
               <ConfigRow label="执行模式" hint="只加群、边加边发、加完再发。">
                 <select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} disabled={running || stopping} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
-                  <option value="join-only">只加群</option>
-                  <option value="join-and-send">边加边发</option>
-                  <option value="join-then-send">加完再发</option>
+                  <option value="join-only" className="bg-white text-slate-950">只加群</option>
+                  <option value="join-and-send" className="bg-white text-slate-950">边加边发</option>
+                  <option value="join-then-send" className="bg-white text-slate-950">加完再发</option>
                 </select>
               </ConfigRow>
 
               <ConfigRow label="执行节奏" hint="建议默认用稳妥。">
                 <div className="flex flex-wrap items-center gap-3">
                   <select value={speedPreset} onChange={(event) => setSpeedPreset(event.target.value as typeof speedPreset)} disabled={running || stopping} className={`h-10 min-w-[180px] rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
-                    <option value="safe">稳妥</option>
-                    <option value="normal">标准</option>
-                    <option value="fast">快速</option>
+                    <option value="safe" className="bg-white text-slate-950">稳妥</option>
+                    <option value="normal" className="bg-white text-slate-950">标准</option>
+                    <option value="fast" className="bg-white text-slate-950">快速</option>
                   </select>
                   <button type="button" disabled={running || stopping} onClick={applySafePreset} className="rounded-[12px] bg-emerald-400/12 px-4 py-2 text-sm text-emerald-300 transition hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60">一键套用稳妥</button>
                 </div>
@@ -420,8 +420,8 @@ const TasksWorkbench = memo(function TasksWorkbench() {
 
               <ConfigRow label="添加顺序">
                 <select value={dispatchMode} onChange={(event) => setDispatchMode(event.target.value as typeof dispatchMode)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
-                  <option value="sequential">按顺序</option>
-                  <option value="random">随机添加</option>
+                  <option value="sequential" className="bg-white text-slate-950">按顺序</option>
+                  <option value="random" className="bg-white text-slate-950">随机添加</option>
                 </select>
               </ConfigRow>
             </FoldSection>
