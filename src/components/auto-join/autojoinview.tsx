@@ -94,7 +94,7 @@ function NumberRangeField(props: {
           <div className="text-sm text-white">{label}</div>
           <div className="mt-1 text-xs text-textMuted">最小 - 最大（秒）</div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-[280px] items-center gap-2">
           <input
             type="number"
             min={min}
@@ -142,8 +142,8 @@ function FoldSection(props: { title: string; hint?: string; defaultOpen?: boolea
   )
 }
 
-function ConfigRow(props: { label: string; hint?: string; children: ReactNode }) {
-  const { label, hint, children } = props
+function ConfigRow(props: { label: string; hint?: string; children: ReactNode; wide?: boolean }) {
+  const { label, hint, children, wide = false } = props
   return (
     <div className="px-3 py-3 text-sm">
       <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
@@ -151,7 +151,7 @@ function ConfigRow(props: { label: string; hint?: string; children: ReactNode })
           <div className="text-sm text-white">{label}</div>
           {hint ? <div className="mt-1 text-xs text-textMuted">{hint}</div> : null}
         </div>
-        <div>{children}</div>
+        <div className={wide ? 'w-full' : 'w-full max-w-[280px]'}>{children}</div>
       </div>
     </div>
   )
@@ -442,7 +442,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
           {needsMessage ? (
             <GlassPanel className="bg-card">
               <FoldSection title="发送内容配置" hint="支持文字、本地图片和一个跳转按钮。">
-                <ConfigRow label="发送文案">
+              <ConfigRow label="发送文案" wide>
                   <textarea
                     rows={6}
                     value={messageText}
@@ -460,7 +460,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                   <input value={buttonUrl} onChange={(event) => setButtonUrl(event.target.value)} placeholder="https://..." className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
                 </ConfigRow>
 
-                <ConfigRow label="发送图片">
+              <ConfigRow label="发送图片" wide>
                   <div className="flex flex-wrap items-center gap-2">
                     <label className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">
                       <Upload size={14} /> 上传图片
@@ -470,7 +470,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                   </div>
                 </ConfigRow>
 
-                <ConfigRow label="发送预览">
+              <ConfigRow label="发送预览" wide>
                   <div className="space-y-3 rounded-[14px] bg-panel/80 p-4 text-sm text-slate-200">
                     {imageData ? <img src={imageData} alt="发送预览" className="max-h-[220px] w-full rounded-[12px] object-cover" /> : <div className="rounded-[12px] border border-dashed border-white/[0.08] px-4 py-6 text-center text-textMuted">还没上传图片</div>}
                     <div className="whitespace-pre-wrap break-words">{messageText.trim() || '这里会显示发送文案。'}</div>

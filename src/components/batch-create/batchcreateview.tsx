@@ -32,7 +32,7 @@ function NumberRangeField(props: {
           <div className="text-sm text-white">{label}</div>
           <div className="mt-1 text-xs text-textMuted">最小 - 最大（秒）</div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-[280px] items-center gap-2">
           <input type="number" min={min} max={max} value={minValue} onChange={(event) => onMinChange(Math.max(min, Number(event.target.value) || min))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
           <span className="text-textMuted">-</span>
           <input type="number" min={min} max={max} value={maxValue} onChange={(event) => onMaxChange(Math.max(min, Number(event.target.value) || min))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
@@ -66,8 +66,8 @@ function FoldSection(props: { title: string; hint?: string; defaultOpen?: boolea
   )
 }
 
-function ConfigRow(props: { label: string; hint?: string; children: ReactNode }) {
-  const { label, hint, children } = props
+function ConfigRow(props: { label: string; hint?: string; children: ReactNode; wide?: boolean }) {
+  const { label, hint, children, wide = false } = props
   return (
     <div className="px-3 py-3 text-sm">
       <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
@@ -75,7 +75,7 @@ function ConfigRow(props: { label: string; hint?: string; children: ReactNode })
           <div className="text-sm text-white">{label}</div>
           {hint ? <div className="mt-1 text-xs text-textMuted">{hint}</div> : null}
         </div>
-        <div>{children}</div>
+        <div className={wide ? 'w-full' : 'w-full max-w-[280px]'}>{children}</div>
       </div>
     </div>
   )
@@ -243,7 +243,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 <input value={usernameTemplate} onChange={(event) => setUsernameTemplate(event.target.value)} placeholder="例如：brandgroup01" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
               </ConfigRow>
 
-              <ConfigRow label="简介" hint="不勾随机时，默认直接用这里的简介。">
+              <ConfigRow label="简介" hint="不勾随机时，默认直接用这里的简介。" wide>
                 <textarea value={aboutTemplate} onChange={(event) => setAboutTemplate(event.target.value)} rows={4} placeholder="例如：欢迎加入品牌交流群" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
               </ConfigRow>
 
