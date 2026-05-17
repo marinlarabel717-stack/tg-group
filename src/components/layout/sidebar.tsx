@@ -110,7 +110,7 @@ export const Sidebar = memo(function Sidebar() {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar)
 
   return (
-    <aside className={`relative flex flex-col rounded-[16px] bg-panel/95 contain-layout transition-[width,padding] duration-200 ${sidebarCollapsed ? 'w-[86px] p-3' : 'w-[252px] px-3 pb-3 pt-2'}`}>
+    <aside className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-[16px] bg-panel/95 contain-layout transition-[width,padding] duration-200 ${sidebarCollapsed ? 'w-[86px] p-3' : 'w-[252px] px-3 pb-3 pt-2'}`}>
       <div className={`relative mb-3 ${sidebarCollapsed ? 'flex flex-col items-center gap-3 pt-10' : 'pt-9'}`}>
         <button
           title={sidebarCollapsed ? '展开导航栏' : '收起导航栏'}
@@ -123,10 +123,12 @@ export const Sidebar = memo(function Sidebar() {
         <SidebarBrand collapsed={sidebarCollapsed} />
       </div>
 
-      <div className={`space-y-2 ${sidebarCollapsed ? 'mt-2' : 'mt-3'}`}>
-        {items.map((item) => (
-          <SidebarNavItem key={item.key} moduleKey={item.key} label={item.label} icon={item.icon} collapsed={sidebarCollapsed} />
-        ))}
+      <div className={`min-h-0 flex-1 ${sidebarCollapsed ? 'mt-2' : 'mt-3'}`}>
+        <div className="h-full space-y-2 overflow-y-auto pr-1">
+          {items.map((item) => (
+            <SidebarNavItem key={item.key} moduleKey={item.key} label={item.label} icon={item.icon} collapsed={sidebarCollapsed} />
+          ))}
+        </div>
       </div>
 
       <SidebarLinks collapsed={sidebarCollapsed} />
