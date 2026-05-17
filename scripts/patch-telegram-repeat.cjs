@@ -122,3 +122,12 @@ patchFile('node_modules/telegram/client/uploads.js', [
     replace: '        scheduleDate: scheduleDate,\n        scheduleRepeatPeriod: scheduleRepeatPeriod,\n        clearDraft: clearDraft,'
   }
 ])
+
+patchFile('node_modules/telegram/tl/AllTLObjects.js', [
+  {
+    label: 'alias legacy message constructor id',
+    skipIf: /tlobjects\[2533211113\] = _1\.Api\.Message;/,
+    find: 'for (const tl of Object.values(_1.Api)) {\n    if ("CONSTRUCTOR_ID" in tl) {\n        tlobjects[tl.CONSTRUCTOR_ID] = tl;\n    }\n    else {\n        for (const sub of Object.values(tl)) {\n            tlobjects[sub.CONSTRUCTOR_ID] = sub;\n        }\n    }\n}\n',
+    replace: 'for (const tl of Object.values(_1.Api)) {\n    if ("CONSTRUCTOR_ID" in tl) {\n        tlobjects[tl.CONSTRUCTOR_ID] = tl;\n    }\n    else {\n        for (const sub of Object.values(tl)) {\n            tlobjects[sub.CONSTRUCTOR_ID] = sub;\n        }\n    }\n}\ntlobjects[2533211113] = _1.Api.Message;\n'
+  }
+])
