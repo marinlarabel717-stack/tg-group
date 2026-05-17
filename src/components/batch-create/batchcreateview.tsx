@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, ChevronRight, Copy, PlusSquare, SquareTerminal, StopCircle } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, Copy, PlusSquare, Search, SquareTerminal, StopCircle, X } from 'lucide-react'
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { GlassPanel } from '../common/glasspanel'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
@@ -98,6 +98,42 @@ function formatTime(value: string) {
   return date.toLocaleTimeString('zh-CN', { hour12: false })
 }
 
+function getAccountStatusTone(status?: string) {
+  if (status === 'alive') return 'bg-emerald-400/12 text-emerald-300'
+  if (status === 'limited') return 'bg-sky-400/12 text-sky-300'
+  if (status === 'temporary_limited') return 'bg-orange-400/12 text-orange-300'
+  if (status === 'geo_restricted') return 'bg-amber-300/12 text-amber-200'
+  if (status === 'frozen') return 'bg-cyan-400/12 text-cyan-300'
+  if (status === 'multi_ip') return 'bg-indigo-400/12 text-indigo-300'
+  if (status === 'timeout') return 'bg-violet-400/12 text-violet-300'
+  if (status === 'banned' || status === 'session_expired' || status === 'not_logged_in') return 'bg-rose-400/12 text-rose-200'
+  if (status === 'checking') return 'bg-teal-400/12 text-teal-300'
+  return 'bg-white/10 text-slate-200'
+}
+
+function readCustomRangeIds<T extends { id: number }>(accounts: T[], startInput: string, endInput: string) {
+  const start = Number(startInput)
+  const end = Number(endInput)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return [] as number[]
+  const normalizedStart = Math.max(1, Math.min(start, end))
+  const normalizedEnd = Math.min(accounts.length, Math.max(start, end))
+  if (normalizedStart > normalizedEnd) return [] as number[]
+  return accounts.slice(normalizedStart - 1, normalizedEnd).map((item) => item.id)
+}
+
+function toggleAccountRange(currentIds: number[], rangeIds: number[]) {
+  const currentSet = new Set(currentIds)
+  const fullySelected = rangeIds.every((id) => currentSet.has(id))
+  if (fullySelected) {
+    return currentIds.filter((id) => !rangeIds.includes(id))
+  }
+  const next = [...currentIds]
+  rangeIds.forEach((id) => {
+    if (!currentSet.has(id)) next.push(id)
+  })
+  return next
+}
+
 const TabBar = memo(function TabBar() {
   const activeTab = useBatchCreateStore((state) => state.activeTab)
   const setActiveTab = useBatchCreateStore((state) => state.setActiveTab)
@@ -167,6 +203,8 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draftIds, setDraftIds] = useState<number[]>(selectedAccountIds)
   const [keyword, setKeyword] = useState('')
+  const [rangeStart, setRangeStart] = useState('1')
+  const [rangeEnd, setRangeEnd] = useState('10')
 
   useEffect(() => {
     void initAccounts()
@@ -179,11 +217,21 @@ const TasksWorkbench = memo(function TasksWorkbench() {
     }
   }, [pickerOpen, selectedAccountIds])
 
+  useEffect(() => {
+    if (!pickerOpen) return
+    setRangeStart('1')
+    setRangeEnd(String(Math.min(10, Math.max(accounts.length, 1))))
+  }, [pickerOpen, accounts.length])
+
   const filteredAccounts = useMemo(() => {
     const value = keyword.trim().toLowerCase()
     if (!value) return accounts
     return accounts.filter((account) => [readAccountLabel(account), account.username || '', account.phone || ''].some((part) => part.toLowerCase().includes(value)))
   }, [accounts, keyword])
+  const selectableFilteredAccounts = useMemo(
+    () => filteredAccounts.filter((account) => !getAccountTaskMeta(accountTaskStatusMap, account.id).occupied),
+    [accountTaskStatusMap, filteredAccounts]
+  )
   const selectedAccounts = useMemo(() => accounts.filter((account) => selectedAccountIds.includes(account.id)), [accounts, selectedAccountIds])
   const latestTask = tasks[0] ?? null
   const totalWillCreate = selectedAccountIds.length * countPerAccount * (createMode === 'both' ? 2 : 1)
@@ -341,43 +389,84 @@ const TasksWorkbench = memo(function TasksWorkbench() {
       </div>
 
       {pickerOpen ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/62 px-4" onClick={() => setPickerOpen(false)}>
-          <div className="w-full max-w-[920px] rounded-[20px] border border-white/[0.08] bg-card p-5 shadow-[0_24px_80px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-lg font-semibold text-white">选择创建账号</div>
-                <div className="mt-1 text-sm text-textMuted">占用中的账号会自动禁选。</div>
+        <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setPickerOpen(false)}>
+          <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-card px-5 py-4">
+              <div className="text-lg font-semibold text-white">选择创建账号</div>
+              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setPickerOpen(false)}><X size={16} /></button>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative w-full lg:max-w-[360px]">
+                  <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
+                  <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索手机号 / 账号名" className={`h-11 w-full rounded-[12px] pl-11 pr-4 text-sm ${SOFT_INPUT_CLASS}`} />
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={() => setDraftIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
+                  <button type="button" onClick={() => setDraftIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
+                </div>
               </div>
-              <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索账号 / 用户名 / 手机号" className={`h-11 w-full max-w-[280px] rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+
+              {filteredAccounts.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-sm text-textMuted">区间选择</div>
+                  <input inputMode="numeric" value={rangeStart} onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))} placeholder="开始" className={`h-10 w-20 rounded-[12px] px-3 text-sm ${SOFT_INPUT_CLASS}`} />
+                  <span className="text-textMuted">-</span>
+                  <input inputMode="numeric" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))} placeholder="结束" className={`h-10 w-20 rounded-[12px] px-3 text-sm ${SOFT_INPUT_CLASS}`} />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rangeIds = readCustomRangeIds(selectableFilteredAccounts, rangeStart, rangeEnd)
+                      if (rangeIds.length === 0) return
+                      setDraftIds((current) => toggleAccountRange(current, rangeIds))
+                    }}
+                    className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18"
+                  >
+                    应用区间
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
+                <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/6 px-4 py-3 text-xs uppercase tracking-[0.16em] text-textMuted">
+                  <div>选择</div>
+                  <div>手机号</div>
+                  <div>账号名</div>
+                  <div>状态</div>
+                </div>
+
+                <div className="max-h-[520px] overflow-y-auto">
+                  {loading && accounts.length === 0 ? (
+                    <div className="px-4 py-12 text-center text-sm text-textMuted">正在读取账号...</div>
+                  ) : filteredAccounts.length === 0 ? (
+                    <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号</div>
+                  ) : filteredAccounts.map((account) => {
+                    const checked = draftIds.includes(account.id)
+                    const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
+                    return (
+                      <label key={account.id} className={`grid grid-cols-[64px_220px_1.4fr_160px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${taskMeta.occupied ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${checked ? 'bg-violet-400/10' : taskMeta.occupied ? '' : 'hover:bg-white/[0.04]'}`}>
+                        <div className="flex items-center justify-center"><input type="checkbox" checked={checked} disabled={taskMeta.occupied} onChange={(event) => setDraftIds((current) => event.target.checked ? [...current, account.id] : current.filter((item) => item !== account.id))} /></div>
+                        <div className="truncate text-white">{account.phone || '—'}</div>
+                        <div className="min-w-0">
+                          <div className="truncate text-white">{readAccountLabel(account)}</div>
+                          {taskMeta.occupied ? <div className="mt-1 text-xs text-textMuted">任务：{taskMeta.label}</div> : null}
+                        </div>
+                        <div>
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>
+                            {formatAccountStatus(account.status)}
+                          </span>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" onClick={() => setDraftIds(filteredAccounts.filter((account) => !getAccountTaskMeta(accountTaskStatusMap, account.id).occupied).map((account) => account.id))} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">全选可用</button>
-              <button type="button" onClick={() => setDraftIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">清空</button>
-            </div>
-
-            <div className="mt-4 max-h-[420px] space-y-2 overflow-auto pr-1">
-              {loading ? <div className="rounded-[14px] bg-panel/70 px-4 py-6 text-sm text-textMuted">正在加载账号...</div> : filteredAccounts.map((account) => {
-                const occupied = getAccountTaskMeta(accountTaskStatusMap, account.id).occupied
-                const checked = draftIds.includes(account.id)
-                return (
-                  <label key={account.id} className={`flex items-center justify-between gap-3 rounded-[14px] px-4 py-3 ${occupied ? 'bg-white/[0.03] opacity-55' : 'bg-panel/70'}`}>
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" disabled={occupied} checked={checked} onChange={(event) => setDraftIds((current) => event.target.checked ? [...current, account.id] : current.filter((id) => id !== account.id))} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-                      <div>
-                        <div className="text-sm text-white">{readAccountLabel(account)}</div>
-                        <div className="mt-1 text-xs text-textMuted">{account.phone || account.username || `账号#${account.id}`}</div>
-                      </div>
-                    </div>
-                    <div className="text-xs text-textMuted">{occupied ? '占用中' : formatAccountStatus(account.status, account.profile?.check_error as string | undefined, account.profile?.check_mode as 'account-status' | 'account-survival' | null | undefined)}</div>
-                  </label>
-                )
-              })}
-            </div>
-
-            <div className="mt-5 flex justify-end gap-3">
-              <button type="button" onClick={() => setPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.08]">取消</button>
-              <button type="button" onClick={applyPicker} className="rounded-[12px] bg-violet-400 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:brightness-110">确认选择</button>
+            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/8 bg-card px-5 py-4">
+              <button type="button" onClick={() => setPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
+              <button type="button" onClick={applyPicker} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">应用账号选择</button>
             </div>
           </div>
         </div>
