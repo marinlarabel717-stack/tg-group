@@ -614,6 +614,49 @@ async function sendContentToJoinedTarget(client: TelegramClient, entity: unknown
   }))
 }
 
+function readMessageText(message: unknown) {
+  const source = message as { message?: unknown; text?: unknown; rawText?: unknown } | null
+  if (typeof source?.message === 'string') return source.message.trim()
+  if (typeof source?.text === 'string') return source.text.trim()
+  if (typeof source?.rawText === 'string') return source.rawText.trim()
+  return ''
+}
+
+function readMessageDateMs(message: unknown) {
+  const source = message as { date?: unknown } | null
+  const raw = source?.date
+  if (raw instanceof Date) return raw.getTime()
+  if (typeof raw === 'number') return raw > 1_000_000_000_000 ? raw : raw * 1000
+  if (typeof raw === 'bigint') return Number(raw) * 1000
+  if (typeof raw === 'string' && raw.trim()) {
+    const time = new Date(raw).getTime()
+    return Number.isFinite(time) ? time : null
+  }
+  return null
+}
+
+async function wasMessageActuallySent(client: TelegramClient, entity: unknown, payload: AutoJoinPayload, startedAtMs: number) {
+  const expectedText = payload.messageText.trim()
+  const expectedHasMedia = Boolean(payload.imageData.trim())
+  const messages = await ((client as TelegramClient) as TelegramClient & {
+    getMessages: (peer: unknown, params: Record<string, unknown>) => Promise<Array<{ out?: unknown; media?: unknown; message?: unknown; text?: unknown; rawText?: unknown; date?: unknown }>>
+  }).getMessages(entity as never, { limit: 6 })
+
+  if (!Array.isArray(messages) || messages.length === 0) return false
+
+  return messages.some((message) => {
+    const out = Boolean((message as { out?: unknown }).out)
+    if (!out) return false
+    const sentAtMs = readMessageDateMs(message)
+    if (typeof sentAtMs === 'number' && sentAtMs + 15_000 < startedAtMs) return false
+    const actualText = readMessageText(message)
+    const actualHasMedia = Boolean((message as { media?: unknown }).media)
+    const textMatched = expectedText ? actualText === expectedText : true
+    const mediaMatched = expectedHasMedia ? actualHasMedia : true
+    return textMatched && mediaMatched
+  })
+}
+
 export class AutoJoinService {
   private activeTask: ActiveAutoJoinTask | null = null
 
@@ -792,6 +835,50 @@ export class AutoJoinService {
       else if (status === 'skipped') sendSkippedCount += 1
       else sendFailedCount += 1
       emit(message, item, null, true)
+    }
+
+    const sendToResolvedTarget = async (client: TelegramClient, accountId: number, accountLabel: string, sourceItem: AutoJoinPayloadItem, targetLabel: string, resultItem: AutoJoinResultItem, roundLabel?: string) => {
+      let resolvedEntity: unknown | null = null
+      try {
+        resolvedEntity = await resolveSendEntity(client, sourceItem)
+        await sendContentToJoinedTarget(client, resolvedEntity, payload, targetLabel)
+        finalizeSendState(resultItem, 'sent', `${accountLabel} 已向 ${targetLabel} 发送内容${roundLabel ? `（${roundLabel}）` : ''}。`)
+        return
+      } catch (sendError) {
+        try {
+          const verifyEntity = resolvedEntity ?? await resolveSendEntity(client, sourceItem)
+          const confirmedSent = await wasMessageActuallySent(client, verifyEntity, payload, Date.now() - 3_000)
+          if (confirmedSent) {
+            finalizeSendState(resultItem, 'sent', `${accountLabel} 已向 ${targetLabel} 发出内容；虽然 Telegram 回了异常，但实际已经发成功${roundLabel ? `（${roundLabel}）` : ''}。`)
+            return
+          }
+          resolvedEntity = verifyEntity
+        } catch {
+          // ignore verification failures and keep original error handling
+        }
+
+        const fatal = readFatalAccountStateFromError(sendError)
+        if (fatal) {
+          if (fatal.persistedStatus) {
+            this.accountRepository.updateStatus([accountId], fatal.persistedStatus)
+          }
+          stoppedAccountIds.add(accountId)
+          finalizeSendState(resultItem, 'failed', `发送时发现账号状态异常：${fatal.itemMessage}`)
+          emit(`${accountLabel} ${fatal.stopMessage}`, null, null, true)
+          return
+        }
+
+        if (payload.leaveMutedGroupsEnabled && isSendForbiddenError(sendError) && resolvedEntity) {
+          try {
+            await leaveJoinedTarget(client, resolvedEntity)
+            finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}，已自动退群。`)
+          } catch {
+            finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}，不过自动退群没成功。`)
+          }
+        } else {
+          finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}`)
+        }
+      }
     }
 
     const takeNextItem = (accountId: number) => {
@@ -1015,34 +1102,12 @@ export class AutoJoinService {
 
             if (needsMessage) {
               if (payload.mode === 'join-and-send' && joined.status !== 'requested') {
-                try {
-                  const sendEntity = await resolveSendEntity(client as TelegramClient, next, 'entity' in joined ? joined.entity : undefined)
-                  await sendContentToJoinedTarget(client as TelegramClient, sendEntity, payload, joined.groupTitle || next.normalized)
-                  finalizeSendState(resultItem, 'sent', `${accountLabel} 已向 ${joined.groupTitle || next.normalized} 发送内容。`)
-                } catch (sendError) {
-                  const fatal = readFatalAccountStateFromError(sendError)
-                  if (fatal) {
-                    if (fatal.persistedStatus) {
-                      this.accountRepository.updateStatus([account.id], fatal.persistedStatus)
-                    }
-                    stoppedAccountIds.add(account.id)
-                    finalizeSendState(resultItem, 'failed', `发送时发现账号状态异常：${fatal.itemMessage}`)
-                    emit(`${accountLabel} ${fatal.stopMessage}`, null, null, true)
-                    return
-                  }
-
-                  if (payload.leaveMutedGroupsEnabled && isSendForbiddenError(sendError)) {
-                    try {
-                      const sendEntity = await resolveSendEntity(client as TelegramClient, next, 'entity' in joined ? joined.entity : undefined)
-                      await leaveJoinedTarget(client as TelegramClient, sendEntity)
-                      finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}，已自动退群。`)
-                    } catch {
-                      finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}，不过自动退群没成功。`)
-                    }
-                  } else {
-                    finalizeSendState(resultItem, 'failed', `发送失败：${formatAutoJoinError(sendError)}`)
-                  }
-                }
+                await sendToResolvedTarget(client as TelegramClient, account.id, accountLabel, {
+                  id: next.id,
+                  raw: next.raw,
+                  normalized: next.normalized,
+                  kind: next.kind
+                }, joined.groupTitle || next.normalized, resultItem)
               } else if (payload.mode === 'join-and-send') {
                 finalizeSendState(resultItem, 'skipped', '当前群还在审核中，这次先不发送。')
               }
@@ -1256,35 +1321,9 @@ export class AutoJoinService {
               normalized: item.normalized,
               kind: item.normalized.startsWith('https://t.me/+') ? 'invite' : 'username'
             }
-            const entity = await resolveSendEntity(client, sourceItem)
-            await sendContentToJoinedTarget(client, entity, payload, item.groupTitle || item.normalized)
-            finalizeSendState(item, 'sent', `${item.accountLabel || '当前账号'} 已向 ${item.groupTitle || item.normalized} 发送内容。`)
+            await sendToResolvedTarget(client, accountId, item.accountLabel || '当前账号', sourceItem, item.groupTitle || item.normalized, item)
           } catch (error) {
-            const fatal = readFatalAccountStateFromError(error)
-            if (fatal?.persistedStatus) {
-              this.accountRepository.updateStatus([accountId], fatal.persistedStatus)
-            }
-            if (fatal) {
-              stoppedAccountIds.add(accountId)
-              finalizeSendState(item, 'failed', `发送时发现账号状态异常：${fatal.itemMessage}`)
-              emit(`${item.accountLabel || '当前账号'} ${fatal.stopMessage}`, null, null, true)
-            } else if (payload.leaveMutedGroupsEnabled && isSendForbiddenError(error)) {
-              try {
-                const sourceItem: AutoJoinPayloadItem = {
-                  id: item.itemId,
-                  raw: item.raw,
-                  normalized: item.normalized,
-                  kind: item.normalized.startsWith('https://t.me/+') ? 'invite' : 'username'
-                }
-                const entity = await resolveSendEntity(client, sourceItem)
-                await leaveJoinedTarget(client, entity)
-                finalizeSendState(item, 'failed', `发送失败：${formatAutoJoinError(error)}，已自动退群。`)
-              } catch {
-                finalizeSendState(item, 'failed', `发送失败：${formatAutoJoinError(error)}，不过自动退群没成功。`)
-              }
-            } else {
-              finalizeSendState(item, 'failed', `发送失败：${formatAutoJoinError(error)}`)
-            }
+            finalizeSendState(item, 'failed', `发送失败：${formatAutoJoinError(error)}`)
           }
 
           if (!task.cancelled && sendCandidates.indexOf(item) < sendCandidates.length - 1) {
@@ -1293,6 +1332,79 @@ export class AutoJoinService {
             emit(`${item.accountLabel || '当前账号'} 等待 ${waitSeconds} 秒后继续发送下一个。`, null, waitSeconds, true)
             await sleepForTask(task, waitMs)
           }
+        }
+      }
+
+      if (!task.cancelled && needsMessage && payload.loopSendEnabled) {
+        const loopCandidates = results.filter((item) => (item.status === 'joined' || item.status === 'already') && typeof item.accountId === 'number')
+        let round = 2
+
+        if (loopCandidates.length > 0) {
+          emit(`首轮群发已完成，后面会按 ${payload.loopSendIntervalMinutes} 分钟间隔继续循环群发。`, null, null, true)
+        }
+
+        while (!task.cancelled && loopCandidates.length > 0) {
+          const waitMs = Math.max(1, payload.loopSendIntervalMinutes) * 60 * 1000
+          emit(`第 ${round} 轮循环群发将在 ${Math.max(1, payload.loopSendIntervalMinutes)} 分钟后开始。`, null, Math.ceil(waitMs / 1000), true)
+          await sleepForTask(task, waitMs)
+          if (task.cancelled) break
+
+          emit(`开始第 ${round} 轮循环群发（共 ${loopCandidates.length} 个群）。`, null, null, true)
+
+          for (let index = 0; index < loopCandidates.length; index += 1) {
+            const item = loopCandidates[index]
+            if (task.cancelled) break
+            const accountId = item.accountId
+            if (typeof accountId !== 'number') {
+              finalizeSendState(item, 'skipped', '没有拿到发送账号，这条先跳过。')
+              continue
+            }
+
+            let client = clients.get(accountId) ?? null
+            if (!client) {
+              const account = accountById.get(accountId)
+              if (!account) {
+                finalizeSendState(item, 'skipped', '没找到对应账号，这条先跳过。')
+                continue
+              }
+              try {
+                client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+                clients.set(accountId, client)
+              } catch (error) {
+                const fatal = readFatalAccountStateFromError(error)
+                if (fatal?.persistedStatus) {
+                  this.accountRepository.updateStatus([accountId], fatal.persistedStatus)
+                }
+                if (fatal) {
+                  stoppedAccountIds.add(accountId)
+                }
+                finalizeSendState(item, 'failed', fatal ? `发送前发现账号状态异常：${fatal.itemMessage}` : `发送前账号登录失效：${formatAutoJoinError(error)}`)
+                continue
+              }
+            }
+
+            if (stoppedAccountIds.has(accountId)) {
+              finalizeSendState(item, 'skipped', '这个账号已经停掉了，后面的发送先不继续。')
+              continue
+            }
+
+            const sourceItem: AutoJoinPayloadItem = {
+              id: item.itemId,
+              raw: item.raw,
+              normalized: item.normalized,
+              kind: item.normalized.startsWith('https://t.me/+') ? 'invite' : 'username'
+            }
+            await sendToResolvedTarget(client, accountId, item.accountLabel || '当前账号', sourceItem, item.groupTitle || item.normalized, item, `第 ${round} 轮`)
+
+            if (!task.cancelled && index < loopCandidates.length - 1) {
+              const perSendWaitMs = pickDelayMs(safeModeLimits.sendIntervalMin, safeModeLimits.sendIntervalMax)
+              const perSendWaitSeconds = Math.max(1, Math.ceil(perSendWaitMs / 1000))
+              emit(`${item.accountLabel || '当前账号'} 等待 ${perSendWaitSeconds} 秒后继续发送下一个。`, null, perSendWaitSeconds, true)
+              await sleepForTask(task, perSendWaitMs)
+            }
+          }
+
+          round += 1
         }
       }
 

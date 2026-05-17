@@ -170,6 +170,10 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const setMaxJoinsPerAccount = useAutoJoinStore((state) => state.setMaxJoinsPerAccount)
   const repeatJoinEnabled = useAutoJoinStore((state) => state.repeatJoinEnabled)
   const setRepeatJoinEnabled = useAutoJoinStore((state) => state.setRepeatJoinEnabled)
+  const loopSendEnabled = useAutoJoinStore((state) => state.loopSendEnabled)
+  const setLoopSendEnabled = useAutoJoinStore((state) => state.setLoopSendEnabled)
+  const loopSendIntervalMinutes = useAutoJoinStore((state) => state.loopSendIntervalMinutes)
+  const setLoopSendIntervalMinutes = useAutoJoinStore((state) => state.setLoopSendIntervalMinutes)
   const dispatchMode = useAutoJoinStore((state) => state.dispatchMode)
   const setDispatchMode = useAutoJoinStore((state) => state.setDispatchMode)
   const startTask = useAutoJoinStore((state) => state.startTask)
@@ -323,6 +327,23 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                   <input type="checkbox" checked={repeatJoinEnabled} onChange={(event) => setRepeatJoinEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
                 </label>
               </ConfigRow>
+
+              {needsMessage ? (
+                <>
+                  <ConfigRow label="循环群发" hint="一轮发完后，不直接结束，而是按你设的间隔继续下一轮。">
+                    <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                      <span>{loopSendEnabled ? '已开启' : '已关闭'}</span>
+                      <input type="checkbox" checked={loopSendEnabled} onChange={(event) => setLoopSendEnabled(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                    </label>
+                  </ConfigRow>
+
+                  {loopSendEnabled ? (
+                    <ConfigRow label="每轮间隔（分钟）" hint="这一轮全部发完后，等多久再开始下一轮。">
+                      <input type="number" min={1} max={1440} value={loopSendIntervalMinutes} onChange={(event) => setLoopSendIntervalMinutes(Number(event.target.value) || 1)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                    </ConfigRow>
+                  ) : null}
+                </>
+              ) : null}
 
               <ConfigRow label="遇到频道自动跳过">
                 <label className="flex items-center justify-end gap-3 text-sm text-slate-200">

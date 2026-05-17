@@ -90,6 +90,8 @@ interface AutoJoinState {
   floodRestMax: number
   retryLimit: number
   repeatJoinEnabled: boolean
+  loopSendEnabled: boolean
+  loopSendIntervalMinutes: number
   dispatchMode: 'random' | 'sequential'
   safeModeEnabled: boolean
   maxJoinsPerAccount: number
@@ -126,6 +128,8 @@ interface AutoJoinState {
   setFloodRestMax: (value: number) => void
   setRetryLimit: (value: number) => void
   setRepeatJoinEnabled: (value: boolean) => void
+  setLoopSendEnabled: (value: boolean) => void
+  setLoopSendIntervalMinutes: (value: number) => void
   setDispatchMode: (value: 'random' | 'sequential') => void
   setSafeModeEnabled: (value: boolean) => void
   setMaxJoinsPerAccount: (value: number) => void
@@ -475,10 +479,12 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       sendIntervalMin: 25,
       sendIntervalMax: 60,
       floodRestMin: 20,
-      floodRestMax: 45,
-      retryLimit: 1,
-      repeatJoinEnabled: false,
-      dispatchMode: 'sequential',
+    floodRestMax: 45,
+    retryLimit: 1,
+    repeatJoinEnabled: false,
+    loopSendEnabled: false,
+    loopSendIntervalMinutes: 30,
+    dispatchMode: 'sequential',
       safeModeEnabled: true,
       maxJoinsPerAccount: 3,
       running: false,
@@ -533,6 +539,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       setFloodRestMax: (value) => set({ floodRestMax: value }),
       setRetryLimit: (value) => set({ retryLimit: value }),
       setRepeatJoinEnabled: (value) => set({ repeatJoinEnabled: value }),
+      setLoopSendEnabled: (value) => set({ loopSendEnabled: value }),
+      setLoopSendIntervalMinutes: (value) => set({ loopSendIntervalMinutes: Math.max(1, Math.min(1440, Math.floor(value) || 1)) }),
       setDispatchMode: (value) => set({ dispatchMode: value }),
       setSafeModeEnabled: (value) => set({ safeModeEnabled: value }),
       setMaxJoinsPerAccount: (value) => set({ maxJoinsPerAccount: Math.max(1, value) }),
@@ -636,6 +644,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             retryLimit: get().retryLimit,
             autoRetryOnFloodWait: true,
             repeatJoinEnabled: get().repeatJoinEnabled,
+            loopSendEnabled: needsMessage ? get().loopSendEnabled : false,
+            loopSendIntervalMinutes: Math.max(1, get().loopSendIntervalMinutes),
             dispatchMode: get().dispatchMode,
             safeModeEnabled,
             maxJoinsPerAccount: perAccountTargetLimit,
@@ -750,6 +760,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           safeModeEnabled: state?.safeModeEnabled ?? true,
           maxJoinsPerAccount: Math.max(1, state?.maxJoinsPerAccount ?? 3),
           repeatJoinEnabled: state?.repeatJoinEnabled ?? false,
+          loopSendEnabled: state?.loopSendEnabled ?? false,
+          loopSendIntervalMinutes: Math.max(1, state?.loopSendIntervalMinutes ?? 30),
           dispatchMode: state?.dispatchMode ?? 'sequential',
           retryLimit: state?.retryLimit ?? 1,
           sendIntervalMin: state?.sendIntervalMin ?? 25,
@@ -779,6 +791,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
         floodRestMax: state.floodRestMax,
         retryLimit: state.retryLimit,
         repeatJoinEnabled: state.repeatJoinEnabled,
+        loopSendEnabled: state.loopSendEnabled,
+        loopSendIntervalMinutes: state.loopSendIntervalMinutes,
         dispatchMode: state.dispatchMode,
         safeModeEnabled: state.safeModeEnabled,
         maxJoinsPerAccount: state.maxJoinsPerAccount

@@ -946,6 +946,8 @@ export interface AutoJoinPayload {
   retryLimit: number
   autoRetryOnFloodWait: boolean
   repeatJoinEnabled: boolean
+  loopSendEnabled: boolean
+  loopSendIntervalMinutes: number
   dispatchMode: 'random' | 'sequential'
   safeModeEnabled: boolean
   maxJoinsPerAccount: number
