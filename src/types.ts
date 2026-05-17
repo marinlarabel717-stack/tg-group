@@ -1080,6 +1080,35 @@ export interface BatchCreateProgress {
   waitSeconds?: number | null
 }
 
+export type OtherToolsUsernameFilterCategory = 'valid' | 'occupiable' | 'forbidden'
+
+export interface OtherToolsUsernameFilterPayload {
+  input: string
+}
+
+export interface OtherToolsUsernameFilterItem {
+  raw: string
+  normalized: string
+  category: OtherToolsUsernameFilterCategory
+  kind: 'username' | 'link'
+  reason: string
+  entityType: 'user' | 'bot' | 'group' | 'channel' | 'unknown'
+  checkedAccountId?: number | null
+  checkedAccountLabel?: string | null
+}
+
+export interface OtherToolsUsernameFilterResult {
+  accountId: number | null
+  accountLabel: string
+  total: number
+  checkedCount: number
+  valid: OtherToolsUsernameFilterItem[]
+  occupiable: OtherToolsUsernameFilterItem[]
+  forbidden: OtherToolsUsernameFilterItem[]
+  items: OtherToolsUsernameFilterItem[]
+  message: string
+}
+
 export interface DesktopSettingsApi {
   get: () => Promise<DesktopAppSettings>
   update: (patch: Partial<DesktopAppSettings>) => Promise<DesktopAppSettings>
@@ -1149,6 +1178,10 @@ export interface DesktopBatchCreateApi {
   onProgress: (callback: (payload: BatchCreateProgress) => void) => () => void
 }
 
+export interface DesktopOtherToolsApi {
+  filterUsernames: (payload: OtherToolsUsernameFilterPayload) => Promise<OtherToolsUsernameFilterResult>
+}
+
 export type AppUpdaterStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'unsupported'
 
 export interface AppUpdaterState {
@@ -1191,6 +1224,7 @@ declare global {
     desktopDirectMessage?: DesktopDirectMessageApi
     desktopAutoJoin?: DesktopAutoJoinApi
     desktopBatchCreate?: DesktopBatchCreateApi
+    desktopOtherTools?: DesktopOtherToolsApi
     desktopUpdater?: DesktopUpdaterApi
     desktopWindow?: DesktopWindowApi
     desktopInfo?: {

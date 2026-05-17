@@ -1,151 +1,20 @@
-import { Copy, Filter } from 'lucide-react'
+import { Copy, Filter, Loader2 } from 'lucide-react'
 import { memo, useMemo, useState } from 'react'
+import type { OtherToolsUsernameFilterItem, OtherToolsUsernameFilterResult } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 
 type OtherToolsTabKey = 'filter'
 
-type FilterCategory = 'valid' | 'replaceable' | 'placeholder' | 'invalid'
-
-type FilterItem = {
-  raw: string
-  normalized: string
-  category: FilterCategory
-  kind: 'username' | 'link' | 'unknown'
-  reason: string
-}
-
 const tabs: Array<{ key: OtherToolsTabKey; label: string; icon: typeof Filter }> = [
   { key: 'filter', label: '筛选', icon: Filter }
 ]
 
-const PLACEHOLDER_MARKERS = ['占位', 'placeholder', '待替换', 'username', 'link', 'url', 'xxx', 'test']
-
-function isPlaceholderValue(value: string) {
-  const normalized = value.trim().toLowerCase()
-  if (!normalized) return false
-  if (/\{[^}]+\}/.test(value)) return true
-  return PLACEHOLDER_MARKERS.some((item) => normalized.includes(item))
-}
-
-function parseUsername(value: string) {
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  const cleaned = trimmed.replace(/^@+/, '')
-  if (/^[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(cleaned)) {
-    return {
-      valid: true,
-      normalized: `@${cleaned.toLowerCase()}`,
-      replaceable: false
-    }
-  }
-
-  const candidate = cleaned.toLowerCase().replace(/[^a-z0-9_]+/g, '')
-  if (/^[a-z][a-z0-9_]{4,31}$/.test(candidate)) {
-    return {
-      valid: false,
-      normalized: `@${candidate}`,
-      replaceable: true
-    }
-  }
-
-  return null
-}
-
-function parseLink(value: string) {
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  const matched = trimmed.match(/^(?:https?:\/\/)?t\.me\/([a-zA-Z0-9_]{5,32})$/i)
-  if (matched?.[1]) {
-    return {
-      valid: true,
-      normalized: `https://t.me/${matched[1].toLowerCase()}`,
-      replaceable: false
-    }
-  }
-
-  const maybePath = trimmed.match(/^(?:https?:\/\/)?t\.me\/([^/?#]+)$/i)
-  if (maybePath?.[1]) {
-    const candidate = maybePath[1].toLowerCase().replace(/[^a-z0-9_]+/g, '')
-    if (/^[a-z][a-z0-9_]{4,31}$/.test(candidate)) {
-      return {
-        valid: false,
-        normalized: `https://t.me/${candidate}`,
-        replaceable: true
-      }
-    }
-  }
-
-  return null
-}
-
-function classifyValue(raw: string): FilterItem {
-  const value = raw.trim()
-  if (!value) {
-    return {
-      raw,
-      normalized: '',
-      category: 'invalid',
-      kind: 'unknown',
-      reason: '空内容已跳过'
-    }
-  }
-
-  if (isPlaceholderValue(value)) {
-    return {
-      raw,
-      normalized: value,
-      category: 'placeholder',
-      kind: /t\.me|https?:\/\//i.test(value) ? 'link' : 'username',
-      reason: '看起来是占位内容，建议后续替换'
-    }
-  }
-
-  const linkResult = parseLink(value)
-  if (linkResult) {
-    return {
-      raw,
-      normalized: linkResult.normalized,
-      category: linkResult.valid ? 'valid' : 'replaceable',
-      kind: 'link',
-      reason: linkResult.valid ? '链接格式合法' : '链接可整理成合法格式'
-    }
-  }
-
-  const usernameResult = parseUsername(value)
-  if (usernameResult) {
-    return {
-      raw,
-      normalized: usernameResult.normalized,
-      category: usernameResult.valid ? 'valid' : 'replaceable',
-      kind: 'username',
-      reason: usernameResult.valid ? '用户名格式合法' : '用户名可整理成合法格式'
-    }
-  }
-
-  return {
-    raw,
-    normalized: value,
-    category: 'invalid',
-    kind: 'unknown',
-    reason: '不是合法用户名/链接，也整理不成可用格式'
-  }
-}
-
-function parseBulkValues(input: string) {
-  const items = input
+function splitPreviewInput(input: string) {
+  return input
     .split(/[\n,\r\t ]+/)
     .map((item) => item.trim())
     .filter(Boolean)
-    .map((item) => classifyValue(item))
-
-  return {
-    items,
-    valid: items.filter((item) => item.category === 'valid'),
-    replaceable: items.filter((item) => item.category === 'replaceable'),
-    placeholder: items.filter((item) => item.category === 'placeholder'),
-    invalid: items.filter((item) => item.category === 'invalid')
-  }
 }
 
 const TabBar = memo(function TabBar(props: { activeTab: OtherToolsTabKey; onChange: (tab: OtherToolsTabKey) => void }) {
@@ -171,7 +40,20 @@ const TabBar = memo(function TabBar(props: { activeTab: OtherToolsTabKey; onChan
   )
 })
 
-function ResultBlock(props: { title: string; items: FilterItem[]; tone: string }) {
+function readKindLabel(item: OtherToolsUsernameFilterItem) {
+  if (item.kind === 'link') return '链接'
+  return '用户名'
+}
+
+function readEntityLabel(item: OtherToolsUsernameFilterItem) {
+  if (item.entityType === 'user') return '真实用户'
+  if (item.entityType === 'bot') return '机器人'
+  if (item.entityType === 'group') return '群组'
+  if (item.entityType === 'channel') return '频道'
+  return '未细分'
+}
+
+function ResultBlock(props: { title: string; items: OtherToolsUsernameFilterItem[]; tone: string }) {
   const { title, items, tone } = props
 
   const copyAll = async () => {
@@ -198,7 +80,7 @@ function ResultBlock(props: { title: string; items: FilterItem[]; tone: string }
           <div key={`${title}_${index}_${item.raw}`} className="rounded-[14px] bg-panel/70 px-4 py-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-white break-all">{item.raw}</div>
-              <div className={`text-xs ${tone}`}>{item.kind === 'link' ? '链接' : item.kind === 'username' ? '用户名' : '未知'}</div>
+              <div className={`text-xs ${tone}`}>{readKindLabel(item)} / {readEntityLabel(item)}</div>
             </div>
             <div className="mt-2 text-xs text-textMuted">{item.reason}</div>
             {item.normalized && item.normalized !== item.raw ? <div className="mt-2 rounded-[10px] bg-black/10 px-3 py-2 text-xs text-slate-200 break-all">整理后：{item.normalized}</div> : null}
@@ -211,15 +93,44 @@ function ResultBlock(props: { title: string; items: FilterItem[]; tone: string }
 
 function FilterWorkbench() {
   const [input, setInput] = useState('')
-  const summary = useMemo(() => parseBulkValues(input), [input])
+  const [running, setRunning] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [summary, setSummary] = useState<OtherToolsUsernameFilterResult | null>(null)
+  const previewItems = useMemo(() => splitPreviewInput(input), [input])
+
+  const handleRun = async () => {
+    const api = window.desktopOtherTools
+    const trimmed = input.trim()
+    if (!trimmed) {
+      setSummary(null)
+      setErrorMessage('先贴一点用户名或 t.me 链接再筛。')
+      return
+    }
+    if (!api) {
+      setErrorMessage('当前运行环境不支持 Telegram 实查。')
+      return
+    }
+
+    setRunning(true)
+    setErrorMessage('')
+    try {
+      const result = await api.filterUsernames({ input: trimmed })
+      setSummary(result)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setErrorMessage(message || '筛选失败')
+    } finally {
+      setRunning(false)
+    }
+  }
 
   return (
     <div className="space-y-5">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <GlassPanel className="bg-card">
-          <FoldSection title="筛选配置" hint="输入区、统计和规则说明统一收口成同一套折叠样式。">
-            <ConfigRow label="原始内容" hint="一行一个，支持用户名和 t.me 链接。" wide>
-              <div className="space-y-2">
+          <FoldSection title="筛选配置" hint="这次改成 Telegram 实查，不再只按字符串格式猜。">
+            <ConfigRow label="原始内容" hint="一行一个，支持 @username / username / t.me/username / https://t.me/username。" wide>
+              <div className="space-y-3">
                 <textarea
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
@@ -227,7 +138,20 @@ function FilterWorkbench() {
                   placeholder="一行一个，支持 @username / username / https://t.me/username / t.me/username"
                   className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`}
                 />
-                <div className="text-xs text-textMuted">可直接贴一整批内容，系统会自动拆分。</div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-xs text-textMuted">当前待查 {previewItems.length} 条。会自动清洗后再用 Telegram 实查。</div>
+                  <button
+                    type="button"
+                    onClick={() => void handleRun()}
+                    disabled={running || previewItems.length === 0}
+                    className="inline-flex items-center gap-2 rounded-[12px] border border-white/[0.08] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {running ? <Loader2 size={14} className="animate-spin" /> : <Filter size={14} />}
+                    {running ? '正在实查…' : '开始筛选'}
+                  </button>
+                </div>
+                {errorMessage ? <div className="rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{errorMessage}</div> : null}
+                {summary?.message ? <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.12] px-3 py-2 text-xs text-textMuted">{summary.message}</div> : null}
               </div>
             </ConfigRow>
           </FoldSection>
@@ -235,24 +159,20 @@ function FilterWorkbench() {
 
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <FoldSection title="统计" hint="处理结果一眼就能看出来。">
+            <FoldSection title="统计" hint="直接按你要的三类出结果。">
               <ConfigRow label="数量统计" wide>
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                   <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-emerald-200/80">合法</div>
-                    <div className="mt-2 text-2xl font-semibold text-emerald-300">{summary.valid.length}</div>
+                    <div className="text-xs tracking-[0.16em] text-emerald-200/80">有效用户名</div>
+                    <div className="mt-2 text-2xl font-semibold text-emerald-300">{summary?.valid.length ?? 0}</div>
                   </div>
                   <div className="rounded-[14px] bg-cyan-400/8 px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-cyan-200/80">可替换</div>
-                    <div className="mt-2 text-2xl font-semibold text-cyan-300">{summary.replaceable.length}</div>
-                  </div>
-                  <div className="rounded-[14px] bg-amber-400/8 px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-amber-200/80">占位</div>
-                    <div className="mt-2 text-2xl font-semibold text-amber-200">{summary.placeholder.length}</div>
+                    <div className="text-xs tracking-[0.16em] text-cyan-200/80">可占位用户名</div>
+                    <div className="mt-2 text-2xl font-semibold text-cyan-300">{summary?.occupiable.length ?? 0}</div>
                   </div>
                   <div className="rounded-[14px] bg-rose-400/8 px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-rose-200/80">无效</div>
-                    <div className="mt-2 text-2xl font-semibold text-rose-300">{summary.invalid.length}</div>
+                    <div className="text-xs tracking-[0.16em] text-rose-200/80">无效且不可占位</div>
+                    <div className="mt-2 text-2xl font-semibold text-rose-300">{summary?.forbidden.length ?? 0}</div>
                   </div>
                 </div>
               </ConfigRow>
@@ -260,13 +180,12 @@ function FilterWorkbench() {
           </GlassPanel>
 
           <GlassPanel className="bg-card">
-            <FoldSection title="规则说明" hint="口径统一，方便后面别的工具也沿用。" defaultOpen={false}>
+            <FoldSection title="规则说明" hint="现在按 Telegram 实际状态分，不再单纯看格式。" defaultOpen={false}>
               <ConfigRow label="分类口径" wide>
                 <div className="space-y-2 text-sm text-textMuted">
-                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">合法：</span>本身就是规范用户名或 t.me 链接。</div>
-                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">可替换：</span>原值不规范，但整理后还能变成合法格式。</div>
-                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">占位：</span>像 placeholder / 待替换 / {'{rand6}'} 这类占位内容。</div>
-                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">无效：</span>既不是合法值，也整理不成可用值。</div>
+                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">有效用户名：</span>已经能查到真实目标，或这个公开用户名当前已被占用。</div>
+                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">可占位用户名：</span>当前没人占用，或者清洗后可以继续拿来占位。</div>
+                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">无效且不可占位：</span>违禁、保留、规则不允许，或根本整理不成合法用户名。</div>
                 </div>
               </ConfigRow>
             </FoldSection>
@@ -275,10 +194,9 @@ function FilterWorkbench() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <ResultBlock title="合法" items={summary.valid} tone="text-emerald-300" />
-        <ResultBlock title="可替换" items={summary.replaceable} tone="text-cyan-300" />
-        <ResultBlock title="占位" items={summary.placeholder} tone="text-amber-200" />
-        <ResultBlock title="无效" items={summary.invalid} tone="text-rose-300" />
+        <ResultBlock title="有效用户名（存在真实用户）" items={summary?.valid ?? []} tone="text-emerald-300" />
+        <ResultBlock title="可占位用户名" items={summary?.occupiable ?? []} tone="text-cyan-300" />
+        <ResultBlock title="无效用户但不可占位" items={summary?.forbidden ?? []} tone="text-rose-300" />
       </div>
     </div>
   )
