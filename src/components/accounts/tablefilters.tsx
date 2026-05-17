@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, RefreshCw, Search, X } from 'lucide-react'
+import { SOFT_INPUT_CLASS, SOFT_SELECT_OPTION_CLASS } from '../common/settings-ui'
 
 interface FilterOption {
   label: string
@@ -45,11 +46,11 @@ function FilterSelect({
     <select
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="h-11 min-w-[132px] rounded-[12px] bg-card px-4 text-sm text-textMain outline-none transition focus:bg-hover"
+      className={`h-11 min-w-[132px] rounded-[12px] px-4 text-sm text-textMain ${SOFT_INPUT_CLASS}`}
     >
-      <option value="">{label}</option>
+      <option value="" className={SOFT_SELECT_OPTION_CLASS}>{label}</option>
       {options.map((option) => (
-        <option key={option.value} value={option.value}>
+        <option key={option.value} value={option.value} className={SOFT_SELECT_OPTION_CLASS}>
           {option.label}
         </option>
       ))}
@@ -125,7 +126,7 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
           value={props.search}
           onChange={(event) => props.onSearchChange(event.target.value)}
           placeholder="按手机号、用户名、userId、路径搜索"
-          className="h-11 w-full rounded-[12px] bg-card pl-11 pr-10 text-sm leading-none text-textMain outline-none transition focus:bg-hover"
+          className={`h-11 w-full rounded-[12px] pl-11 pr-10 text-sm leading-none text-textMain ${SOFT_INPUT_CLASS}`}
         />
         {props.search ? (
           <button
@@ -147,7 +148,7 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
         <button
           type="button"
           onClick={() => setOtherFiltersOpen((value) => !value)}
-          className="inline-flex h-11 min-w-[132px] items-center justify-center gap-2 rounded-[12px] bg-card px-4 text-sm text-textMain transition hover:bg-hover"
+          className="inline-flex h-11 min-w-[132px] items-center justify-center gap-2 rounded-[12px] border border-white/[0.06] bg-black/10 px-4 text-sm text-textMain transition hover:bg-hover"
         >
           <span>{activePresenceFilters.length > 0 ? `其他筛选（${activePresenceFilters.length}）` : '其他筛选'}</span>
           <ChevronDown size={15} className={`transition ${otherFiltersOpen ? 'rotate-180' : ''}`} />
@@ -219,7 +220,7 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
       <button
         type="button"
         onClick={props.onRefresh}
-        className="inline-flex h-11 min-w-[96px] shrink-0 items-center justify-center gap-2 rounded-[12px] bg-card px-5 text-sm font-medium text-textMain transition hover:bg-hover"
+        className="inline-flex h-11 min-w-[96px] shrink-0 items-center justify-center gap-2 rounded-[12px] border border-white/[0.06] bg-black/10 px-5 text-sm font-medium text-textMain transition hover:bg-hover"
       >
         <RefreshCw size={16} />
         刷新

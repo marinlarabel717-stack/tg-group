@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { SOFT_INPUT_CLASS, SOFT_SELECT_OPTION_CLASS } from '../common/settings-ui'
 
 interface TablePaginationProps {
   pageIndex: number
@@ -25,7 +26,7 @@ export const TablePagination = memo(function TablePagination({
   onPageSizeChange
 }: TablePaginationProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] bg-card px-5 py-5">
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border border-white/[0.06] bg-black/10 px-5 py-5">
       <div>
         <div className="text-[11px] tracking-[0.22em] text-textMuted">分页</div>
         <div className="mt-1 text-sm text-white">
@@ -37,10 +38,10 @@ export const TablePagination = memo(function TablePagination({
         <select
           value={pageSize}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
-          className="h-11 rounded-[12px] bg-panel px-4 text-sm text-textMain outline-none transition focus:bg-hover"
+          className={`h-11 rounded-[12px] px-4 text-sm text-textMain ${SOFT_INPUT_CLASS}`}
         >
           {[10, 20, 30, 50].map((size) => (
-            <option key={size} value={size}>
+            <option key={size} value={size} className={SOFT_SELECT_OPTION_CLASS}>
               每页 {size} 条
             </option>
           ))}
@@ -51,7 +52,7 @@ export const TablePagination = memo(function TablePagination({
             title="上一页"
             onClick={onPreviousPage}
             disabled={!canPreviousPage}
-            className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-panel text-textMain transition hover:bg-hover hover:text-neonSoft disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-[12px] border border-white/[0.06] bg-black/10 text-textMain transition hover:bg-hover hover:text-neonSoft disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronLeft size={18} />
           </button>
@@ -59,7 +60,7 @@ export const TablePagination = memo(function TablePagination({
             title="下一页"
             onClick={onNextPage}
             disabled={!canNextPage}
-            className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-panel text-textMain transition hover:bg-hover hover:text-neonSoft disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-[12px] border border-white/[0.06] bg-black/10 text-textMain transition hover:bg-hover hover:text-neonSoft disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronRight size={18} />
           </button>

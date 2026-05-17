@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { ImagePlus, Loader2, Sparkles, Trash2, Type, UserRoundPen } from 'lucide-react'
 import type { AccountRecord, ProfileOperationAction, ProfileOperationPayload } from '../../types'
+import { SOFT_INPUT_CLASS } from '../common/settings-ui'
 import { ResultDialogShell, ResultHero } from './resultdialog'
 
 function readActionLabel(action: ProfileOperationAction | null) {
@@ -191,14 +192,14 @@ export const ProfileManageDialog = memo(function ProfileManageDialog({
               value={value}
               onChange={(event) => setValue(event.target.value)}
               placeholder={readPlaceholder(action)}
-              className="min-h-[120px] w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-sm text-white outline-none transition focus:border-white/[0.12] focus:bg-hover"
+              className={`min-h-[120px] w-full rounded-[12px] px-4 py-3 text-sm ${SOFT_INPUT_CLASS}`}
             />
           ) : (
             <input
               value={value}
               onChange={(event) => setValue(event.target.value)}
               placeholder={readPlaceholder(action)}
-              className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-white outline-none transition focus:border-white/[0.12] focus:bg-hover"
+              className={`h-11 w-full rounded-[12px] px-4 text-sm ${SOFT_INPUT_CLASS}`}
             />
           )}
         </div>

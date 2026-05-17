@@ -4,6 +4,8 @@ import { useState, type ReactNode } from 'react'
 export const SOFT_INPUT_CLASS = 'border border-white/[0.06] bg-black/10 text-white outline-none transition focus:border-white/[0.12] focus:bg-black/12'
 export const SOFT_PANEL_INPUT_CLASS = 'border border-white/[0.06] bg-panel text-white outline-none transition focus:border-white/[0.12] focus:bg-panel'
 export const SOFT_TAB_CLASS = 'border border-white/[0.06] transition'
+export const SOFT_SELECT_OPTION_CLASS = 'bg-white text-slate-950'
+export const SOFT_NOTICE_CLASS = 'rounded-[14px] border border-white/[0.06] bg-black/[0.08]'
 
 export function FoldSection(props: { title: string; hint?: string; defaultOpen?: boolean; children: ReactNode }) {
   const { title, hint, defaultOpen = true, children } = props

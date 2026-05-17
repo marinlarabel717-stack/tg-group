@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, KeyRound, Loader2, MailCheck, RotateCcw, ShieldOff } from 'lucide-react'
 import type { AccountRecord, TwoFactorAction, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState } from '../../types'
+import { SOFT_INPUT_CLASS } from '../common/settings-ui'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from './resultdialog'
 
 function readActionLabel(action: TwoFactorAction) {
@@ -151,7 +152,7 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
               placeholder="没有本地记录时，在这里填旧 2FA"
-              className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-white outline-none transition focus:border-white/[0.12] focus:bg-hover"
+              className={`h-11 w-full rounded-[12px] px-4 text-sm ${SOFT_INPUT_CLASS}`}
             />
           </div>
         ) : null}
@@ -165,7 +166,7 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
                 placeholder="批量改成这个 2FA"
-                className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-white outline-none transition focus:border-white/[0.12] focus:bg-hover"
+                className={`h-11 w-full rounded-[12px] px-4 text-sm ${SOFT_INPUT_CLASS}`}
               />
             </div>
             <div>
@@ -175,7 +176,7 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 placeholder="再输入一次新的 2FA"
-                className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-white outline-none transition focus:border-white/[0.12] focus:bg-hover"
+                className={`h-11 w-full rounded-[12px] px-4 text-sm ${SOFT_INPUT_CLASS}`}
               />
             </div>
             <div>
@@ -184,7 +185,7 @@ export const TwoFactorManageDialog = memo(function TwoFactorManageDialog({
                 value={hint}
                 onChange={(event) => setHint(event.target.value)}
                 placeholder="比如：本批 5 月新规则"
-                className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-white outline-none transition focus:border-white/[0.12] focus:bg-hover"
+                className={`h-11 w-full rounded-[12px] px-4 text-sm ${SOFT_INPUT_CLASS}`}
               />
             </div>
           </>

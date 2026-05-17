@@ -33,6 +33,11 @@ select {
   font: inherit;
 }
 
+select option {
+  color: #0f172a;
+  background: #ffffff;
+}
+
 input,
 textarea,
 [contenteditable='true'] {

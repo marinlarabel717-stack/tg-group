@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { ClipboardList, Loader2, Play, RefreshCw, ShoppingBag, Shuffle, ShieldCheck, ShieldX, WandSparkles } from 'lucide-react'
+import { ClipboardList, Loader2, Play, RefreshCw, ShoppingBag, Shuffle, WandSparkles } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
+import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_SELECT_OPTION_CLASS } from '../common/settings-ui'
 import { useProxyPoolStore } from '../../stores/proxypoolstore'
 import { useUIStore } from '../../stores/uistore'
 import { formatDateTime } from '../../lib/ui-text'
@@ -103,34 +104,36 @@ export default memo(function ProxyPoolView() {
 
         <div className="grid gap-5 px-5 py-5 xl:grid-cols-[1.25fr_0.9fr]">
           <div className="space-y-5">
-            <div className="rounded-[16px] bg-panel p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => textareaRef.current?.focus()}
-                  className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-hover"
-                >
-                  <ClipboardList size={16} />
-                  代理列表
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handlePasteFromClipboard()}
-                  className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-hover"
-                >
-                  <WandSparkles size={16} />
-                  从剪贴板粘贴
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-white/[0.04] px-4 text-sm font-medium text-textMuted transition hover:bg-hover hover:text-white"
-                >
-                  <ShoppingBag size={16} />
-                  购买代理
-                </button>
-              </div>
+            <FoldSection title="代理列表" hint="先贴列表，再统一保存和检查。" defaultOpen>
+              <ConfigRow label="快捷操作" hint="支持直接聚焦、从剪贴板补进去，购买入口先占位。" wide>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => textareaRef.current?.focus()}
+                    className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-hover"
+                  >
+                    <ClipboardList size={16} />
+                    代理列表
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handlePasteFromClipboard()}
+                    className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-hover"
+                  >
+                    <WandSparkles size={16} />
+                    从剪贴板粘贴
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-11 items-center gap-2 rounded-[12px] bg-white/[0.04] px-4 text-sm font-medium text-textMuted transition hover:bg-hover hover:text-white"
+                  >
+                    <ShoppingBag size={16} />
+                    购买代理
+                  </button>
+                </div>
+              </ConfigRow>
 
-              <div className="mt-4 rounded-[14px] border border-white/6 bg-slate-950/35 p-3">
+              <ConfigRow label="代理内容" hint="一行一个代理，支持带协议、账号密码。" wide>
                 <textarea
                   ref={textareaRef}
                   value={draft}
@@ -139,12 +142,11 @@ export default memo(function ProxyPoolView() {
                     setDirty(true)
                   }}
                   placeholder={'一行一个代理，例如：\n127.0.0.1:7890\n127.0.0.1:7890:user:pass\nhttp://user:pass@127.0.0.1:7890'}
-                  className="h-[340px] w-full resize-none rounded-[12px] border border-white/5 bg-panel px-4 py-4 font-mono text-[13px] leading-6 text-white outline-none transition focus:border-sky-400/40"
+                  className={`h-[340px] w-full resize-none rounded-[12px] px-4 py-4 font-mono text-[13px] leading-6 ${SOFT_INPUT_CLASS}`}
                 />
-              </div>
+              </ConfigRow>
 
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-textMuted">
-                <div>当前输入 {draft.split(/\r?\n/).map((item) => item.trim()).filter(Boolean).length} 条</div>
+              <ConfigRow label="保存列表" hint={`当前输入 ${draft.split(/\r?\n/).map((item) => item.trim()).filter(Boolean).length} 条。`}>
                 <button
                   type="button"
                   disabled={saving || !dirty}
@@ -154,49 +156,43 @@ export default memo(function ProxyPoolView() {
                   {saving ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
                   保存代理列表
                 </button>
-              </div>
-            </div>
+              </ConfigRow>
+            </FoldSection>
 
-            <div className="rounded-[16px] bg-panel p-5">
-              <div className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">其他选项</div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm text-textMuted">
-                  <span>默认代理类型</span>
-                  <select
-                    value={state.settings.defaultType}
-                    onChange={(event) => void updateSettings({ defaultType: event.target.value as 'http' | 'https' | 'socks5' })}
-                    className="h-11 rounded-[12px] border border-white/10 bg-slate-950/45 px-3 text-white outline-none transition focus:border-sky-400/50"
-                  >
-                    {typeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                </label>
-
-                <label className="flex flex-col gap-2 text-sm text-textMuted">
-                  <span>IP 代理版本</span>
-                  <select
-                    value={state.settings.ipVersion}
-                    onChange={(event) => void updateSettings({ ipVersion: event.target.value as 'ipv4' | 'ipv6' })}
-                    className="h-11 rounded-[12px] border border-white/10 bg-slate-950/45 px-3 text-white outline-none transition focus:border-sky-400/50"
-                  >
-                    {ipOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                </label>
-              </div>
-
-              <div className="mt-5 flex items-center justify-between rounded-[14px] border border-white/6 bg-slate-950/35 px-4 py-4">
-                <div>
-                  <div className="text-sm font-medium text-white">随机选择代理</div>
-                  <div className="mt-1 text-xs text-textMuted">开启后会在检查时打乱顺序，避免固定批次偏差。</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void updateSettings({ randomize: !state.settings.randomize })}
-                  className={`inline-flex h-9 w-16 items-center rounded-full px-1 transition ${state.settings.randomize ? 'bg-sky-500/80' : 'bg-white/10'}`}
+            <FoldSection title="其他选项" hint="默认代理类型、IP 版本和随机策略统一放这里。" defaultOpen>
+              <ConfigRow label="默认代理类型">
+                <select
+                  value={state.settings.defaultType}
+                  onChange={(event) => void updateSettings({ defaultType: event.target.value as 'http' | 'https' | 'socks5' })}
+                  className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
                 >
-                  <span className={`h-7 w-7 rounded-full bg-white shadow transition ${state.settings.randomize ? 'translate-x-7' : 'translate-x-0'}`} />
-                </button>
-              </div>
-            </div>
+                  {typeOptions.map((option) => <option key={option.value} value={option.value} className={SOFT_SELECT_OPTION_CLASS}>{option.label}</option>)}
+                </select>
+              </ConfigRow>
+
+              <ConfigRow label="IP 代理版本">
+                <select
+                  value={state.settings.ipVersion}
+                  onChange={(event) => void updateSettings({ ipVersion: event.target.value as 'ipv4' | 'ipv6' })}
+                  className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
+                >
+                  {ipOptions.map((option) => <option key={option.value} value={option.value} className={SOFT_SELECT_OPTION_CLASS}>{option.label}</option>)}
+                </select>
+              </ConfigRow>
+
+              <ConfigRow label="随机选择代理" hint="开启后会在检查时打乱顺序，避免固定批次偏差。">
+                <div className="flex items-center justify-between gap-3 rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-2.5">
+                  <div className="text-sm text-white">{state.settings.randomize ? '已开启' : '已关闭'}</div>
+                  <button
+                    type="button"
+                    onClick={() => void updateSettings({ randomize: !state.settings.randomize })}
+                    className={`inline-flex h-9 w-16 items-center rounded-full px-1 transition ${state.settings.randomize ? 'bg-sky-500/80' : 'bg-white/10'}`}
+                  >
+                    <span className={`h-7 w-7 rounded-full bg-white shadow transition ${state.settings.randomize ? 'translate-x-7' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </ConfigRow>
+            </FoldSection>
           </div>
 
           <div className="flex flex-col gap-5">
@@ -207,16 +203,9 @@ export default memo(function ProxyPoolView() {
               <SummaryCard title="可用率" value={availableRatio} tone="violet" />
             </div>
 
-            <div className="rounded-[16px] bg-panel p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-base font-semibold text-white">当前池子</div>
-                  <div className="mt-1 text-xs text-textMuted">检查完成后会自动删除不可用代理，列表会保留可用项。</div>
-                </div>
-                {loading ? <Loader2 size={18} className="animate-spin text-textMuted" /> : null}
-              </div>
-
-              <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+            <FoldSection title="当前池子" hint="检查完成后会自动删除不可用代理，只保留可用项。" defaultOpen>
+              <div className="max-h-[360px] space-y-2 overflow-y-auto px-3 py-3 pr-1">
+                {loading ? <div className="px-1 text-xs text-textMuted">正在读取代理池...</div> : null}
                 {state.proxies.length === 0 ? (
                   <div className="rounded-[14px] border border-dashed border-white/10 px-4 py-10 text-center text-sm text-textMuted">
                     还没有代理，先把代理列表贴到左边。
@@ -245,17 +234,11 @@ export default memo(function ProxyPoolView() {
                   </div>
                 ))}
               </div>
-            </div>
+            </FoldSection>
 
-            <div className="rounded-[16px] bg-panel p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-base font-semibold text-white">最近日志</div>
-                  <div className="mt-1 text-xs text-textMuted">点击右下角开始检查后，会自动跳到日志中心查看完整过程。</div>
-                </div>
-                <Shuffle size={18} className="text-neonSoft" />
-              </div>
-              <div className="mt-4 space-y-2 select-text">
+            <FoldSection title="最近日志" hint="点击右下角开始检查后，会自动跳到日志中心查看完整过程。" defaultOpen>
+              <div className="space-y-2 px-3 py-3 select-text">
+                <div className="flex items-center justify-end"><Shuffle size={16} className="text-neonSoft" /></div>
                 {recentLogs.length === 0 ? (
                   <div className="rounded-[14px] border border-dashed border-white/10 px-4 py-8 text-center text-sm text-textMuted">暂无代理检查日志</div>
                 ) : recentLogs.map((log) => (
@@ -269,7 +252,7 @@ export default memo(function ProxyPoolView() {
                   </div>
                 ))}
               </div>
-            </div>
+            </FoldSection>
           </div>
         </div>
 
