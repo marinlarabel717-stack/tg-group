@@ -1,11 +1,14 @@
 import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3, CopyPlus, Eye, LayoutTemplate, ListChecks, MessageSquareText, Play, Plus, RefreshCw, Search, Send, Trash2, Users, X } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
+import { ConfigRow, FoldSection, SOFT_INPUT_CLASS } from '../common/settings-ui'
 import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useAccountStore } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
 import type { BroadcastJoinedGroup, BroadcastScheduledMessageItem } from '../../types'
+
+const COMPACT_INPUT_CLASS = `h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`
 
 const tabs: Array<{ key: BroadcastTabKey; label: string; icon: typeof ListChecks }> = [
   { key: 'tasks', label: '群组配置', icon: Users },
@@ -375,100 +378,109 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               </div>
             ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2 text-sm">
-                <span className="text-textMuted">任务名称</span>
-                <input value={selectedTask.name} onChange={(event) => updateTask(selectedTask.id, { name: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none transition focus:border-white/[0.12]" />
-              </label>
-              <label className="space-y-2 text-sm">
-                <span className="text-textMuted">启用状态</span>
-                <select value={selectedTask.enabled ? 'enabled' : 'disabled'} onChange={(event) => updateTask(selectedTask.id, { enabled: event.target.value === 'enabled' })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none transition focus:border-white/[0.12]">
-                  <option value="enabled">启用</option>
-                  <option value="disabled">停用</option>
-                </select>
-              </label>
-            </div>
+            <div className="space-y-3">
+              <FoldSection title="任务基础配置" hint="任务名称、状态和备注统一收口。">
+                <ConfigRow label="任务名称">
+                  <input value={selectedTask.name} onChange={(event) => updateTask(selectedTask.id, { name: event.target.value })} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+                <ConfigRow label="启用状态">
+                  <select value={selectedTask.enabled ? 'enabled' : 'disabled'} onChange={(event) => updateTask(selectedTask.id, { enabled: event.target.value === 'enabled' })} className={COMPACT_INPUT_CLASS}>
+                    <option value="enabled" className="bg-white text-slate-950">启用</option>
+                    <option value="disabled" className="bg-white text-slate-950">停用</option>
+                  </select>
+                </ConfigRow>
+                <ConfigRow label="任务备注" wide>
+                  <textarea value={selectedTask.note} onChange={(event) => updateTask(selectedTask.id, { note: event.target.value })} rows={3} className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+                </ConfigRow>
+              </FoldSection>
 
-            <label className="block space-y-2 text-sm">
-              <span className="text-textMuted">任务备注</span>
-              <textarea value={selectedTask.note} onChange={(event) => updateTask(selectedTask.id, { note: event.target.value })} rows={3} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none transition focus:border-white/[0.12]" />
-            </label>
+              <FoldSection title="时间与频率" hint="开始时间、结束时间、间隔和每日条数统一放在这一组。">
+                <ConfigRow label="开始时间">
+                  <input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+                <ConfigRow label="结束时间">
+                  <input type="time" value={selectedTask.endTime} onChange={(event) => updateTask(selectedTask.id, { endTime: event.target.value })} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+                <ConfigRow label="间隔（分钟）">
+                  <input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+                <ConfigRow label="随机抖动（分钟）">
+                  <input type="number" min={0} max={30} value={selectedTask.jitterMinutes} onChange={(event) => updateTask(selectedTask.id, { jitterMinutes: Number(event.target.value) || 0 })} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+                <ConfigRow label="单群每日条数">
+                  <input type="number" min={1} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Number(event.target.value) || 1 })} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+              </FoldSection>
 
-            <div className="grid gap-4 md:grid-cols-5">
-              <label className="space-y-2 text-sm"><span className="text-textMuted">开始时间</span><input type="time" value={selectedTask.startTime} onChange={(event) => updateTask(selectedTask.id, { startTime: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">结束时间</span><input type="time" value={selectedTask.endTime} onChange={(event) => updateTask(selectedTask.id, { endTime: event.target.value })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">随机抖动（分钟）</span><input type="number" min={0} max={30} value={selectedTask.jitterMinutes} onChange={(event) => updateTask(selectedTask.id, { jitterMinutes: Number(event.target.value) || 0 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
-              <label className="space-y-2 text-sm"><span className="text-textMuted">单群每日条数</span><input type="number" min={1} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Number(event.target.value) || 1 })} className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-3 text-white outline-none focus:border-white/[0.12]" /></label>
+              <FoldSection title="资源选择" hint="账号、目标群组、文案池都统一收进一个折叠区。">
+                <ConfigRow label="发送账号" hint="勾选这次任务要使用的账号。" wide>
+                  <div className="space-y-2 rounded-[16px] bg-panel p-3">
+                    {accounts.length === 0 ? <div className="text-sm text-textMuted">还没有导入账号，先去账号管理登录或导入。</div> : accounts.map((account) => {
+                      const checked = selectedTask.accountIds.includes(account.id)
+                      return (
+                        <label key={account.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-[12px] px-3 py-2 hover:bg-white/[0.04]">
+                          <div>
+                            <div className="text-sm text-white">{account.username || account.phone || `账号#${account.id}`}</div>
+                            <div className="text-xs text-textMuted">{formatAccountStatus(account.status)} · {account.phone || account.userId || '未识别'}</div>
+                          </div>
+                          <input type="checkbox" checked={checked} onChange={() => toggleTaskAccount(selectedTask.id, account.id)} />
+                        </label>
+                      )
+                    })}
+                  </div>
+                </ConfigRow>
+
+                <ConfigRow label="目标群组" hint="勾选当前任务要覆盖的群。" wide>
+                  <div className="space-y-2 rounded-[16px] bg-panel p-3">
+                    {groups.map((group) => {
+                      const checked = selectedTask.groupIds.includes(group.id)
+                      return (
+                        <label key={group.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-[12px] px-3 py-2 hover:bg-white/[0.04]">
+                          <div>
+                            <div className="text-sm text-white">{group.title}</div>
+                            <div className="text-xs text-textMuted">{group.username || '未填写 @username'} · 已入群账号 {group.accountIds.length}</div>
+                          </div>
+                          <input type="checkbox" checked={checked} onChange={() => toggleTaskGroup(selectedTask.id, group.id)} />
+                        </label>
+                      )
+                    })}
+                  </div>
+                </ConfigRow>
+
+                <ConfigRow label="文案池" hint="勾选这次任务允许使用的文案。" wide>
+                  <div className="space-y-2 rounded-[16px] bg-panel p-3">
+                    {creatives.map((creative) => {
+                      const checked = selectedTask.creativeIds.includes(creative.id)
+                      return (
+                        <label key={creative.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-[12px] px-3 py-2 hover:bg-white/[0.04]">
+                          <div>
+                            <div className="text-sm text-white">{creative.title}</div>
+                            <div className="text-xs text-textMuted">每日 {creative.dailyQuota} 条 · 权重 {creative.weight}</div>
+                          </div>
+                          <input type="checkbox" checked={checked} onChange={() => toggleTaskCreative(selectedTask.id, creative.id)} />
+                        </label>
+                      )
+                    })}
+                  </div>
+                </ConfigRow>
+              </FoldSection>
+
+              <FoldSection title="预览与执行" hint="先预览，再写入 Telegram 官方定时队列。" defaultOpen={false}>
+                <ConfigRow label="执行操作" wide>
+                  <div className="flex flex-wrap gap-3">
+                    <button type="button" onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
+                      <RefreshCw size={16} /> 预览今日计划
+                    </button>
+                    <button type="button" disabled={syncing} onClick={() => void pushScheduleToTelegram(accounts)} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60">
+                      <Send size={16} /> {syncing ? '正在写入…' : '写入 Telegram 定时消息'}
+                    </button>
+                    <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.04] px-4 py-3 text-sm text-white transition hover:bg-white/[0.08]">清空当前预览</button>
+                  </div>
+                </ConfigRow>
+              </FoldSection>
             </div>
 
             {selectedTask.lastSyncedAt ? <div className="text-xs text-textMuted">最近一次写入 Telegram：{formatDateTimeFull(selectedTask.lastSyncedAt)}</div> : null}
-
-            <div className="grid gap-5 lg:grid-cols-3">
-              <div>
-                <div className="mb-3 text-sm font-semibold text-white">发送账号</div>
-                <div className="space-y-2 rounded-[16px] bg-panel p-3">
-                  {accounts.length === 0 ? <div className="text-sm text-textMuted">还没有导入账号，先去账号管理登录或导入。</div> : accounts.map((account) => {
-                    const checked = selectedTask.accountIds.includes(account.id)
-                    return (
-                      <label key={account.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-[12px] px-3 py-2 hover:bg-white/[0.04]">
-                        <div>
-                          <div className="text-sm text-white">{account.username || account.phone || `账号#${account.id}`}</div>
-                          <div className="text-xs text-textMuted">{formatAccountStatus(account.status)} · {account.phone || account.userId || '未识别'}</div>
-                        </div>
-                        <input type="checkbox" checked={checked} onChange={() => toggleTaskAccount(selectedTask.id, account.id)} />
-                      </label>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-3 text-sm font-semibold text-white">目标群组</div>
-                <div className="space-y-2 rounded-[16px] bg-panel p-3">
-                  {groups.map((group) => {
-                    const checked = selectedTask.groupIds.includes(group.id)
-                    return (
-                      <label key={group.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-[12px] px-3 py-2 hover:bg-white/[0.04]">
-                        <div>
-                          <div className="text-sm text-white">{group.title}</div>
-                          <div className="text-xs text-textMuted">{group.username || '未填写 @username'} · 已入群账号 {group.accountIds.length}</div>
-                        </div>
-                        <input type="checkbox" checked={checked} onChange={() => toggleTaskGroup(selectedTask.id, group.id)} />
-                      </label>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-3 text-sm font-semibold text-white">文案池</div>
-                <div className="space-y-2 rounded-[16px] bg-panel p-3">
-                  {creatives.map((creative) => {
-                    const checked = selectedTask.creativeIds.includes(creative.id)
-                    return (
-                      <label key={creative.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-[12px] px-3 py-2 hover:bg-white/[0.04]">
-                        <div>
-                          <div className="text-sm text-white">{creative.title}</div>
-                          <div className="text-xs text-textMuted">每日 {creative.dailyQuota} 条 · 权重 {creative.weight}</div>
-                        </div>
-                        <input type="checkbox" checked={checked} onChange={() => toggleTaskCreative(selectedTask.id, creative.id)} />
-                      </label>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button type="button" onClick={() => generatePreview(accounts)} className="flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-4 py-3 text-sm font-medium text-violet-300 transition hover:bg-violet-400/18">
-                <RefreshCw size={16} /> 预览今日计划
-              </button>
-              <button type="button" disabled={syncing} onClick={() => void pushScheduleToTelegram(accounts)} className="flex items-center gap-2 rounded-[12px] bg-emerald-400/12 px-4 py-3 text-sm font-medium text-emerald-300 transition hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60">
-                <Send size={16} /> {syncing ? '正在写入…' : '写入 Telegram 定时消息'}
-              </button>
-              <button type="button" onClick={clearPreview} className="rounded-[12px] bg-white/[0.04] px-4 py-3 text-sm text-white transition hover:bg-white/[0.08]">清空当前预览</button>
-            </div>
             {errorMessage ? <div className="rounded-[14px] border border-rose-400/15 bg-rose-400/8 px-4 py-3 text-sm text-rose-200">{explainPreviewError(errorMessage)}</div> : null}
           </div>
         )}

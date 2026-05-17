@@ -1,6 +1,7 @@
-import { Copy, Filter, SearchCheck } from 'lucide-react'
+import { Copy, Filter } from 'lucide-react'
 import { memo, useMemo, useState } from 'react'
 import { GlassPanel } from '../common/glasspanel'
+import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 
 type OtherToolsTabKey = 'filter'
 
@@ -17,9 +18,6 @@ type FilterItem = {
 const tabs: Array<{ key: OtherToolsTabKey; label: string; icon: typeof Filter }> = [
   { key: 'filter', label: '筛选', icon: Filter }
 ]
-
-const SOFT_INPUT_CLASS = 'border border-white/[0.06] bg-black/10 text-white outline-none transition focus:border-white/[0.12] focus:bg-black/12'
-const SOFT_TAB_CLASS = 'border border-white/[0.06] transition'
 
 const PLACEHOLDER_MARKERS = ['占位', 'placeholder', '待替换', 'username', 'link', 'url', 'xxx', 'test']
 
@@ -219,60 +217,59 @@ function FilterWorkbench() {
     <div className="space-y-5">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <GlassPanel className="bg-card">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-violet-400/12 text-violet-300">
-              <SearchCheck size={18} />
-            </div>
-            <div>
-              <div className="text-base font-semibold text-white">用户名 / 链接筛选</div>
-              <div className="mt-1 text-sm text-textMuted">自动把输入分成：合法、可替换、占位、无效。</div>
-            </div>
-          </div>
-
-          <label className="mt-4 block rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-            <div className="text-xs tracking-[0.18em] text-textMuted">原始内容</div>
-            <textarea
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              rows={14}
-              placeholder="一行一个，支持 @username / username / https://t.me/username / t.me/username"
-              className={`mt-3 w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`}
-            />
-            <div className="mt-2 text-xs text-textMuted">可直接贴一整批内容，系统会自动拆分。</div>
-          </label>
+          <FoldSection title="筛选配置" hint="输入区、统计和规则说明统一收口成同一套折叠样式。">
+            <ConfigRow label="原始内容" hint="一行一个，支持用户名和 t.me 链接。" wide>
+              <div className="space-y-2">
+                <textarea
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  rows={14}
+                  placeholder="一行一个，支持 @username / username / https://t.me/username / t.me/username"
+                  className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`}
+                />
+                <div className="text-xs text-textMuted">可直接贴一整批内容，系统会自动拆分。</div>
+              </div>
+            </ConfigRow>
+          </FoldSection>
         </GlassPanel>
 
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <div className="text-base font-semibold text-white">统计</div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-emerald-200/80">合法</div>
-                <div className="mt-2 text-2xl font-semibold text-emerald-300">{summary.valid.length}</div>
-              </div>
-              <div className="rounded-[14px] bg-cyan-400/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-cyan-200/80">可替换</div>
-                <div className="mt-2 text-2xl font-semibold text-cyan-300">{summary.replaceable.length}</div>
-              </div>
-              <div className="rounded-[14px] bg-amber-400/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-amber-200/80">占位</div>
-                <div className="mt-2 text-2xl font-semibold text-amber-200">{summary.placeholder.length}</div>
-              </div>
-              <div className="rounded-[14px] bg-rose-400/8 px-4 py-3">
-                <div className="text-xs tracking-[0.16em] text-rose-200/80">无效</div>
-                <div className="mt-2 text-2xl font-semibold text-rose-300">{summary.invalid.length}</div>
-              </div>
-            </div>
+            <FoldSection title="统计" hint="处理结果一眼就能看出来。">
+              <ConfigRow label="数量统计" wide>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-emerald-200/80">合法</div>
+                    <div className="mt-2 text-2xl font-semibold text-emerald-300">{summary.valid.length}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-cyan-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-cyan-200/80">可替换</div>
+                    <div className="mt-2 text-2xl font-semibold text-cyan-300">{summary.replaceable.length}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-amber-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-amber-200/80">占位</div>
+                    <div className="mt-2 text-2xl font-semibold text-amber-200">{summary.placeholder.length}</div>
+                  </div>
+                  <div className="rounded-[14px] bg-rose-400/8 px-4 py-3">
+                    <div className="text-xs tracking-[0.16em] text-rose-200/80">无效</div>
+                    <div className="mt-2 text-2xl font-semibold text-rose-300">{summary.invalid.length}</div>
+                  </div>
+                </div>
+              </ConfigRow>
+            </FoldSection>
           </GlassPanel>
 
           <GlassPanel className="bg-card">
-            <div className="text-base font-semibold text-white">规则说明</div>
-            <div className="mt-4 space-y-2 text-sm text-textMuted">
-              <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">合法：</span>本身就是规范用户名或 t.me 链接。</div>
-              <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">可替换：</span>原值不规范，但整理后还能变成合法格式。</div>
-              <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">占位：</span>像 placeholder / 待替换 / {'{rand6}'} 这类占位内容。</div>
-              <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">无效：</span>既不是合法值，也整理不成可用值。</div>
-            </div>
+            <FoldSection title="规则说明" hint="口径统一，方便后面别的工具也沿用。" defaultOpen={false}>
+              <ConfigRow label="分类口径" wide>
+                <div className="space-y-2 text-sm text-textMuted">
+                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">合法：</span>本身就是规范用户名或 t.me 链接。</div>
+                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">可替换：</span>原值不规范，但整理后还能变成合法格式。</div>
+                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">占位：</span>像 placeholder / 待替换 / {'{rand6}'} 这类占位内容。</div>
+                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">无效：</span>既不是合法值，也整理不成可用值。</div>
+                </div>
+              </ConfigRow>
+            </FoldSection>
           </GlassPanel>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Clock3, Copy, FolderSearch2, Hash, ListFilter, Play, RadioTower, Search, Square, Trash2, Upload, X } from 'lucide-react'
 import { GlassPanel } from '../components/common/glasspanel'
+import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_TAB_CLASS } from '../components/common/settings-ui'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../components/accounts/resultdialog'
 import { formatAccountStatus } from '../lib/ui-text'
 import { useAccountStore } from '../stores/accountstore'
@@ -116,9 +117,6 @@ const lastSeenOptions: Array<{ value: GroupCollectorLastSeenBucket; label: strin
   { value: 'month', label: '近一月' },
   { value: 'offline', label: '离线/更早' }
 ]
-
-const SOFT_INPUT_CLASS = 'border border-white/[0.06] bg-black/10 text-white outline-none transition focus:border-white/[0.12] focus:bg-black/12'
-const SOFT_TAB_CLASS = 'border border-white/[0.06] transition'
 
 function createId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
@@ -695,84 +693,82 @@ export default function SessionManagerModule() {
       ) : null}
 
       <GlassPanel>
-        <div className="space-y-4">
-          <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-            <button
-              type="button"
-              onClick={() => setAccountPickerOpen(true)}
-              className="block w-full rounded-[14px] border border-white/[0.08] bg-black/10 px-4 py-4 text-left transition hover:border-white/[0.12] hover:bg-white/[0.03]"
-            >
-              <div className="text-xs tracking-[0.18em] text-textMuted">采集账号</div>
-              <div className="mt-2 text-sm text-white">{selectedAccounts.length > 0 ? `已选择 ${selectedAccounts.length} 个账号，点击重新选择` : '点击选择账号'}</div>
-            </button>
-
-            {selectedAccounts.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {selectedAccounts.map((account) => (
-                  <span key={account.id} className="inline-flex rounded-full bg-violet-400/10 px-3 py-1 text-xs text-violet-200">
-                    {readAccountPhone(account) || readAccountLabel(account)}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-
-
-          </div>
-
-          <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-base font-semibold text-white">采集目标</div>
-              <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-3">
+          <FoldSection title="基础配置" hint="账号和群来源都先在这里配好。">
+            <ConfigRow label="采集账号" hint="点击按钮选择这次拿来采集的账号。" wide>
+              <div className="space-y-3">
                 <button
                   type="button"
-                  onClick={() => groupFileInputRef.current?.click()}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
+                  onClick={() => setAccountPickerOpen(true)}
+                  className="block w-full rounded-[12px] border border-white/[0.08] bg-black/10 px-4 py-3 text-left transition hover:border-white/[0.12] hover:bg-white/[0.03]"
                 >
-                  <Upload size={14} />
-                  导入TXT
+                  <div className="text-sm text-white">{selectedAccounts.length > 0 ? `已选择 ${selectedAccounts.length} 个账号，点击重新选择` : '点击选择账号'}</div>
                 </button>
-                <button
-                  type="button"
-                  onClick={clearGroups}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
-                >
-                  <Trash2 size={14} />
-                  清空群列表
-                </button>
+                {selectedAccounts.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedAccounts.map((account) => (
+                      <span key={account.id} className="inline-flex rounded-full bg-violet-400/10 px-3 py-1 text-xs text-violet-200">
+                        {readAccountPhone(account) || readAccountLabel(account)}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
-            </div>
+            </ConfigRow>
 
-            <div className="mt-4">
-              <textarea
-                rows={12}
-                value={groupInput}
-                onChange={(event) => setGroupInput(event.target.value)}
-                onPaste={(event) => {
-                  const text = event.clipboardData.getData('text')
-                  if (!text.trim()) return
-                  event.preventDefault()
-                  handlePasteSources(text, 'group')
-                }}
-                onBlur={() => {
-                  if (groupInput.trim()) {
-                    syncGroupSourcesFromInput(groupInput)
-                  }
-                }}
-                placeholder="一行一个，支持 @群用户名 / t.me公开链接 / t.me私密邀请链接"
-                className="w-full rounded-[16px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none transition focus:border-white/[0.12]"
-              />
-              <div className="mt-3 flex flex-wrap gap-2 text-sm text-textMuted">
-                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-violet-300">会自动去重和过滤无效格式</div>
-                {groupInputSummary.duplicate > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">去重 {groupInputSummary.duplicate} 条</div> : null}
-                {groupInputSummary.invalid > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">过滤错误 {groupInputSummary.invalid} 条</div> : null}
+            <ConfigRow label="采集目标" hint="支持粘贴、导入、自动去重。" wide>
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-base font-semibold text-white">采集目标</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => groupFileInputRef.current?.click()}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
+                    >
+                      <Upload size={14} />
+                      导入TXT
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearGroups}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
+                    >
+                      <Trash2 size={14} />
+                      清空群列表
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  rows={12}
+                  value={groupInput}
+                  onChange={(event) => setGroupInput(event.target.value)}
+                  onPaste={(event) => {
+                    const text = event.clipboardData.getData('text')
+                    if (!text.trim()) return
+                    event.preventDefault()
+                    handlePasteSources(text, 'group')
+                  }}
+                  onBlur={() => {
+                    if (groupInput.trim()) {
+                      syncGroupSourcesFromInput(groupInput)
+                    }
+                  }}
+                  placeholder="一行一个，支持 @群用户名 / t.me公开链接 / t.me私密邀请链接"
+                  className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none transition focus:border-white/[0.12]"
+                />
+                <div className="flex flex-wrap gap-2 text-sm text-textMuted">
+                  <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-violet-300">会自动去重和过滤无效格式</div>
+                  {groupInputSummary.duplicate > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">去重 {groupInputSummary.duplicate} 条</div> : null}
+                  {groupInputSummary.invalid > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">过滤错误 {groupInputSummary.invalid} 条</div> : null}
+                </div>
               </div>
-            </div>
-          </div>
+            </ConfigRow>
+          </FoldSection>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-              <div className="text-xs tracking-[0.18em] text-textMuted">采集类型</div>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <FoldSection title="采集条件" hint="采集方式、数量范围和过滤条件都统一收在这一组。">
+            <ConfigRow label="采集类型" hint="公开采集或隐藏成员采集。" wide>
+              <div className="grid gap-3 md:grid-cols-2">
                 {modeOptions.map((option) => (
                   <button
                     key={option.value}
@@ -785,117 +781,67 @@ export default function SessionManagerModule() {
                   </button>
                 ))}
               </div>
+            </ConfigRow>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <label className="rounded-[14px] bg-black/10 px-4 py-4 text-sm">
-                  <div className="text-xs tracking-[0.18em] text-textMuted">公开采集数量</div>
-                  <input
-                    value={participantLimit}
-                    onChange={(event) => setParticipantLimit(event.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="留空尽量全量"
-                    className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
-                  />
-                </label>
-                <label className="rounded-[14px] bg-black/10 px-4 py-4 text-sm">
-                  <div className="text-xs tracking-[0.18em] text-textMuted">隐藏成员历史消息数</div>
-                  <input
-                    value={historyLimit}
-                    onChange={(event) => setHistoryLimit(event.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="例如 1000"
-                    className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
-                  />
-                </label>
-                <label className="rounded-[14px] bg-black/10 px-4 py-4 text-sm">
-                  <div className="text-xs tracking-[0.18em] text-textMuted">采集最近几天</div>
-                  <input
-                    value={historyDays}
-                    onChange={(event) => setHistoryDays(event.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="例如 3 / 5 / 7，留空则不按天数限制"
-                    className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
-                  />
-                </label>
-              </div>
-            </div>
+            <ConfigRow label="公开采集数量">
+              <input value={participantLimit} onChange={(event) => setParticipantLimit(event.target.value.replace(/[^\d]/g, ''))} placeholder="留空尽量全量" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            </ConfigRow>
+            <ConfigRow label="隐藏成员历史消息数">
+              <input value={historyLimit} onChange={(event) => setHistoryLimit(event.target.value.replace(/[^\d]/g, ''))} placeholder="例如 1000" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            </ConfigRow>
+            <ConfigRow label="采集最近几天">
+              <input value={historyDays} onChange={(event) => setHistoryDays(event.target.value.replace(/[^\d]/g, ''))} placeholder="例如 3 / 5 / 7，留空则不按天数限制" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            </ConfigRow>
 
-            <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs tracking-[0.18em] text-textMuted">过滤条件</div>
-                  <div className="mt-2 text-sm text-white">不勾就不参与过滤。</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
-                >
-                  <ListFilter size={14} />
-                  清空筛选
+            <ConfigRow label="过滤条件" hint="不勾就不参与过滤。" wide>
+              <div className="space-y-3">
+                <button type="button" onClick={clearFilters} className="inline-flex h-9 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]">
+                  <ListFilter size={14} /> 清空筛选
                 </button>
-              </div>
-
-              <div className="mt-4 space-y-3">
                 <div>
                   <div className="mb-2 text-xs tracking-[0.18em] text-textMuted">身份</div>
-                  <div className="flex flex-wrap gap-2">
-                    {roleOptions.map((item) => (
-                      <FilterChip key={item.value} active={roleFilters.includes(item.value)} label={item.label} onClick={() => setRoleFilters((current) => toggleSelection(current, item.value))} />
-                    ))}
-                  </div>
+                  <div className="flex flex-wrap gap-2">{roleOptions.map((item) => <FilterChip key={item.value} active={roleFilters.includes(item.value)} label={item.label} onClick={() => setRoleFilters((current) => toggleSelection(current, item.value))} />)}</div>
                 </div>
                 <div>
                   <div className="mb-2 text-xs tracking-[0.18em] text-textMuted">账号类型</div>
-                  <div className="flex flex-wrap gap-2">
-                    <FilterChip active={onlyBots} label="机器人" onClick={() => setOnlyBots((current) => !current)} />
-                  </div>
+                  <div className="flex flex-wrap gap-2"><FilterChip active={onlyBots} label="机器人" onClick={() => setOnlyBots((current) => !current)} /></div>
                 </div>
                 <div>
                   <div className="mb-2 text-xs tracking-[0.18em] text-textMuted">头像</div>
-                  <div className="flex flex-wrap gap-2">
-                    {avatarOptions.map((item) => (
-                      <FilterChip key={item.value} active={avatarFilters.includes(item.value)} label={item.label} onClick={() => setAvatarFilters((current) => toggleSelection(current, item.value))} />
-                    ))}
-                  </div>
+                  <div className="flex flex-wrap gap-2">{avatarOptions.map((item) => <FilterChip key={item.value} active={avatarFilters.includes(item.value)} label={item.label} onClick={() => setAvatarFilters((current) => toggleSelection(current, item.value))} />)}</div>
                 </div>
                 <div>
                   <div className="mb-2 text-xs tracking-[0.18em] text-textMuted">用户名</div>
-                  <div className="flex flex-wrap gap-2">
-                    {usernameOptions.map((item) => (
-                      <FilterChip key={item.value} active={usernameFilters.includes(item.value)} label={item.label} onClick={() => setUsernameFilters((current) => toggleSelection(current, item.value))} />
-                    ))}
-                  </div>
+                  <div className="flex flex-wrap gap-2">{usernameOptions.map((item) => <FilterChip key={item.value} active={usernameFilters.includes(item.value)} label={item.label} onClick={() => setUsernameFilters((current) => toggleSelection(current, item.value))} />)}</div>
                 </div>
                 <div>
                   <div className="mb-2 text-xs tracking-[0.18em] text-textMuted">会员</div>
-                  <div className="flex flex-wrap gap-2">
-                    {premiumOptions.map((item) => (
-                      <FilterChip key={item.value} active={premiumFilters.includes(item.value)} label={item.label} onClick={() => setPremiumFilters((current) => toggleSelection(current, item.value))} />
-                    ))}
-                  </div>
+                  <div className="flex flex-wrap gap-2">{premiumOptions.map((item) => <FilterChip key={item.value} active={premiumFilters.includes(item.value)} label={item.label} onClick={() => setPremiumFilters((current) => toggleSelection(current, item.value))} />)}</div>
                 </div>
                 <div>
                   <div className="mb-2 text-xs tracking-[0.18em] text-textMuted">在线时间</div>
-                  <div className="flex flex-wrap gap-2">
-                    {lastSeenOptions.map((item) => (
-                      <FilterChip key={item.value} active={lastSeenFilters.includes(item.value)} label={item.label} onClick={() => setLastSeenFilters((current) => toggleSelection(current, item.value))} />
-                    ))}
-                  </div>
+                  <div className="flex flex-wrap gap-2">{lastSeenOptions.map((item) => <FilterChip key={item.value} active={lastSeenFilters.includes(item.value)} label={item.label} onClick={() => setLastSeenFilters((current) => toggleSelection(current, item.value))} />)}</div>
                 </div>
               </div>
-            </div>
-          </div>
+            </ConfigRow>
+          </FoldSection>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              disabled={!canStartGroupTask}
-              onClick={() => void handleStartGroup()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-violet-300/16 bg-violet-400/10 px-4 text-sm font-medium text-violet-200 transition hover:bg-violet-400/16 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Play size={15} />
-              开始采集
-            </button>
-            <div className="text-sm text-textMuted">{groupSummaryText}</div>
-          </div>
+          <FoldSection title="开始采集" hint="确认账号和群列表后再启动。" defaultOpen={false}>
+            <ConfigRow label="启动任务" wide>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  disabled={!canStartGroupTask}
+                  onClick={() => void handleStartGroup()}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-violet-300/16 bg-violet-400/10 px-4 text-sm font-medium text-violet-200 transition hover:bg-violet-400/16 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Play size={15} />
+                  开始采集
+                </button>
+                <div className="text-sm text-textMuted">{groupSummaryText}</div>
+              </div>
+            </ConfigRow>
+          </FoldSection>
         </div>
       </GlassPanel>
 
@@ -928,154 +874,74 @@ export default function SessionManagerModule() {
       ) : null}
 
       <GlassPanel>
-        <div className="space-y-4">
-          <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-            <button
-              type="button"
-              onClick={() => setAccountPickerOpen(true)}
-              className="block w-full rounded-[14px] border border-white/[0.08] bg-black/10 px-4 py-4 text-left transition hover:border-white/[0.12] hover:bg-white/[0.03]"
-            >
-              <div className="text-xs tracking-[0.18em] text-textMuted">采集账号</div>
-              <div className="mt-2 text-sm text-white">{selectedAccounts.length > 0 ? `已选择 ${selectedAccounts.length} 个账号，点击重新选择` : '点击选择账号'}</div>
-            </button>
-
-            {selectedAccounts.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {selectedAccounts.map((account) => (
-                  <span key={account.id} className="inline-flex rounded-full bg-violet-400/10 px-3 py-1 text-xs text-violet-200">
-                    {readAccountPhone(account) || readAccountLabel(account)}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-base font-semibold text-white">频道来源</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => channelFileInputRef.current?.click()}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
-                >
-                  <Upload size={14} />
-                  导入TXT
+        <div className="space-y-3">
+          <FoldSection title="基础配置" hint="账号和频道来源统一按折叠方式整理。">
+            <ConfigRow label="采集账号" wide>
+              <div className="space-y-3">
+                <button type="button" onClick={() => setAccountPickerOpen(true)} className="block w-full rounded-[12px] border border-white/[0.08] bg-black/10 px-4 py-3 text-left transition hover:border-white/[0.12] hover:bg-white/[0.03]">
+                  <div className="text-sm text-white">{selectedAccounts.length > 0 ? `已选择 ${selectedAccounts.length} 个账号，点击重新选择` : '点击选择账号'}</div>
                 </button>
-                <button
-                  type="button"
-                  onClick={clearChannels}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"
-                >
-                  <Trash2 size={14} />
-                  清空频道列表
-                </button>
+                {selectedAccounts.length > 0 ? <div className="flex flex-wrap gap-2">{selectedAccounts.map((account) => <span key={account.id} className="inline-flex rounded-full bg-violet-400/10 px-3 py-1 text-xs text-violet-200">{readAccountPhone(account) || readAccountLabel(account)}</span>)}</div> : null}
               </div>
-            </div>
-
-            <div className="mt-4">
-              <textarea
-                rows={12}
-                value={channelInput}
-                onChange={(event) => setChannelInput(event.target.value)}
-                onPaste={(event) => {
+            </ConfigRow>
+            <ConfigRow label="频道来源" hint="支持粘贴和导入 TXT。" wide>
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => channelFileInputRef.current?.click()} className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"><Upload size={14} />导入TXT</button>
+                  <button type="button" onClick={clearChannels} className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/[0.08] bg-panel px-3 text-sm text-slate-200 transition hover:border-white/[0.12] hover:bg-white/[0.03]"><Trash2 size={14} />清空频道列表</button>
+                </div>
+                <textarea rows={12} value={channelInput} onChange={(event) => setChannelInput(event.target.value)} onPaste={(event) => {
                   const text = event.clipboardData.getData('text')
                   if (!text.trim()) return
                   event.preventDefault()
                   handlePasteSources(text, 'channel')
-                }}
-                onBlur={() => {
+                }} onBlur={() => {
                   if (channelInput.trim()) {
                     syncChannelSourcesFromInput(channelInput)
                   }
-                }}
-                placeholder="一行一个，支持 @频道用户名 / t.me公开链接 / t.me私密邀请链接"
-                className="w-full rounded-[16px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none transition focus:border-white/[0.12]"
-              />
-              <div className="mt-3 flex flex-wrap gap-2 text-sm text-textMuted">
-                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-violet-300">会自动去重和过滤无效格式</div>
-                {channelInputSummary.duplicate > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">去重 {channelInputSummary.duplicate} 条</div> : null}
-                {channelInputSummary.invalid > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">过滤错误 {channelInputSummary.invalid} 条</div> : null}
+                }} placeholder="一行一个，支持 @频道用户名 / t.me公开链接 / t.me私密邀请链接" className="w-full rounded-[12px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none transition focus:border-white/[0.12]" />
+                <div className="flex flex-wrap gap-2 text-sm text-textMuted">
+                  <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-violet-300">会自动去重和过滤无效格式</div>
+                  {channelInputSummary.duplicate > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">去重 {channelInputSummary.duplicate} 条</div> : null}
+                  {channelInputSummary.invalid > 0 ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5">过滤错误 {channelInputSummary.invalid} 条</div> : null}
+                </div>
               </div>
-            </div>
-          </div>
+            </ConfigRow>
+          </FoldSection>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-              <div className="text-xs tracking-[0.18em] text-textMuted">时间范围</div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {CHANNEL_DAY_PRESETS.map((days) => {
-                  const active = channelHistoryDaysPreset === String(days)
-                  return (
-                    <button
-                      key={days}
-                      type="button"
-                      onClick={() => {
-                        setChannelHistoryDaysPreset(String(days))
-                        setChannelHistoryDaysCustom('')
-                      }}
-                      className={`rounded-[12px] px-4 py-2.5 text-sm ${SOFT_TAB_CLASS} ${active ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
-                    >
-                      最近 {days} 天
-                    </button>
-                  )
-                })}
-                <button
-                  type="button"
-                  onClick={() => setChannelHistoryDaysPreset('custom')}
-                  className={`rounded-[12px] px-4 py-2.5 text-sm ${SOFT_TAB_CLASS} ${channelHistoryDaysPreset === 'custom' ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
-                >
-                  自定义天数
-                </button>
+          <FoldSection title="时间与说明" hint="时间范围和频道采集规则统一收在这里。">
+            <ConfigRow label="时间范围" wide>
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {CHANNEL_DAY_PRESETS.map((days) => {
+                    const active = channelHistoryDaysPreset === String(days)
+                    return <button key={days} type="button" onClick={() => { setChannelHistoryDaysPreset(String(days)); setChannelHistoryDaysCustom('') }} className={`rounded-[12px] px-4 py-2.5 text-sm ${SOFT_TAB_CLASS} ${active ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}>最近 {days} 天</button>
+                  })}
+                  <button type="button" onClick={() => setChannelHistoryDaysPreset('custom')} className={`rounded-[12px] px-4 py-2.5 text-sm ${SOFT_TAB_CLASS} ${channelHistoryDaysPreset === 'custom' ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}>自定义天数</button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={channelHistoryDaysPreset === 'custom' ? channelHistoryDaysCustom : channelHistoryDaysPreset} onChange={(event) => { setChannelHistoryDaysPreset('custom'); setChannelHistoryDaysCustom(event.target.value.replace(/[^\d]/g, '')) }} placeholder="例如 7 / 30 / 90" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                  <input value={channelHistoryLimit} onChange={(event) => setChannelHistoryLimit(event.target.value.replace(/[^\d]/g, ''))} placeholder="默认 2000" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                </div>
               </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <label className="rounded-[14px] bg-black/10 px-4 py-4 text-sm">
-                  <div className="text-xs tracking-[0.18em] text-textMuted">采集最近几天</div>
-                  <input
-                    value={channelHistoryDaysPreset === 'custom' ? channelHistoryDaysCustom : channelHistoryDaysPreset}
-                    onChange={(event) => {
-                      setChannelHistoryDaysPreset('custom')
-                      setChannelHistoryDaysCustom(event.target.value.replace(/[^\d]/g, ''))
-                    }}
-                    placeholder="例如 7 / 30 / 90"
-                    className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
-                  />
-                </label>
-                <label className="rounded-[14px] bg-black/10 px-4 py-4 text-sm">
-                  <div className="text-xs tracking-[0.18em] text-textMuted">最多读取最近帖子数</div>
-                  <input
-                    value={channelHistoryLimit}
-                    onChange={(event) => setChannelHistoryLimit(event.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="默认 2000"
-                    className={`mt-3 h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-              <div className="text-xs tracking-[0.18em] text-textMuted">采集说明</div>
-              <div className="mt-3 space-y-3 text-sm leading-6 text-textMuted">
+            </ConfigRow>
+            <ConfigRow label="采集说明" wide>
+              <div className="space-y-3 text-sm leading-6 text-textMuted">
                 <div className="rounded-[14px] bg-black/10 px-4 py-4">只提取频道帖子正文里带 <span className="text-white">@username</span> 的内容，不会去做验证码绕过之类的动作。</div>
                 <div className="rounded-[14px] bg-black/10 px-4 py-4">时间范围按“最近 N 天”过滤；开始后会自动跳到日志页，过程里优先给你白话提示。</div>
                 <div className="rounded-[14px] bg-black/10 px-4 py-4">导出的结果会自动去重，只保留可直接用于后续私信的 <span className="text-white">@用户名</span>。</div>
               </div>
-            </div>
-          </div>
+            </ConfigRow>
+          </FoldSection>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              disabled={!canStartChannelTask}
-              onClick={() => void handleStartChannel()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-violet-300/16 bg-violet-400/10 px-4 text-sm font-medium text-violet-200 transition hover:bg-violet-400/16 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Play size={15} />
-              开始采集频道
-            </button>
-            <div className="text-sm text-textMuted">{channelSummaryText}</div>
-          </div>
+          <FoldSection title="开始采集频道" hint="确认频道来源后再启动。" defaultOpen={false}>
+            <ConfigRow label="启动任务" wide>
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" disabled={!canStartChannelTask} onClick={() => void handleStartChannel()} className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-violet-300/16 bg-violet-400/10 px-4 text-sm font-medium text-violet-200 transition hover:bg-violet-400/16 disabled:cursor-not-allowed disabled:opacity-50"><Play size={15} />开始采集频道</button>
+                <div className="text-sm text-textMuted">{channelSummaryText}</div>
+              </div>
+            </ConfigRow>
+          </FoldSection>
         </div>
       </GlassPanel>
 

@@ -13,6 +13,7 @@ import {
   X
 } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
+import { ConfigRow, FoldSection, SOFT_INPUT_CLASS } from '../common/settings-ui'
 import { useAccountStore } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import {
@@ -21,6 +22,8 @@ import {
   type DirectMessageTabKey
 } from '../../stores/directmessagestore'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
+
+const COMPACT_INPUT_CLASS = `h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`
 
 const tabs: Array<{ key: DirectMessageTabKey; label: string; icon: typeof Send }> = [
   { key: 'send', label: '私信群发', icon: Send },
@@ -275,209 +278,149 @@ const SendWorkbench = memo(function SendWorkbench() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <div className="grid gap-4 md:grid-cols-3">
-              <button type="button" disabled={sending || stopping} onClick={() => setAccountPickerOpen(true)} className="rounded-[16px] bg-panel/80 px-4 py-4 text-left transition hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-60">
-                <div className="text-xs tracking-[0.18em] text-textMuted">账号数量</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{selectedAccountIds.length}</div>
-                <div className="mt-1 text-xs text-textMuted">{occupiedSelectedAccounts.length > 0 ? `有 ${occupiedSelectedAccounts.length} 个账号正在忙，先别拿来发私信。` : '点这里选择账号'}</div>
-              </button>
+            <div className="space-y-3">
+              <FoldSection title="基础配置" hint="账号、间隔、并发都收在这里，先展开这一组就够了。">
+                <ConfigRow label="选择账号" hint={occupiedSelectedAccounts.length > 0 ? `有 ${occupiedSelectedAccounts.length} 个账号正在忙，暂时别拿来发私信。` : '点击按钮选择发送账号。'}>
+                  <button type="button" disabled={sending || stopping} onClick={() => setAccountPickerOpen(true)} className="h-10 w-full rounded-[12px] bg-white/[0.05] px-3 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60">
+                    已选 {selectedAccountIds.length} 个
+                  </button>
+                </ConfigRow>
 
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">发送间隔</div>
-                <input type="number" min={5} max={600} value={intervalSeconds} onChange={(event) => setIntervalSeconds(Number(event.target.value) || 5)} className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]" />
-              </label>
+                <ConfigRow label="发送间隔" hint="每发完一个用户，等待多少秒再继续。">
+                  <input type="number" min={5} max={600} value={intervalSeconds} onChange={(event) => setIntervalSeconds(Number(event.target.value) || 5)} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
 
-              <label className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <div className="text-xs tracking-[0.18em] text-textMuted">并发线程</div>
-                <input type="number" min={1} max={20} value={groupConcurrency} onChange={(event) => setGroupConcurrency(Number(event.target.value) || 1)} className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]" />
-              </label>
-            </div>
+                <ConfigRow label="并发线程" hint="默认少一点，稳定优先。">
+                  <input type="number" min={1} max={20} value={groupConcurrency} onChange={(event) => setGroupConcurrency(Number(event.target.value) || 1)} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+              </FoldSection>
 
-            <div className="mt-4 rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-              <div className="text-xs tracking-[0.18em] text-textMuted">发送后删除</div>
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
-                {deleteModes.map((mode) => {
-                  const active = deleteMode === mode.key
-                  return (
-                    <button
-                      key={mode.key}
-                      type="button"
-                      onClick={() => setDeleteMode(mode.key)}
-                      className={`rounded-[14px] border px-4 py-3 text-left transition ${active ? 'border-violet-300/45 bg-violet-400/10 text-violet-200' : 'border-white/[0.06] bg-black/10 text-slate-200 hover:border-white/[0.12] hover:bg-white/[0.03]'}`}
-                    >
-                      <div className="text-sm font-medium">{mode.label}</div>
-                      <div className="mt-1 text-xs text-textMuted">{mode.hint}</div>
-                    </button>
-                  )
-                })}
-              </div>
+              <FoldSection title="发送后动作" hint="删除、置顶、欢迎帖都集中在这一组。" defaultOpen={false}>
+                <ConfigRow label="发送后删除" hint="发出去后是否自动删掉消息。" wide>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {deleteModes.map((mode) => {
+                      const active = deleteMode === mode.key
+                      return (
+                        <button
+                          key={mode.key}
+                          type="button"
+                          onClick={() => setDeleteMode(mode.key)}
+                          className={`rounded-[12px] border px-3 py-3 text-left transition ${active ? 'border-violet-300/45 bg-violet-400/10 text-violet-200' : 'border-white/[0.06] bg-black/10 text-slate-200 hover:border-white/[0.12] hover:bg-white/[0.03]'}`}
+                        >
+                          <div className="text-sm font-medium">{mode.label}</div>
+                          <div className="mt-1 text-xs text-textMuted">{mode.hint}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </ConfigRow>
 
-              {deleteMode !== 'none' ? (
-                <label className="mt-3 block rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-3 text-sm">
-                  <div className="text-xs tracking-[0.14em] text-textMuted">删除延时（秒）</div>
-                  <input
-                    type="number"
-                    min={0}
-                    max={3600}
-                    value={deleteDelaySeconds}
-                    onChange={(event) => setDeleteDelaySeconds(Number(event.target.value) || 0)}
-                    className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]"
-                  />
-                </label>
-              ) : null}
-            </div>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <label className="inline-flex items-center gap-2 text-sm text-white">
-                  <input type="checkbox" checked={pinAfterSendEnabled} onChange={(event) => setPinAfterSendEnabled(event.target.checked)} />
-                  发送后自动置顶
-                </label>
-                <div className="mt-2 text-xs text-textMuted">按你填的秒数等待后，把刚发出的广告在当前账号侧置顶。</div>
-                {pinAfterSendEnabled ? (
-                  <input
-                    type="number"
-                    min={0}
-                    max={3600}
-                    value={pinDelaySeconds}
-                    onChange={(event) => setPinDelaySeconds(Number(event.target.value) || 0)}
-                    className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]"
-                  />
+                {deleteMode !== 'none' ? (
+                  <ConfigRow label="删除延时" hint="多少秒后执行删除。">
+                    <input type="number" min={0} max={3600} value={deleteDelaySeconds} onChange={(event) => setDeleteDelaySeconds(Number(event.target.value) || 0)} className={COMPACT_INPUT_CLASS} />
+                  </ConfigRow>
                 ) : null}
-              </div>
 
-              <div className="rounded-[16px] bg-panel/80 px-4 py-4 text-sm">
-                <label className="inline-flex items-center gap-2 text-sm text-white">
-                  <input type="checkbox" checked={welcomeMessageEnabled} onChange={(event) => setWelcomeMessageEnabled(event.target.checked)} />
-                  先发欢迎帖子，再发广告
-                </label>
-                <div className="mt-2 text-xs text-textMuted">会先发一条欢迎内容，等几秒后再发送正式广告。</div>
-                {welcomeMessageEnabled ? (
-                  <input
-                    type="number"
-                    min={0}
-                    max={3600}
-                    value={welcomeDelaySeconds}
-                    onChange={(event) => setWelcomeDelaySeconds(Number(event.target.value) || 0)}
-                    className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-3 py-3 text-white outline-none focus:border-white/[0.12]"
-                  />
-                ) : null}
-              </div>
+                <ConfigRow label="自动置顶" hint="发送后把广告消息在当前账号侧置顶。" wide>
+                  <div className="space-y-3">
+                    <label className="inline-flex items-center gap-2 text-sm text-white">
+                      <input type="checkbox" checked={pinAfterSendEnabled} onChange={(event) => setPinAfterSendEnabled(event.target.checked)} />
+                      开启发送后自动置顶
+                    </label>
+                    {pinAfterSendEnabled ? <input type="number" min={0} max={3600} value={pinDelaySeconds} onChange={(event) => setPinDelaySeconds(Number(event.target.value) || 0)} className={COMPACT_INPUT_CLASS} /> : null}
+                  </div>
+                </ConfigRow>
+
+                <ConfigRow label="欢迎帖子" hint="先发欢迎内容，再延迟发送正式广告。" wide>
+                  <div className="space-y-3">
+                    <label className="inline-flex items-center gap-2 text-sm text-white">
+                      <input type="checkbox" checked={welcomeMessageEnabled} onChange={(event) => setWelcomeMessageEnabled(event.target.checked)} />
+                      开启欢迎帖子
+                    </label>
+                    {welcomeMessageEnabled ? (
+                      <>
+                        <input type="number" min={0} max={3600} value={welcomeDelaySeconds} onChange={(event) => setWelcomeDelaySeconds(Number(event.target.value) || 0)} className={COMPACT_INPUT_CLASS} />
+                        <textarea rows={5} value={welcomeMessageText} onChange={(event) => setWelcomeMessageText(event.target.value)} placeholder="先发的欢迎内容写这里" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+                      </>
+                    ) : null}
+                  </div>
+                </ConfigRow>
+              </FoldSection>
             </div>
           </GlassPanel>
 
           <GlassPanel className="bg-card">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-base font-semibold text-white">发送目标</div>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => importTargets(targetInput, { mode: 'replace', source: 'manual' })} disabled={!targetInput.trim()} className="inline-flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-3 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14} /> 整理名单</button>
-                <button type="button" onClick={copyTargets} className="inline-flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]"><Copy size={14} /> 直接复制</button>
-                <button type="button" onClick={exportTargetsAsTxt} className="inline-flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]"><Download size={14} /> TXT导出</button>
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">
-                  <Upload size={14} /> 导入TXT
-                  <input type="file" accept=".txt,.csv" className="hidden" onChange={handleTargetFileUpload} />
-                </label>
-                <button type="button" onClick={clearTargets} className="inline-flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]"><Trash2 size={14} /> 清空</button>
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">总数量</div><div className="mt-2 text-xl font-semibold text-white">{targetSummary.total}</div></div>
-              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">可发送</div><div className="mt-2 text-xl font-semibold text-white">{effectiveTargets.length}</div></div>
-              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">重复</div><div className="mt-2 text-xl font-semibold text-white">{duplicateTargets}</div></div>
-              <div className="rounded-[14px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">格式不对</div><div className="mt-2 text-xl font-semibold text-white">{invalidTargets}</div></div>
-            </div>
-
-            <div className="mt-4">
-              <textarea
-                rows={11}
-                value={targetInput}
-                onChange={(event) => setTargetInput(event.target.value)}
-                placeholder="一行一个，支持 @username / t.me/xxx / +8613xxxxxxx"
-                className="w-full rounded-[16px] border border-white/[0.06] bg-panel px-4 py-4 text-white outline-none focus:border-white/[0.12]"
-              />
-              <div className="mt-3 flex flex-wrap gap-2">
-                <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300">大名单先粘贴，再点“整理名单”；5 万级名单不会再一直挂在输入框里拖慢页面。</div>
-                {effectiveTargets.length > 2000 && !targetInput.trim() ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-textMuted">当前已导入大名单，为了避免卡顿，输入框内容已自动收起。</div> : null}
-              </div>
-            </div>
-
-          </GlassPanel>
-
-          <GlassPanel className="bg-card">
-            <div className="text-base font-semibold text-white">发送文案</div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {messageModes.map((mode) => (
-                <button
-                  key={mode.key}
-                  type="button"
-                  onClick={() => setMessageType(mode.key)}
-                  className={`rounded-[12px] px-4 py-2.5 text-sm transition ${messageType === mode.key ? 'bg-violet-400 text-slate-950' : 'bg-white/[0.05] text-white hover:bg-white/[0.08]'}`}
-                >
-                  {mode.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4 rounded-[16px] bg-panel/80 p-4">
-              {messageType === 'text' ? (
-                <div className="space-y-3">
-                  <textarea
-                    rows={10}
-                    value={messageText}
-                    onChange={(event) => setMessageText(event.target.value)}
-                    placeholder="文本直发：直接写发送内容"
-                    className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
-                  />
-                  <label className="inline-flex items-center gap-2 text-sm text-white">
-                    <input type="checkbox" checked={randomEmojiEnabled} onChange={(event) => setRandomEmojiEnabled(event.target.checked)} />
-                    纯文本随机符号模式（每次随机带 1-2 个 emoji）
-                  </label>
+            <FoldSection title="发送目标" hint="名单导入、整理、导出都统一收在这一组。">
+              <ConfigRow label="目标统计" hint="先看总数，再决定是否整理名单。" wide>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-[12px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">总数量</div><div className="mt-2 text-xl font-semibold text-white">{targetSummary.total}</div></div>
+                  <div className="rounded-[12px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">可发送</div><div className="mt-2 text-xl font-semibold text-white">{effectiveTargets.length}</div></div>
+                  <div className="rounded-[12px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">重复</div><div className="mt-2 text-xl font-semibold text-white">{duplicateTargets}</div></div>
+                  <div className="rounded-[12px] bg-panel/80 px-4 py-3"><div className="text-xs tracking-[0.18em] text-textMuted">格式不对</div><div className="mt-2 text-xl font-semibold text-white">{invalidTargets}</div></div>
                 </div>
+              </ConfigRow>
+
+              <ConfigRow label="名单操作" hint="支持手输、导入、复制、导出。" wide>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => importTargets(targetInput, { mode: 'replace', source: 'manual' })} disabled={!targetInput.trim()} className="inline-flex items-center gap-2 rounded-[12px] bg-violet-400/12 px-3 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14} /> 整理名单</button>
+                  <button type="button" onClick={copyTargets} className="inline-flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]"><Copy size={14} /> 直接复制</button>
+                  <button type="button" onClick={exportTargetsAsTxt} className="inline-flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]"><Download size={14} /> TXT导出</button>
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">
+                    <Upload size={14} /> 导入TXT
+                    <input type="file" accept=".txt,.csv" className="hidden" onChange={handleTargetFileUpload} />
+                  </label>
+                  <button type="button" onClick={clearTargets} className="inline-flex items-center gap-2 rounded-[12px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]"><Trash2 size={14} /> 清空</button>
+                </div>
+              </ConfigRow>
+
+              <ConfigRow label="原始名单" hint="一行一个，支持用户名、链接、手机号。" wide>
+                <div className="space-y-3">
+                  <textarea rows={11} value={targetInput} onChange={(event) => setTargetInput(event.target.value)} placeholder="一行一个，支持 @username / t.me/xxx / +8613xxxxxxx" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+                  <div className="flex flex-wrap gap-2">
+                    <div className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300">大名单先粘贴，再点“整理名单”；5 万级名单不会再一直挂在输入框里拖慢页面。</div>
+                    {effectiveTargets.length > 2000 && !targetInput.trim() ? <div className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-textMuted">当前已导入大名单，为了避免卡顿，输入框内容已自动收起。</div> : null}
+                  </div>
+                </div>
+              </ConfigRow>
+            </FoldSection>
+          </GlassPanel>
+
+          <GlassPanel className="bg-card">
+            <FoldSection title="发送文案" hint="文案类型、内容和来源链接统一放这里。">
+              <ConfigRow label="发送方式" hint="选一种发送模式即可。" wide>
+                <div className="flex flex-wrap gap-2">
+                  {messageModes.map((mode) => (
+                    <button key={mode.key} type="button" onClick={() => setMessageType(mode.key)} className={`rounded-[12px] px-4 py-2.5 text-sm transition ${messageType === mode.key ? 'bg-violet-400 text-slate-950' : 'bg-white/[0.05] text-white hover:bg-white/[0.08]'}`}>
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              </ConfigRow>
+
+              {messageType === 'text' ? (
+                <ConfigRow label="发送内容" hint="直接输入要发给用户的文本。" wide>
+                  <div className="space-y-3">
+                    <textarea rows={10} value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="文本直发：直接写发送内容" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+                    <label className="inline-flex items-center gap-2 text-sm text-white">
+                      <input type="checkbox" checked={randomEmojiEnabled} onChange={(event) => setRandomEmojiEnabled(event.target.checked)} />
+                      纯文本随机符号模式（每次随机带 1-2 个 emoji）
+                    </label>
+                  </div>
+                </ConfigRow>
               ) : null}
 
-              {messageType === 'channel_forward' ? (
-                <input
-                  value={sourceLink}
-                  onChange={(event) => setSourceLink(event.target.value)}
-                  placeholder="频道转发：填频道消息链接"
-                  className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
-                />
-              ) : null}
-
-              {messageType === 'hidden_channel_forward' ? (
-                <input
-                  value={sourceLink}
-                  onChange={(event) => setSourceLink(event.target.value)}
-                  placeholder="隐藏频道来源转发：填频道消息链接"
-                  className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
-                />
+              {(messageType === 'channel_forward' || messageType === 'hidden_channel_forward') ? (
+                <ConfigRow label="频道消息链接" hint="贴一条频道消息链接即可。" wide>
+                  <input value={sourceLink} onChange={(event) => setSourceLink(event.target.value)} placeholder={messageType === 'channel_forward' ? '频道转发：填频道消息链接' : '隐藏频道来源转发：填频道消息链接'} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                </ConfigRow>
               ) : null}
 
               {messageType === 'postbot_code' ? (
-                <textarea
-                  rows={10}
-                  value={postbotCode}
-                  onChange={(event) => setPostbotCode(event.target.value)}
-                  placeholder="post图文+按钮：贴 postbot 生成代码"
-                  className="w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
-                />
+                <ConfigRow label="postbot 代码" hint="直接贴生成好的图文+按钮代码。" wide>
+                  <textarea rows={10} value={postbotCode} onChange={(event) => setPostbotCode(event.target.value)} placeholder="post图文+按钮：贴 postbot 生成代码" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+                </ConfigRow>
               ) : null}
-
-              {welcomeMessageEnabled ? (
-                <div className="mt-4 rounded-[14px] border border-white/[0.06] bg-black/10 p-4">
-                  <div className="text-sm font-medium text-white">欢迎帖子内容</div>
-                  <div className="mt-1 text-xs text-textMuted">这条会先发，等待上面设置的秒数后，再发正式广告。</div>
-                  <textarea
-                    rows={5}
-                    value={welcomeMessageText}
-                    onChange={(event) => setWelcomeMessageText(event.target.value)}
-                    placeholder="先发的欢迎内容写这里"
-                    className="mt-3 w-full rounded-[14px] border border-white/[0.06] bg-black/10 px-4 py-4 text-white outline-none focus:border-white/[0.12]"
-                  />
-                </div>
-              ) : null}
-            </div>
+            </FoldSection>
           </GlassPanel>
         </div>
 
@@ -769,27 +712,45 @@ const AutoReplyWorkbench = memo(function AutoReplyWorkbench() {
 
   return (
     <GlassPanel className="bg-card">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="inline-flex items-center gap-2 text-sm text-white"><input type="checkbox" checked={autoReplyEnabled} onChange={(event) => setAutoReplyEnabled(event.target.checked)} /> 开启自动回复</label>
-        <button type="button" onClick={addAutoReplyRule} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.08]">新增规则</button>
-        <button type="button" disabled={autoReplySyncing} onClick={() => void syncAutoReply()} className="rounded-[12px] bg-violet-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{autoReplySyncing ? '应用中' : '应用规则'}</button>
-      </div>
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-4">
-          {autoReplyRules.map((rule, index) => (
-            <div key={rule.id} className="rounded-[16px] bg-panel/75 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-white">规则 {index + 1}</div>
-                <button type="button" onClick={() => removeAutoReplyRule(rule.id)} className="rounded-[10px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">删除</button>
+          <FoldSection title="自动回复开关" hint="先决定开不开，再应用规则。">
+            <ConfigRow label="启用状态" hint="开启后，命中规则才会自动回复。" wide>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-white"><input type="checkbox" checked={autoReplyEnabled} onChange={(event) => setAutoReplyEnabled(event.target.checked)} /> 开启自动回复</label>
+                <button type="button" disabled={autoReplySyncing} onClick={() => void syncAutoReply()} className="rounded-[12px] bg-violet-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60">{autoReplySyncing ? '应用中' : '应用规则'}</button>
               </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
-                <input value={rule.keyword} onChange={(event) => updateAutoReplyRule(rule.id, { keyword: event.target.value })} placeholder="触发词" className="rounded-[12px] border border-white/[0.06] bg-black/10 px-4 py-3 text-white outline-none focus:border-white/[0.12]" />
-                <select value={rule.matchMode} onChange={(event) => updateAutoReplyRule(rule.id, { matchMode: event.target.value as 'contains' | 'exact' })} className="rounded-[12px] border border-white/[0.06] bg-black/10 px-4 py-3 text-white outline-none focus:border-white/[0.12]"><option value="contains">包含</option><option value="exact">完全匹配</option></select>
-                <input type="number" min={0} value={rule.cooldownSeconds} onChange={(event) => updateAutoReplyRule(rule.id, { cooldownSeconds: Math.max(0, Number(event.target.value) || 0) })} placeholder="冷却秒数" className="rounded-[12px] border border-white/[0.06] bg-black/10 px-4 py-3 text-white outline-none focus:border-white/[0.12]" />
+            </ConfigRow>
+          </FoldSection>
+
+          <FoldSection title="回复规则" hint="一条规则一组，保持一行一参数。">
+            <ConfigRow label="规则操作" hint="先新增，再逐条填写。" wide>
+              <button type="button" onClick={addAutoReplyRule} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.08]">新增规则</button>
+            </ConfigRow>
+
+            {autoReplyRules.map((rule, index) => (
+              <div key={rule.id} className="border-t border-white/[0.035] px-3 py-3 first:border-t-0">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-white">规则 {index + 1}</div>
+                  <button type="button" onClick={() => removeAutoReplyRule(rule.id)} className="rounded-[10px] bg-white/[0.05] px-3 py-2 text-sm text-white transition hover:bg-white/[0.08]">删除</button>
+                </div>
+                <div className="space-y-2">
+                  <ConfigRow label="触发词">
+                    <input value={rule.keyword} onChange={(event) => updateAutoReplyRule(rule.id, { keyword: event.target.value })} placeholder="触发词" className={COMPACT_INPUT_CLASS} />
+                  </ConfigRow>
+                  <ConfigRow label="匹配方式">
+                    <select value={rule.matchMode} onChange={(event) => updateAutoReplyRule(rule.id, { matchMode: event.target.value as 'contains' | 'exact' })} className={COMPACT_INPUT_CLASS}><option value="contains" className="bg-white text-slate-950">包含</option><option value="exact" className="bg-white text-slate-950">完全匹配</option></select>
+                  </ConfigRow>
+                  <ConfigRow label="冷却秒数">
+                    <input type="number" min={0} value={rule.cooldownSeconds} onChange={(event) => updateAutoReplyRule(rule.id, { cooldownSeconds: Math.max(0, Number(event.target.value) || 0) })} placeholder="冷却秒数" className={COMPACT_INPUT_CLASS} />
+                  </ConfigRow>
+                  <ConfigRow label="回复内容" wide>
+                    <textarea rows={4} value={rule.replyText} onChange={(event) => updateAutoReplyRule(rule.id, { replyText: event.target.value })} placeholder="自动回复内容" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
+                  </ConfigRow>
+                </div>
               </div>
-              <textarea rows={4} value={rule.replyText} onChange={(event) => updateAutoReplyRule(rule.id, { replyText: event.target.value })} placeholder="自动回复内容" className="mt-3 w-full rounded-[12px] border border-white/[0.06] bg-black/10 px-4 py-3 text-white outline-none focus:border-white/[0.12]" />
-            </div>
-          ))}
+            ))}
+          </FoldSection>
         </div>
         <div className="space-y-3">
           <div className="rounded-[16px] bg-panel/80 px-4 py-4"><div className="text-xs tracking-[0.18em] text-textMuted">当前状态</div><div className="mt-2 text-lg font-semibold text-white">{autoReplyState.enabled ? '已启用' : '未启用'}</div></div>
