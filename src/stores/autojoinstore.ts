@@ -92,6 +92,8 @@ interface AutoJoinState {
   repeatJoinEnabled: boolean
   loopSendEnabled: boolean
   loopSendIntervalMinutes: number
+  autoDeleteSentMessages: boolean
+  deleteSentAfterSeconds: number
   dispatchMode: 'random' | 'sequential'
   safeModeEnabled: boolean
   maxJoinsPerAccount: number
@@ -130,6 +132,8 @@ interface AutoJoinState {
   setRepeatJoinEnabled: (value: boolean) => void
   setLoopSendEnabled: (value: boolean) => void
   setLoopSendIntervalMinutes: (value: number) => void
+  setAutoDeleteSentMessages: (value: boolean) => void
+  setDeleteSentAfterSeconds: (value: number) => void
   setDispatchMode: (value: 'random' | 'sequential') => void
   setSafeModeEnabled: (value: boolean) => void
   setMaxJoinsPerAccount: (value: number) => void
@@ -484,6 +488,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
     repeatJoinEnabled: false,
     loopSendEnabled: false,
     loopSendIntervalMinutes: 30,
+    autoDeleteSentMessages: false,
+    deleteSentAfterSeconds: 30,
     dispatchMode: 'sequential',
       safeModeEnabled: true,
       maxJoinsPerAccount: 3,
@@ -541,6 +547,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
       setRepeatJoinEnabled: (value) => set({ repeatJoinEnabled: value }),
       setLoopSendEnabled: (value) => set({ loopSendEnabled: value }),
       setLoopSendIntervalMinutes: (value) => set({ loopSendIntervalMinutes: Math.max(1, Math.min(1440, Math.floor(value) || 1)) }),
+      setAutoDeleteSentMessages: (value) => set({ autoDeleteSentMessages: value }),
+      setDeleteSentAfterSeconds: (value) => set({ deleteSentAfterSeconds: Math.max(1, Math.min(86400, Math.floor(value) || 1)) }),
       setDispatchMode: (value) => set({ dispatchMode: value }),
       setSafeModeEnabled: (value) => set({ safeModeEnabled: value }),
       setMaxJoinsPerAccount: (value) => set({ maxJoinsPerAccount: Math.max(1, value) }),
@@ -646,6 +654,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
             repeatJoinEnabled: get().repeatJoinEnabled,
             loopSendEnabled: needsMessage ? get().loopSendEnabled : false,
             loopSendIntervalMinutes: Math.max(1, get().loopSendIntervalMinutes),
+            autoDeleteSentMessages: needsMessage ? get().autoDeleteSentMessages : false,
+            deleteSentAfterSeconds: Math.max(1, get().deleteSentAfterSeconds),
             dispatchMode: get().dispatchMode,
             safeModeEnabled,
             maxJoinsPerAccount: perAccountTargetLimit,
@@ -762,6 +772,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           repeatJoinEnabled: state?.repeatJoinEnabled ?? false,
           loopSendEnabled: state?.loopSendEnabled ?? false,
           loopSendIntervalMinutes: Math.max(1, state?.loopSendIntervalMinutes ?? 30),
+          autoDeleteSentMessages: state?.autoDeleteSentMessages ?? false,
+          deleteSentAfterSeconds: Math.max(1, state?.deleteSentAfterSeconds ?? 30),
           dispatchMode: state?.dispatchMode ?? 'sequential',
           retryLimit: state?.retryLimit ?? 1,
           sendIntervalMin: state?.sendIntervalMin ?? 25,
@@ -793,6 +805,8 @@ export const useAutoJoinStore = create<AutoJoinState>()(
         repeatJoinEnabled: state.repeatJoinEnabled,
         loopSendEnabled: state.loopSendEnabled,
         loopSendIntervalMinutes: state.loopSendIntervalMinutes,
+        autoDeleteSentMessages: state.autoDeleteSentMessages,
+        deleteSentAfterSeconds: state.deleteSentAfterSeconds,
         dispatchMode: state.dispatchMode,
         safeModeEnabled: state.safeModeEnabled,
         maxJoinsPerAccount: state.maxJoinsPerAccount

@@ -948,6 +948,8 @@ export interface AutoJoinPayload {
   repeatJoinEnabled: boolean
   loopSendEnabled: boolean
   loopSendIntervalMinutes: number
+  autoDeleteSentMessages: boolean
+  deleteSentAfterSeconds: number
   dispatchMode: 'random' | 'sequential'
   safeModeEnabled: boolean
   maxJoinsPerAccount: number

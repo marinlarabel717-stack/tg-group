@@ -174,6 +174,10 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const setLoopSendEnabled = useAutoJoinStore((state) => state.setLoopSendEnabled)
   const loopSendIntervalMinutes = useAutoJoinStore((state) => state.loopSendIntervalMinutes)
   const setLoopSendIntervalMinutes = useAutoJoinStore((state) => state.setLoopSendIntervalMinutes)
+  const autoDeleteSentMessages = useAutoJoinStore((state) => state.autoDeleteSentMessages)
+  const setAutoDeleteSentMessages = useAutoJoinStore((state) => state.setAutoDeleteSentMessages)
+  const deleteSentAfterSeconds = useAutoJoinStore((state) => state.deleteSentAfterSeconds)
+  const setDeleteSentAfterSeconds = useAutoJoinStore((state) => state.setDeleteSentAfterSeconds)
   const dispatchMode = useAutoJoinStore((state) => state.dispatchMode)
   const setDispatchMode = useAutoJoinStore((state) => state.setDispatchMode)
   const startTask = useAutoJoinStore((state) => state.startTask)
@@ -400,6 +404,19 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 <ConfigRow label="按钮链接">
                   <input value={buttonUrl} onChange={(event) => setButtonUrl(event.target.value)} placeholder="https://..." className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
                 </ConfigRow>
+
+                <ConfigRow label="发送后自动删除" hint="消息发出去后，延迟几秒自动删掉自己刚发的那条。">
+                  <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                    <span>{autoDeleteSentMessages ? '已开启' : '已关闭'}</span>
+                    <input type="checkbox" checked={autoDeleteSentMessages} onChange={(event) => setAutoDeleteSentMessages(event.target.checked)} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                  </label>
+                </ConfigRow>
+
+                {autoDeleteSentMessages ? (
+                  <ConfigRow label="延迟删除（秒）" hint="发出去后，等几秒再自动删除。">
+                    <input type="number" min={1} max={86400} value={deleteSentAfterSeconds} onChange={(event) => setDeleteSentAfterSeconds(Number(event.target.value) || 1)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+                  </ConfigRow>
+                ) : null}
 
               <ConfigRow label="发送图片" wide>
                   <div className="flex flex-wrap items-center gap-2">

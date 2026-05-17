@@ -16,6 +16,7 @@ interface ActiveAutoJoinTask {
   clients: Map<number, TelegramClient>
   wakeWaiters: Set<() => void>
   joinAbortControllers: Set<AbortController>
+  deletePromises: Set<Promise<void>>
 }
 
 interface PendingJoinItem extends AutoJoinPayloadItem {
@@ -605,13 +606,28 @@ async function sendContentToJoinedTarget(client: TelegramClient, entity: unknown
       })
     : undefined
 
-  await (((client as TelegramClient) as TelegramClient & {
+  const response = await (((client as TelegramClient) as TelegramClient & {
     sendMessage: (peer: unknown, options: Record<string, unknown>) => Promise<unknown>
   }).sendMessage(entity as never, {
     message: messageText || undefined,
     file: media,
     replyMarkup
   }))
+
+  const responseMessage = response as { id?: unknown; message?: { id?: unknown } } | null
+  if (typeof responseMessage?.id === 'number' && responseMessage.id > 0) {
+    return responseMessage.id
+  }
+  if (typeof responseMessage?.message?.id === 'number' && responseMessage.message.id > 0) {
+    return responseMessage.message.id
+  }
+  return null
+}
+
+async function deleteSentMessage(client: TelegramClient, entity: unknown, messageId: number) {
+  await (((client as TelegramClient) as TelegramClient & {
+    deleteMessages: (peer: unknown, messageIds: number[], options: { revoke?: boolean }) => Promise<unknown>
+  }).deleteMessages(entity as never, [messageId], { revoke: true }))
 }
 
 function readMessageText(message: unknown) {
@@ -752,7 +768,8 @@ export class AutoJoinService {
       cancelled: false,
       clients,
       wakeWaiters: new Set(),
-      joinAbortControllers: new Set()
+      joinAbortControllers: new Set(),
+      deletePromises: new Set()
     }
     this.activeTask = task
     const needsMessage = payload.mode !== 'join-only'
@@ -837,12 +854,33 @@ export class AutoJoinService {
       emit(message, item, null, true)
     }
 
+    const scheduleDeleteAfterSend = (client: TelegramClient, entity: unknown, messageId: number, accountLabel: string, targetLabel: string) => {
+      if (!payload.autoDeleteSentMessages || !Number.isFinite(messageId) || messageId <= 0) return
+      const waitMs = Math.max(1, payload.deleteSentAfterSeconds) * 1000
+      const deletePromise = (async () => {
+        await sleepForTask(task, waitMs)
+        if (task.cancelled) return
+        try {
+          await deleteSentMessage(client, entity, messageId)
+          emit(`${accountLabel} 已自动删除 ${targetLabel} 刚发出的消息。`, null, null, true)
+        } catch (error) {
+          emit(`${accountLabel} 自动删除消息失败：${formatAutoJoinError(error)}`, null, null, true)
+        }
+      })().finally(() => {
+        task.deletePromises.delete(deletePromise)
+      })
+      task.deletePromises.add(deletePromise)
+    }
+
     const sendToResolvedTarget = async (client: TelegramClient, accountId: number, accountLabel: string, sourceItem: AutoJoinPayloadItem, targetLabel: string, resultItem: AutoJoinResultItem, roundLabel?: string) => {
       let resolvedEntity: unknown | null = null
       try {
         resolvedEntity = await resolveSendEntity(client, sourceItem)
-        await sendContentToJoinedTarget(client, resolvedEntity, payload, targetLabel)
+        const sentMessageId = await sendContentToJoinedTarget(client, resolvedEntity, payload, targetLabel)
         finalizeSendState(resultItem, 'sent', `${accountLabel} 已向 ${targetLabel} 发送内容${roundLabel ? `（${roundLabel}）` : ''}。`)
+        if (sentMessageId) {
+          scheduleDeleteAfterSend(client, resolvedEntity, sentMessageId, accountLabel, targetLabel)
+        }
         return
       } catch (sendError) {
         try {
@@ -1433,6 +1471,7 @@ export class AutoJoinService {
         stopped: task.cancelled
       }
     } finally {
+      await Promise.all(Array.from(task.deletePromises))
       wakeTaskWaiters(task)
       for (const controller of Array.from(task.joinAbortControllers)) {
         controller.abort()
