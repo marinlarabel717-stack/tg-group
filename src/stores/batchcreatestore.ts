@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { BatchCreateMode, BatchCreateProgress, BatchCreateResultItem, BatchCreateTaskResult } from '../types'
+import type { BatchCreateMode, BatchCreatePostType, BatchCreateProgress, BatchCreateResultItem, BatchCreateTaskResult } from '../types'
+import { useUIStore } from './uistore'
 
 export type BatchCreateTabKey = 'tasks' | 'logs'
 export type BatchCreateLogLevel = 'info' | 'success' | 'error'
@@ -58,6 +59,9 @@ interface BatchCreateState {
   randomAboutEnabled: boolean
   randomUsernameEnabled: boolean
   randomLength: number
+  postType: BatchCreatePostType
+  postText: string
+  postImageData: string
   running: boolean
   stopping: boolean
   runningAccountIds: number[]
@@ -82,6 +86,9 @@ interface BatchCreateState {
   setRandomAboutEnabled: (value: boolean) => void
   setRandomUsernameEnabled: (value: boolean) => void
   setRandomLength: (value: number) => void
+  setPostType: (value: BatchCreatePostType) => void
+  setPostText: (value: string) => void
+  setPostImageData: (value: string) => void
   clearLogs: () => void
   closeCompletionDialog: () => void
   init: () => void
@@ -122,11 +129,22 @@ function upsertTask(tasks: BatchCreateTaskRecord[], task: BatchCreateTaskRecord)
 
 function createLogEntry(progress: BatchCreateProgress): BatchCreateLogEntry {
   const item = progress.item
+  const targetType = item ? (item.entityType === 'group' ? '公开群组' : '公开频道') : ''
+  const details = item
+    ? [
+        item.accountLabel ? `账号：${item.accountLabel}` : '',
+        targetType ? `类型：${targetType}` : '',
+        item.title ? `名称：${item.title}` : '',
+        item.username ? `用户名：${item.username}` : '',
+        item.publicLink ? `链接：${item.publicLink}` : ''
+      ].filter(Boolean).join(' | ')
+    : ''
+
   return {
     id: createId('batch-create-log'),
     taskId: progress.taskId,
     level: item?.status === 'success' ? 'success' : item?.status === 'failed' ? 'error' : 'info',
-    message: item?.message || progress.message,
+    message: details ? `${progress.message} | ${details}` : progress.message,
     createdAt: new Date().toISOString(),
     accountLabel: item?.accountLabel || '',
     targetLabel: item?.publicLink || item?.title || ''
@@ -148,6 +166,9 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
   randomAboutEnabled: false,
   randomUsernameEnabled: true,
   randomLength: 8,
+  postType: 'none',
+  postText: '',
+  postImageData: '',
   running: false,
   stopping: false,
   runningAccountIds: [],
@@ -172,6 +193,9 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
   setRandomAboutEnabled: (value) => set({ randomAboutEnabled: value }),
   setRandomUsernameEnabled: (value) => set({ randomUsernameEnabled: value }),
   setRandomLength: (value) => set({ randomLength: Math.max(4, Math.min(24, value)) }),
+  setPostType: (value) => set({ postType: value }),
+  setPostText: (value) => set({ postText: value }),
+  setPostImageData: (value) => set({ postImageData: value }),
   clearLogs: () => set({ logs: [] }),
   closeCompletionDialog: () => set({ completionDialogTaskId: null }),
   init: () => {
@@ -197,7 +221,7 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
           status: progress.running ? 'running' : state.stopping ? 'stopped' : 'completed',
           finishedAt: progress.running ? currentTask.finishedAt : new Date().toISOString()
         }
-        const nextLogs = progress.item ? [createLogEntry(progress), ...state.logs].slice(0, 300) : state.logs
+        const nextLogs = [createLogEntry(progress), ...state.logs].slice(0, 500)
         return {
           tasks: upsertTask(state.tasks, nextTask),
           logs: nextLogs,
@@ -223,6 +247,9 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
 
     const taskId = createId('batch-create-task')
     const total = selectedAccountIds.length * get().countPerAccount * (get().createMode === 'both' ? 2 : 1)
+    useUIStore.getState().setLogsContext('batch-create')
+    useUIStore.getState().setActiveModule('logs')
+
     set((state) => ({
       errorMessage: '',
       running: true,
@@ -231,7 +258,19 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
       currentTaskId: taskId,
       activeTab: 'logs',
       lastActionMessage: '批量创建任务已启动。',
-      tasks: upsertTask(state.tasks, createTaskRecord(taskId, total))
+      tasks: upsertTask(state.tasks, createTaskRecord(taskId, total)),
+      logs: [createLogEntry({
+        taskId,
+        total,
+        completed: 0,
+        successCount: 0,
+        failedCount: 0,
+        groupCount: 0,
+        channelCount: 0,
+        running: true,
+        item: null,
+        message: `批量创建任务已启动，本轮共计划创建 ${total} 个目标。`
+      }), ...state.logs].slice(0, 500)
     }))
 
     try {
@@ -249,7 +288,10 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
         randomTitleEnabled: get().randomTitleEnabled,
         randomAboutEnabled: get().randomAboutEnabled,
         randomUsernameEnabled: get().randomUsernameEnabled,
-        randomLength: get().randomLength
+        randomLength: get().randomLength,
+        postType: get().postType,
+        postText: get().postText,
+        postImageData: get().postImageData
       })
       set((state) => {
         const finishedTask: BatchCreateTaskRecord = {

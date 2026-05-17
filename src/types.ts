@@ -1016,6 +1016,7 @@ export interface AutoJoinProgress {
 }
 
 export type BatchCreateMode = 'group' | 'channel' | 'both'
+export type BatchCreatePostType = 'none' | 'text' | 'photo'
 
 export interface BatchCreatePayload {
   taskId: string
@@ -1032,6 +1033,9 @@ export interface BatchCreatePayload {
   randomAboutEnabled: boolean
   randomUsernameEnabled: boolean
   randomLength: number
+  postType: BatchCreatePostType
+  postText: string
+  postImageData: string
 }
 
 export interface BatchCreateResultItem {

@@ -1,5 +1,6 @@
 import { Api } from 'telegram'
 import type { TelegramClient } from 'telegram'
+import { CustomFile } from 'telegram/client/uploads'
 import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
@@ -67,6 +68,34 @@ function pickDelayMs(minSeconds: number, maxSeconds: number) {
   const maxMs = Math.round(max * 1000)
   if (maxMs <= minMs) return minMs
   return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs
+}
+
+function slugifyFileName(input: string) {
+  const value = input.trim().replace(/[^\p{L}\p{N}._-]+/gu, '_').replace(/^_+|_+$/g, '')
+  return value || 'batch_create_post'
+}
+
+function inferImageExtension(mimeType: string) {
+  if (mimeType.includes('png')) return 'png'
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg'
+  if (mimeType.includes('webp')) return 'webp'
+  if (mimeType.includes('gif')) return 'gif'
+  return 'bin'
+}
+
+function resolveMediaFile(imageData: string, title: string) {
+  const value = imageData.trim()
+  if (!value) return undefined
+  if (value.startsWith('data:')) {
+    const matched = value.match(/^data:([^;,]+)?(;base64)?,(.*)$/s)
+    if (!matched) throw new Error('图片 Data URL 格式不正确')
+    const mimeType = matched[1] || 'application/octet-stream'
+    const encoded = matched[3] || ''
+    const buffer = matched[2] ? Buffer.from(encoded, 'base64') : Buffer.from(decodeURIComponent(encoded), 'utf8')
+    const extension = inferImageExtension(mimeType)
+    return new CustomFile(`${slugifyFileName(title)}.${extension}`, buffer.length, '', buffer)
+  }
+  return value
 }
 
 function readRequiredWaitSeconds(error: unknown) {
@@ -182,12 +211,16 @@ function formatBatchCreateError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '创建失败，原因没拿到。'
+  if (/BATCH_CREATE_POST_IMAGE_REQUIRED/i.test(normalized)) return '你选择了图文首帖，但还没上传图片。'
+  if (/BATCH_CREATE_POST_CONTENT_REQUIRED/i.test(normalized)) return '你开启了首帖发送，但文案和图片至少要填一个。'
   if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '全局代理已开启，但当前没有可用代理。'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '这个账号登录已经失效了。'
   if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(normalized)) return '这个账号已经被封了。'
   if (/ACCOUNT_RESTRICTED/i.test(normalized)) return '这个账号当前被 Telegram 限制了。'
   if (/CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号创建得太多了，Telegram 不让继续建了。'
   if (/CHANNELS_ADMIN_PUBLIC_TOO_MUCH/i.test(normalized)) return '这个账号公开群/频道数量已经到上限了。'
+  if (/PHOTO_INVALID|MEDIA_INVALID|IMAGE_PROCESS_FAILED/i.test(normalized)) return '首帖图片格式不对，Telegram 没能处理这张图。'
+  if (/MESSAGE_TOO_LONG|MEDIA_CAPTION_TOO_LONG/i.test(normalized)) return '首帖文案太长了，缩短一点再试。'
   if (/USERNAME_OCCUPIED/i.test(normalized)) return '这个公开链接已经被占用了。'
   if (/USERNAME_INVALID/i.test(normalized)) return '这个公开链接格式不对，只能用字母、数字和下划线。'
   if (/USERNAMES_UNAVAILABLE/i.test(normalized)) return '这个公开链接当前不可用。'
@@ -221,6 +254,18 @@ async function rollbackCreatedEntity(client: TelegramClient, entity: unknown) {
   await client.invoke(new Api.channels.DeleteChannel({ channel: input as never }))
 }
 
+async function sendInitialPostToChannel(client: TelegramClient, entity: unknown, payload: BatchCreatePayload, title: string) {
+  if (payload.postType === 'none') return
+  const message = payload.postText.trim() || undefined
+  const file = payload.postType === 'photo' ? resolveMediaFile(payload.postImageData, title) : undefined
+  await (((client as TelegramClient) as TelegramClient & {
+    sendMessage: (peer: unknown, options: Record<string, unknown>) => Promise<unknown>
+  }).sendMessage(entity as never, {
+    message,
+    file
+  }))
+}
+
 export class BatchCreateService {
   private activeTask: ActiveBatchCreateTask | null = null
 
@@ -251,6 +296,13 @@ export class BatchCreateService {
   async start(payload: BatchCreatePayload, onProgress?: (payload: BatchCreateProgress) => void): Promise<BatchCreateTaskResult> {
     if (this.activeTask) {
       throw new Error('已经有批量创建任务在执行了，请先停掉当前任务。')
+    }
+
+    if (payload.postType === 'photo' && !payload.postImageData.trim()) {
+      throw new Error('BATCH_CREATE_POST_IMAGE_REQUIRED')
+    }
+    if (payload.postType !== 'none' && !payload.postText.trim() && !(payload.postType === 'photo' && payload.postImageData.trim())) {
+      throw new Error('BATCH_CREATE_POST_CONTENT_REQUIRED')
     }
 
     const accountIds = Array.from(new Set(payload.accountIds.filter((item): item is number => typeof item === 'number')))
@@ -345,10 +397,13 @@ export class BatchCreateService {
             const about = buildAbout(payload, context, title)
             let lastError: unknown = null
             let emittedItem: BatchCreateResultItem | null = null
+            let postFailureMessage = ''
 
             for (let retry = 0; retry < 4; retry += 1) {
               let createdEntity: unknown = null
+              let rollbackAllowed = true
               const username = buildUsername(payload, context, retry, currentSequenceIndex, customUsernames)
+              emit(`${accountLabel} 开始创建公开${type === 'group' ? '群组' : '频道'}：${title}（准备绑定 ${username}）`, null, true)
               try {
                 const createResult = await client.invoke(new Api.channels.CreateChannel({
                   title,
@@ -365,6 +420,18 @@ export class BatchCreateService {
                   channel: inputChannel as never,
                   username
                 }))
+                rollbackAllowed = false
+
+                if (type === 'channel' && payload.postType !== 'none') {
+                  emit(`${accountLabel} 公开频道 ${title} 创建完成，开始发送首帖。`, null, true)
+                  try {
+                    await sendInitialPostToChannel(client, createdEntity, payload, title)
+                    emit(`${accountLabel} 已向频道 ${title} 发送首帖。`, null, true)
+                  } catch (postError) {
+                    postFailureMessage = formatBatchCreateError(postError)
+                    emit(`${accountLabel} 频道 ${title} 已创建成功，但首帖发送失败：${postFailureMessage}`, null, true)
+                  }
+                }
 
                 completed += 1
                 successCount += 1
@@ -380,7 +447,7 @@ export class BatchCreateService {
                   username,
                   publicLink: `https://t.me/${username}`,
                   status: 'success',
-                  message: `已创建公开${type === 'group' ? '群组' : '频道'}：${title}`,
+                  message: `已创建公开${type === 'group' ? '群组' : '频道'}：${title}${type === 'channel' && payload.postType !== 'none' ? (postFailureMessage ? `，但首帖发送失败：${postFailureMessage}` : '，并已发送首帖') : ''}`,
                   createdAt: new Date().toISOString()
                 }
                 results.push(emittedItem)
@@ -393,7 +460,7 @@ export class BatchCreateService {
                 if (fatal) {
                   this.accountRepository.updateStatus([account.id], fatal.status)
                 }
-                if (createdEntity) {
+                if (createdEntity && rollbackAllowed) {
                   await rollbackCreatedEntity(client, createdEntity).catch(() => undefined)
                 }
                 if (payload.autoWaitOnFlood && waitSeconds && !fatal) {
@@ -403,6 +470,9 @@ export class BatchCreateService {
                   continue
                 }
                 const canRetryUsername = /USERNAME_OCCUPIED|USERNAME_INVALID|USERNAMES_UNAVAILABLE/i.test(error instanceof Error ? error.message : String(error))
+                if (canRetryUsername && retry < 3 && !fatal) {
+                  emit(`${accountLabel} 绑定公开链接 ${username} 失败，系统准备自动重试。`, null, true)
+                }
                 if (!canRetryUsername || retry >= 3 || fatal) {
                   completed += 1
                   failedCount += 1

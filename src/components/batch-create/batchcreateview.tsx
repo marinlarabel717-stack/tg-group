@@ -1,5 +1,5 @@
-import { CheckCircle2, Copy, PlusSquare, Search, SquareTerminal, StopCircle, X } from 'lucide-react'
-import { memo, useEffect, useMemo, useState } from 'react'
+import { CheckCircle2, Copy, Image as ImageIcon, PlusSquare, Search, SquareTerminal, StopCircle, Type, X } from 'lucide-react'
+import { memo, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, NumberRangeField, SOFT_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
@@ -12,6 +12,34 @@ const tabs: Array<{ key: BatchCreateTabKey; label: string; icon: typeof PlusSqua
   { key: 'tasks', label: '创建任务', icon: PlusSquare },
   { key: 'logs', label: '执行日志', icon: SquareTerminal }
 ]
+
+function PostTypeTabs({ value, onChange }: { value: 'none' | 'text' | 'photo'; onChange: (value: 'none' | 'text' | 'photo') => void }) {
+  const items = [
+    { value: 'none' as const, label: '不发首帖', icon: SquareTerminal },
+    { value: 'text' as const, label: '纯文字', icon: Type },
+    { value: 'photo' as const, label: '图文', icon: ImageIcon }
+  ]
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item) => {
+        const Icon = item.icon
+        const active = value === item.value
+        return (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => onChange(item.value)}
+            className={`inline-flex h-10 items-center gap-2 rounded-[12px] px-4 text-sm ${SOFT_TAB_CLASS} ${active ? 'border-white/[0.12] bg-violet-400/10 text-violet-200' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
+          >
+            <Icon size={15} />
+            {item.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 
 function readAccountLabel(account: { id: number; username?: string; phone?: string; userId?: string; profile?: Record<string, unknown> }) {
@@ -125,6 +153,12 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const setRandomUsernameEnabled = useBatchCreateStore((state) => state.setRandomUsernameEnabled)
   const randomLength = useBatchCreateStore((state) => state.randomLength)
   const setRandomLength = useBatchCreateStore((state) => state.setRandomLength)
+  const postType = useBatchCreateStore((state) => state.postType)
+  const setPostType = useBatchCreateStore((state) => state.setPostType)
+  const postText = useBatchCreateStore((state) => state.postText)
+  const setPostText = useBatchCreateStore((state) => state.setPostText)
+  const postImageData = useBatchCreateStore((state) => state.postImageData)
+  const setPostImageData = useBatchCreateStore((state) => state.setPostImageData)
   const running = useBatchCreateStore((state) => state.running)
   const stopping = useBatchCreateStore((state) => state.stopping)
   const lastActionMessage = useBatchCreateStore((state) => state.lastActionMessage)
@@ -171,6 +205,17 @@ const TasksWorkbench = memo(function TasksWorkbench() {
   const applyPicker = () => {
     setSelectedAccountIds(draftIds.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied))
     setPickerOpen(false)
+  }
+
+  const handlePostImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      setPostImageData(typeof reader.result === 'string' ? reader.result : '')
+    }
+    reader.readAsDataURL(file)
+    event.target.value = ''
   }
 
   return (
@@ -267,6 +312,44 @@ const TasksWorkbench = memo(function TasksWorkbench() {
               <div className="rounded-[14px] bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
                 支持公开群组 / 公开频道。群名和公开链接现在都支持一行一个顺序取用；若公开链接撞名，系统只会在重试时补随机后缀，不会在第一次创建时私自改你的自定义值。
               </div>
+            </FoldSection>
+
+            <div className="mt-4" />
+
+            <FoldSection title="创建频道后自动发首帖" hint="只对新建频道生效；群组不会自动发这条首帖。" defaultOpen>
+              <ConfigRow label="post 类型" hint="可以不发、发纯文字，或发图文首帖。">
+                <PostTypeTabs value={postType} onChange={setPostType} />
+              </ConfigRow>
+
+              {postType !== 'none' ? (
+                <>
+                  <ConfigRow label="发送文案" hint="创建频道成功后，马上把这段内容发出去。" wide>
+                    <textarea
+                      value={postText}
+                      onChange={(event) => setPostText(event.target.value)}
+                      rows={5}
+                      placeholder="例如：欢迎来到频道，这里是首条公告。"
+                      className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`}
+                    />
+                  </ConfigRow>
+
+                  {postType === 'photo' ? (
+                    <ConfigRow label="首帖图片" hint="上传本地图片；创建频道后会按图文消息发出去。" wide>
+                      <div className="space-y-3">
+                        <label className="inline-flex h-10 cursor-pointer items-center rounded-[12px] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08]">
+                          选择图片
+                          <input type="file" accept="image/*" className="hidden" onChange={handlePostImageUpload} />
+                        </label>
+                        <div className="flex items-center justify-between rounded-[12px] bg-black/10 px-4 py-3 text-xs text-textMuted">
+                          <span>{postImageData ? '已选择首帖图片' : '暂未选择图片'}</span>
+                          {postImageData ? <button type="button" onClick={() => setPostImageData('')} className="text-white transition hover:text-rose-200">删除</button> : null}
+                        </div>
+                        {postImageData ? <img src={postImageData} alt="首帖预览" className="max-h-[220px] rounded-[14px] border border-white/8 object-contain" /> : null}
+                      </div>
+                    </ConfigRow>
+                  ) : null}
+                </>
+              ) : null}
             </FoldSection>
           </GlassPanel>
         </div>

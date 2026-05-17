@@ -1,10 +1,11 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { FileClock, KeyRound, ShieldCheck, ShieldX, UserRoundPen } from 'lucide-react'
+import { FileClock, KeyRound, ShieldCheck, ShieldX, SquareTerminal, UserRoundPen } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { CheckResultDialog } from '../accounts/checkresultdialog'
 import { useAccountStore } from '../../stores/accountstore'
 import { useProxyPoolStore } from '../../stores/proxypoolstore'
 import { useUIStore } from '../../stores/uistore'
+import { useBatchCreateStore } from '../../stores/batchcreatestore'
 import type { CheckLogEntry, CheckLogLevel, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationProgressState, ProxyCheckLogEntry, TwoFactorAction, TwoFactorLogEntry, TwoFactorProgressState } from '../../types'
 import { isGeoRestrictedError } from '../../lib/ui-text'
 
@@ -384,6 +385,77 @@ function ProfileSummary({ state, scrollContainerRef, onScroll }: { state: Profil
   )
 }
 
+function BatchCreateSummary({ scrollContainerRef, onScroll }: { scrollContainerRef: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
+  const running = useBatchCreateStore((state) => state.running)
+  const stopping = useBatchCreateStore((state) => state.stopping)
+  const logs = useBatchCreateStore((state) => state.logs)
+  const tasks = useBatchCreateStore((state) => state.tasks)
+  const clearLogs = useBatchCreateStore((state) => state.clearLogs)
+  const stopTask = useBatchCreateStore((state) => state.stopTask)
+
+  const latestTask = tasks[0] ?? null
+
+  return (
+    <GlassPanel className="min-h-[520px] bg-card p-0">
+      <div className="border-b border-white/5 px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-medium text-white"><SquareTerminal size={16} className="text-violet-300" /><span>批量创建日志</span></div>
+            <div className="mt-1 text-xs text-textMuted">开始任务后会自动跳到这里，逐条显示创建、等待、重试、成功和失败。</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={!running || stopping}
+              onClick={() => void stopTask()}
+              className="rounded-[12px] bg-rose-400/12 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {stopping ? '停止中' : '停止任务'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void clearLogs()}
+              className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]"
+            >
+              清空日志
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 border-b border-white/5 px-5 py-4 md:grid-cols-4">
+        <div className="rounded-[14px] bg-panel px-4 py-4">
+          <div className="text-xs tracking-[0.16em] text-textMuted">当前进度</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{latestTask ? `${latestTask.completed} / ${latestTask.total}` : '0 / 0'}</div>
+        </div>
+        <div className="rounded-[14px] bg-panel px-4 py-4">
+          <div className="text-xs tracking-[0.16em] text-emerald-300">成功</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{latestTask?.successCount ?? 0}</div>
+        </div>
+        <div className="rounded-[14px] bg-panel px-4 py-4">
+          <div className="text-xs tracking-[0.16em] text-rose-300">失败</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{latestTask?.failedCount ?? 0}</div>
+        </div>
+        <div className="rounded-[14px] bg-panel px-4 py-4">
+          <div className="text-xs tracking-[0.16em] text-violet-300">状态</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{running ? (stopping ? '停止中' : '执行中') : '已结束'}</div>
+        </div>
+      </div>
+
+      <div ref={scrollContainerRef as RefObject<HTMLDivElement>} onScroll={onScroll} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">
+        {logs.length === 0 ? (
+          <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center text-textMuted">
+            <SquareTerminal size={24} className="text-violet-300" />
+            <div className="text-base font-medium text-white">暂无批量创建日志</div>
+          </div>
+        ) : (
+          <IncrementalLogLines logs={logs.slice().reverse()} lineClassResolver={(log) => getLevelClass(log.level)} />
+        )}
+      </div>
+    </GlassPanel>
+  )
+}
+
 export default memo(function LogsView() {
   const initAccounts = useAccountStore((state) => state.init)
   const stopCheck = useAccountStore((state) => state.stopCheck)
@@ -393,6 +465,7 @@ export default memo(function LogsView() {
   const checkLogs = useAccountStore((state) => state.checkLogs)
   const twoFactorState = useAccountStore((state) => state.twoFactorState)
   const profileOperationState = useAccountStore((state) => state.profileOperationState)
+  const batchCreateLogs = useBatchCreateStore((state) => state.logs)
   const logsContext = useUIStore((state) => state.logsContext)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const shouldStickToBottomRef = useRef(true)
@@ -406,8 +479,9 @@ export default memo(function LogsView() {
     if (logsContext === 'accounts') return checkLogs.length
     if (logsContext === 'accounts-two-factor') return twoFactorState.logs.length
     if (logsContext === 'accounts-profile') return profileOperationState.logs.length
+    if (logsContext === 'batch-create') return batchCreateLogs.length
     return 0
-  }, [checkLogs.length, logsContext, profileOperationState.logs.length, twoFactorState.logs.length])
+  }, [batchCreateLogs.length, checkLogs.length, logsContext, profileOperationState.logs.length, twoFactorState.logs.length])
 
   useEffect(() => {
     const element = scrollContainerRef.current
@@ -433,6 +507,10 @@ export default memo(function LogsView() {
 
   if (logsContext === 'accounts-profile') {
     return <ProfileSummary state={profileOperationState} scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
+  }
+
+  if (logsContext === 'batch-create') {
+    return <BatchCreateSummary scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
   }
 
   return (

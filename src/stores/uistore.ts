@@ -1,14 +1,16 @@
 import { create } from 'zustand'
 import type { ModuleKey } from '../types'
 
+type LogsContext = 'accounts' | 'proxy-pool' | 'accounts-two-factor' | 'accounts-profile' | 'batch-create'
+
 interface UIState {
   activeModule: ModuleKey
-  logsContext: 'accounts' | 'proxy-pool' | 'accounts-two-factor' | 'accounts-profile'
+  logsContext: LogsContext
   notificationCount: number
   userName: string
   sidebarCollapsed: boolean
   setActiveModule: (module: ModuleKey) => void
-  setLogsContext: (context: 'accounts' | 'proxy-pool' | 'accounts-two-factor' | 'accounts-profile') => void
+  setLogsContext: (context: LogsContext) => void
   setNotificationCount: (count: number) => void
   toggleSidebar: () => void
 }
