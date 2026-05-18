@@ -501,19 +501,15 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
     for source in expanded_sources:
         messages = [message async for message in client.iter_messages(source['entity'], limit=source_message_limit)]
         messages.reverse()
-        logs.append({
-            'level': 'info',
-            'message': f"开始检查来源 {source['title']}：读取最近 {source_message_limit} 条消息。",
-            'sourceRef': source['ref'],
-            'sourceTitle': source['title']
-        })
+        source_title = str(source.get('title') or source.get('ref') or '未知来源')
+        source_prefix = f'[{source_title}]'
         for message in messages:
             message_id = getattr(message, 'id', None)
             key = f"{source['ref']}:{message_id}" if message_id is not None else ''
             if key and key in seen_message_keys:
                 logs.append({
                     'level': 'info',
-                    'message': f"消息 {message_id} 是旧消息，已跳过。",
+                    'message': f"{source_prefix} 旧消息，跳过 #{message_id}",
                     'sourceRef': source['ref'],
                     'sourceTitle': source['title']
                 })
@@ -523,7 +519,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 new_seen_message_keys.append(key)
                 logs.append({
                     'level': 'info',
-                    'message': f"扫到新消息 {message_id}，开始检查里面有没有可占用用户名。",
+                    'message': f"{source_prefix} 扫到新消息 #{message_id}",
                     'sourceRef': source['ref'],
                     'sourceTitle': source['title']
                 })
@@ -532,7 +528,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
             if not blob:
                 logs.append({
                     'level': 'info',
-                    'message': f"消息 {message_id} 没有可分析内容，已跳过。",
+                    'message': f"{source_prefix} 新消息 #{message_id} 没有可分析内容，跳过",
                     'sourceRef': source['ref'],
                     'sourceTitle': source['title']
                 })
@@ -540,7 +536,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
             if not _matches_keywords(blob, include_keywords, exclude_keywords):
                 logs.append({
                     'level': 'info',
-                    'message': f"消息 {message_id} 没命中过滤条件，已跳过。",
+                    'message': f"{source_prefix} 新消息 #{message_id} 没命中过滤条件，跳过",
                     'sourceRef': source['ref'],
                     'sourceTitle': source['title']
                 })
@@ -558,7 +554,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 if not normalized.get('candidate') or not candidate_key:
                     logs.append({
                         'level': 'warning',
-                        'message': f"提取到 {candidate_value}，但整理后不是可检查的公开用户名，已跳过。",
+                        'message': f"{source_prefix} 提取到 {candidate_value}，但不是可检查的公开用户名，跳过",
                         'sourceRef': source['ref'],
                         'sourceTitle': source['title'],
                         'candidate': candidate_value
@@ -567,7 +563,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 if candidate_key in handled_candidate_keys:
                     logs.append({
                         'level': 'info',
-                        'message': f"验证 {candidate_value}：这个名字之前已经处理过了，这次跳过。",
+                        'message': f"{source_prefix} 提取到 {candidate_value}，但之前已经处理过，跳过",
                         'sourceRef': source['ref'],
                         'sourceTitle': source['title'],
                         'candidate': candidate_value
@@ -576,7 +572,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 if candidate_key in handled_in_pass:
                     logs.append({
                         'level': 'info',
-                        'message': f"验证 {candidate_value}：这一轮里已经检查过了，已跳过重复项。",
+                        'message': f"{source_prefix} 提取到 {candidate_value}，但这一轮已经检查过，跳过",
                         'sourceRef': source['ref'],
                         'sourceTitle': source['title'],
                         'candidate': candidate_value
@@ -585,7 +581,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
 
                 logs.append({
                     'level': 'info',
-                    'message': f"验证 {candidate_value}：开始检查是否可占用。",
+                    'message': f"{source_prefix} 提取到 {candidate_value}",
                     'sourceRef': source['ref'],
                     'sourceTitle': source['title'],
                     'candidate': candidate_value
@@ -598,7 +594,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 if resolved_category == 'occupiable':
                     logs.append({
                         'level': 'success',
-                        'message': f"验证 {candidate_value}：当前可占用。{resolved_reason}".strip(),
+                        'message': f"{source_prefix} 判定：可抢{('｜' + resolved_reason) if resolved_reason else ''}",
                         'sourceRef': source['ref'],
                         'sourceTitle': source['title'],
                         'candidate': candidate_value
@@ -606,7 +602,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 elif resolved_category == 'valid':
                     logs.append({
                         'level': 'info',
-                        'message': f"验证 {candidate_value}：存在真实用户或已被占用，已跳过。{resolved_reason}".strip(),
+                        'message': f"{source_prefix} 判定：已占用{('｜' + resolved_reason) if resolved_reason else ''}",
                         'sourceRef': source['ref'],
                         'sourceTitle': source['title'],
                         'candidate': candidate_value
@@ -614,7 +610,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 else:
                     logs.append({
                         'level': 'warning',
-                        'message': f"验证 {candidate_value}：当前不可用，已跳过。{resolved_reason}".strip(),
+                        'message': f"{source_prefix} 判定：不可用{('｜' + resolved_reason) if resolved_reason else ''}",
                         'sourceRef': source['ref'],
                         'sourceTitle': source['title'],
                         'candidate': candidate_value
@@ -636,7 +632,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
             if not found_any_candidate:
                 logs.append({
                     'level': 'info',
-                    'message': f"消息 {message_id} 没提取到 @username / t.me 用户名，已跳过。",
+                    'message': f"{source_prefix} 新消息 #{message_id} 没提取到 @username，跳过",
                     'sourceRef': source['ref'],
                     'sourceTitle': source['title']
                 })
