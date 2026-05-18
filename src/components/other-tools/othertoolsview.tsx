@@ -662,7 +662,7 @@ function SniperWorkbench() {
                 {accounts.map((account) => <option key={`scan_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}
               </select>
             </ConfigRow>
-            <ConfigRow label="谁来抢名字" hint="命中可抢名后，用这个账号去占。" wide>
+            <ConfigRow label="谁来抢名字" hint="不选也行，系统会自动从账号池挑一个能用的。" wide>
               <select value={claimAccountId} onChange={(event) => setClaimAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
                 <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
                 {accounts.map((account) => <option key={`claim_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}
@@ -712,7 +712,7 @@ function SniperWorkbench() {
             <ConfigRow label="单轮最多处理多少个名字" hint="防止一次扫太多。">
               <input type="number" min={1} max={500} value={candidateLimit} onChange={(event) => setCandidateLimit(Math.max(1, Math.min(500, Number(event.target.value) || 80)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
-            <ConfigRow label="自动建频道用哪个账号" hint="不选就自动回退到抢注账号 / 监听账号。" wide>
+            <ConfigRow label="自动建频道用哪个账号" hint="不选也行，系统会自动从账号池挑一个能用的。" wide>
               <select value={createCarrierAccountId} onChange={(event) => setCreateCarrierAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
                 <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
                 {accounts.map((account) => <option key={`create_carrier_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}

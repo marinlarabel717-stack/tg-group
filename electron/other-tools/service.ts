@@ -52,14 +52,17 @@ async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: Ses
     proxy: toClientProxy(proxy)
   })
 
-  await client.connect()
-  const authorized = await client.isUserAuthorized()
-  if (!authorized) {
-    await clientManager.destroyClient(client)
-    throw new Error('AUTH_KEY_UNREGISTERED')
+  try {
+    await client.connect()
+    const authorized = await client.isUserAuthorized()
+    if (!authorized) {
+      throw new Error('AUTH_KEY_UNREGISTERED')
+    }
+    return client
+  } catch (error) {
+    await clientManager.destroyClient(client).catch(() => undefined)
+    throw error
   }
-
-  return client
 }
 
 function splitInput(input: string) {
@@ -198,6 +201,11 @@ type ListenerClaimResult = {
   createdCarrier: boolean
   postSent?: boolean
   postFailureMessage?: string
+}
+
+interface ResolvedSniperAccountClient {
+  account: AccountRecord
+  client: TelegramClient
 }
 
 interface ActiveSniperListenerTask {
@@ -1076,6 +1084,57 @@ export class OtherToolsService {
     this.emitSniperListenerState(task)
   }
 
+  private async resolveSniperAccountClient(options: {
+    accounts: AccountRecord[]
+    preferredIds?: Array<number | null | undefined>
+    roleLabel: string
+    existing?: ResolvedSniperAccountClient[]
+  }): Promise<ResolvedSniperAccountClient> {
+    const available = options.accounts.filter((account) => !['banned', 'frozen', 'session_expired', 'not_logged_in'].includes(account.status))
+    const fallbackPool = available.length > 0 ? available : options.accounts
+    if (fallbackPool.length === 0) {
+      throw new Error(`当前没有可用${options.roleLabel}账号。`)
+    }
+
+    const preferredIds = Array.from(new Set((options.preferredIds ?? []).filter((item): item is number => typeof item === 'number' && Number.isFinite(item))))
+    const orderedCandidates: AccountRecord[] = []
+    const seen = new Set<number>()
+    for (const id of preferredIds) {
+      const matched = fallbackPool.find((account) => account.id === id)
+      if (matched && !seen.has(matched.id)) {
+        orderedCandidates.push(matched)
+        seen.add(matched.id)
+      }
+    }
+    for (const account of fallbackPool) {
+      if (seen.has(account.id)) continue
+      orderedCandidates.push(account)
+      seen.add(account.id)
+    }
+
+    let lastError: unknown = null
+    for (const account of orderedCandidates) {
+      const reused = options.existing?.find((item) => item.account.id === account.id)
+      if (reused) return reused
+      try {
+        const client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+        return { account, client }
+      } catch (error) {
+        lastError = error
+        const fatal = isFatalAccountError(error)
+        if (fatal) {
+          this.repository.updateStatus([account.id], fatal.status)
+        }
+        if (/GLOBAL_PROXY_REQUIRED/i.test(error instanceof Error ? error.message : String(error))) {
+          throw error
+        }
+      }
+    }
+
+    const reason = lastError instanceof Error ? lastError.message : String(lastError || '')
+    throw new Error(reason ? `账号池里没有能用的${options.roleLabel}账号：${reason}` : `账号池里没有能用的${options.roleLabel}账号。`)
+  }
+
   private async destroySniperListenerTask(task: ActiveSniperListenerTask | null) {
     if (!task) return
     const scanClient = task.scanClient
@@ -1196,21 +1255,35 @@ export class OtherToolsService {
     }
 
     const accounts = this.repository.list()
-    const scanAccount = pickCheckAccount(accounts, payload.scanAccountId ?? null)
-    if (!scanAccount) {
-      throw new Error('当前没有可用监听账号。')
-    }
+    const scanSelection = await this.resolveSniperAccountClient({
+      accounts,
+      preferredIds: [payload.scanAccountId ?? null],
+      roleLabel: '监听'
+    })
+    const scanAccount = scanSelection.account
 
-    const claimAccount = payload.autoClaim
-      ? pickCheckAccount(accounts, payload.claimAccountId ?? payload.scanAccountId ?? null)
+    const claimSelection = payload.autoClaim
+      ? await this.resolveSniperAccountClient({
+        accounts,
+        preferredIds: [payload.claimAccountId ?? null, payload.scanAccountId ?? null, scanAccount.id],
+        roleLabel: '抢注',
+        existing: [scanSelection]
+      })
       : null
+    const claimAccount = claimSelection?.account ?? null
     if (payload.autoClaim && !claimAccount && !payload.autoCreateCarrier) {
       throw new Error('当前没有可用抢注账号。')
     }
 
-    const createCarrierAccount = payload.autoCreateCarrier
-      ? pickCheckAccount(accounts, payload.createCarrierAccountId ?? payload.claimAccountId ?? payload.scanAccountId ?? null)
+    const createCarrierSelection = payload.autoCreateCarrier
+      ? await this.resolveSniperAccountClient({
+        accounts,
+        preferredIds: [payload.createCarrierAccountId ?? null, payload.claimAccountId ?? null, payload.scanAccountId ?? null, claimAccount?.id ?? null, scanAccount.id],
+        roleLabel: '建池',
+        existing: [scanSelection, ...(claimSelection ? [claimSelection] : [])]
+      })
       : null
+    const createCarrierAccount = createCarrierSelection?.account ?? null
     if (payload.autoCreateCarrier && !createCarrierAccount) {
       throw new Error('已开启自动建频道占位，但当前没有可用建池账号。')
     }
@@ -1249,9 +1322,9 @@ export class OtherToolsService {
         logs: [],
         message: '监听准备启动中…'
       },
-      scanClient: null,
-      claimClient: null,
-      createCarrierClient: null,
+      scanClient: scanSelection.client,
+      claimClient: claimSelection?.client ?? null,
+      createCarrierClient: createCarrierSelection?.client ?? null,
       subscribeClients: new Map(),
       seenMessageKeys: new Set(),
       handledCandidateKeys: new Set()
@@ -1268,6 +1341,10 @@ export class OtherToolsService {
         if (!this.telethonSniperService.isAvailable()) {
           throw new Error('TELETHON_SNIPER_SERVICE_UNAVAILABLE')
         }
+
+        task.scanClient = scanSelection.client
+        task.claimClient = claimSelection?.client ?? null
+        task.createCarrierClient = createCarrierSelection?.client ?? null
 
         if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
           for (const account of subscribeAccounts) {
@@ -1305,6 +1382,12 @@ export class OtherToolsService {
           accountId: scanAccount.id,
           accountLabel: readCheckResultTitle(scanAccount)
         })
+        if (!payload.scanAccountId || (payload.autoClaim && !payload.claimAccountId) || (payload.autoCreateCarrier && !payload.createCarrierAccountId)) {
+          this.pushSniperListenerLog(task, {
+            level: 'info',
+            message: `未手动指定的账号已自动从账号池挑选：监听 ${readCheckResultTitle(scanAccount)}${claimAccount ? `，抢注 ${readCheckResultTitle(claimAccount)}` : ''}${createCarrierAccount ? `，建频道 ${readCheckResultTitle(createCarrierAccount)}` : ''}。`
+          })
+        }
 
         while (!task.cancelled) {
           task.state.lastTickAt = new Date().toISOString()
@@ -1549,18 +1632,32 @@ export class OtherToolsService {
     }
 
     const accounts = this.repository.list()
-    const scanAccount = pickCheckAccount(accounts, payload.scanAccountId ?? null)
-    if (!scanAccount) {
-      throw new Error('当前没有可用监听账号，没法去白名单来源里巡检。')
-    }
+    const scanSelection = await this.resolveSniperAccountClient({
+      accounts,
+      preferredIds: [payload.scanAccountId ?? null],
+      roleLabel: '监听'
+    })
+    const scanAccount = scanSelection.account
 
-    const claimAccount = payload.autoClaim
-      ? pickCheckAccount(accounts, payload.claimAccountId ?? payload.scanAccountId ?? null)
+    const claimSelection = payload.autoClaim
+      ? await this.resolveSniperAccountClient({
+        accounts,
+        preferredIds: [payload.claimAccountId ?? null, payload.scanAccountId ?? null, scanAccount.id],
+        roleLabel: '抢注',
+        existing: [scanSelection]
+      })
       : null
+    const claimAccount = claimSelection?.account ?? null
     const autoCreateCarrier = Boolean(payload.autoCreateCarrier)
-    const createCarrierAccount = autoCreateCarrier
-      ? pickCheckAccount(accounts, payload.createCarrierAccountId ?? payload.claimAccountId ?? payload.scanAccountId ?? null)
+    const createCarrierSelection = autoCreateCarrier
+      ? await this.resolveSniperAccountClient({
+        accounts,
+        preferredIds: [payload.createCarrierAccountId ?? null, payload.claimAccountId ?? null, payload.scanAccountId ?? null, claimAccount?.id ?? null, scanAccount.id],
+        roleLabel: '建池',
+        existing: [scanSelection, ...(claimSelection ? [claimSelection] : [])]
+      })
       : null
+    const createCarrierAccount = createCarrierSelection?.account ?? null
     const subscribeAccountIds = Array.from(new Set((payload.subscribeAccountIds ?? []).filter((item): item is number => typeof item === 'number')))
     const subscribeAccounts = payload.autoSubscribeSources
       ? accounts.filter((account) => subscribeAccountIds.includes(account.id) && !['banned', 'frozen', 'session_expired', 'not_logged_in'].includes(account.status))
@@ -1586,17 +1683,9 @@ export class OtherToolsService {
     const sourceLimit = Math.max(1, Math.min(100, Math.trunc(payload.sourceMessageLimit || 20)))
     const candidateLimit = Math.max(1, Math.min(500, Math.trunc(payload.candidateLimit || 100)))
 
-    const scanClient = await ensureAuthorizedClient(scanAccount, this.sessionLoader, this.clientManager, this.proxyPoolService)
-    const claimClient = payload.autoClaim && claimAccount
-      ? (claimAccount.id === scanAccount.id ? scanClient : await ensureAuthorizedClient(claimAccount as AccountRecord, this.sessionLoader, this.clientManager, this.proxyPoolService))
-      : null
-    const createCarrierClient = autoCreateCarrier && createCarrierAccount
-      ? (createCarrierAccount.id === scanAccount.id
-        ? scanClient
-        : claimClient && createCarrierAccount.id === claimAccount?.id
-          ? claimClient
-          : await ensureAuthorizedClient(createCarrierAccount, this.sessionLoader, this.clientManager, this.proxyPoolService))
-      : null
+    const scanClient = scanSelection.client
+    const claimClient = claimSelection?.client ?? null
+    const createCarrierClient = createCarrierSelection?.client ?? null
     const subscribeClients = new Map<number, TelegramClient>()
 
     try {
@@ -1618,6 +1707,12 @@ export class OtherToolsService {
         accountId: scanAccount.id,
         accountLabel: readCheckResultTitle(scanAccount)
       })
+      if (!payload.scanAccountId || (payload.autoClaim && !payload.claimAccountId) || (autoCreateCarrier && !payload.createCarrierAccountId)) {
+        pushRunLog({
+          level: 'info',
+          message: `账号未手动指定的部分，已自动从账号池选择：监听 ${readCheckResultTitle(scanAccount)}${claimAccount ? `，抢注 ${readCheckResultTitle(claimAccount)}` : ''}${createCarrierAccount ? `，建频道 ${readCheckResultTitle(createCarrierAccount)}` : ''}。`
+        })
+      }
 
       if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
         for (const account of subscribeAccounts) {
