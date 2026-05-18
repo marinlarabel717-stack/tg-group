@@ -799,13 +799,27 @@ async function sendInitialPostToChannel(client: TelegramClient, entity: unknown,
   }))
 }
 
+function formatSniperRuntimeError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/AUTH_KEY_DUPLICATED/i.test(message)) return '这个账号掉线了：同一个登录在别处占用了连接，当前这里不能继续用。'
+  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(message)) return '这个账号登录已经失效了，需要重新登录。'
+  if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(message)) return '这个账号已经被封了，不能继续用。'
+  if (/FROZEN|USER_DEACTIVATED|INPUT_FETCH_ERROR/i.test(message)) return '这个账号已经冻结了，不能继续用。'
+  if (/ACCOUNT_RESTRICTED/i.test(message)) return '这个账号现在受限，暂时不能继续操作。'
+  if (/GLOBAL_PROXY_REQUIRED/i.test(message)) return '你开了全局代理，但现在没有可用代理。'
+  if (/TELETHON_SNIPER_SERVICE_UNAVAILABLE/i.test(message)) return '监听核心没准备好，当前这台机器上的监听组件不可用。'
+  if (/TIMEOUT/i.test(message)) return '这次操作超时了，Telegram 那边太久没回。'
+  if (/InvokeWithLayer/i.test(message) && /AUTH_KEY_DUPLICATED/i.test(message)) return '这个账号会话冲突了：同一个号在别处占用连接，当前监听没法启动。'
+  return message
+}
+
 function formatSniperPostError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   if (/PHOTO_INVALID|MEDIA_INVALID|IMAGE_PROCESS_FAILED/i.test(message)) return '图片格式不对，Telegram 没收下。'
   if (/MESSAGE_TOO_LONG|MEDIA_CAPTION_TOO_LONG/i.test(message)) return '文案太长了，发不出去。'
   if (/CHAT_SEND_MEDIA_FORBIDDEN/i.test(message)) return '这个频道当前不允许发媒体。'
   if (/CHAT_WRITE_FORBIDDEN|CHAT_ADMIN_REQUIRED/i.test(message)) return '这个频道当前没有发帖权限。'
-  return `首帖发送失败：${message}`
+  return `首帖发送失败：${formatSniperRuntimeError(error)}`
 }
 
 async function createCarrierAndClaim(
@@ -881,11 +895,8 @@ function formatSniperClaimError(error: unknown) {
   if (/USERNAME_OCCUPIED/i.test(message)) return '这个名字刚刚被别人占走了。'
   if (/USERNAME_INVALID|USERNAMES_UNAVAILABLE|USERNAME_PURCHASE_AVAILABLE/i.test(message)) return '这个名字现在不能普通占位。'
   if (/CHANNELS_ADMIN_PUBLIC_TOO_MUCH/i.test(message)) return '这个账号的公开群/频道用户名槽位已经到上限了。'
-  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(message)) return '抢注账号登录失效了。'
-  if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(message)) return '抢注账号已经封禁了。'
-  if (/ACCOUNT_RESTRICTED/i.test(message)) return '抢注账号当前受限，不能继续占位。'
   if (/CHAT_ADMIN_REQUIRED/i.test(message)) return '这个池子载体不是当前账号真正可控的管理员对象。'
-  return `抢注失败：${message}`
+  return `抢注失败：${formatSniperRuntimeError(error)}`
 }
 
 async function isAlreadyInChannel(client: TelegramClient, entity: unknown) {
@@ -933,10 +944,7 @@ function formatSourceSubscribeError(error: unknown) {
   if (/USER_ALREADY_PARTICIPANT/i.test(message)) return '这个账号已经在目标里了。'
   if (/CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(message)) return '这个账号加入得太多了，Telegram 不让继续加。'
   if (/INVITE_SLUG_EXPIRED|SLUG_EXPIRED/i.test(message)) return '这个分组分享链接已经失效了。'
-  if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(message)) return '这个账号登录已经失效。'
-  if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(message)) return '这个账号已经被封。'
-  if (/ACCOUNT_RESTRICTED/i.test(message)) return '这个账号当前受限。'
-  return `加入失败：${message}`
+  return `加入失败：${formatSniperRuntimeError(error)}`
 }
 
 async function subscribeSourcesForAccount(client: TelegramClient, account: AccountRecord, refs: string[]): Promise<OtherToolsSourceSubscribeItem[]> {
@@ -1437,7 +1445,7 @@ export class OtherToolsService {
             }
             this.pushSniperListenerLog(task, {
               level: 'error',
-              message: `${roleLabel}账号池已经耗尽：${switchError instanceof Error ? switchError.message : String(switchError)}`
+              message: `${roleLabel}账号池已经耗尽：${formatSniperRuntimeError(switchError)}`
             })
             return false
           }
@@ -1709,7 +1717,7 @@ export class OtherToolsService {
         task.state.running = false
         this.pushSniperListenerLog(task, {
           level: 'error',
-          message: `监听启动失败：${error instanceof Error ? error.message : String(error)}`
+          message: `监听启动失败：${formatSniperRuntimeError(error)}`
         })
       } finally {
         task.state.running = false
