@@ -509,7 +509,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
             if key and key in seen_message_keys:
                 logs.append({
                     'level': 'info',
-                    'message': f"{source_prefix} 旧消息，跳过 #{message_id}",
+                    'message': f"{source_prefix} 旧消息 #{message_id}",
                     'sourceRef': source['ref'],
                     'sourceTitle': source['title']
                 })
@@ -525,58 +525,19 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 })
 
             blob = _read_source_blob(message)
-            if not blob:
-                logs.append({
-                    'level': 'info',
-                    'message': f"{source_prefix} 新消息 #{message_id} 没有可分析内容，跳过",
-                    'sourceRef': source['ref'],
-                    'sourceTitle': source['title']
-                })
-                continue
-            if not _matches_keywords(blob, include_keywords, exclude_keywords):
-                logs.append({
-                    'level': 'info',
-                    'message': f"{source_prefix} 新消息 #{message_id} 没命中过滤条件，跳过",
-                    'sourceRef': source['ref'],
-                    'sourceTitle': source['title']
-                })
+            if not blob or not _matches_keywords(blob, include_keywords, exclude_keywords):
                 continue
 
             checked_message_count += 1
             text = _read_message_text(message)
-            found_any_candidate = False
 
             for found in _extract_candidates_from_text(blob):
-                found_any_candidate = True
                 normalized = _normalize_candidate(found)
                 candidate_value = str(normalized.get('normalized') or found).strip()
                 candidate_key = candidate_value.lower()
                 if not normalized.get('candidate') or not candidate_key:
-                    logs.append({
-                        'level': 'warning',
-                        'message': f"{source_prefix} 提取到 {candidate_value}，但不是可检查的公开用户名，跳过",
-                        'sourceRef': source['ref'],
-                        'sourceTitle': source['title'],
-                        'candidate': candidate_value
-                    })
                     continue
-                if candidate_key in handled_candidate_keys:
-                    logs.append({
-                        'level': 'info',
-                        'message': f"{source_prefix} 提取到 {candidate_value}，但之前已经处理过，跳过",
-                        'sourceRef': source['ref'],
-                        'sourceTitle': source['title'],
-                        'candidate': candidate_value
-                    })
-                    continue
-                if candidate_key in handled_in_pass:
-                    logs.append({
-                        'level': 'info',
-                        'message': f"{source_prefix} 提取到 {candidate_value}，但这一轮已经检查过，跳过",
-                        'sourceRef': source['ref'],
-                        'sourceTitle': source['title'],
-                        'candidate': candidate_value
-                    })
+                if candidate_key in handled_candidate_keys or candidate_key in handled_in_pass:
                     continue
 
                 logs.append({
@@ -594,7 +555,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 if resolved_category == 'occupiable':
                     logs.append({
                         'level': 'success',
-                        'message': f"{source_prefix} 判定：可抢{('｜' + resolved_reason) if resolved_reason else ''}",
+                        'message': f"{source_prefix} 判定：可抢",
                         'sourceRef': source['ref'],
                         'sourceTitle': source['title'],
                         'candidate': candidate_value
@@ -602,7 +563,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 elif resolved_category == 'valid':
                     logs.append({
                         'level': 'info',
-                        'message': f"{source_prefix} 判定：已占用{('｜' + resolved_reason) if resolved_reason else ''}",
+                        'message': f"{source_prefix} 判定：已占用",
                         'sourceRef': source['ref'],
                         'sourceTitle': source['title'],
                         'candidate': candidate_value
@@ -610,7 +571,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 else:
                     logs.append({
                         'level': 'warning',
-                        'message': f"{source_prefix} 判定：不可用{('｜' + resolved_reason) if resolved_reason else ''}",
+                        'message': f"{source_prefix} 判定：不可用",
                         'sourceRef': source['ref'],
                         'sourceTitle': source['title'],
                         'candidate': candidate_value
@@ -629,13 +590,6 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                     'sourceDate': _read_message_date(message)
                 })
 
-            if not found_any_candidate:
-                logs.append({
-                    'level': 'info',
-                    'message': f"{source_prefix} 新消息 #{message_id} 没提取到 @username，跳过",
-                    'sourceRef': source['ref'],
-                    'sourceTitle': source['title']
-                })
 
     return {
         'expandedSourceCount': len(expanded_sources),
