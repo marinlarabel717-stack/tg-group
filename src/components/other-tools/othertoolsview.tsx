@@ -6,7 +6,7 @@ import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-t
 import { formatAccountStatus } from '../../lib/ui-text'
 import { useUIStore } from '../../stores/uistore'
 import { useOtherToolsStore } from '../../stores/othertoolsstore'
-import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_SELECT_OPTION_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
+import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 
 type OtherToolsTabKey = 'filter' | 'sniper'
 
@@ -408,8 +408,6 @@ function SniperWorkbench() {
   const [poolInput, setPoolInput] = useState('')
   const [includeKeywords, setIncludeKeywords] = useState('')
   const [excludeKeywords, setExcludeKeywords] = useState('')
-  const [scanAccountId, setScanAccountId] = useState('')
-  const [claimAccountId, setClaimAccountId] = useState('')
   const [subscribeAccountIds, setSubscribeAccountIds] = useState<number[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draftSubscribeIds, setDraftSubscribeIds] = useState<number[]>([])
@@ -422,7 +420,6 @@ function SniperWorkbench() {
   const [autoSubscribeSources, setAutoSubscribeSources] = useState(true)
   const [listenerPollSeconds, setListenerPollSeconds] = useState(15)
   const [autoCreateCarrier, setAutoCreateCarrier] = useState(true)
-  const [createCarrierAccountId, setCreateCarrierAccountId] = useState('')
   const [createCarrierTitleTemplate, setCreateCarrierTitleTemplate] = useState('监听占位_{candidate}')
   const [createCarrierAboutTemplate, setCreateCarrierAboutTemplate] = useState('自动监听命中 {candidate} 后创建的占位频道。')
   const [postType, setPostType] = useState<BatchCreatePostType>('none')
@@ -520,8 +517,8 @@ function SniperWorkbench() {
         poolInput,
         includeKeywords,
         excludeKeywords,
-        scanAccountId: scanAccountId ? Number(scanAccountId) : null,
-        claimAccountId: claimAccountId ? Number(claimAccountId) : null,
+        scanAccountId: null,
+        claimAccountId: null,
         subscribeAccountIds,
         sourceMessageLimit,
         candidateLimit,
@@ -529,7 +526,7 @@ function SniperWorkbench() {
         autoSubscribeSources,
         pollIntervalSeconds: listenerPollSeconds,
         autoCreateCarrier,
-        createCarrierAccountId: createCarrierAccountId ? Number(createCarrierAccountId) : null,
+        createCarrierAccountId: null,
         createCarrierTitleTemplate,
         createCarrierAboutTemplate,
         postType,
@@ -609,17 +606,10 @@ function SniperWorkbench() {
                 )}
               </div>
             </ConfigRow>
-            <ConfigRow label="谁来盯新帖" hint="不选也行，系统会只在你选中的任务账号里自动挑一个。" wide>
-              <select value={scanAccountId} onChange={(event) => setScanAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
-                <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
-                {accounts.map((account) => <option key={`scan_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}
-              </select>
-            </ConfigRow>
-            <ConfigRow label="谁来抢名字" hint="不选也行，系统会只在你选中的任务账号里自动挑一个。" wide>
-              <select value={claimAccountId} onChange={(event) => setClaimAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
-                <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
-                {accounts.map((account) => <option key={`claim_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}
-              </select>
+            <ConfigRow label="角色分配" hint="不用再单独选监听号、抢注号、建频道号。" wide>
+              <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-sm text-textMuted">
+                系统会只在你这次选中的任务账号里，自动分配谁来订阅来源、谁来监听、谁来抢名字、谁来建频道。
+              </div>
             </ConfigRow>
             <ConfigRow label="备用空频道（可选）" hint="有的话就填进去；不填也行，系统会自动新建频道去占。" wide>
               <div className="space-y-2">
@@ -665,11 +655,10 @@ function SniperWorkbench() {
             <ConfigRow label="单轮最多处理多少个名字" hint="防止一次扫太多。">
               <input type="number" min={1} max={500} value={candidateLimit} onChange={(event) => setCandidateLimit(Math.max(1, Math.min(500, Number(event.target.value) || 80)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
-            <ConfigRow label="自动建频道用哪个账号" hint="不选也行，系统会只在你选中的任务账号里自动挑一个。" wide>
-              <select value={createCarrierAccountId} onChange={(event) => setCreateCarrierAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
-                <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
-                {accounts.map((account) => <option key={`create_carrier_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}
-              </select>
+            <ConfigRow label="角色说明" hint="所有角色都只在本次任务账号池里自动轮换。" wide>
+              <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-sm text-textMuted">
+                当前不需要你手动指定“谁来监听 / 谁来抢 / 谁来建频道”。如果某个号封禁、冻结、登录失效，系统会只在这次选中的任务账号里切下一个；这批号都不行了，本次任务就结束。
+              </div>
             </ConfigRow>
             <ConfigRow label="自动新建频道名称" hint="支持 {candidate} / {accountId} / {index}。" wide>
               <input value={createCarrierTitleTemplate} onChange={(event) => setCreateCarrierTitleTemplate(event.target.value)} placeholder="监听占位_{candidate}" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
