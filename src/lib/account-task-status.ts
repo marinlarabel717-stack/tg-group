@@ -5,8 +5,9 @@ import { useAutoJoinStore } from '../stores/autojoinstore'
 import { useBatchCreateStore } from '../stores/batchcreatestore'
 import { useBroadcastStore } from '../stores/broadcaststore'
 import { useDirectMessageStore } from '../stores/directmessagestore'
+import { useOtherToolsStore } from '../stores/othertoolsstore'
 
-export type AccountTaskKind = 'idle' | 'checking' | 'direct-message' | 'broadcast' | 'auto-join' | 'batch-create' | 'two-factor' | 'profile'
+export type AccountTaskKind = 'idle' | 'checking' | 'direct-message' | 'broadcast' | 'auto-join' | 'batch-create' | 'sniper' | 'two-factor' | 'profile'
 
 export interface AccountTaskMeta {
   kind: AccountTaskKind
@@ -52,6 +53,12 @@ const ACCOUNT_TASK_META: Record<AccountTaskKind, AccountTaskMeta> = {
     tone: 'border-cyan-400/18 bg-cyan-400/12 text-cyan-200',
     occupied: true
   },
+  sniper: {
+    kind: 'sniper',
+    label: '抢注中',
+    tone: 'border-rose-400/18 bg-rose-400/12 text-rose-200',
+    occupied: true
+  },
   'two-factor': {
     kind: 'two-factor',
     label: '2FA 中',
@@ -81,6 +88,7 @@ export function buildAccountTaskStatusMap(input: {
   broadcast: { syncing: boolean; stopping: boolean; syncingAccountIds: number[] }
   autoJoin: { running: boolean; stopping: boolean; runningAccountIds: number[] }
   batchCreate: { running: boolean; stopping: boolean; runningAccountIds: number[] }
+  sniper: { running: boolean; stopping: boolean; runningAccountIds: number[] }
   twoFactor: { running: boolean; stopping: boolean; runningAccountIds: number[] }
   profile: { running: boolean; stopping: boolean; runningAccountIds: number[] }
 }) {
@@ -104,6 +112,10 @@ export function buildAccountTaskStatusMap(input: {
 
   if (input.batchCreate.running || input.batchCreate.stopping) {
     assignTask(map, input.batchCreate.runningAccountIds, 'batch-create')
+  }
+
+  if (input.sniper.running || input.sniper.stopping) {
+    assignTask(map, input.sniper.runningAccountIds, 'sniper')
   }
 
   if (input.twoFactor.running || input.twoFactor.stopping) {
@@ -140,6 +152,7 @@ export function useAccountTaskStatusMap() {
   const batchCreateRunning = useBatchCreateStore((state) => state.running)
   const batchCreateStopping = useBatchCreateStore((state) => state.stopping)
   const batchCreateRunningAccountIds = useBatchCreateStore((state) => state.runningAccountIds)
+  const sniperListenerState = useOtherToolsStore((state) => state.listenerState)
   const twoFactorState = useAccountStore((state) => state.twoFactorState)
   const profileOperationState = useAccountStore((state) => state.profileOperationState)
 
@@ -169,6 +182,11 @@ export function useAccountTaskStatusMap() {
       stopping: batchCreateStopping,
       runningAccountIds: batchCreateRunningAccountIds
     },
+    sniper: {
+      running: Boolean(sniperListenerState?.taskAccountIds?.length),
+      stopping: false,
+      runningAccountIds: sniperListenerState?.taskAccountIds ?? []
+    },
     twoFactor: {
       running: twoFactorState.running,
       stopping: twoFactorState.stopRequested,
@@ -195,6 +213,7 @@ export function useAccountTaskStatusMap() {
     directMessageSending,
     directMessageStopping,
     profileOperationState,
+    sniperListenerState,
     twoFactorState
   ])
 }

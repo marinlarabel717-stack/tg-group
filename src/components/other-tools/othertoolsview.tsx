@@ -60,6 +60,7 @@ function saveSniperDraft(draft: SniperDraftState) {
 function createEmptySniperListenerState(message = '监听未启动。'): OtherToolsSniperListenerState {
   return {
     running: false,
+    taskAccountIds: [],
     scanAccountId: null,
     scanAccountLabel: '',
     claimAccountId: null,
@@ -588,7 +589,8 @@ function SniperWorkbench() {
 
     setListenerState({
       ...(listenerState ?? createEmptySniperListenerState('实时监听启动中…')),
-      running: false,
+      running: true,
+      taskAccountIds: subscribeAccountIds,
       message: '实时监听启动中…'
     })
     openSniperLogs()
@@ -618,7 +620,7 @@ function SniperWorkbench() {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setListenerState({
-        ...(listenerState ?? createEmptySniperListenerState(message || '启动监听失败')),
+        ...createEmptySniperListenerState(message || '启动监听失败'),
         running: false,
         message: message || '启动监听失败'
       })
@@ -636,6 +638,7 @@ function SniperWorkbench() {
       setListenerState({
         ...(listenerState ?? createEmptySniperListenerState(message || '停止监听失败')),
         running: false,
+        taskAccountIds: [],
         message: message || '停止监听失败'
       })
     }

@@ -1094,6 +1094,7 @@ export class OtherToolsService {
   private createEmptySniperListenerState(message = '监听未启动。'): OtherToolsSniperListenerState {
     return {
       running: false,
+      taskAccountIds: [],
       scanAccountId: null,
       scanAccountLabel: '',
       claimAccountId: null,
@@ -1396,6 +1397,7 @@ export class OtherToolsService {
       tickCount: 0,
       state: {
         running: true,
+        taskAccountIds: selectedTaskAccountIds,
         scanAccountId: scanAccount.id,
         scanAccountLabel: readCheckResultTitle(scanAccount),
         claimAccountId: claimAccount?.id ?? null,

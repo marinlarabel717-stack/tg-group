@@ -1228,6 +1228,7 @@ export interface OtherToolsSniperListenerLogEntry {
 
 export interface OtherToolsSniperListenerState {
   running: boolean
+  taskAccountIds: number[]
   scanAccountId: number | null
   scanAccountLabel: string
   claimAccountId: number | null
