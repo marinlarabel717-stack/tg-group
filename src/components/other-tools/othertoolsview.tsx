@@ -1,6 +1,6 @@
 import { Copy, Filter, ImageIcon, Loader2, Radar, Search, SquareTerminal, Type, X } from 'lucide-react'
 import { type ChangeEvent, memo, useEffect, useMemo, useState } from 'react'
-import type { AccountRecord, BatchCreatePostType, OtherToolsSniperCandidateItem, OtherToolsSniperListenerState, OtherToolsSniperResult, OtherToolsSourceSubscribeItem, OtherToolsUsernameFilterItem, OtherToolsUsernameFilterResult } from '../../types'
+import type { AccountRecord, BatchCreatePostType, OtherToolsSniperCandidateItem, OtherToolsSniperListenerState, OtherToolsSourceSubscribeItem, OtherToolsUsernameFilterItem, OtherToolsUsernameFilterResult } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
@@ -401,14 +401,8 @@ function SniperWorkbench() {
   const setActiveModule = useUIStore((state) => state.setActiveModule)
   const setLogsContext = useUIStore((state) => state.setLogsContext)
   const initOtherToolsStore = useOtherToolsStore((state) => state.init)
-  const summary = useOtherToolsStore((state) => state.sniperSummary)
-  const manualRunning = useOtherToolsStore((state) => state.manualRunning)
-  const manualErrorMessage = useOtherToolsStore((state) => state.manualErrorMessage)
   const listenerState = useOtherToolsStore((state) => state.listenerState)
   const setListenerState = useOtherToolsStore((state) => state.setListenerState)
-  const startManualRun = useOtherToolsStore((state) => state.startManualRun)
-  const finishManualRun = useOtherToolsStore((state) => state.finishManualRun)
-  const failManualRun = useOtherToolsStore((state) => state.failManualRun)
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
   const [sourceInput, setSourceInput] = useState('')
   const [poolInput, setPoolInput] = useState('')
@@ -503,47 +497,6 @@ function SniperWorkbench() {
     event.target.value = ''
   }
 
-  const handleRun = async () => {
-    const api = window.desktopOtherTools
-    if (!api) {
-      failManualRun('当前运行环境不支持抢注系统。')
-      return
-    }
-    if (!sourceInput.trim()) {
-      failManualRun('先填白名单来源。')
-      return
-    }
-
-    startManualRun('抢注巡检已开始，正在整理日志…')
-    openSniperLogs()
-    try {
-      const result = await api.scanAndClaim({
-        sourceInput,
-        poolInput,
-        includeKeywords,
-        excludeKeywords,
-        scanAccountId: scanAccountId ? Number(scanAccountId) : null,
-        claimAccountId: claimAccountId ? Number(claimAccountId) : null,
-        createCarrierAccountId: createCarrierAccountId ? Number(createCarrierAccountId) : null,
-        subscribeAccountIds,
-        sourceMessageLimit,
-        candidateLimit,
-        autoClaim,
-        autoSubscribeSources,
-        autoCreateCarrier,
-        createCarrierTitleTemplate,
-        createCarrierAboutTemplate,
-        postType,
-        postText,
-        postImageData
-      })
-      finishManualRun(result)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      failManualRun(message || '巡检失败')
-    }
-  }
-
   const handleStartListener = async () => {
     const api = window.desktopOtherTools
     if (!api) {
@@ -619,8 +572,8 @@ function SniperWorkbench() {
               <div className="space-y-2 text-sm text-textMuted">
                 <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">1.</span> 把你要盯的频道 / 群 / addlist 链接贴进去。</div>
                 <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">2.</span> 选一批账号先去加入这些来源。</div>
-                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">3.</span> 选一个负责盯新帖的账号，再选一个负责抢名字的账号。</div>
-                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">4.</span> 点 <span className="text-emerald-200">启动实时监听</span>，命中可抢名就自动抢；池子不够时会自动新建频道占位。</div>
+                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">3.</span> 账号不懂就留空，系统会自动从账号池挑能用的。</div>
+                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">4.</span> 点 <span className="text-emerald-200">开始监听</span>，后面就一直盯新帖；命中可抢名会自动抢，池子不够就自动新建频道。</div>
               </div>
             </ConfigRow>
             <ConfigRow label="监听哪些来源" hint="一行一个。支持频道、群、机器人链接，也支持 t.me/addlist/...。" wide>
@@ -754,76 +707,61 @@ function SniperWorkbench() {
 
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <FoldSection title="执行" hint="先做一键巡检版，把闭环跑通。">
+            <FoldSection title="开始监听" hint="点一次就直接进入监听，不再分巡检和监听两套。">
               <div className="space-y-3 px-3 py-3 text-sm">
-                <div className="text-sm text-white">开始执行</div>
+                <div className="text-sm text-white">启动 / 停止</div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleRun()}
-                    disabled={manualRunning || sourcePreviewCount === 0}
-                    className="inline-flex min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-[12px] border border-white/[0.08] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {manualRunning ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
-                    {manualRunning ? '巡检中…' : '开始巡检'}
-                  </button>
                   <button
                     type="button"
                     onClick={() => void handleStartListener()}
                     disabled={listening || sourcePreviewCount === 0}
-                    className="inline-flex min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-[12px] border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-h-[48px] items-center justify-center gap-2 whitespace-nowrap rounded-[12px] border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {listening ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
-                    {listening ? '监听运行中' : '启动实时监听'}
+                    {listening ? '监听运行中' : '开始监听'}
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleStopListener()}
                     disabled={!listening}
-                    className="inline-flex min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+                    className="inline-flex min-h-[48px] items-center justify-center gap-2 whitespace-nowrap rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     停止监听
                   </button>
                 </div>
-                <div className="text-xs text-textMuted">手动巡检适合立刻扫一轮；实时监听会常驻轮询新帖，命中可抢名时优先用池子，不够就自动建频道秒占。</div>
-                {manualErrorMessage ? <div className="rounded-[12px] border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{manualErrorMessage}</div> : null}
-                {summary?.message ? <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.12] px-3 py-2 text-xs text-textMuted">{summary.message}</div> : null}
+                <div className="text-xs text-textMuted">点“开始监听”后会直接跳到日志中心，并持续盯新帖；命中可抢名时会自动抢，池子不够就自动新建频道。</div>
                 {listenerState?.message ? <div className="rounded-[12px] border border-emerald-400/10 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-100">{listenerState.message}</div> : null}
               </div>
             </FoldSection>
           </GlassPanel>
 
           <GlassPanel className="bg-card">
-            <FoldSection title="统计" hint="本轮巡检与抢注汇总。">
+            <FoldSection title="监听统计" hint="开始后这里只看监听状态。">
               <div className="space-y-3 px-3 py-3 text-sm">
                 <div className="text-sm text-white">数量统计</div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
                     <div className="text-xs tracking-[0.16em] text-slate-200/80">来源 / 池子</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{summary?.sourceCount ?? 0} / {summary?.poolCount ?? 0}</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{sourcePreviewCount} / {poolPreviewCount}</div>
                   </div>
                   <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-slate-200/80">订阅账号 / 已加入</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{summary?.subscribeAccountCount ?? 0} / {summary?.subscribeJoinedCount ?? 0}</div>
+                    <div className="text-xs tracking-[0.16em] text-slate-200/80">订阅账号</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{subscribeSelectedAccounts.length}</div>
                   </div>
                   <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-slate-200/80">已巡检消息</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{summary?.inspectedMessageCount ?? 0}</div>
+                    <div className="text-xs tracking-[0.16em] text-slate-200/80">已检查消息</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{listenerState?.checkedMessageCount ?? 0}</div>
                   </div>
                   <div className="rounded-[14px] bg-cyan-400/8 px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-cyan-200/80">可抢注</div>
-                    <div className="mt-2 text-2xl font-semibold text-cyan-300">{summary?.claimable.length ?? 0}</div>
+                    <div className="text-xs tracking-[0.16em] text-cyan-200/80">发现候选</div>
+                    <div className="mt-2 text-2xl font-semibold text-cyan-300">{listenerState?.candidateCount ?? 0}</div>
                   </div>
                   <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
                     <div className="text-xs tracking-[0.16em] text-emerald-200/80">已抢到</div>
-                    <div className="mt-2 text-2xl font-semibold text-emerald-300">{summary?.claimed.length ?? 0}</div>
-                  </div>
-                  <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-emerald-200/80">监听已抢到</div>
                     <div className="mt-2 text-2xl font-semibold text-emerald-300">{listenerState?.claimedCount ?? 0}</div>
                   </div>
                   <div className="rounded-[14px] bg-violet-400/8 px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-violet-200/80">监听新建频道</div>
+                    <div className="text-xs tracking-[0.16em] text-violet-200/80">自动新建频道</div>
                     <div className="mt-2 text-2xl font-semibold text-violet-300">{listenerState?.createdCarrierCount ?? 0}</div>
                   </div>
                 </div>
@@ -832,7 +770,7 @@ function SniperWorkbench() {
           </GlassPanel>
 
           <GlassPanel className="bg-card">
-            <FoldSection title="说明" hint="现在同时支持手动巡检和常驻监听；监听是轮询新帖版。" defaultOpen={false}>
+            <FoldSection title="说明" hint="现在主流程就是直接监听；开始后会常驻轮询新帖。" defaultOpen={false}>
               <ConfigRow label="第一版边界" wide>
                 <div className="space-y-2 text-sm text-textMuted">
                   <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">主体：</span>走用户号，不走 Bot API。</div>
@@ -844,35 +782,6 @@ function SniperWorkbench() {
           </GlassPanel>
         </div>
       </div>
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <SubscribeResultBlock title="订阅结果" items={summary?.subscribeItems ?? []} />
-        <SniperResultBlock title="已抢到" items={summary?.claimed ?? []} />
-        <SniperResultBlock title="可抢注" items={summary?.claimable ?? []} />
-        <SniperResultBlock title="已占用" items={summary?.occupied ?? []} />
-        <SniperResultBlock title="不可用" items={summary?.forbidden ?? []} />
-      </div>
-
-      <GlassPanel className="bg-card">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-base font-semibold text-white">巡检执行日志</div>
-            <div className="mt-1 text-sm text-textMuted">最近 {summary?.logs.length ?? 0} 条</div>
-          </div>
-          <div className="text-xs text-textMuted">{manualRunning ? '巡检中' : '等待执行'}</div>
-        </div>
-        <div className="mt-4 space-y-2">
-          {!summary || summary.logs.length === 0 ? <div className="rounded-[14px] bg-panel/70 px-4 py-4 text-sm text-textMuted">点一次“开始巡检”后，这里会把订阅、展开来源、抢注成功/失败这些步骤按日志列出来。</div> : summary.logs.map((log) => (
-            <div key={log.id} className="rounded-[14px] bg-panel/70 px-4 py-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className={log.level === 'success' ? 'text-emerald-300' : log.level === 'error' ? 'text-rose-300' : log.level === 'warning' ? 'text-amber-200' : 'text-slate-200'}>{log.message}</div>
-                <div className="text-xs text-textMuted">{new Date(log.createdAt).toLocaleTimeString('zh-CN', { hour12: false })}</div>
-              </div>
-              {(log.sourceTitle || log.candidate || log.targetRef || log.accountLabel) ? <div className="mt-1 text-xs text-textMuted break-all">{[log.sourceTitle, log.candidate, log.targetRef, log.accountLabel].filter(Boolean).join(' · ')}</div> : null}
-            </div>
-          ))}
-        </div>
-      </GlassPanel>
 
       <GlassPanel className="bg-card">
         <div className="flex items-center justify-between gap-3">
@@ -894,10 +803,6 @@ function SniperWorkbench() {
           ))}
         </div>
       </GlassPanel>
-
-      <div className="grid gap-5 xl:grid-cols-1">
-        <SniperResultBlock title="未确认 / 读取失败" items={summary?.uncertain ?? []} />
-      </div>
 
       {pickerOpen ? (
         <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setPickerOpen(false)}>
