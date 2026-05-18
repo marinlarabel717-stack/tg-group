@@ -13,6 +13,8 @@ interface ExecFileFailure extends Error {
   stderr?: string | Buffer
   code?: string | number | null
   signal?: string | null
+  errno?: string | number | null
+  killed?: boolean
 }
 
 interface TelethonSniperRawResult<T = Record<string, unknown>> {
@@ -124,11 +126,12 @@ function formatTelethonProcessFailure(action: 'scan_sources' | 'claim_with_pool'
   const failure = error as ExecFileFailure
   const stdoutText = readExecText(failure?.stdout)
   const stderrText = readExecText(failure?.stderr)
+  const errorMessage = typeof failure?.message === 'string' ? failure.message.trim() : ''
   const parsedFromStdout = parseTelethonRawResult(stdoutText)
   const parsedReason = typeof parsedFromStdout?.reason === 'string' ? parsedFromStdout.reason.trim() : ''
   if (parsedReason) return parsedReason
 
-  const detail = extractUsefulPythonErrorText(stderrText) || extractUsefulPythonErrorText(stdoutText)
+  const detail = extractUsefulPythonErrorText(stderrText) || extractUsefulPythonErrorText(stdoutText) || extractUsefulPythonErrorText(errorMessage)
   const actionLabel = action === 'create_carrier_and_claim'
     ? '自动建频道并抢注'
     : action === 'claim_with_pool'
@@ -138,10 +141,15 @@ function formatTelethonProcessFailure(action: 'scan_sources' | 'claim_with_pool'
   if (/ModuleNotFoundError/i.test(detail)) return `${actionLabel}脚本缺少运行依赖，没成功跑起来。`
   if (/SyntaxError/i.test(detail)) return `${actionLabel}脚本启动失败，代码里有语法问题。`
   if (/No such file|can'?t open file/i.test(detail)) return `${actionLabel}脚本文件没找到，当前环境不完整。`
-  if (/timed out|TimeoutError/i.test(detail)) return `${actionLabel}脚本执行超时了。`
+  if (/timed out|TimeoutError/i.test(detail) || failure?.signal === 'SIGTERM') return `${actionLabel}脚本执行超时了。`
   if (/proxy/i.test(detail) && /(failed|error|refused|unreachable|closed)/i.test(detail)) return `${actionLabel}时代理连接失败了。`
+  if (/spawn .*ENOENT|ENOENT/i.test(errorMessage) || failure?.code === 'ENOENT' || failure?.errno === 'ENOENT') return `${actionLabel}脚本没启动起来：系统找不到 Python 或脚本文件。`
+  if (/EACCES|EPERM/i.test(errorMessage) || failure?.code === 'EACCES' || failure?.code === 'EPERM' || failure?.errno === 'EACCES' || failure?.errno === 'EPERM') return `${actionLabel}脚本没法启动：权限不够或被系统拦住了。`
   if (detail) return `${actionLabel}脚本执行失败：${detail}`
-  return `${actionLabel}脚本执行失败，没返回具体原因。`
+  if (failure?.signal) return `${actionLabel}脚本执行失败：进程被系统中断了（${failure.signal}）。`
+  if (failure?.code !== null && failure?.code !== undefined && failure.code !== '') return `${actionLabel}脚本执行失败：进程异常退出（退出码 ${String(failure.code)}）。`
+  if (failure?.killed) return `${actionLabel}脚本执行失败：进程被提前终止了。`
+  return `${actionLabel}脚本执行失败，没拿到错误正文，但可以确定这次是脚本进程自己异常退出了。`
 }
 
 export class TelethonSniperService {
