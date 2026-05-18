@@ -1549,23 +1549,52 @@ export class OtherToolsService {
             accountLabel: readCheckResultTitle(scanAccount)
           })
 
-          let scanResult
+          let scanResult: Awaited<ReturnType<TelethonSniperService['scanSources']>> | null = null
           try {
-            scanResult = await this.telethonSniperService.scanSources({
-              sessionPath: scanAccount.sessionPath,
-              sourceRefs,
-              sourceMessageLimit: sourceLimit,
-              includeKeywords,
-              excludeKeywords,
-              seenMessageKeys: Array.from(task.seenMessageKeys),
-              handledCandidateKeys: Array.from(task.handledCandidateKeys),
-              joinChatlists: joinChatlistsOnFirstTick,
-              proxy: readCurrentProxyOrThrow(this.proxyPoolService)
-            })
+            const scanRetryTimeouts = [undefined, 120, 180] as const
+            let lastScanError: unknown = null
+            for (let attemptIndex = 0; attemptIndex < scanRetryTimeouts.length; attemptIndex += 1) {
+              try {
+                scanResult = await this.telethonSniperService.scanSources({
+                  sessionPath: scanAccount.sessionPath,
+                  sourceRefs,
+                  sourceMessageLimit: sourceLimit,
+                  includeKeywords,
+                  excludeKeywords,
+                  seenMessageKeys: Array.from(task.seenMessageKeys),
+                  handledCandidateKeys: Array.from(task.handledCandidateKeys),
+                  joinChatlists: joinChatlistsOnFirstTick,
+                  timeoutSeconds: scanRetryTimeouts[attemptIndex] ?? undefined,
+                  proxy: readCurrentProxyOrThrow(this.proxyPoolService)
+                })
+                break
+              } catch (error) {
+                lastScanError = error
+                const message = error instanceof Error ? error.message : String(error)
+                if (!/TIMEOUT/i.test(message)) {
+                  throw error
+                }
+                if (attemptIndex < scanRetryTimeouts.length - 1) {
+                  this.pushSniperListenerLog(task, {
+                    level: 'warning',
+                    message: `第 ${task.tickCount} 轮扫描超时，正在自动重试（第 ${attemptIndex + 2}/${scanRetryTimeouts.length} 次）。`,
+                    accountId: scanAccount.id,
+                    accountLabel: readCheckResultTitle(scanAccount)
+                  })
+                  continue
+                }
+              }
+            }
+            if (!scanResult && lastScanError) {
+              throw lastScanError
+            }
+            if (!scanResult) {
+              throw new Error('监听扫描这轮没拿到结果。')
+            }
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             if (/TIMEOUT/i.test(message)) {
-              throw new Error(`监听启动阶段超时：第 ${task.tickCount} 轮扫描来源太慢了，可能是来源太多、代理太慢，或者 Telegram 返回太慢。`)
+              throw new Error(`监听扫描已自动重试 ${3} 次，但还是超时。可能是来源太多、代理太慢，或者 Telegram 返回太慢。`)
             }
             const fatal = isFatalAccountError(error)
             if (fatal) {
