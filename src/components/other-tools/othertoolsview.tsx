@@ -645,17 +645,15 @@ function SniperWorkbench() {
     <div className="space-y-5">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <GlassPanel className="bg-card">
-          <FoldSection title="傻瓜式设置" hint="这页现在尽量只留参数名；鼠标移到 ? 上看详细说明。本页参数会自动记住，下次打开不用重新配。">
+          <FoldSection title="基础参数" hint="鼠标移到 ? 上看详细说明。本页参数会自动记住。">
             <ConfigRow label="监听哪些来源" hint="一行一个。支持频道、群、机器人链接，也支持 t.me/addlist/...。" wide>
               <div className="space-y-2">
                 <textarea value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} rows={8} placeholder="例如：@channel_name\nhttps://t.me/xxxx_channel\nhttps://t.me/addlist/xxxxxx" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
-                <div className="text-xs text-textMuted">当前 {sourcePreviewCount} 个来源。</div>
               </div>
             </ConfigRow>
             <ConfigRow label="本次任务用哪些账号" hint="这次任务只会用你选中的这些号，不会去动账号列表里的其他号。" wide>
               <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-sm text-white">本次任务已选 {subscribeSelectedAccounts.length} 个账号</div>
+                <div className="flex justify-end">
                   <button type="button" onClick={() => setPickerOpen(true)} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">选择账号</button>
                 </div>
                 {subscribeSelectedAccounts.length === 0 ? (
@@ -674,7 +672,6 @@ function SniperWorkbench() {
                         </div>
                       )
                     })}
-                    {subscribeSelectedAccounts.length > 6 ? <div className="px-1 text-xs text-textMuted">其余 {subscribeSelectedAccounts.length - 6} 个账号已折叠显示。</div> : null}
                   </div>
                 )}
               </div>
@@ -682,30 +679,29 @@ function SniperWorkbench() {
             <ConfigRow label="备用空频道（可选）" hint="有的话就填进去；不填也行，系统会自动新建频道去占。" wide>
               <div className="space-y-2">
                 <textarea value={poolInput} onChange={(event) => setPoolInput(event.target.value)} rows={4} placeholder="例如：@empty_pool_1\nhttps://t.me/empty_pool_2" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
-                <div className="text-xs text-textMuted">当前 {poolPreviewCount} 个备用池子。</div>
               </div>
             </ConfigRow>
             <ConfigRow label="发现可抢名就自动处理" hint="建议保持开启。" wide>
               <label className="inline-flex items-center gap-3 text-sm text-white">
                 <input type="checkbox" checked={autoClaim} onChange={(event) => setAutoClaim(event.target.checked)} />
-                自动抢注
+                开启
               </label>
             </ConfigRow>
             <ConfigRow label="池子不够就自动新建频道" hint="建议保持开启。" wide>
               <label className="inline-flex items-center gap-3 text-sm text-white">
                 <input type="checkbox" checked={autoCreateCarrier} onChange={(event) => setAutoCreateCarrier(event.target.checked)} />
-                自动新建频道占位
+                开启
               </label>
             </ConfigRow>
           </FoldSection>
 
           <div className="mt-4" />
 
-          <FoldSection title="高级设置" hint="看不懂就别动，默认值已经能跑。" defaultOpen={false}>
+          <FoldSection title="更多参数" hint="一般不用改，默认值已经能跑。" defaultOpen={false}>
             <ConfigRow label="先让这些任务账号加入来源" hint="建议保持开启。" wide>
               <label className="inline-flex items-center gap-3 text-sm text-white">
                 <input type="checkbox" checked={autoSubscribeSources} onChange={(event) => setAutoSubscribeSources(event.target.checked)} />
-                启动前先让选中的账号批量加入来源
+                开启
               </label>
             </ConfigRow>
             <ConfigRow label="只盯这些关键词（可空）" hint="留空就是全部都看。" wide>
@@ -759,9 +755,8 @@ function SniperWorkbench() {
 
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <FoldSection title="开始监听" hint="点一次就直接进入监听，不再分巡检和监听两套。默认每 5 秒检查一次，每个来源每轮只看最近 2 条；首次启动先对齐旧帖，后面只盯新帖。">
+            <FoldSection title="运行" hint="点一次就直接进入监听。默认每 5 秒检查一次，每个来源每轮只看最近 2 条；首次启动先对齐旧帖，后面只盯新帖。">
               <div className="space-y-3 px-3 py-3 text-sm">
-                <div className="text-sm text-white">启动 / 停止</div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <button
                     type="button"
@@ -770,7 +765,7 @@ function SniperWorkbench() {
                     className="inline-flex min-h-[48px] items-center justify-center gap-2 whitespace-nowrap rounded-[12px] border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {listening ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
-                    {listening ? '监听运行中' : '开始监听'}
+                    {listening ? '运行中' : '开始监听'}
                   </button>
                   <button
                     type="button"
@@ -787,33 +782,32 @@ function SniperWorkbench() {
           </GlassPanel>
 
           <GlassPanel className="bg-card">
-            <FoldSection title="监听统计" hint="开始后这里只看监听状态。">
-              <div className="space-y-3 px-3 py-3 text-sm">
-                <div className="text-sm text-white">数量统计</div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-slate-200/80">来源 / 池子</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{sourcePreviewCount} / {poolPreviewCount}</div>
+            <FoldSection title="统计" hint="这里只显示当前监听状态。">
+              <div className="px-3 py-3 text-sm">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
+                    <div className="text-xs text-textMuted">来源 / 池子</div>
+                    <div className="mt-1 text-xl font-semibold text-white">{sourcePreviewCount} / {poolPreviewCount}</div>
                   </div>
-                  <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-slate-200/80">订阅账号</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{subscribeSelectedAccounts.length}</div>
+                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
+                    <div className="text-xs text-textMuted">任务账号</div>
+                    <div className="mt-1 text-xl font-semibold text-white">{subscribeSelectedAccounts.length}</div>
                   </div>
-                  <div className="rounded-[14px] bg-white/[0.04] px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-slate-200/80">已检查消息</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{listenerState?.checkedMessageCount ?? 0}</div>
+                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
+                    <div className="text-xs text-textMuted">已检查</div>
+                    <div className="mt-1 text-xl font-semibold text-white">{listenerState?.checkedMessageCount ?? 0}</div>
                   </div>
-                  <div className="rounded-[14px] bg-cyan-400/8 px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-cyan-200/80">发现候选</div>
-                    <div className="mt-2 text-2xl font-semibold text-cyan-300">{listenerState?.candidateCount ?? 0}</div>
+                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
+                    <div className="text-xs text-textMuted">候选</div>
+                    <div className="mt-1 text-xl font-semibold text-white">{listenerState?.candidateCount ?? 0}</div>
                   </div>
-                  <div className="rounded-[14px] bg-emerald-400/8 px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-emerald-200/80">已抢到</div>
-                    <div className="mt-2 text-2xl font-semibold text-emerald-300">{listenerState?.claimedCount ?? 0}</div>
+                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
+                    <div className="text-xs text-textMuted">已抢到</div>
+                    <div className="mt-1 text-xl font-semibold text-white">{listenerState?.claimedCount ?? 0}</div>
                   </div>
-                  <div className="rounded-[14px] bg-violet-400/8 px-4 py-3">
-                    <div className="text-xs tracking-[0.16em] text-violet-200/80">自动新建频道</div>
-                    <div className="mt-2 text-2xl font-semibold text-violet-300">{listenerState?.createdCarrierCount ?? 0}</div>
+                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
+                    <div className="text-xs text-textMuted">新建频道</div>
+                    <div className="mt-1 text-xl font-semibold text-white">{listenerState?.createdCarrierCount ?? 0}</div>
                   </div>
                 </div>
               </div>
@@ -821,7 +815,7 @@ function SniperWorkbench() {
           </GlassPanel>
 
           <GlassPanel className="bg-card">
-            <FoldSection title="抢注系统的运行日志" hint="开始监听后，日志直接显示在这里，不再跳日志中心；最新日志会持续追加在这里。">
+            <FoldSection title="运行日志" hint="日志直接显示在这里，不再跳日志中心。">
               <div className="space-y-3 px-3 py-3 text-sm">
                 {listenerState?.logs && listenerState.logs.length > 0 ? (
                   <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
@@ -837,9 +831,7 @@ function SniperWorkbench() {
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-4 text-sm text-textMuted">
-                    这里会显示抢注系统的实时运行日志。开始监听后，就在当前页面直接看，不再跳到日志中心。
-                  </div>
+                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-4 py-4 text-sm text-textMuted">暂无日志</div>
                 )}
               </div>
             </FoldSection>
