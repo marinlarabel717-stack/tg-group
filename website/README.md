@@ -8,7 +8,9 @@
 - 样式：`website/styles.css`
 - 脚本：`website/app.js`
 - 资源：`website/assets/`
-- 功能预览图：`website/assets/features/*.svg`
+- 旧版功能预览图：`website/assets/features/*.svg`
+- 真实软件截图：`website/assets/features-real/*.png`
+- 教程裁剪图：`website/assets/features-real/crops/*.png`
 
 ## 本地预览
 
@@ -38,8 +40,8 @@ python -m http.server 4173 -d website
 
 1. 首页功能总览
 2. 每个功能可点击进入详情页
-3. 每个详情页带对应 UI 预览图
-4. 每个详情页带使用教程说明
+3. 每个详情页带真实软件 UI 截图
+4. 每个详情页带更细的图文教程说明
 
 ## 后续你需要替换的内容
 

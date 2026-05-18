@@ -88,11 +88,27 @@ function renderFeatureDetail() {
 
     <section class="section">
       <div class="section-heading">
-        <div class="eyebrow">使用教程</div>
-        <h2>第一次看这个功能页，建议按这 3 步理解</h2>
+        <div class="eyebrow">更细的教程图文</div>
+        <h2>按这个顺序看界面，基本就能理解怎么用</h2>
       </div>
-      <div class="tutorial-list">
-        ${feature.tutorial.map((step, index) => `<article class="tutorial-step"><div class="tutorial-step__num">${index + 1}</div><div><h3>${step.title}</h3><p>${step.body}</p></div></article>`).join('')}
+      <div class="tutorial-list tutorial-list--visual">
+        ${feature.tutorial.map((step, index) => `
+          <article class="tutorial-step tutorial-step--visual">
+            <div class="tutorial-step__media">
+              <img src="${step.image}" alt="${feature.title} 教程步骤 ${index + 1}" loading="lazy" />
+            </div>
+            <div class="tutorial-step__content">
+              <div class="tutorial-step__num">${index + 1}</div>
+              <div>
+                <h3>${step.title}</h3>
+                <p>${step.body}</p>
+                <ul class="tutorial-points">
+                  ${step.points.map((point) => `<li>${point}</li>`).join('')}
+                </ul>
+              </div>
+            </div>
+          </article>
+        `).join('')}
       </div>
     </section>
 
@@ -106,7 +122,7 @@ function renderFeatureDetail() {
       </div>
       <div class="cta-panel cta-panel--detail">
         <a class="button button--primary" href="./index.html#contact">接入正式域名 / 联系方式</a>
-        <span>这页后面也可以继续替换成真实软件截图版，我已经先把结构给你铺好了。</span>
+        <span>这版官网已经把真实软件截图和更细的图文教程都接进来了，后面还可以继续替换成带真实业务数据的演示截图。</span>
       </div>
     </section>
   `
