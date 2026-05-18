@@ -1390,6 +1390,50 @@ export class OtherToolsService {
         task.claimClient = claimSelection?.client ?? null
         task.createCarrierClient = createCarrierSelection?.client ?? null
 
+        const ensureListenerSourceReady = async (account: AccountRecord, client: TelegramClient, context: 'start' | 'switch') => {
+          if (!payload.autoSubscribeSources) return
+          let subscribeItems: OtherToolsSourceSubscribeItem[] = []
+          try {
+            subscribeItems = await subscribeSourcesForAccount(client, account, sourceRefs)
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            if (/TIMEOUT/i.test(message)) {
+              throw new Error(`监听启动阶段超时：账号 ${readCheckResultTitle(account)} 预先订阅来源太慢了。`)
+            }
+            throw error
+          }
+          const joinedCount = subscribeItems.filter((item) => item.status === 'joined').length
+          const failedItems = subscribeItems.filter((item) => item.status === 'failed')
+          if (joinedCount > 0) {
+            this.pushSniperListenerLog(task, {
+              level: 'success',
+              message: context === 'start'
+                ? `${readCheckResultTitle(account)} 已预先订阅 ${joinedCount} 个来源目标。`
+                : `${readCheckResultTitle(account)} 已补订阅 ${joinedCount} 个来源目标。`,
+              accountId: account.id,
+              accountLabel: readCheckResultTitle(account)
+            })
+          }
+          if (failedItems.length > 0) {
+            this.pushSniperListenerLog(task, {
+              level: 'warning',
+              message: `${readCheckResultTitle(account)} 订阅来源时有 ${failedItems.length} 条失败。`,
+              accountId: account.id,
+              accountLabel: readCheckResultTitle(account)
+            })
+            for (const failedItem of failedItems) {
+              this.pushSniperListenerLog(task, {
+                level: 'warning',
+                message: `${readCheckResultTitle(account)} 订阅失败：${readSubscribeSourceKindLabel(failedItem.sourceKind)} ${failedItem.sourceTitle}｜${failedItem.message}`,
+                accountId: account.id,
+                accountLabel: readCheckResultTitle(account),
+                sourceRef: failedItem.sourceRef,
+                sourceTitle: failedItem.sourceTitle
+              })
+            }
+          }
+        }
+
         const switchRoleAccount = async (role: 'scan' | 'claim' | 'createCarrier', reason: string) => {
           const roleLabel = role === 'scan' ? '监听' : role === 'claim' ? '抢注' : '建池'
           const previousAccount = role === 'scan' ? scanAccount : role === 'claim' ? claimAccount : createCarrierAccount
@@ -1427,6 +1471,7 @@ export class OtherToolsService {
               task.scanClient = next.client
               task.state.scanAccountId = next.account.id
               task.state.scanAccountLabel = readCheckResultTitle(next.account)
+              await ensureListenerSourceReady(next.account, next.client, 'switch')
             } else if (role === 'claim') {
               claimAccount = next.account
               task.claimClient = next.client
@@ -1467,53 +1512,7 @@ export class OtherToolsService {
           }
         }
 
-        if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
-          for (const account of subscribeAccounts) {
-            let client = task.subscribeClients.get(account.id) ?? null
-            if (!client) {
-              client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
-              task.subscribeClients.set(account.id, client)
-            }
-            let subscribeItems
-            try {
-              subscribeItems = await subscribeSourcesForAccount(client, account, sourceRefs)
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error)
-              if (/TIMEOUT/i.test(message)) {
-                throw new Error(`监听启动阶段超时：账号 ${readCheckResultTitle(account)} 预先订阅来源太慢了。`)
-              }
-              throw error
-            }
-            const joinedCount = subscribeItems.filter((item) => item.status === 'joined').length
-            const failedCount = subscribeItems.filter((item) => item.status === 'failed').length
-            if (joinedCount > 0) {
-              this.pushSniperListenerLog(task, {
-                level: 'success',
-                message: `${readCheckResultTitle(account)} 已预先订阅 ${joinedCount} 个来源目标。`,
-                accountId: account.id,
-                accountLabel: readCheckResultTitle(account)
-              })
-            }
-            if (failedCount > 0) {
-              this.pushSniperListenerLog(task, {
-                level: 'warning',
-                message: `${readCheckResultTitle(account)} 订阅来源时有 ${failedCount} 条失败。`,
-                accountId: account.id,
-                accountLabel: readCheckResultTitle(account)
-              })
-              for (const failedItem of subscribeItems.filter((item) => item.status === 'failed')) {
-                this.pushSniperListenerLog(task, {
-                  level: 'warning',
-                  message: `${readCheckResultTitle(account)} 订阅失败：${readSubscribeSourceKindLabel(failedItem.sourceKind)} ${failedItem.sourceTitle}｜${failedItem.message}`,
-                  accountId: account.id,
-                  accountLabel: readCheckResultTitle(account),
-                  sourceRef: failedItem.sourceRef,
-                  sourceTitle: failedItem.sourceTitle
-                })
-              }
-            }
-          }
-        }
+        await ensureListenerSourceReady(scanAccount, task.scanClient!, 'start')
 
         task.state.message = '监听已启动，正在进入 Telethon 主链路…'
         this.pushSniperListenerLog(task, {
