@@ -15,6 +15,48 @@ const tabs: Array<{ key: OtherToolsTabKey; label: string; icon: typeof Filter }>
   { key: 'sniper', label: '抢注系统', icon: Radar }
 ]
 
+const SNIPER_DRAFT_STORAGE_KEY = 'tg-matrix.other-tools.sniper-draft.v1'
+
+interface SniperDraftState {
+  sourceInput: string
+  poolInput: string
+  includeKeywords: string
+  excludeKeywords: string
+  subscribeAccountIds: number[]
+  sourceMessageLimit: number
+  candidateLimit: number
+  autoClaim: boolean
+  autoSubscribeSources: boolean
+  listenerPollSeconds: number
+  autoCreateCarrier: boolean
+  createCarrierTitleTemplate: string
+  createCarrierAboutTemplate: string
+  postType: BatchCreatePostType
+  postText: string
+  postImageData: string
+}
+
+function readSniperDraft(): Partial<SniperDraftState> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(SNIPER_DRAFT_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Partial<SniperDraftState>
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveSniperDraft(draft: SniperDraftState) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(SNIPER_DRAFT_STORAGE_KEY, JSON.stringify(draft))
+  } catch {
+    // ignore local draft persistence errors
+  }
+}
+
 function createEmptySniperListenerState(message = '监听未启动。'): OtherToolsSniperListenerState {
   return {
     running: false,
@@ -397,6 +439,7 @@ function SubscribeResultBlock(props: { title: string; items: OtherToolsSourceSub
 }
 
 function SniperWorkbench() {
+  const savedDraft = useMemo(() => readSniperDraft(), [])
   const accountTaskStatusMap = useAccountTaskStatusMap()
   const setActiveModule = useUIStore((state) => state.setActiveModule)
   const setLogsContext = useUIStore((state) => state.setLogsContext)
@@ -404,27 +447,27 @@ function SniperWorkbench() {
   const listenerState = useOtherToolsStore((state) => state.listenerState)
   const setListenerState = useOtherToolsStore((state) => state.setListenerState)
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
-  const [sourceInput, setSourceInput] = useState('')
-  const [poolInput, setPoolInput] = useState('')
-  const [includeKeywords, setIncludeKeywords] = useState('')
-  const [excludeKeywords, setExcludeKeywords] = useState('')
-  const [subscribeAccountIds, setSubscribeAccountIds] = useState<number[]>([])
+  const [sourceInput, setSourceInput] = useState(savedDraft.sourceInput ?? '')
+  const [poolInput, setPoolInput] = useState(savedDraft.poolInput ?? '')
+  const [includeKeywords, setIncludeKeywords] = useState(savedDraft.includeKeywords ?? '')
+  const [excludeKeywords, setExcludeKeywords] = useState(savedDraft.excludeKeywords ?? '')
+  const [subscribeAccountIds, setSubscribeAccountIds] = useState<number[]>(Array.isArray(savedDraft.subscribeAccountIds) ? savedDraft.subscribeAccountIds.filter((item): item is number => typeof item === 'number') : [])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draftSubscribeIds, setDraftSubscribeIds] = useState<number[]>([])
   const [subscribeKeyword, setSubscribeKeyword] = useState('')
   const [subscribeRangeStart, setSubscribeRangeStart] = useState('1')
   const [subscribeRangeEnd, setSubscribeRangeEnd] = useState('10')
-  const [sourceMessageLimit, setSourceMessageLimit] = useState(20)
-  const [candidateLimit, setCandidateLimit] = useState(80)
-  const [autoClaim, setAutoClaim] = useState(true)
-  const [autoSubscribeSources, setAutoSubscribeSources] = useState(true)
-  const [listenerPollSeconds, setListenerPollSeconds] = useState(15)
-  const [autoCreateCarrier, setAutoCreateCarrier] = useState(true)
-  const [createCarrierTitleTemplate, setCreateCarrierTitleTemplate] = useState('监听占位_{candidate}')
-  const [createCarrierAboutTemplate, setCreateCarrierAboutTemplate] = useState('自动监听命中 {candidate} 后创建的占位频道。')
-  const [postType, setPostType] = useState<BatchCreatePostType>('none')
-  const [postText, setPostText] = useState('')
-  const [postImageData, setPostImageData] = useState('')
+  const [sourceMessageLimit, setSourceMessageLimit] = useState(typeof savedDraft.sourceMessageLimit === 'number' ? Math.max(1, Math.min(100, savedDraft.sourceMessageLimit)) : 20)
+  const [candidateLimit, setCandidateLimit] = useState(typeof savedDraft.candidateLimit === 'number' ? Math.max(1, Math.min(500, savedDraft.candidateLimit)) : 80)
+  const [autoClaim, setAutoClaim] = useState(savedDraft.autoClaim ?? true)
+  const [autoSubscribeSources, setAutoSubscribeSources] = useState(savedDraft.autoSubscribeSources ?? true)
+  const [listenerPollSeconds, setListenerPollSeconds] = useState(typeof savedDraft.listenerPollSeconds === 'number' ? Math.max(5, Math.min(300, savedDraft.listenerPollSeconds)) : 15)
+  const [autoCreateCarrier, setAutoCreateCarrier] = useState(savedDraft.autoCreateCarrier ?? true)
+  const [createCarrierTitleTemplate, setCreateCarrierTitleTemplate] = useState(savedDraft.createCarrierTitleTemplate ?? '监听占位_{candidate}')
+  const [createCarrierAboutTemplate, setCreateCarrierAboutTemplate] = useState(savedDraft.createCarrierAboutTemplate ?? '自动监听命中 {candidate} 后创建的占位频道。')
+  const [postType, setPostType] = useState<BatchCreatePostType>(savedDraft.postType ?? 'none')
+  const [postText, setPostText] = useState(savedDraft.postText ?? '')
+  const [postImageData, setPostImageData] = useState(savedDraft.postImageData ?? '')
 
   useEffect(() => {
     let active = true
@@ -458,6 +501,44 @@ function SniperWorkbench() {
     setSubscribeRangeStart('1')
     setSubscribeRangeEnd(String(Math.min(10, Math.max(accounts.length, 1))))
   }, [pickerOpen, accounts.length])
+
+  useEffect(() => {
+    saveSniperDraft({
+      sourceInput,
+      poolInput,
+      includeKeywords,
+      excludeKeywords,
+      subscribeAccountIds,
+      sourceMessageLimit,
+      candidateLimit,
+      autoClaim,
+      autoSubscribeSources,
+      listenerPollSeconds,
+      autoCreateCarrier,
+      createCarrierTitleTemplate,
+      createCarrierAboutTemplate,
+      postType,
+      postText,
+      postImageData
+    })
+  }, [
+    sourceInput,
+    poolInput,
+    includeKeywords,
+    excludeKeywords,
+    subscribeAccountIds,
+    sourceMessageLimit,
+    candidateLimit,
+    autoClaim,
+    autoSubscribeSources,
+    listenerPollSeconds,
+    autoCreateCarrier,
+    createCarrierTitleTemplate,
+    createCarrierAboutTemplate,
+    postType,
+    postText,
+    postImageData
+  ])
 
   const sourcePreviewCount = useMemo(() => splitPreviewInput(sourceInput).length, [sourceInput])
   const poolPreviewCount = useMemo(() => splitPreviewInput(poolInput).length, [poolInput])
@@ -567,6 +648,7 @@ function SniperWorkbench() {
           <FoldSection title="傻瓜式设置" hint="就按下面 4 步填，别的默认不用管。">
             <ConfigRow label="最简单用法" wide>
               <div className="space-y-2 text-sm text-textMuted">
+                <div className="rounded-[14px] border border-emerald-400/15 bg-emerald-400/8 px-4 py-3 text-emerald-100">本页参数会自动记住，下次打开不用重新配。</div>
                 <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">1.</span> 把你要盯的频道 / 群 / addlist 链接贴进去。</div>
                 <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">2.</span> 选好本次任务要用的账号，比如这次就用 10 个号。</div>
                 <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">3.</span> 这次任务只会用你选中的这些号来订阅来源、监听消息、自动建频道。</div>
