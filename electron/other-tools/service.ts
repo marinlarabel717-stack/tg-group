@@ -668,6 +668,8 @@ function readCheckResultTitle(account: AccountRecord | null) {
   return account.username || account.phone || `ID ${account.id}`
 }
 
+const MAX_PUBLIC_LINKS_PER_ACCOUNT = 10
+
 function isFatalAccountError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(message)) {
@@ -683,6 +685,11 @@ function isFatalAccountError(error: unknown) {
     return { status: 'not_logged_in' as const, message: '账号受限' }
   }
   return null
+}
+
+function isPublicLinkLimitError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /CHANNELS_ADMIN_PUBLIC_TOO_MUCH|公开群\/频道用户名槽位已经到上限/i.test(message)
 }
 
 function readSourceBlob(message: unknown) {
@@ -1120,9 +1127,11 @@ export class OtherToolsService {
     preferredIds?: Array<number | null | undefined>
     roleLabel: string
     existing?: ResolvedSniperAccountClient[]
+    excludeIds?: Array<number | null | undefined>
   }): Promise<ResolvedSniperAccountClient> {
-    const available = options.accounts.filter((account) => !['banned', 'frozen', 'session_expired', 'not_logged_in'].includes(account.status))
-    const fallbackPool = available.length > 0 ? available : options.accounts
+    const excludedIds = new Set((options.excludeIds ?? []).filter((item): item is number => typeof item === 'number' && Number.isFinite(item)))
+    const available = options.accounts.filter((account) => !excludedIds.has(account.id) && !['banned', 'frozen', 'session_expired', 'not_logged_in'].includes(account.status))
+    const fallbackPool = available.length > 0 ? available : options.accounts.filter((account) => !excludedIds.has(account.id))
     if (fallbackPool.length === 0) {
       throw new Error(`当前没有可用${options.roleLabel}账号。`)
     }
@@ -1308,6 +1317,7 @@ export class OtherToolsService {
       throw new Error('当前没有可用抢注账号。')
     }
 
+    const createCarrierSuccessCountByAccount = new Map<number, number>()
     const createCarrierSelection = payload.autoCreateCarrier
       ? await this.resolveSniperAccountClient({
         accounts: taskAccounts,
@@ -1395,7 +1405,8 @@ export class OtherToolsService {
                 ...(role !== 'scan' && task.scanClient ? [{ account: scanAccount, client: task.scanClient }] : []),
                 ...(role !== 'claim' && claimAccount && task.claimClient ? [{ account: claimAccount, client: task.claimClient }] : []),
                 ...(role !== 'createCarrier' && createCarrierAccount && task.createCarrierClient ? [{ account: createCarrierAccount, client: task.createCarrierClient }] : [])
-              ]
+              ],
+              excludeIds: [previousAccount?.id ?? null]
             })
 
             const otherClients = [
@@ -1635,54 +1646,120 @@ export class OtherToolsService {
             try {
               let claimed: ListenerClaimResult | null = null
               let claimByAccount: AccountRecord | null = claimAccount
-              const proxy = readCurrentProxyOrThrow(this.proxyPoolService)
+              while (true) {
+                const proxy = readCurrentProxyOrThrow(this.proxyPoolService)
 
-              if (carrierIndex < poolRefs.length && claimAccount) {
-                attemptedRole = 'claim'
-                attemptedAccount = claimAccount
-                const poolClaimed = await this.telethonSniperService.claimWithPool({
-                  sessionPath: claimAccount.sessionPath,
-                  carrierRef: poolRefs[carrierIndex],
-                  normalizedCandidate: item.normalized,
-                  proxy
-                })
-                claimed = {
-                  ...poolClaimed,
-                  createdCarrier: false
+                if (carrierIndex < poolRefs.length && claimAccount) {
+                  attemptedRole = 'claim'
+                  attemptedAccount = claimAccount
+                  try {
+                    const poolClaimed = await this.telethonSniperService.claimWithPool({
+                      sessionPath: claimAccount.sessionPath,
+                      carrierRef: poolRefs[carrierIndex],
+                      normalizedCandidate: item.normalized,
+                      proxy
+                    })
+                    claimed = {
+                      ...poolClaimed,
+                      createdCarrier: false
+                    }
+                    carrierIndex += 1
+                    break
+                  } catch (error) {
+                    if (isPublicLinkLimitError(error)) {
+                      this.pushSniperListenerLog(task, {
+                        level: 'warning',
+                        message: `抢注账号 ${readCheckResultTitle(claimAccount)} 的公开链接槽位已经满了，正在切下一个号继续。`,
+                        candidate: item.normalized,
+                        sourceRef: item.sourceRef,
+                        sourceTitle: item.sourceTitle,
+                        accountId: claimAccount.id,
+                        accountLabel: readCheckResultTitle(claimAccount)
+                      })
+                      const switched = await switchRoleAccount('claim', '公开链接槽位已满')
+                      if (!switched) {
+                        throw new Error('当前这批任务账号的公开链接槽位都满了，没法继续抢注。')
+                      }
+                      continue
+                    }
+                    throw error
+                  }
+                } else if (payload.autoCreateCarrier && createCarrierAccount) {
+                  const usedCount = createCarrierSuccessCountByAccount.get(createCarrierAccount.id) ?? 0
+                  if (usedCount >= MAX_PUBLIC_LINKS_PER_ACCOUNT) {
+                    this.pushSniperListenerLog(task, {
+                      level: 'warning',
+                      message: `建频道账号 ${readCheckResultTitle(createCarrierAccount)} 在本次任务里已经创建了 ${MAX_PUBLIC_LINKS_PER_ACCOUNT} 个公开链接，正在切下一个号继续。`,
+                      candidate: item.normalized,
+                      sourceRef: item.sourceRef,
+                      sourceTitle: item.sourceTitle,
+                      accountId: createCarrierAccount.id,
+                      accountLabel: readCheckResultTitle(createCarrierAccount)
+                    })
+                    const switched = await switchRoleAccount('createCarrier', `本次任务已创建满 ${MAX_PUBLIC_LINKS_PER_ACCOUNT} 个公开链接`)
+                    if (!switched) {
+                      throw new Error('当前这批任务账号都已经建满公开链接了，没法继续自动建频道抢注。')
+                    }
+                    continue
+                  }
+
+                  attemptedRole = 'createCarrier'
+                  attemptedAccount = createCarrierAccount
+                  try {
+                    const createdClaim = await this.telethonSniperService.createCarrierAndClaim({
+                      sessionPath: createCarrierAccount.sessionPath,
+                      normalizedCandidate: item.normalized,
+                      accountId: createCarrierAccount.id,
+                      createdIndex: createdCarrierIndex,
+                      createCarrierTitleTemplate: payload.createCarrierTitleTemplate,
+                      createCarrierAboutTemplate: payload.createCarrierAboutTemplate,
+                      postType: payload.postType,
+                      postText: payload.postText,
+                      postImageData: payload.postImageData,
+                      proxy
+                    })
+                    claimed = {
+                      ...createdClaim,
+                      createdCarrier: true
+                    }
+                    createdCarrierIndex += 1
+                    claimByAccount = createCarrierAccount
+                    task.state.createdCarrierCount += 1
+                    createCarrierSuccessCountByAccount.set(createCarrierAccount.id, usedCount + 1)
+                    break
+                  } catch (error) {
+                    if (isPublicLinkLimitError(error)) {
+                      this.pushSniperListenerLog(task, {
+                        level: 'warning',
+                        message: `建频道账号 ${readCheckResultTitle(createCarrierAccount)} 的公开链接槽位已经满了，正在切下一个号继续。`,
+                        candidate: item.normalized,
+                        sourceRef: item.sourceRef,
+                        sourceTitle: item.sourceTitle,
+                        accountId: createCarrierAccount.id,
+                        accountLabel: readCheckResultTitle(createCarrierAccount)
+                      })
+                      const switched = await switchRoleAccount('createCarrier', '公开链接槽位已满')
+                      if (!switched) {
+                        throw new Error('当前这批任务账号都已经建满公开链接了，没法继续自动建频道抢注。')
+                      }
+                      continue
+                    }
+                    throw error
+                  }
+                } else {
+                  item.claimStatus = 'skipped'
+                  item.claimMessage = '可抢名已发现，但当前没有可用池子，也没开自动建频道占位。'
+                  this.pushSniperListenerLog(task, {
+                    level: 'warning',
+                    message: `发现 ${item.normalized} 可抢，但没有可用池子/建池账号。`,
+                    sourceRef: item.sourceRef,
+                    sourceTitle: item.sourceTitle,
+                    candidate: item.normalized
+                  })
+                  break
                 }
-                carrierIndex += 1
-              } else if (payload.autoCreateCarrier && createCarrierAccount) {
-                attemptedRole = 'createCarrier'
-                attemptedAccount = createCarrierAccount
-                const createdClaim = await this.telethonSniperService.createCarrierAndClaim({
-                  sessionPath: createCarrierAccount.sessionPath,
-                  normalizedCandidate: item.normalized,
-                  accountId: createCarrierAccount.id,
-                  createdIndex: createdCarrierIndex,
-                  createCarrierTitleTemplate: payload.createCarrierTitleTemplate,
-                  createCarrierAboutTemplate: payload.createCarrierAboutTemplate,
-                  postType: payload.postType,
-                  postText: payload.postText,
-                  postImageData: payload.postImageData,
-                  proxy
-                })
-                claimed = {
-                  ...createdClaim,
-                  createdCarrier: true
-                }
-                createdCarrierIndex += 1
-                claimByAccount = createCarrierAccount
-                task.state.createdCarrierCount += 1
-              } else {
-                item.claimStatus = 'skipped'
-                item.claimMessage = '可抢名已发现，但当前没有可用池子，也没开自动建频道占位。'
-                this.pushSniperListenerLog(task, {
-                  level: 'warning',
-                  message: `发现 ${item.normalized} 可抢，但没有可用池子/建池账号。`,
-                  sourceRef: item.sourceRef,
-                  sourceTitle: item.sourceTitle,
-                  candidate: item.normalized
-                })
+              }
+              if (!claimed) {
                 continue
               }
 
@@ -1829,7 +1906,7 @@ export class OtherToolsService {
         existing: [scanSelection]
       })
       : null
-    const claimAccount = claimSelection?.account ?? null
+    let claimAccount = claimSelection?.account ?? null
     const autoCreateCarrier = Boolean(payload.autoCreateCarrier)
     const createCarrierSelection = autoCreateCarrier
       ? await this.resolveSniperAccountClient({
@@ -1839,7 +1916,7 @@ export class OtherToolsService {
         existing: [scanSelection, ...(claimSelection ? [claimSelection] : [])]
       })
       : null
-    const createCarrierAccount = createCarrierSelection?.account ?? null
+    let createCarrierAccount = createCarrierSelection?.account ?? null
     const subscribeAccounts = payload.autoSubscribeSources ? taskAccounts : []
     if (payload.autoClaim && !claimAccount && !autoCreateCarrier) {
       throw new Error('当前没有可用抢注账号。')
@@ -1863,8 +1940,8 @@ export class OtherToolsService {
     const candidateLimit = Math.max(1, Math.min(500, Math.trunc(payload.candidateLimit || 100)))
 
     const scanClient = scanSelection.client
-    const claimClient = claimSelection?.client ?? null
-    const createCarrierClient = createCarrierSelection?.client ?? null
+    let claimClient = claimSelection?.client ?? null
+    let createCarrierClient = createCarrierSelection?.client ?? null
     const subscribeClients = new Map<number, TelegramClient>()
 
     try {
@@ -1876,6 +1953,7 @@ export class OtherToolsService {
         if (logs.length > 120) logs.length = 120
       }
       const seenCandidates = new Set<string>()
+      const createCarrierSuccessCountByAccount = new Map<number, number>()
       let inspectedMessageCount = 0
       let expandedSourceCount = 0
       let chatlistJoinCount = 0
@@ -1895,6 +1973,48 @@ export class OtherToolsService {
           level: 'info',
           message: `账号未手动指定的部分，已从这 ${taskAccounts.length} 个任务账号里自动选择：监听 ${readCheckResultTitle(scanAccount)}${claimAccount ? `，抢注 ${readCheckResultTitle(claimAccount)}` : ''}${createCarrierAccount ? `，建频道 ${readCheckResultTitle(createCarrierAccount)}` : ''}。`
         })
+      }
+
+      const switchRunRoleAccount = async (role: 'claim' | 'createCarrier', reason: string) => {
+        const previousAccount = role === 'claim' ? claimAccount : createCarrierAccount
+        const previousClient = role === 'claim' ? claimClient : createCarrierClient
+        if (!previousAccount) return false
+
+        const next = await this.resolveSniperAccountClient({
+          accounts: taskAccounts,
+          preferredIds: role === 'claim'
+            ? [payload.claimAccountId ?? null, payload.scanAccountId ?? null]
+            : [payload.createCarrierAccountId ?? null, payload.claimAccountId ?? null, payload.scanAccountId ?? null],
+          roleLabel: role === 'claim' ? '抢注' : '建池',
+          existing: [
+            { account: scanAccount, client: scanClient },
+            ...(role !== 'claim' && claimAccount && claimClient ? [{ account: claimAccount, client: claimClient }] : []),
+            ...(role !== 'createCarrier' && createCarrierAccount && createCarrierClient ? [{ account: createCarrierAccount, client: createCarrierClient }] : [])
+          ],
+          excludeIds: [previousAccount.id]
+        })
+
+        if (role === 'claim') {
+          if (previousClient && previousClient !== next.client && previousClient !== scanClient && previousClient !== createCarrierClient) {
+            await this.clientManager.destroyClient(previousClient).catch(() => undefined)
+          }
+          claimAccount = next.account
+          claimClient = next.client
+        } else {
+          if (previousClient && previousClient !== next.client && previousClient !== scanClient && previousClient !== claimClient) {
+            await this.clientManager.destroyClient(previousClient).catch(() => undefined)
+          }
+          createCarrierAccount = next.account
+          createCarrierClient = next.client
+        }
+
+        pushRunLog({
+          level: 'warning',
+          message: `${role === 'claim' ? '抢注' : '建频道'}账号 ${readCheckResultTitle(previousAccount)} 已不可继续使用，已切到 ${readCheckResultTitle(next.account)}。原因：${reason}`,
+          accountId: next.account.id,
+          accountLabel: readCheckResultTitle(next.account)
+        })
+        return true
       }
 
       if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
@@ -2072,37 +2192,104 @@ export class OtherToolsService {
         let createdCarrierIndex = 0
         for (const item of claimableItems) {
           try {
-            let claimed: ListenerClaimResult
+            let claimed: ListenerClaimResult | null = null
             let claimByAccount: AccountRecord | null = claimAccount
 
-            if (carrierIndex < carriers.length && claimClient) {
-              const carrier = carriers[carrierIndex]
-              const poolClaimed = await claimCandidateWithPool(claimClient, carrier, item)
-              claimed = {
-                claimTargetTitle: poolClaimed.claimTargetTitle,
-                claimTargetRef: poolClaimed.claimTargetRef,
-                claimMessage: poolClaimed.claimMessage,
-                createdCarrier: false
+            while (true) {
+              if (carrierIndex < carriers.length && claimClient && claimAccount) {
+                const carrier = carriers[carrierIndex]
+                try {
+                  const poolClaimed = await claimCandidateWithPool(claimClient, carrier, item)
+                  claimed = {
+                    claimTargetTitle: poolClaimed.claimTargetTitle,
+                    claimTargetRef: poolClaimed.claimTargetRef,
+                    claimMessage: poolClaimed.claimMessage,
+                    createdCarrier: false
+                  }
+                  carrierIndex += 1
+                  break
+                } catch (error) {
+                  if (isPublicLinkLimitError(error)) {
+                    pushRunLog({
+                      level: 'warning',
+                      message: `抢注账号 ${readCheckResultTitle(claimAccount)} 的公开链接槽位已经满了，正在切下一个号继续。`,
+                      sourceRef: item.sourceRef,
+                      sourceTitle: item.sourceTitle,
+                      candidate: item.normalized,
+                      accountId: claimAccount.id,
+                      accountLabel: readCheckResultTitle(claimAccount)
+                    })
+                    const switched = await switchRunRoleAccount('claim', '公开链接槽位已满')
+                    if (!switched) {
+                      throw new Error('当前这批任务账号的公开链接槽位都满了，没法继续抢注。')
+                    }
+                    claimByAccount = claimAccount
+                    continue
+                  }
+                  throw error
+                }
+              } else if (autoCreateCarrier && createCarrierClient && createCarrierAccount) {
+                const usedCount = createCarrierSuccessCountByAccount.get(createCarrierAccount.id) ?? 0
+                if (usedCount >= MAX_PUBLIC_LINKS_PER_ACCOUNT) {
+                  pushRunLog({
+                    level: 'warning',
+                    message: `建频道账号 ${readCheckResultTitle(createCarrierAccount)} 在本次任务里已经创建了 ${MAX_PUBLIC_LINKS_PER_ACCOUNT} 个公开链接，正在切下一个号继续。`,
+                    sourceRef: item.sourceRef,
+                    sourceTitle: item.sourceTitle,
+                    candidate: item.normalized,
+                    accountId: createCarrierAccount.id,
+                    accountLabel: readCheckResultTitle(createCarrierAccount)
+                  })
+                  const switched = await switchRunRoleAccount('createCarrier', `本次任务已创建满 ${MAX_PUBLIC_LINKS_PER_ACCOUNT} 个公开链接`)
+                  if (!switched) {
+                    throw new Error('当前这批任务账号都已经建满公开链接了，没法继续自动建频道抢注。')
+                  }
+                  continue
+                }
+
+                try {
+                  claimed = await createCarrierAndClaim(createCarrierClient, item, payload as unknown as OtherToolsSniperListenerPayload, createCarrierAccount.id, createdCarrierIndex)
+                  createdCarrierIndex += 1
+                  createCarrierSuccessCountByAccount.set(createCarrierAccount.id, usedCount + 1)
+                  claimByAccount = createCarrierAccount
+                  break
+                } catch (error) {
+                  if (isPublicLinkLimitError(error)) {
+                    pushRunLog({
+                      level: 'warning',
+                      message: `建频道账号 ${readCheckResultTitle(createCarrierAccount)} 的公开链接槽位已经满了，正在切下一个号继续。`,
+                      sourceRef: item.sourceRef,
+                      sourceTitle: item.sourceTitle,
+                      candidate: item.normalized,
+                      accountId: createCarrierAccount.id,
+                      accountLabel: readCheckResultTitle(createCarrierAccount)
+                    })
+                    const switched = await switchRunRoleAccount('createCarrier', '公开链接槽位已满')
+                    if (!switched) {
+                      throw new Error('当前这批任务账号都已经建满公开链接了，没法继续自动建频道抢注。')
+                    }
+                    continue
+                  }
+                  throw error
+                }
+              } else {
+                item.claimStatus = 'skipped'
+                item.claimMessage = carriers.length > 0
+                  ? '当前池子载体已经用完了，剩余可抢名先保留在结果里。'
+                  : '当前没有池子载体，也没开自动建频道占位。'
+                pushRunLog({
+                  level: 'warning',
+                  message: carriers.length > 0
+                    ? `${item.normalized} 可抢，但池子已经用完，先跳过。`
+                    : `${item.normalized} 可抢，但没有可用池子/建池账号，先跳过。`,
+                  sourceRef: item.sourceRef,
+                  sourceTitle: item.sourceTitle,
+                  candidate: item.normalized
+                })
+                break
               }
-              carrierIndex += 1
-            } else if (autoCreateCarrier && createCarrierClient && createCarrierAccount) {
-              claimed = await createCarrierAndClaim(createCarrierClient, item, payload as OtherToolsSniperListenerPayload, createCarrierAccount.id, createdCarrierIndex)
-              createdCarrierIndex += 1
-              claimByAccount = createCarrierAccount
-            } else {
-              item.claimStatus = 'skipped'
-              item.claimMessage = carriers.length > 0
-                ? '当前池子载体已经用完了，剩余可抢名先保留在结果里。'
-                : '当前没有池子载体，也没开自动建频道占位。'
-              pushRunLog({
-                level: 'warning',
-                message: carriers.length > 0
-                  ? `${item.normalized} 可抢，但池子已经用完，先跳过。`
-                  : `${item.normalized} 可抢，但没有可用池子/建池账号，先跳过。`,
-                sourceRef: item.sourceRef,
-                sourceTitle: item.sourceTitle,
-                candidate: item.normalized
-              })
+            }
+            if (!claimed) {
               continue
             }
 
