@@ -178,7 +178,7 @@ export class TelethonSniperService {
   }
 
   async createCarrierAndClaim(payload: TelethonSniperCreateCarrierPayload) {
-    return await this.runAction<TelethonSniperClaimResult>('create_carrier_and_claim', payload, Math.max(20, payload.timeoutSeconds ?? 40))
+    return await this.runAction<TelethonSniperClaimResult>('create_carrier_and_claim', payload, Math.max(45, payload.timeoutSeconds ?? 90))
   }
 
   private async runAction<T>(action: 'scan_sources' | 'claim_with_pool' | 'create_carrier_and_claim', payload: object, timeoutSeconds: number): Promise<T> {
