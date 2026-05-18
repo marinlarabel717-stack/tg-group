@@ -607,7 +607,7 @@ const OtherToolsSniperSummary = memo(function OtherToolsSniperSummary() {
           {!listenerState || listenerState.logs.length === 0 ? (
             <div className="flex min-h-[180px] items-center justify-center text-sm text-textMuted">开始监听后，这里会持续追加命中、抢注、发帖结果。</div>
           ) : (
-            <IncrementalLogLines logs={[...listenerState.logs].reverse()} lineClassResolver={getSniperLogLineClass} />
+            <IncrementalLogLines logs={listenerState.logs} lineClassResolver={getSniperLogLineClass} />
           )}
         </div>
       </GlassPanel>

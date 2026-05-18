@@ -807,8 +807,40 @@ async function sendInitialPostToChannel(client: TelegramClient, entity: unknown,
   }))
 }
 
+function readRequiredWaitSeconds(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  const explicitWait = message.match(/A wait of (\d+) seconds is required/i)
+  if (explicitWait?.[1]) {
+    const seconds = Number(explicitWait[1])
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  }
+
+  const floodWait = message.match(/FLOOD_WAIT_(\d+)/i)
+  if (floodWait?.[1]) {
+    const seconds = Number(floodWait[1])
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  }
+
+  return null
+}
+
+function formatWaitDuration(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '稍后'
+  const minutes = Math.floor(seconds / 60)
+  const remainSeconds = seconds % 60
+  if (minutes <= 0) return `${seconds} 秒`
+  if (remainSeconds <= 0) return `${minutes} 分钟`
+  return `${minutes} 分 ${remainSeconds} 秒`
+}
+
 function formatSniperRuntimeError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
+  const waitSeconds = readRequiredWaitSeconds(error)
+  if (waitSeconds) {
+    const waitText = formatWaitDuration(waitSeconds)
+    if (/UpdateUsernameRequest/i.test(message)) return `这个账号改公开用户名太频繁，被 Telegram 限流了，请 ${waitText} 后再试。`
+    return `这个账号被 Telegram 限流了，请 ${waitText} 后再试。`
+  }
   if (/AUTH_KEY_DUPLICATED/i.test(message)) return '这个账号掉线了：同一个登录在别处占用了连接，当前这里不能继续用。'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(message)) return '这个账号登录已经失效了，需要重新登录。'
   if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(message)) return '这个账号已经被封了，不能继续用。'
@@ -904,7 +936,7 @@ function formatSniperClaimError(error: unknown) {
   if (/USERNAME_INVALID|USERNAMES_UNAVAILABLE|USERNAME_PURCHASE_AVAILABLE/i.test(message)) return '这个名字现在不能普通占位。'
   if (/CHANNELS_ADMIN_PUBLIC_TOO_MUCH/i.test(message)) return '这个账号的公开群/频道用户名槽位已经到上限了。'
   if (/CHAT_ADMIN_REQUIRED/i.test(message)) return '这个池子载体不是当前账号真正可控的管理员对象。'
-  return `抢注失败：${formatSniperRuntimeError(error)}`
+  return formatSniperRuntimeError(error)
 }
 
 async function isAlreadyInChannel(client: TelegramClient, entity: unknown) {
