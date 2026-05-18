@@ -179,7 +179,9 @@ export class TelethonSniperService {
   }
 
   async scanSources(payload: TelethonSniperScanPayload) {
-    return await this.runAction<TelethonSniperScanResult>('scan_sources', payload, Math.max(20, payload.timeoutSeconds ?? 35))
+    const dynamicTimeout = payload.timeoutSeconds
+      ?? Math.min(120, Math.max(35, 20 + (payload.sourceRefs?.length ?? 0) * 4 + Math.ceil((payload.sourceMessageLimit ?? 10) / 5) * 5))
+    return await this.runAction<TelethonSniperScanResult>('scan_sources', payload, Math.max(20, dynamicTimeout))
   }
 
   async claimWithPool(payload: TelethonSniperClaimWithPoolPayload) {

@@ -1460,7 +1460,16 @@ export class OtherToolsService {
               client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
               task.subscribeClients.set(account.id, client)
             }
-            const subscribeItems = await subscribeSourcesForAccount(client, account, sourceRefs)
+            let subscribeItems
+            try {
+              subscribeItems = await subscribeSourcesForAccount(client, account, sourceRefs)
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error)
+              if (/TIMEOUT/i.test(message)) {
+                throw new Error(`监听启动阶段超时：账号 ${readCheckResultTitle(account)} 预先订阅来源太慢了。`)
+              }
+              throw error
+            }
             const joinedCount = subscribeItems.filter((item) => item.status === 'joined').length
             const failedCount = subscribeItems.filter((item) => item.status === 'failed').length
             if (joinedCount > 0) {
@@ -1526,6 +1535,10 @@ export class OtherToolsService {
               proxy: readCurrentProxyOrThrow(this.proxyPoolService)
             })
           } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            if (/TIMEOUT/i.test(message)) {
+              throw new Error(`监听启动阶段超时：第 ${task.tickCount} 轮扫描来源太慢了，可能是来源太多、代理太慢，或者 Telegram 返回太慢。`)
+            }
             const fatal = isFatalAccountError(error)
             if (fatal) {
               this.repository.updateStatus([scanAccount.id], fatal.status)
