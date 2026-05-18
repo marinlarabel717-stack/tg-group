@@ -67,16 +67,16 @@ input[type='number']::-webkit-inner-spin-button {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(15, 23, 42, 0.26);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(148, 163, 184, 0.16);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(59, 130, 246, 0.6);
+  background: rgba(148, 163, 184, 0.26);
 }
 
 .content-visibility-auto {
@@ -128,7 +128,7 @@ input[type='number']::-webkit-inner-spin-button {
 
 .sidebar-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.14) transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.1) transparent;
 }
 
 .sidebar-scrollbar::-webkit-scrollbar {
@@ -140,12 +140,12 @@ input[type='number']::-webkit-inner-spin-button {
 }
 
 .sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.14);
+  background: rgba(148, 163, 184, 0.1);
   border-radius: 999px;
 }
 
 .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.24);
+  background: rgba(148, 163, 184, 0.18);
 }
 
 .country-flag-text {
