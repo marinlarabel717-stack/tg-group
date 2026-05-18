@@ -4,7 +4,6 @@ import type { AccountRecord, BatchCreatePostType, OtherToolsSniperCandidateItem,
 import { GlassPanel } from '../common/glasspanel'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
-import { useUIStore } from '../../stores/uistore'
 import { useOtherToolsStore } from '../../stores/othertoolsstore'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 
@@ -87,6 +86,12 @@ function splitPreviewInput(input: string) {
     .split(/[\n,\r\t ]+/)
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function formatTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '--:--:--'
+  return date.toLocaleTimeString('zh-CN', { hour12: false })
 }
 
 function PostTypeTabs({ value, onChange }: { value: BatchCreatePostType; onChange: (value: BatchCreatePostType) => void }) {
@@ -442,8 +447,6 @@ function SubscribeResultBlock(props: { title: string; items: OtherToolsSourceSub
 function SniperWorkbench() {
   const savedDraft = useMemo(() => readSniperDraft(), [])
   const accountTaskStatusMap = useAccountTaskStatusMap()
-  const setActiveModule = useUIStore((state) => state.setActiveModule)
-  const setLogsContext = useUIStore((state) => state.setLogsContext)
   const initOtherToolsStore = useOtherToolsStore((state) => state.init)
   const listenerState = useOtherToolsStore((state) => state.listenerState)
   const setListenerState = useOtherToolsStore((state) => state.setListenerState)
@@ -555,11 +558,6 @@ function SniperWorkbench() {
   )
   const listening = Boolean(listenerState?.running)
 
-  const openSniperLogs = () => {
-    setLogsContext('other-tools-sniper')
-    setActiveModule('logs')
-  }
-
   const applySubscribePicker = () => {
     setSubscribeAccountIds(draftSubscribeIds.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied))
     setPickerOpen(false)
@@ -593,7 +591,6 @@ function SniperWorkbench() {
       taskAccountIds: subscribeAccountIds,
       message: '实时监听启动中…'
     })
-    openSniperLogs()
     try {
       const state = await api.startSniperListener({
         sourceInput,
@@ -803,7 +800,7 @@ function SniperWorkbench() {
                     停止监听
                   </button>
                 </div>
-                <div className="text-xs text-textMuted">点“开始监听”后会直接跳到日志中心；默认每 5 秒检查一次，每个来源每轮只看最近 2 条，首次启动先对齐旧帖，后面只要有新帖就立刻扫用户名能不能抢，命中后会自动抢，池子不够就自动新建频道。</div>
+                <div className="text-xs text-textMuted">默认每 5 秒检查一次，每个来源每轮只看最近 2 条，首次启动先对齐旧帖，后面只要有新帖就立刻扫用户名能不能抢，命中后会自动抢，池子不够就自动新建频道。</div>
                 {listenerState?.message ? <div className="rounded-[12px] border border-emerald-400/10 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-100">{listenerState.message}</div> : null}
               </div>
             </FoldSection>
@@ -844,14 +841,27 @@ function SniperWorkbench() {
           </GlassPanel>
 
           <GlassPanel className="bg-card">
-            <FoldSection title="说明" hint="现在主流程就是直接监听；开始后会常驻轮询新帖。" defaultOpen={false}>
-              <ConfigRow label="第一版边界" wide>
-                <div className="space-y-2 text-sm text-textMuted">
-                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">主体：</span>走用户号，不走 Bot API。</div>
-                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">入口：</span>支持你混填频道 / 群 / 机器人白名单，以及 `t.me/addlist/...` 分组分享链接。</div>
-                  <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">抢注：</span>优先使用你手动提供的池子载体；池子不够时，可自动新建频道秒占。</div>
-                </div>
-              </ConfigRow>
+            <FoldSection title="抢注系统的运行日志" hint="开始监听后，日志直接显示在这里，不再跳日志中心。">
+              <div className="space-y-3 px-3 py-3 text-sm">
+                {listenerState?.logs && listenerState.logs.length > 0 ? (
+                  <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+                    {listenerState.logs.map((log) => (
+                      <div key={log.id} className="rounded-[14px] border border-white/[0.06] bg-panel/70 px-4 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className={`text-sm ${log.level === 'success' ? 'text-emerald-200' : log.level === 'warning' ? 'text-amber-200' : log.level === 'error' ? 'text-rose-200' : 'text-slate-200'}`}>
+                            {log.message}
+                          </div>
+                          <div className="shrink-0 text-[11px] text-textMuted">{formatTime(log.createdAt)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-4 text-sm text-textMuted">
+                    这里会显示抢注系统的实时运行日志。开始监听后，就在当前页面直接看，不再跳到日志中心。
+                  </div>
+                )}
+              </div>
             </FoldSection>
           </GlassPanel>
         </div>
