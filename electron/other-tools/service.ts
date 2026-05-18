@@ -211,6 +211,7 @@ interface ResolvedSniperAccountClient {
 interface ActiveSniperListenerTask {
   id: string
   cancelled: boolean
+  tickCount: number
   state: OtherToolsSniperListenerState
   scanClient: TelegramClient | null
   claimClient: TelegramClient | null
@@ -1322,7 +1323,7 @@ export class OtherToolsService {
 
     const subscribeAccounts = payload.autoSubscribeSources ? taskAccounts : []
     const pollIntervalSeconds = Math.max(5, Math.min(300, Math.trunc(payload.pollIntervalSeconds || 15)))
-    const sourceLimit = Math.max(1, Math.min(100, Math.trunc(payload.sourceMessageLimit || 20)))
+    const sourceLimit = Math.max(1, Math.min(100, Math.trunc(payload.sourceMessageLimit || 10)))
     const candidateLimit = Math.max(1, Math.min(500, Math.trunc(payload.candidateLimit || 100)))
     const includeKeywords = normalizeKeywordSet(payload.includeKeywords)
     const excludeKeywords = normalizeKeywordSet(payload.excludeKeywords)
@@ -1330,6 +1331,7 @@ export class OtherToolsService {
     const task: ActiveSniperListenerTask = {
       id: createId('sniper-listener'),
       cancelled: false,
+      tickCount: 0,
       state: {
         running: true,
         scanAccountId: scanAccount.id,
@@ -1499,8 +1501,16 @@ export class OtherToolsService {
         }
 
         while (!task.cancelled) {
+          task.tickCount += 1
           task.state.lastTickAt = new Date().toISOString()
           this.emitSniperListenerState(task)
+
+          this.pushSniperListenerLog(task, {
+            level: 'info',
+            message: `第 ${task.tickCount} 轮监听开始：每 ${pollIntervalSeconds} 秒检查一次，每个来源看最近 ${sourceLimit} 条消息。`,
+            accountId: scanAccount.id,
+            accountLabel: readCheckResultTitle(scanAccount)
+          })
 
           let scanResult
           try {
@@ -1539,6 +1549,16 @@ export class OtherToolsService {
           }
           task.state.seenMessageCount = task.seenMessageKeys.size
           task.state.message = `监听运行中：当前盯着 ${scanResult.expandedSourceCount} 个实际来源。`
+
+          const occupiableCount = scanResult.items.filter((item) => item.category === 'occupiable').length
+          const occupiedCount = scanResult.items.filter((item) => item.category === 'valid').length
+          const forbiddenCount = scanResult.items.filter((item) => item.category === 'forbidden').length
+          this.pushSniperListenerLog(task, {
+            level: scanResult.items.length > 0 ? 'success' : 'info',
+            message: `第 ${task.tickCount} 轮监听结果：实际检查 ${scanResult.expandedSourceCount} 个来源，拉取到 ${scanResult.newSeenMessageKeys.length} 条新消息，命中过滤后检查 ${scanResult.checkedMessageCount} 条，发现 ${scanResult.candidateCount} 个候选（可抢 ${occupiableCount} / 已占用 ${occupiedCount} / 不可用 ${forbiddenCount}）。`,
+            accountId: scanAccount.id,
+            accountLabel: readCheckResultTitle(scanAccount)
+          })
 
           if (scanResult.chatlistJoinCount > 0) {
             this.pushSniperListenerLog(task, {
