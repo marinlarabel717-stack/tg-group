@@ -1,4 +1,6 @@
 import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { resolveRuntimeAssetPath } from '../runtime-paths'
@@ -99,6 +101,12 @@ function readExecText(value: string | Buffer | null | undefined) {
   return ''
 }
 
+async function writePayloadFile(payload: object) {
+  const filePath = path.join(os.tmpdir(), `tg-matrix-sniper-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.json`)
+  await fs.promises.writeFile(filePath, JSON.stringify(payload), 'utf8')
+  return filePath
+}
+
 function parseTelethonRawResult<T>(text: string) {
   if (!text) return null
   try {
@@ -143,6 +151,7 @@ function formatTelethonProcessFailure(action: 'scan_sources' | 'claim_with_pool'
   if (/No such file|can'?t open file/i.test(detail)) return `${actionLabel}脚本文件没找到，当前环境不完整。`
   if (/timed out|TimeoutError/i.test(detail) || failure?.signal === 'SIGTERM') return `${actionLabel}脚本执行超时了。`
   if (/proxy/i.test(detail) && /(failed|error|refused|unreachable|closed)/i.test(detail)) return `${actionLabel}时代理连接失败了。`
+  if (/ENAMETOOLONG/i.test(errorMessage) || failure?.code === 'ENAMETOOLONG' || failure?.errno === 'ENAMETOOLONG') return `${actionLabel}脚本没启动起来：传给脚本的参数太长了。`
   if (/spawn .*ENOENT|ENOENT/i.test(errorMessage) || failure?.code === 'ENOENT' || failure?.errno === 'ENOENT') return `${actionLabel}脚本没启动起来：系统找不到 Python 或脚本文件。`
   if (/EACCES|EPERM/i.test(errorMessage) || failure?.code === 'EACCES' || failure?.code === 'EPERM' || failure?.errno === 'EACCES' || failure?.errno === 'EPERM') return `${actionLabel}脚本没法启动：权限不够或被系统拦住了。`
   if (detail) return `${actionLabel}脚本执行失败：${detail}`
@@ -178,10 +187,11 @@ export class TelethonSniperService {
     }
 
     let stdout = ''
+    const payloadFile = await writePayloadFile({ action, ...payload, timeoutSeconds })
     try {
       const result = await execFileAsync(this.pythonExecutable, [
         this.scriptPath,
-        JSON.stringify({ action, ...payload, timeoutSeconds })
+        `@${payloadFile}`
       ], {
         cwd: process.cwd(),
         windowsHide: true,
@@ -192,6 +202,8 @@ export class TelethonSniperService {
       stdout = result.stdout
     } catch (error) {
       throw new Error(formatTelethonProcessFailure(action, error))
+    } finally {
+      await fs.promises.unlink(payloadFile).catch(() => undefined)
     }
 
     const raw = parseTelethonRawResult<T>(stdout)

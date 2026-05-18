@@ -611,8 +611,8 @@ function SniperWorkbench() {
         createCarrierTitleTemplate,
         createCarrierAboutTemplate,
         postType,
-        postText,
-        postImageData
+        postText: postType === 'none' ? '' : postText,
+        postImageData: postType === 'photo' ? postImageData : ''
       })
       setListenerState(state)
     } catch (error) {

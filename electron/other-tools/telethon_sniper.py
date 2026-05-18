@@ -667,6 +667,13 @@ async def _main():
         sys.stderr.reconfigure(encoding='utf-8')
 
     raw = sys.argv[1] if len(sys.argv) > 1 else '{}'
+    if isinstance(raw, str) and raw.startswith('@'):
+        payload_path = Path(raw[1:])
+        try:
+            raw = payload_path.read_text(encoding='utf-8')
+        except Exception:
+            print(json.dumps({'ok': False, 'reason': 'INVALID_PAYLOAD_FILE'}, ensure_ascii=False))
+            return
     try:
         command = json.loads(raw)
     except Exception:
