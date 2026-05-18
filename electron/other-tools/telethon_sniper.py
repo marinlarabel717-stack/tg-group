@@ -492,6 +492,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
     expanded = await _expand_source_entities(client, source_refs, join_chatlists)
     expanded_sources = expanded['expanded_sources']
     items: List[Dict[str, Any]] = []
+    logs: List[Dict[str, Any]] = []
     candidate_count = 0
     checked_message_count = 0
     new_seen_message_keys: List[str] = []
@@ -500,39 +501,130 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
     for source in expanded_sources:
         messages = [message async for message in client.iter_messages(source['entity'], limit=source_message_limit)]
         messages.reverse()
+        logs.append({
+            'level': 'info',
+            'message': f"开始检查来源 {source['title']}：读取最近 {source_message_limit} 条消息。",
+            'sourceRef': source['ref'],
+            'sourceTitle': source['title']
+        })
         for message in messages:
             message_id = getattr(message, 'id', None)
             key = f"{source['ref']}:{message_id}" if message_id is not None else ''
             if key and key in seen_message_keys:
+                logs.append({
+                    'level': 'info',
+                    'message': f"消息 {message_id} 是旧消息，已跳过。",
+                    'sourceRef': source['ref'],
+                    'sourceTitle': source['title']
+                })
                 continue
             if key:
                 seen_message_keys.add(key)
                 new_seen_message_keys.append(key)
+                logs.append({
+                    'level': 'info',
+                    'message': f"扫到新消息 {message_id}，开始检查里面有没有可占用用户名。",
+                    'sourceRef': source['ref'],
+                    'sourceTitle': source['title']
+                })
 
             blob = _read_source_blob(message)
-            if not blob or not _matches_keywords(blob, include_keywords, exclude_keywords):
+            if not blob:
+                logs.append({
+                    'level': 'info',
+                    'message': f"消息 {message_id} 没有可分析内容，已跳过。",
+                    'sourceRef': source['ref'],
+                    'sourceTitle': source['title']
+                })
+                continue
+            if not _matches_keywords(blob, include_keywords, exclude_keywords):
+                logs.append({
+                    'level': 'info',
+                    'message': f"消息 {message_id} 没命中过滤条件，已跳过。",
+                    'sourceRef': source['ref'],
+                    'sourceTitle': source['title']
+                })
                 continue
 
             checked_message_count += 1
             text = _read_message_text(message)
+            found_any_candidate = False
 
             for found in _extract_candidates_from_text(blob):
+                found_any_candidate = True
                 normalized = _normalize_candidate(found)
-                candidate_key = str(normalized.get('normalized') or '').lower()
+                candidate_value = str(normalized.get('normalized') or found).strip()
+                candidate_key = candidate_value.lower()
                 if not normalized.get('candidate') or not candidate_key:
+                    logs.append({
+                        'level': 'warning',
+                        'message': f"提取到 {candidate_value}，但整理后不是可检查的公开用户名，已跳过。",
+                        'sourceRef': source['ref'],
+                        'sourceTitle': source['title'],
+                        'candidate': candidate_value
+                    })
                     continue
-                if candidate_key in handled_candidate_keys or candidate_key in handled_in_pass:
+                if candidate_key in handled_candidate_keys:
+                    logs.append({
+                        'level': 'info',
+                        'message': f"验证 {candidate_value}：这个名字之前已经处理过了，这次跳过。",
+                        'sourceRef': source['ref'],
+                        'sourceTitle': source['title'],
+                        'candidate': candidate_value
+                    })
+                    continue
+                if candidate_key in handled_in_pass:
+                    logs.append({
+                        'level': 'info',
+                        'message': f"验证 {candidate_value}：这一轮里已经检查过了，已跳过重复项。",
+                        'sourceRef': source['ref'],
+                        'sourceTitle': source['title'],
+                        'candidate': candidate_value
+                    })
                     continue
 
+                logs.append({
+                    'level': 'info',
+                    'message': f"验证 {candidate_value}：开始检查是否可占用。",
+                    'sourceRef': source['ref'],
+                    'sourceTitle': source['title'],
+                    'candidate': candidate_value
+                })
                 resolved = await _resolve_username_state(client, normalized)
                 candidate_count += 1
                 handled_in_pass.add(candidate_key)
+                resolved_category = resolved.get('category') or 'forbidden'
+                resolved_reason = resolved.get('reason') or ''
+                if resolved_category == 'occupiable':
+                    logs.append({
+                        'level': 'success',
+                        'message': f"验证 {candidate_value}：当前可占用。{resolved_reason}".strip(),
+                        'sourceRef': source['ref'],
+                        'sourceTitle': source['title'],
+                        'candidate': candidate_value
+                    })
+                elif resolved_category == 'valid':
+                    logs.append({
+                        'level': 'info',
+                        'message': f"验证 {candidate_value}：存在真实用户或已被占用，已跳过。{resolved_reason}".strip(),
+                        'sourceRef': source['ref'],
+                        'sourceTitle': source['title'],
+                        'candidate': candidate_value
+                    })
+                else:
+                    logs.append({
+                        'level': 'warning',
+                        'message': f"验证 {candidate_value}：当前不可用，已跳过。{resolved_reason}".strip(),
+                        'sourceRef': source['ref'],
+                        'sourceTitle': source['title'],
+                        'candidate': candidate_value
+                    })
                 items.append({
                     'raw': normalized.get('raw') or found,
                     'normalized': normalized.get('normalized') or found,
                     'kind': normalized.get('kind') or 'username',
-                    'category': resolved.get('category') or 'forbidden',
-                    'reason': resolved.get('reason') or '',
+                    'category': resolved_category,
+                    'reason': resolved_reason,
                     'entityType': resolved.get('entityType') or 'unknown',
                     'sourceRef': source['ref'],
                     'sourceTitle': source['title'],
@@ -541,13 +633,22 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                     'sourceDate': _read_message_date(message)
                 })
 
+            if not found_any_candidate:
+                logs.append({
+                    'level': 'info',
+                    'message': f"消息 {message_id} 没提取到 @username / t.me 用户名，已跳过。",
+                    'sourceRef': source['ref'],
+                    'sourceTitle': source['title']
+                })
+
     return {
         'expandedSourceCount': len(expanded_sources),
         'chatlistJoinCount': expanded['chatlist_join_count'],
         'checkedMessageCount': checked_message_count,
         'candidateCount': candidate_count,
         'newSeenMessageKeys': new_seen_message_keys,
-        'items': items
+        'items': items,
+        'logs': logs
     }
 
 

@@ -1091,7 +1091,7 @@ export class OtherToolsService {
 
   private pushSniperListenerLog(task: ActiveSniperListenerTask, entry: Omit<OtherToolsSniperListenerLogEntry, 'id' | 'createdAt'>) {
     const next = createSniperLogEntry(entry)
-    task.state.logs = [next, ...task.state.logs].slice(0, 80)
+    task.state.logs = [next, ...task.state.logs].slice(0, 300)
     task.state.message = next.message
     this.emitSniperListenerState(task)
   }
@@ -1559,6 +1559,17 @@ export class OtherToolsService {
             accountId: scanAccount.id,
             accountLabel: readCheckResultTitle(scanAccount)
           })
+          for (const detailLog of scanResult.logs ?? []) {
+            this.pushSniperListenerLog(task, {
+              level: detailLog.level,
+              message: detailLog.message,
+              sourceRef: detailLog.sourceRef,
+              sourceTitle: detailLog.sourceTitle,
+              candidate: detailLog.candidate,
+              accountId: scanAccount.id,
+              accountLabel: readCheckResultTitle(scanAccount)
+            })
+          }
 
           if (scanResult.chatlistJoinCount > 0) {
             this.pushSniperListenerLog(task, {

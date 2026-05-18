@@ -39,6 +39,14 @@ export interface TelethonSniperScanItem {
   sourceDate: string
 }
 
+interface TelethonSniperScanLogItem {
+  level: 'info' | 'success' | 'warning' | 'error'
+  message: string
+  sourceRef?: string
+  sourceTitle?: string
+  candidate?: string
+}
+
 export interface TelethonSniperScanResult {
   expandedSourceCount: number
   chatlistJoinCount: number
@@ -46,6 +54,7 @@ export interface TelethonSniperScanResult {
   candidateCount: number
   newSeenMessageKeys: string[]
   items: TelethonSniperScanItem[]
+  logs?: TelethonSniperScanLogItem[]
 }
 
 interface TelethonSniperScanPayload {
