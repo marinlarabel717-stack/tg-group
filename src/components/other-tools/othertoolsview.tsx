@@ -645,16 +645,7 @@ function SniperWorkbench() {
     <div className="space-y-5">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <GlassPanel className="bg-card">
-          <FoldSection title="傻瓜式设置" hint="就按下面 4 步填，别的默认不用管。">
-            <ConfigRow label="最简单用法" wide>
-              <div className="space-y-2 text-sm text-textMuted">
-                <div className="rounded-[14px] border border-emerald-400/15 bg-emerald-400/8 px-4 py-3 text-emerald-100">本页参数会自动记住，下次打开不用重新配。</div>
-                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">1.</span> 把你要盯的频道 / 群 / addlist 链接贴进去。</div>
-                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">2.</span> 选好本次任务要用的账号，比如这次就用 10 个号。</div>
-                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">3.</span> 这次任务只会用你选中的这些号来订阅来源、监听消息、自动建频道。</div>
-                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">4.</span> 点 <span className="text-emerald-200">开始监听</span>，选中的号用完了、都封禁/冻结了，这次任务就结束。</div>
-              </div>
-            </ConfigRow>
+          <FoldSection title="傻瓜式设置" hint="这页现在尽量只留参数名；鼠标移到 ? 上看详细说明。本页参数会自动记住，下次打开不用重新配。">
             <ConfigRow label="监听哪些来源" hint="一行一个。支持频道、群、机器人链接，也支持 t.me/addlist/...。" wide>
               <div className="space-y-2">
                 <textarea value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} rows={8} placeholder="例如：@channel_name\nhttps://t.me/xxxx_channel\nhttps://t.me/addlist/xxxxxx" className={`w-full rounded-[12px] px-3 py-3 ${SOFT_INPUT_CLASS}`} />
@@ -686,11 +677,6 @@ function SniperWorkbench() {
                     {subscribeSelectedAccounts.length > 6 ? <div className="px-1 text-xs text-textMuted">其余 {subscribeSelectedAccounts.length - 6} 个账号已折叠显示。</div> : null}
                   </div>
                 )}
-              </div>
-            </ConfigRow>
-            <ConfigRow label="角色分配" hint="不用再单独选监听号、抢注号、建频道号。" wide>
-              <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-sm text-textMuted">
-                系统会只在你这次选中的任务账号里，自动分配谁来订阅来源、谁来监听、谁来抢名字、谁来建频道。
               </div>
             </ConfigRow>
             <ConfigRow label="备用空频道（可选）" hint="有的话就填进去；不填也行，系统会自动新建频道去占。" wide>
@@ -737,11 +723,6 @@ function SniperWorkbench() {
             <ConfigRow label="单轮最多处理多少个名字" hint="防止一次扫太多。">
               <input type="number" min={1} max={500} value={candidateLimit} onChange={(event) => setCandidateLimit(Math.max(1, Math.min(500, Number(event.target.value) || 80)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
-            <ConfigRow label="角色说明" hint="所有角色都只在本次任务账号池里自动轮换。" wide>
-              <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-sm text-textMuted">
-                当前不需要你手动指定“谁来监听 / 谁来抢 / 谁来建频道”。如果某个号封禁、冻结、登录失效，系统会只在这次选中的任务账号里切下一个；这批号都不行了，本次任务就结束。
-              </div>
-            </ConfigRow>
             <ConfigRow label="自动新建频道名称" hint="支持 {candidate} / {accountId} / {index}。" wide>
               <input value={createCarrierTitleTemplate} onChange={(event) => setCreateCarrierTitleTemplate(event.target.value)} placeholder="监听占位_{candidate}" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
@@ -778,7 +759,7 @@ function SniperWorkbench() {
 
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <FoldSection title="开始监听" hint="点一次就直接进入监听，不再分巡检和监听两套。">
+            <FoldSection title="开始监听" hint="点一次就直接进入监听，不再分巡检和监听两套。默认每 5 秒检查一次，每个来源每轮只看最近 2 条；首次启动先对齐旧帖，后面只盯新帖。">
               <div className="space-y-3 px-3 py-3 text-sm">
                 <div className="text-sm text-white">启动 / 停止</div>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -800,7 +781,6 @@ function SniperWorkbench() {
                     停止监听
                   </button>
                 </div>
-                <div className="text-xs text-textMuted">默认每 5 秒检查一次，每个来源每轮只看最近 2 条，首次启动先对齐旧帖，后面只要有新帖就立刻扫用户名能不能抢，命中后会自动抢，池子不够就自动新建频道。</div>
                 {listenerState?.message ? <div className="rounded-[12px] border border-emerald-400/10 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-100">{listenerState.message}</div> : null}
               </div>
             </FoldSection>
@@ -841,7 +821,7 @@ function SniperWorkbench() {
           </GlassPanel>
 
           <GlassPanel className="bg-card">
-            <FoldSection title="抢注系统的运行日志" hint="开始监听后，日志直接显示在这里，不再跳日志中心。">
+            <FoldSection title="抢注系统的运行日志" hint="开始监听后，日志直接显示在这里，不再跳日志中心；最新日志会持续追加在这里。">
               <div className="space-y-3 px-3 py-3 text-sm">
                 {listenerState?.logs && listenerState.logs.length > 0 ? (
                   <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
