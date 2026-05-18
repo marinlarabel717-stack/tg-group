@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, CircleHelp } from 'lucide-react'
+import { ChevronDown, ChevronRight, Info } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
 export const SOFT_INPUT_CLASS = 'border border-white/[0.06] bg-black/10 text-white outline-none transition focus:border-white/[0.12] focus:bg-black/12'
@@ -11,8 +11,11 @@ function HintTooltip(props: { text: string }) {
   const { text } = props
   return (
     <span className="group/tooltip relative inline-flex items-center align-middle">
-      <span className="inline-flex h-[18px] w-[18px] cursor-help items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-textMuted transition hover:border-white/18 hover:bg-white/[0.06] hover:text-white" title={text}>
-        <CircleHelp size={12} strokeWidth={1.9} />
+      <span
+        className="inline-flex h-[14px] w-[14px] cursor-help items-center justify-center text-white/32 transition hover:text-white/72"
+        aria-label={text}
+      >
+        <Info size={12} strokeWidth={2} />
       </span>
       <span className="pointer-events-none absolute left-0 top-[calc(100%+8px)] z-30 w-[260px] rounded-[10px] border border-white/10 bg-[#6f86ba]/95 px-3 py-2 text-left text-xs leading-5 text-white opacity-0 shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition duration-150 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100">
         {text}
