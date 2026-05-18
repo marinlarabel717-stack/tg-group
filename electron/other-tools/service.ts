@@ -934,9 +934,9 @@ async function joinPublicSource(client: TelegramClient, ref: string) {
   }
   if (await isAlreadyInChannel(client, resolved.entity)) {
     return {
-      status: 'already' as const,
+      status: 'skipped' as const,
       source: resolved,
-      message: '这个账号已经在该频道/群里了。'
+      message: '已加入，跳过。'
     }
   }
   await client.invoke(new Api.channels.JoinChannel({ channel: resolved.entity as never }))
@@ -981,16 +981,6 @@ async function subscribeSourcesForAccount(client: TelegramClient, account: Accou
         )
         const peersToJoin = inviteChats.filter((entity) => missingPeerKeys.size === 0 || missingPeerKeys.has(readEntityPeerKey(entity)))
         if (peersToJoin.length === 0) {
-          items.push({
-            id: createId('subscribe-item'),
-            accountId: account.id,
-            accountLabel: readCheckResultTitle(account),
-            sourceRef: ref,
-            sourceTitle: '分组分享链接',
-            sourceKind: 'chatlist',
-            status: 'already',
-            message: '这个账号已经导入过该分组里的目标，当前没有新的频道/群需要加入。'
-          })
           continue
         }
         await client.invoke(new Api.chatlists.JoinChatlistInvite({ slug, peers: peersToJoin as never }))
@@ -1006,6 +996,9 @@ async function subscribeSourcesForAccount(client: TelegramClient, account: Accou
         })
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
+        if (/FILTER_INCLUDE_EMPTY/i.test(message)) {
+          continue
+        }
         items.push({
           id: createId('subscribe-item'),
           accountId: account.id,
@@ -1013,7 +1006,7 @@ async function subscribeSourcesForAccount(client: TelegramClient, account: Accou
           sourceRef: ref,
           sourceTitle: '分组分享链接',
           sourceKind: 'chatlist',
-          status: /FILTER_INCLUDE_EMPTY/i.test(message) ? 'already' : 'failed',
+          status: 'failed',
           message: formatSourceSubscribeError(error)
         })
       }
@@ -2076,11 +2069,11 @@ export class OtherToolsService {
             const accountItems = await subscribeSourcesForAccount(client, account, sourceRefs)
             subscribeItems.push(...accountItems)
             const joinedCount = accountItems.filter((item) => item.status === 'joined').length
-            const alreadyCount = accountItems.filter((item) => item.status === 'already').length
+            const skippedCount = accountItems.filter((item) => item.status === 'skipped' || item.status === 'already').length
             const failedCount = accountItems.filter((item) => item.status === 'failed').length
             pushRunLog({
               level: failedCount > 0 ? 'warning' : 'success',
-              message: `${readCheckResultTitle(account)} 来源订阅完成：成功 ${joinedCount}，已在内 ${alreadyCount}，失败 ${failedCount}。`,
+              message: `${readCheckResultTitle(account)} 来源订阅完成：成功 ${joinedCount}，跳过 ${skippedCount}，失败 ${failedCount}。`,
               accountId: account.id,
               accountLabel: readCheckResultTitle(account)
             })
@@ -2414,7 +2407,7 @@ export class OtherToolsService {
       const subscribeJoinedCount = subscribeItems.filter((item) => item.status === 'joined').length
       const subscribeAlreadyCount = subscribeItems.filter((item) => item.status === 'already').length
       const subscribeFailedCount = subscribeItems.filter((item) => item.status === 'failed').length
-      const subscribeSkippedCount = subscribeItems.filter((item) => item.status === 'skipped').length
+      const subscribeSkippedCount = subscribeItems.filter((item) => item.status === 'skipped' || item.status === 'already').length
 
       const summaryParts = [
         `已处理 ${sourceRefs.length} 个白名单来源`,
@@ -2423,7 +2416,7 @@ export class OtherToolsService {
         `可抢 ${claimable.length} 条`
       ]
       if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
-        summaryParts.push(`订阅账号 ${subscribeAccounts.length} 个，成功 ${subscribeJoinedCount}，已在内 ${subscribeAlreadyCount}，失败 ${subscribeFailedCount}`)
+        summaryParts.push(`订阅账号 ${subscribeAccounts.length} 个，成功 ${subscribeJoinedCount}，跳过 ${subscribeSkippedCount}，失败 ${subscribeFailedCount}`)
       }
       if (chatlistJoinCount > 0) {
         summaryParts.push(`监听账号经分组链接导入 ${chatlistJoinCount} 个目标`)
