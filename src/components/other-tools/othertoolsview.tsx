@@ -571,9 +571,9 @@ function SniperWorkbench() {
             <ConfigRow label="最简单用法" wide>
               <div className="space-y-2 text-sm text-textMuted">
                 <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">1.</span> 把你要盯的频道 / 群 / addlist 链接贴进去。</div>
-                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">2.</span> 选一批账号先去加入这些来源。</div>
-                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">3.</span> 账号不懂就留空，系统会自动从账号池挑能用的。</div>
-                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">4.</span> 点 <span className="text-emerald-200">开始监听</span>，后面就一直盯新帖；命中可抢名会自动抢，池子不够就自动新建频道。</div>
+                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">2.</span> 选好本次任务要用的账号，比如这次就用 10 个号。</div>
+                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">3.</span> 这次任务只会用你选中的这些号来订阅来源、监听消息、自动建频道。</div>
+                <div className="rounded-[14px] bg-panel/70 px-4 py-3"><span className="text-white">4.</span> 点 <span className="text-emerald-200">开始监听</span>，选中的号用完了、都封禁/冻结了，这次任务就结束。</div>
               </div>
             </ConfigRow>
             <ConfigRow label="监听哪些来源" hint="一行一个。支持频道、群、机器人链接，也支持 t.me/addlist/...。" wide>
@@ -582,14 +582,14 @@ function SniperWorkbench() {
                 <div className="text-xs text-textMuted">当前 {sourcePreviewCount} 个来源。</div>
               </div>
             </ConfigRow>
-            <ConfigRow label="先去加入来源的账号" hint="这些账号会先把来源加进去，后面监听更稳。" wide>
+            <ConfigRow label="本次任务用哪些账号" hint="这次任务只会用你选中的这些号，不会去动账号列表里的其他号。" wide>
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-sm text-white">已选 {subscribeSelectedAccounts.length} 个账号</div>
+                  <div className="text-sm text-white">本次任务已选 {subscribeSelectedAccounts.length} 个账号</div>
                   <button type="button" onClick={() => setPickerOpen(true)} className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]">选择账号</button>
                 </div>
                 {subscribeSelectedAccounts.length === 0 ? (
-                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-sm text-textMuted">还没选账号。</div>
+                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-sm text-textMuted">还没选任务账号。</div>
                 ) : (
                   <div className="space-y-2 rounded-[12px] border border-white/[0.06] bg-black/[0.08] p-3">
                     {subscribeSelectedAccounts.slice(0, 6).map((account) => {
@@ -609,13 +609,13 @@ function SniperWorkbench() {
                 )}
               </div>
             </ConfigRow>
-            <ConfigRow label="谁来盯新帖" hint="不懂就留空，系统自动挑一个能用的。" wide>
+            <ConfigRow label="谁来盯新帖" hint="不选也行，系统会只在你选中的任务账号里自动挑一个。" wide>
               <select value={scanAccountId} onChange={(event) => setScanAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
                 <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
                 {accounts.map((account) => <option key={`scan_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}
               </select>
             </ConfigRow>
-            <ConfigRow label="谁来抢名字" hint="不选也行，系统会自动从账号池挑一个能用的。" wide>
+            <ConfigRow label="谁来抢名字" hint="不选也行，系统会只在你选中的任务账号里自动挑一个。" wide>
               <select value={claimAccountId} onChange={(event) => setClaimAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
                 <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
                 {accounts.map((account) => <option key={`claim_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}
@@ -644,10 +644,10 @@ function SniperWorkbench() {
           <div className="mt-4" />
 
           <FoldSection title="高级设置" hint="看不懂就别动，默认值已经能跑。" defaultOpen={false}>
-            <ConfigRow label="先帮账号加入来源" hint="建议保持开启。" wide>
+            <ConfigRow label="先让这些任务账号加入来源" hint="建议保持开启。" wide>
               <label className="inline-flex items-center gap-3 text-sm text-white">
                 <input type="checkbox" checked={autoSubscribeSources} onChange={(event) => setAutoSubscribeSources(event.target.checked)} />
-                启动前先批量加入来源
+                启动前先让选中的账号批量加入来源
               </label>
             </ConfigRow>
             <ConfigRow label="只盯这些关键词（可空）" hint="留空就是全部都看。" wide>
@@ -665,7 +665,7 @@ function SniperWorkbench() {
             <ConfigRow label="单轮最多处理多少个名字" hint="防止一次扫太多。">
               <input type="number" min={1} max={500} value={candidateLimit} onChange={(event) => setCandidateLimit(Math.max(1, Math.min(500, Number(event.target.value) || 80)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
-            <ConfigRow label="自动建频道用哪个账号" hint="不选也行，系统会自动从账号池挑一个能用的。" wide>
+            <ConfigRow label="自动建频道用哪个账号" hint="不选也行，系统会只在你选中的任务账号里自动挑一个。" wide>
               <select value={createCarrierAccountId} onChange={(event) => setCreateCarrierAccountId(event.target.value)} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}>
                 <option value="" className={SOFT_SELECT_OPTION_CLASS}>自动选择</option>
                 {accounts.map((account) => <option key={`create_carrier_${account.id}`} value={String(account.id)} className={SOFT_SELECT_OPTION_CLASS}>{readAccountOptionLabel(account)}</option>)}

@@ -675,6 +675,9 @@ function isFatalAccountError(error: unknown) {
   if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(message)) {
     return { status: 'banned' as const, message: '账号封禁' }
   }
+  if (/FROZEN|USER_DEACTIVATED|INPUT_FETCH_ERROR/i.test(message)) {
+    return { status: 'frozen' as const, message: '账号冻结' }
+  }
   if (/ACCOUNT_RESTRICTED/i.test(message)) {
     return { status: 'not_logged_in' as const, message: '账号受限' }
   }
@@ -1084,6 +1087,25 @@ export class OtherToolsService {
     this.emitSniperListenerState(task)
   }
 
+  private resolveSniperTaskAccounts(accounts: AccountRecord[], selectedIds: Array<number | null | undefined>) {
+    const normalizedIds = Array.from(new Set(selectedIds.filter((item): item is number => typeof item === 'number' && Number.isFinite(item))))
+    if (normalizedIds.length === 0) {
+      throw new Error('先选本次任务要用的账号。')
+    }
+
+    const selectedAccounts = accounts.filter((account) => normalizedIds.includes(account.id))
+    if (selectedAccounts.length === 0) {
+      throw new Error('你选的任务账号当前都找不到了。')
+    }
+
+    const availableAccounts = selectedAccounts.filter((account) => !['banned', 'frozen', 'session_expired', 'not_logged_in'].includes(account.status))
+    if (availableAccounts.length === 0) {
+      throw new Error('你选的任务账号当前都不可用，任务没法开始。')
+    }
+
+    return availableAccounts
+  }
+
   private async resolveSniperAccountClient(options: {
     accounts: AccountRecord[]
     preferredIds?: Array<number | null | undefined>
@@ -1255,43 +1277,42 @@ export class OtherToolsService {
     }
 
     const accounts = this.repository.list()
+    const selectedTaskAccountIds = Array.from(new Set((payload.subscribeAccountIds ?? []).filter((item): item is number => typeof item === 'number')))
+    const taskAccounts = this.resolveSniperTaskAccounts(accounts, selectedTaskAccountIds)
     const scanSelection = await this.resolveSniperAccountClient({
-      accounts,
+      accounts: taskAccounts,
       preferredIds: [payload.scanAccountId ?? null],
       roleLabel: '监听'
     })
-    const scanAccount = scanSelection.account
+    let scanAccount = scanSelection.account
 
     const claimSelection = payload.autoClaim
       ? await this.resolveSniperAccountClient({
-        accounts,
+        accounts: taskAccounts,
         preferredIds: [payload.claimAccountId ?? null, payload.scanAccountId ?? null, scanAccount.id],
         roleLabel: '抢注',
         existing: [scanSelection]
       })
       : null
-    const claimAccount = claimSelection?.account ?? null
+    let claimAccount = claimSelection?.account ?? null
     if (payload.autoClaim && !claimAccount && !payload.autoCreateCarrier) {
       throw new Error('当前没有可用抢注账号。')
     }
 
     const createCarrierSelection = payload.autoCreateCarrier
       ? await this.resolveSniperAccountClient({
-        accounts,
+        accounts: taskAccounts,
         preferredIds: [payload.createCarrierAccountId ?? null, payload.claimAccountId ?? null, payload.scanAccountId ?? null, claimAccount?.id ?? null, scanAccount.id],
         roleLabel: '建池',
         existing: [scanSelection, ...(claimSelection ? [claimSelection] : [])]
       })
       : null
-    const createCarrierAccount = createCarrierSelection?.account ?? null
+    let createCarrierAccount = createCarrierSelection?.account ?? null
     if (payload.autoCreateCarrier && !createCarrierAccount) {
       throw new Error('已开启自动建频道占位，但当前没有可用建池账号。')
     }
 
-    const subscribeAccountIds = Array.from(new Set((payload.subscribeAccountIds ?? []).filter((item): item is number => typeof item === 'number')))
-    const subscribeAccounts = payload.autoSubscribeSources
-      ? accounts.filter((account) => subscribeAccountIds.includes(account.id) && !['banned', 'frozen', 'session_expired', 'not_logged_in'].includes(account.status))
-      : []
+    const subscribeAccounts = payload.autoSubscribeSources ? taskAccounts : []
     const pollIntervalSeconds = Math.max(5, Math.min(300, Math.trunc(payload.pollIntervalSeconds || 15)))
     const sourceLimit = Math.max(1, Math.min(100, Math.trunc(payload.sourceMessageLimit || 20)))
     const candidateLimit = Math.max(1, Math.min(500, Math.trunc(payload.candidateLimit || 100)))
@@ -1346,6 +1367,82 @@ export class OtherToolsService {
         task.claimClient = claimSelection?.client ?? null
         task.createCarrierClient = createCarrierSelection?.client ?? null
 
+        const switchRoleAccount = async (role: 'scan' | 'claim' | 'createCarrier', reason: string) => {
+          const roleLabel = role === 'scan' ? '监听' : role === 'claim' ? '抢注' : '建池'
+          const previousAccount = role === 'scan' ? scanAccount : role === 'claim' ? claimAccount : createCarrierAccount
+          const previousClient = role === 'scan' ? task.scanClient : role === 'claim' ? task.claimClient : task.createCarrierClient
+
+          try {
+            const next = await this.resolveSniperAccountClient({
+              accounts: taskAccounts,
+              preferredIds: role === 'scan'
+                ? [payload.scanAccountId ?? null]
+                : role === 'claim'
+                  ? [payload.claimAccountId ?? null, payload.scanAccountId ?? null]
+                  : [payload.createCarrierAccountId ?? null, payload.claimAccountId ?? null, payload.scanAccountId ?? null],
+              roleLabel,
+              existing: [
+                ...(role !== 'scan' && task.scanClient ? [{ account: scanAccount, client: task.scanClient }] : []),
+                ...(role !== 'claim' && claimAccount && task.claimClient ? [{ account: claimAccount, client: task.claimClient }] : []),
+                ...(role !== 'createCarrier' && createCarrierAccount && task.createCarrierClient ? [{ account: createCarrierAccount, client: task.createCarrierClient }] : [])
+              ]
+            })
+
+            const otherClients = [
+              role !== 'scan' ? task.scanClient : null,
+              role !== 'claim' ? task.claimClient : null,
+              role !== 'createCarrier' ? task.createCarrierClient : null
+            ].filter((client): client is TelegramClient => Boolean(client))
+
+            if (previousClient && previousClient !== next.client && !otherClients.includes(previousClient)) {
+              await this.clientManager.destroyClient(previousClient).catch(() => undefined)
+            }
+
+            if (role === 'scan') {
+              scanAccount = next.account
+              task.scanClient = next.client
+              task.state.scanAccountId = next.account.id
+              task.state.scanAccountLabel = readCheckResultTitle(next.account)
+            } else if (role === 'claim') {
+              claimAccount = next.account
+              task.claimClient = next.client
+              task.state.claimAccountId = next.account.id
+              task.state.claimAccountLabel = readCheckResultTitle(next.account)
+            } else {
+              createCarrierAccount = next.account
+              task.createCarrierClient = next.client
+              task.state.createCarrierAccountId = next.account.id
+              task.state.createCarrierAccountLabel = readCheckResultTitle(next.account)
+            }
+
+            this.pushSniperListenerLog(task, {
+              level: 'warning',
+              message: `${roleLabel}账号 ${readCheckResultTitle(previousAccount)} 已不可用，已切到 ${readCheckResultTitle(next.account)} 继续任务。原因：${reason}`,
+              accountId: next.account.id,
+              accountLabel: readCheckResultTitle(next.account)
+            })
+            return true
+          } catch (switchError) {
+            if (role === 'claim') {
+              claimAccount = null
+              task.claimClient = null
+              task.state.claimAccountId = null
+              task.state.claimAccountLabel = ''
+            }
+            if (role === 'createCarrier') {
+              createCarrierAccount = null
+              task.createCarrierClient = null
+              task.state.createCarrierAccountId = null
+              task.state.createCarrierAccountLabel = ''
+            }
+            this.pushSniperListenerLog(task, {
+              level: 'error',
+              message: `${roleLabel}账号池已经耗尽：${switchError instanceof Error ? switchError.message : String(switchError)}`
+            })
+            return false
+          }
+        }
+
         if (payload.autoSubscribeSources && subscribeAccounts.length > 0) {
           for (const account of subscribeAccounts) {
             let client = task.subscribeClients.get(account.id) ?? null
@@ -1382,10 +1479,14 @@ export class OtherToolsService {
           accountId: scanAccount.id,
           accountLabel: readCheckResultTitle(scanAccount)
         })
+        this.pushSniperListenerLog(task, {
+          level: 'info',
+          message: `本次任务只会使用你选中的 ${taskAccounts.length} 个账号，不会去动账号列表里的其他号。`
+        })
         if (!payload.scanAccountId || (payload.autoClaim && !payload.claimAccountId) || (payload.autoCreateCarrier && !payload.createCarrierAccountId)) {
           this.pushSniperListenerLog(task, {
             level: 'info',
-            message: `未手动指定的账号已自动从账号池挑选：监听 ${readCheckResultTitle(scanAccount)}${claimAccount ? `，抢注 ${readCheckResultTitle(claimAccount)}` : ''}${createCarrierAccount ? `，建频道 ${readCheckResultTitle(createCarrierAccount)}` : ''}。`
+            message: `未手动指定的角色已从这 ${taskAccounts.length} 个任务账号里自动挑选：监听 ${readCheckResultTitle(scanAccount)}${claimAccount ? `，抢注 ${readCheckResultTitle(claimAccount)}` : ''}${createCarrierAccount ? `，建频道 ${readCheckResultTitle(createCarrierAccount)}` : ''}。`
           })
         }
 
@@ -1393,17 +1494,33 @@ export class OtherToolsService {
           task.state.lastTickAt = new Date().toISOString()
           this.emitSniperListenerState(task)
 
-          const scanResult = await this.telethonSniperService.scanSources({
-            sessionPath: scanAccount.sessionPath,
-            sourceRefs,
-            sourceMessageLimit: sourceLimit,
-            includeKeywords,
-            excludeKeywords,
-            seenMessageKeys: Array.from(task.seenMessageKeys),
-            handledCandidateKeys: Array.from(task.handledCandidateKeys),
-            joinChatlists: joinChatlistsOnFirstTick,
-            proxy: readCurrentProxyOrThrow(this.proxyPoolService)
-          })
+          let scanResult
+          try {
+            scanResult = await this.telethonSniperService.scanSources({
+              sessionPath: scanAccount.sessionPath,
+              sourceRefs,
+              sourceMessageLimit: sourceLimit,
+              includeKeywords,
+              excludeKeywords,
+              seenMessageKeys: Array.from(task.seenMessageKeys),
+              handledCandidateKeys: Array.from(task.handledCandidateKeys),
+              joinChatlists: joinChatlistsOnFirstTick,
+              proxy: readCurrentProxyOrThrow(this.proxyPoolService)
+            })
+          } catch (error) {
+            const fatal = isFatalAccountError(error)
+            if (fatal) {
+              this.repository.updateStatus([scanAccount.id], fatal.status)
+              const switched = await switchRoleAccount('scan', fatal.message)
+              if (!switched) {
+                task.state.message = '你选的任务账号都已经不可用，监听任务结束。'
+                break
+              }
+              joinChatlistsOnFirstTick = true
+              continue
+            }
+            throw error
+          }
           joinChatlistsOnFirstTick = false
 
           task.state.expandedSourceCount = scanResult.expandedSourceCount
@@ -1461,12 +1578,16 @@ export class OtherToolsService {
               continue
             }
 
+            let attemptedRole: 'claim' | 'createCarrier' | null = null
+            let attemptedAccount: AccountRecord | null = null
             try {
               let claimed: ListenerClaimResult | null = null
               let claimByAccount: AccountRecord | null = claimAccount
               const proxy = readCurrentProxyOrThrow(this.proxyPoolService)
 
               if (carrierIndex < poolRefs.length && claimAccount) {
+                attemptedRole = 'claim'
+                attemptedAccount = claimAccount
                 const poolClaimed = await this.telethonSniperService.claimWithPool({
                   sessionPath: claimAccount.sessionPath,
                   carrierRef: poolRefs[carrierIndex],
@@ -1479,6 +1600,8 @@ export class OtherToolsService {
                 }
                 carrierIndex += 1
               } else if (payload.autoCreateCarrier && createCarrierAccount) {
+                attemptedRole = 'createCarrier'
+                attemptedAccount = createCarrierAccount
                 const createdClaim = await this.telethonSniperService.createCarrierAndClaim({
                   sessionPath: createCarrierAccount.sessionPath,
                   normalizedCandidate: item.normalized,
@@ -1549,9 +1672,14 @@ export class OtherToolsService {
             } catch (error) {
               const fatal = isFatalAccountError(error)
               if (fatal) {
-                const fatalAccountId = createCarrierAccount?.id ?? claimAccount?.id ?? null
+                const fatalAccountId = attemptedAccount?.id ?? null
                 if (fatalAccountId) {
                   this.repository.updateStatus([fatalAccountId], fatal.status)
+                }
+                const switched = attemptedRole ? await switchRoleAccount(attemptedRole, fatal.message) : false
+                if (!switched && !claimAccount && !createCarrierAccount) {
+                  task.state.message = '你选的任务账号都已经不可用，监听任务结束。'
+                  task.cancelled = true
                 }
               }
               this.pushSniperListenerLog(task, {
@@ -1560,8 +1688,8 @@ export class OtherToolsService {
                 sourceRef: item.sourceRef,
                 sourceTitle: item.sourceTitle,
                 candidate: item.normalized,
-                accountId: createCarrierAccount?.id ?? claimAccount?.id ?? null,
-                accountLabel: readCheckResultTitle(createCarrierAccount ?? claimAccount)
+                accountId: attemptedAccount?.id ?? null,
+                accountLabel: readCheckResultTitle(attemptedAccount)
               })
             }
 
@@ -1632,8 +1760,10 @@ export class OtherToolsService {
     }
 
     const accounts = this.repository.list()
+    const selectedTaskAccountIds = Array.from(new Set((payload.subscribeAccountIds ?? []).filter((item): item is number => typeof item === 'number')))
+    const taskAccounts = this.resolveSniperTaskAccounts(accounts, selectedTaskAccountIds)
     const scanSelection = await this.resolveSniperAccountClient({
-      accounts,
+      accounts: taskAccounts,
       preferredIds: [payload.scanAccountId ?? null],
       roleLabel: '监听'
     })
@@ -1641,7 +1771,7 @@ export class OtherToolsService {
 
     const claimSelection = payload.autoClaim
       ? await this.resolveSniperAccountClient({
-        accounts,
+        accounts: taskAccounts,
         preferredIds: [payload.claimAccountId ?? null, payload.scanAccountId ?? null, scanAccount.id],
         roleLabel: '抢注',
         existing: [scanSelection]
@@ -1651,17 +1781,14 @@ export class OtherToolsService {
     const autoCreateCarrier = Boolean(payload.autoCreateCarrier)
     const createCarrierSelection = autoCreateCarrier
       ? await this.resolveSniperAccountClient({
-        accounts,
+        accounts: taskAccounts,
         preferredIds: [payload.createCarrierAccountId ?? null, payload.claimAccountId ?? null, payload.scanAccountId ?? null, claimAccount?.id ?? null, scanAccount.id],
         roleLabel: '建池',
         existing: [scanSelection, ...(claimSelection ? [claimSelection] : [])]
       })
       : null
     const createCarrierAccount = createCarrierSelection?.account ?? null
-    const subscribeAccountIds = Array.from(new Set((payload.subscribeAccountIds ?? []).filter((item): item is number => typeof item === 'number')))
-    const subscribeAccounts = payload.autoSubscribeSources
-      ? accounts.filter((account) => subscribeAccountIds.includes(account.id) && !['banned', 'frozen', 'session_expired', 'not_logged_in'].includes(account.status))
-      : []
+    const subscribeAccounts = payload.autoSubscribeSources ? taskAccounts : []
     if (payload.autoClaim && !claimAccount && !autoCreateCarrier) {
       throw new Error('当前没有可用抢注账号。')
     }
@@ -1707,10 +1834,14 @@ export class OtherToolsService {
         accountId: scanAccount.id,
         accountLabel: readCheckResultTitle(scanAccount)
       })
+      pushRunLog({
+        level: 'info',
+        message: `本次任务只会使用你选中的 ${taskAccounts.length} 个账号，不会去动账号列表里的其他号。`
+      })
       if (!payload.scanAccountId || (payload.autoClaim && !payload.claimAccountId) || (autoCreateCarrier && !payload.createCarrierAccountId)) {
         pushRunLog({
           level: 'info',
-          message: `账号未手动指定的部分，已自动从账号池选择：监听 ${readCheckResultTitle(scanAccount)}${claimAccount ? `，抢注 ${readCheckResultTitle(claimAccount)}` : ''}${createCarrierAccount ? `，建频道 ${readCheckResultTitle(createCarrierAccount)}` : ''}。`
+          message: `账号未手动指定的部分，已从这 ${taskAccounts.length} 个任务账号里自动选择：监听 ${readCheckResultTitle(scanAccount)}${claimAccount ? `，抢注 ${readCheckResultTitle(claimAccount)}` : ''}${createCarrierAccount ? `，建频道 ${readCheckResultTitle(createCarrierAccount)}` : ''}。`
         })
       }
 
