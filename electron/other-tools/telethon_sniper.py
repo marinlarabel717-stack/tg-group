@@ -18,6 +18,28 @@ USERNAME_AT_RE = re.compile(r'@([A-Za-z0-9_]{5,32})\b')
 CHATLIST_RE = re.compile(r'(?:https?://)?t\.me/addlist/([A-Za-z0-9_-]+)', re.I)
 
 
+def _format_source_subscribe_error(error: Exception) -> str:
+    message = str(error or '')
+    upper = message.upper()
+    if 'FILTER_INCLUDE_EMPTY' in upper:
+        return '这个分组当前没有新的频道/群需要加入。'
+    if 'CHATLISTS_TOO_MUCH' in upper:
+        return '这个账号可导入的分组太多了，Telegram 不让再加新的分组。'
+    if 'USER_ALREADY_PARTICIPANT' in upper or 'ALREADY_PARTICIPANT' in upper:
+        return '这个账号已经在目标里了。'
+    if 'CHANNELS_TOO_MUCH' in upper or 'USER_CHANNELS_TOO_MUCH' in upper:
+        return '这个账号加入得太多了，Telegram 不让继续加。'
+    if 'INVITE_SLUG_EXPIRED' in upper or 'SLUG_EXPIRED' in upper:
+        return '这个分组分享链接已经失效了。'
+    if 'CHANNEL_PRIVATE' in upper or 'CHAT_ADMIN_REQUIRED' in upper:
+        return '加入失败：当前账号没权限进入这个来源。'
+    if 'USERNAME_INVALID' in upper:
+        return '加入失败：这个来源链接格式不对。'
+    if 'TIMEOUT' in upper:
+        return '加入失败：Telegram 太久没响应。'
+    return f'加入失败：{message or "未知错误"}'
+
+
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
@@ -485,6 +507,92 @@ async def _expand_source_entities(client: Any, refs: List[str], join_chatlists: 
     }
 
 
+async def _join_public_source(client: Any, ref: str) -> Dict[str, Any]:
+    entity = await _resolve_entity(client, ref)
+    source_ref = _build_entity_ref(entity, ref)
+    source_title = _read_title_from_entity(entity)
+    source_kind = _read_entity_type(entity)
+
+    if source_kind not in {'channel', 'group'}:
+        return {
+            'sourceRef': source_ref,
+            'sourceTitle': source_title,
+            'sourceKind': source_kind if source_kind in {'bot'} else 'unknown',
+            'status': 'skipped',
+            'message': '这个来源不是可加入的频道/群，已跳过。'
+        }
+
+    try:
+        await client(functions.channels.JoinChannelRequest(channel=entity))
+        return {
+            'sourceRef': source_ref,
+            'sourceTitle': source_title,
+            'sourceKind': source_kind,
+            'status': 'joined',
+            'message': '已成功加入这个频道/群。'
+        }
+    except Exception as error:
+        upper = str(error or '').upper()
+        if 'USER_ALREADY_PARTICIPANT' in upper or 'ALREADY_PARTICIPANT' in upper:
+            return {
+                'sourceRef': source_ref,
+                'sourceTitle': source_title,
+                'sourceKind': source_kind,
+                'status': 'skipped',
+                'message': '已加入，跳过。'
+            }
+        raise
+
+
+async def _subscribe_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
+    refs = [str(item).strip() for item in list(command.get('sourceRefs') or []) if str(item).strip()]
+    items: List[Dict[str, Any]] = []
+
+    for ref in refs:
+        slug = _extract_chatlist_slug(ref)
+        if slug:
+            try:
+                invite = await client(functions.chatlists.CheckChatlistInviteRequest(slug=slug))
+                invite_chats = [chat for chat in list(getattr(invite, 'chats', None) or []) if _read_entity_type(chat) in {'channel', 'group'}]
+                missing_peer_keys = {_read_peer_id(peer) for peer in list(getattr(invite, 'missing_peers', None) or []) if _read_peer_id(peer)}
+                peers_to_join = [chat for chat in invite_chats if not missing_peer_keys or _read_peer_id(chat) in missing_peer_keys]
+                if not peers_to_join:
+                    continue
+                input_peers = [await client.get_input_entity(chat) for chat in peers_to_join]
+                await client(functions.chatlists.JoinChatlistInviteRequest(slug=slug, peers=input_peers))
+                items.append({
+                    'sourceRef': ref,
+                    'sourceTitle': '分组分享链接',
+                    'sourceKind': 'chatlist',
+                    'status': 'joined',
+                    'message': f'已通过分组链接导入 {len(peers_to_join)} 个频道/群。'
+                })
+            except Exception as error:
+                if 'FILTER_INCLUDE_EMPTY' in str(error or '').upper():
+                    continue
+                items.append({
+                    'sourceRef': ref,
+                    'sourceTitle': '分组分享链接',
+                    'sourceKind': 'chatlist',
+                    'status': 'failed',
+                    'message': _format_source_subscribe_error(error)
+                })
+            continue
+
+        try:
+            items.append(await _join_public_source(client, ref))
+        except Exception as error:
+            items.append({
+                'sourceRef': ref,
+                'sourceTitle': ref,
+                'sourceKind': 'unknown',
+                'status': 'failed',
+                'message': _format_source_subscribe_error(error)
+            })
+
+    return {'items': items}
+
+
 async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
     source_refs = [str(item).strip() for item in list(command.get('sourceRefs') or []) if str(item).strip()]
     source_message_limit = max(1, min(100, _safe_int(command.get('sourceMessageLimit'), 2)))
@@ -701,6 +809,8 @@ async def _run(command: Dict[str, Any]) -> Dict[str, Any]:
             result = await asyncio.wait_for(_claim_with_pool(client, command), timeout=timeout_seconds)
         elif action == 'create_carrier_and_claim':
             result = await asyncio.wait_for(_create_carrier_and_claim(client, command), timeout=timeout_seconds)
+        elif action == 'subscribe_sources':
+            result = await asyncio.wait_for(_subscribe_sources(client, command), timeout=timeout_seconds)
         else:
             return {'ok': False, 'reason': 'INVALID_ACTION'}
 

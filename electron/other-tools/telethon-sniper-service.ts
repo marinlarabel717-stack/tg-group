@@ -79,6 +79,25 @@ export interface TelethonSniperClaimResult {
   postFailureMessage?: string
 }
 
+export interface TelethonSniperSubscribeItem {
+  sourceRef: string
+  sourceTitle: string
+  sourceKind: 'channel' | 'group' | 'chatlist' | 'bot' | 'unknown'
+  status: 'joined' | 'already' | 'failed' | 'skipped'
+  message: string
+}
+
+interface TelethonSniperSubscribePayload {
+  sessionPath: string
+  sourceRefs: string[]
+  proxy?: AccountCheckProxy | null
+  timeoutSeconds?: number
+}
+
+interface TelethonSniperSubscribeResult {
+  items: TelethonSniperSubscribeItem[]
+}
+
 interface TelethonSniperClaimWithPoolPayload {
   sessionPath: string
   carrierRef: string
@@ -140,7 +159,7 @@ function extractUsefulPythonErrorText(text: string) {
   return (lastRuntimeLine || lines[lines.length - 1]).trim()
 }
 
-function formatTelethonProcessFailure(action: 'scan_sources' | 'claim_with_pool' | 'create_carrier_and_claim', error: unknown) {
+function formatTelethonProcessFailure(action: 'scan_sources' | 'claim_with_pool' | 'create_carrier_and_claim' | 'subscribe_sources', error: unknown) {
   const failure = error as ExecFileFailure
   const stdoutText = readExecText(failure?.stdout)
   const stderrText = readExecText(failure?.stderr)
@@ -154,7 +173,9 @@ function formatTelethonProcessFailure(action: 'scan_sources' | 'claim_with_pool'
     ? '自动建频道并抢注'
     : action === 'claim_with_pool'
       ? '池子改绑抢注'
-      : '监听扫描'
+      : action === 'subscribe_sources'
+        ? '来源订阅'
+        : '监听扫描'
 
   if (/ModuleNotFoundError/i.test(detail)) return `${actionLabel}脚本缺少运行依赖，没成功跑起来。`
   if (/SyntaxError/i.test(detail)) return `${actionLabel}脚本启动失败，代码里有语法问题。`
@@ -193,7 +214,11 @@ export class TelethonSniperService {
     return await this.runAction<TelethonSniperClaimResult>('create_carrier_and_claim', payload, Math.max(45, payload.timeoutSeconds ?? 90))
   }
 
-  private async runAction<T>(action: 'scan_sources' | 'claim_with_pool' | 'create_carrier_and_claim', payload: object, timeoutSeconds: number): Promise<T> {
+  async subscribeSources(payload: TelethonSniperSubscribePayload) {
+    return await this.runAction<TelethonSniperSubscribeResult>('subscribe_sources', payload, Math.max(20, payload.timeoutSeconds ?? 60))
+  }
+
+  private async runAction<T>(action: 'scan_sources' | 'claim_with_pool' | 'create_carrier_and_claim' | 'subscribe_sources', payload: object, timeoutSeconds: number): Promise<T> {
     if (!this.isAvailable()) {
       throw new Error('TELETHON_SNIPER_SERVICE_UNAVAILABLE')
     }
