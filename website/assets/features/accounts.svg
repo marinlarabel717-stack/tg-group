@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="760" viewBox="0 0 1200 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B0C12"/>
+      <stop offset="1" stop-color="#06070B"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="200" y2="80" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9D8CFF"/>
+      <stop offset="1" stop-color="#72DEFF"/>
+    </linearGradient>
+    <style>
+  .bg{fill:url(#bg)}
+  .panel{fill:rgba(15,17,26,0.94);stroke:rgba(255,255,255,0.10);stroke-width:1}
+  .soft{fill:rgba(255,255,255,0.04);stroke:rgba(255,255,255,0.08);stroke-width:1}
+  .text{fill:rgba(255,255,255,0.92);font-family:Inter,Segoe UI,Arial,sans-serif}
+  .muted{fill:rgba(255,255,255,0.58);font-family:Inter,Segoe UI,Arial,sans-serif}
+  .accent{fill:url(#accent)}
+  .stroke{stroke:rgba(255,255,255,0.1);stroke-width:1}
+</style>
+  </defs>
+  <rect width="1200" height="760" rx="34" class="bg"/>
+  <rect x="18" y="18" width="1164" height="724" rx="28" class="panel"/>
+  <rect x="18" y="18" width="220" height="724" rx="28" class="soft"/>
+  <rect x="26" y="30" width="176" height="64" rx="18" class="panel"/>
+  <circle cx="58" cy="62" r="18" class="accent"/>
+  <text x="88" y="58" class="text" font-size="22" font-weight="800">TG-Matrix</text>
+  <text x="88" y="80" class="muted" font-size="12">?????</text>
+  <text x="44" y="168" class="muted" font-size="14" font-weight="500">???</text><rect x="26" y="188" rx="14" ry="14" width="176" height="30" class="accent" opacity="0.85"/><text x="44" y="206" class="text" font-size="14" font-weight="700">????</text><rect x="26" y="226" rx="14" ry="14" width="176" height="30" class="accent" opacity="0.85"/><text x="44" y="244" class="text" font-size="14" font-weight="700">????</text><text x="44" y="282" class="muted" font-size="14" font-weight="500">?????</text><rect x="26" y="302" rx="14" ry="14" width="176" height="30" class="accent" opacity="0.85"/><text x="44" y="320" class="text" font-size="14" font-weight="700">????</text><rect x="26" y="340" rx="14" ry="14" width="176" height="30" class="accent" opacity="0.85"/><text x="44" y="358" class="text" font-size="14" font-weight="700">????</text><text x="44" y="396" class="muted" font-size="14" font-weight="500">???</text><rect x="26" y="416" rx="14" ry="14" width="176" height="30" class="accent" opacity="0.85"/><text x="44" y="434" class="text" font-size="14" font-weight="700">????</text><rect x="26" y="454" rx="14" ry="14" width="176" height="30" class="accent" opacity="0.85"/><text x="44" y="472" class="text" font-size="14" font-weight="700">????</text>
+  <rect x="246" y="30" width="918" height="56" rx="18" class="soft"/>
+  <text x="272" y="63" class="text" font-size="26" font-weight="800">????</text>
+  <text x="272" y="84" class="muted" font-size="13">????????????</text>
+  <rect x="1010" y="42" width="132" height="32" rx="16" class="accent"/>
+  <text x="1076" y="62" text-anchor="middle" class="text" font-size="12" font-weight="800">?????</text>
+  <rect x="246" y="124" rx="12" ry="12" width="102" height="34" class="soft" fill="url(#accent)" stroke="none"/><text x="297" y="146" text-anchor="middle" class="text" font-size="13" font-weight="700">????</text><rect x="364" y="124" rx="12" ry="12" width="102" height="34" class="soft" /><text x="415" y="146" text-anchor="middle" class="muted" font-size="13" font-weight="700">????</text><rect x="482" y="124" rx="12" ry="12" width="102" height="34" class="soft" /><text x="533" y="146" text-anchor="middle" class="muted" font-size="13" font-weight="700">????</text><rect x="600" y="124" rx="12" ry="12" width="102" height="34" class="soft" /><text x="651" y="146" text-anchor="middle" class="muted" font-size="13" font-weight="700">????</text>
+  <rect x="246" y="178" rx="18" ry="18" width="178" height="96" class="panel"/><text x="268" y="220" class="text" font-size="30" font-weight="800">1,284</text><text x="268" y="246" class="muted" font-size="13">????</text><rect x="448" y="178" rx="18" ry="18" width="178" height="96" class="panel"/><text x="470" y="220" class="text" font-size="30" font-weight="800">126</text><text x="470" y="246" class="muted" font-size="13">???</text><rect x="650" y="178" rx="18" ry="18" width="178" height="96" class="panel"/><text x="672" y="220" class="text" font-size="30" font-weight="800">8</text><text x="672" y="246" class="muted" font-size="13">????</text>
+  <rect x="246" y="292" rx="22" ry="22" width="918" height="420" class="panel"/>
+  <text x="264" y="324" class="muted" font-size="12" letter-spacing="1.5">??</text><text x="442" y="324" class="muted" font-size="12" letter-spacing="1.5">??</text><text x="620" y="324" class="muted" font-size="12" letter-spacing="1.5">??</text><text x="798" y="324" class="muted" font-size="12" letter-spacing="1.5">??</text>
+  <rect x="246" y="344" rx="16" ry="16" width="570" height="46" fill="rgba(255,255,255,0.028)" stroke="rgba(255,255,255,0.05)" stroke-width="1"/><text x="264" y="372" class="muted" font-size="14">+852 9123 4455</text><text x="442" y="372" class="text" font-size="14">???</text><text x="620" y="372" class="muted" font-size="14">??</text><text x="798" y="372" class="muted" font-size="14">??</text><rect x="246" y="402" rx="16" ry="16" width="570" height="46" fill="rgba(255,255,255,0.015)" stroke="rgba(255,255,255,0.05)" stroke-width="1"/><text x="264" y="430" class="muted" font-size="14">+86 133 8899 1200</text><text x="442" y="430" class="text" font-size="14">??</text><text x="620" y="430" class="muted" font-size="14">??</text><text x="798" y="430" class="muted" font-size="14">???</text><rect x="246" y="460" rx="16" ry="16" width="570" height="46" fill="rgba(255,255,255,0.028)" stroke="rgba(255,255,255,0.05)" stroke-width="1"/><text x="264" y="488" class="muted" font-size="14">+66 9120 0041</text><text x="442" y="488" class="text" font-size="14">??</text><text x="620" y="488" class="muted" font-size="14">??</text><text x="798" y="488" class="muted" font-size="14">???</text><rect x="246" y="518" rx="16" ry="16" width="570" height="46" fill="rgba(255,255,255,0.015)" stroke="rgba(255,255,255,0.05)" stroke-width="1"/><text x="264" y="546" class="muted" font-size="14">+1 213 220 9011</text><text x="442" y="546" class="text" font-size="14">? IP ??</text><text x="620" y="546" class="muted" font-size="14">??</text><text x="798" y="546" class="muted" font-size="14">??</text>
+  <rect x="840" y="178" rx="18" ry="18" width="324" height="534" class="panel"/>
+  <text x="864" y="212" class="text" font-size="20" font-weight="800">????</text>
+  <text x="864" y="242" class="muted" font-size="14">1. ????? / ????</text>
+  <text x="864" y="272" class="muted" font-size="14">2. ??????????</text>
+  <text x="864" y="302" class="muted" font-size="14">3. ?????????</text>
+  <rect x="864" y="338" width="276" height="138" rx="18" class="soft"/>
+  <text x="886" y="372" class="text" font-size="16" font-weight="700">????</text>
+  <text x="886" y="402" class="muted" font-size="13">???????????????</text>
+  <text x="886" y="424" class="muted" font-size="13">???????????????</text>
+  <text x="886" y="456" class="muted" font-size="13">????????????????</text>
+  <rect x="864" y="502" width="276" height="180" rx="18" class="soft"/>
+  <text x="886" y="536" class="text" font-size="16" font-weight="700">????</text>
+  <text x="886" y="568" class="muted" font-size="13">????</text>
+  <text x="1088" y="568" class="text" font-size="13" text-anchor="end">???</text>
+  <text x="886" y="598" class="muted" font-size="13">????</text>
+  <text x="1088" y="598" class="text" font-size="13" text-anchor="end">?? / ??</text>
+  <text x="886" y="628" class="muted" font-size="13">????</text>
+  <text x="1088" y="628" class="text" font-size="13" text-anchor="end">?????</text>
+</svg>

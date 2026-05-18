@@ -6,14 +6,13 @@
     <title>TG-Matrix | 官方产品官网</title>
     <meta
       name="description"
-      content="TG-Matrix 是一体化 Telegram 桌面工作台，集账号管理、极速群发、机器人中心、代理池、私信用户与数据采集于一体。"
+      content="TG-Matrix 是一体化 Telegram 桌面工作台，集账号管理、极速群发、机器人中心、代理池、私信用户、采集用户与日志追踪于一体。"
     />
     <meta name="theme-color" content="#09090f" />
     <link rel="icon" type="image/png" href="./assets/icon.png" />
-    <link rel="preload" as="image" href="./assets/icon-512.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body data-page="home">
     <div class="page-shell">
       <header class="topbar">
         <a class="brand" href="#hero" aria-label="TG-Matrix 首页">
@@ -21,10 +20,9 @@
           <span class="brand__text">TG-Matrix</span>
         </a>
         <nav class="nav">
-          <a href="#features">功能</a>
+          <a href="#features">功能页</a>
           <a href="#workflow">流程</a>
-          <a href="#modules">模块</a>
-          <a href="#contact">联系</a>
+          <a href="#contact">部署</a>
         </nav>
         <a class="button button--ghost" href="#contact">立即咨询</a>
       </header>
@@ -33,79 +31,46 @@
         <section class="hero" id="hero">
           <div class="hero__content">
             <div class="eyebrow">TG-Matrix 官方产品官网</div>
-            <h1>一体化 Telegram 桌面工作台</h1>
+            <h1>每个功能都能点进去，看界面、看教程、看怎么用</h1>
             <p class="hero__lead">
-              把账号管理、极速群发、机器人中心、私信用户、代理池与数据采集收进同一个工作台里，减少来回切换，让操作更直观、流程更完整。
+              这版官网已经升级成产品展示站：不仅介绍 TG-Matrix 是什么，还能点进每个功能，查看对应的 UI 预览页，并直接读使用教程说明。
             </p>
             <div class="hero__actions">
-              <a class="button button--primary" href="#contact">获取试用 / 下载</a>
-              <a class="button button--secondary" href="#features">查看核心能力</a>
+              <a class="button button--primary" href="#features">查看功能页</a>
+              <a class="button button--secondary" href="#contact">后续换正式域名</a>
             </div>
             <ul class="hero__meta">
-              <li>桌面端工作流</li>
-              <li>统一模块入口</li>
-              <li>持续迭代更新</li>
+              <li>功能可点击</li>
+              <li>每页带 UI 预览</li>
+              <li>每页带使用教程</li>
             </ul>
           </div>
 
           <div class="hero__visual">
-            <div class="product-window">
+            <div class="product-window product-window--hero">
               <div class="product-window__topbar">
                 <div class="window-dots">
                   <span></span><span></span><span></span>
                 </div>
-                <div class="window-title">TG-Matrix · 控制台预览</div>
+                <div class="window-title">TG-Matrix · 功能详情展示</div>
               </div>
-              <div class="product-window__body">
-                <aside class="sidebar-preview">
-                  <div class="sidebar-preview__brand">
-                    <img src="./assets/icon.png" alt="" />
-                    <span>TG-Matrix</span>
-                  </div>
-                  <div class="sidebar-preview__items">
-                    <span class="is-active">账号管理</span>
-                    <span>极速群发</span>
-                    <span>机器人中心</span>
-                    <span>代理池</span>
-                    <span>采集用户</span>
-                    <span>日志中心</span>
-                  </div>
-                </aside>
-                <div class="dashboard-preview">
-                  <div class="stats-grid">
-                    <article>
-                      <strong>1,284</strong>
-                      <span>导入账号</span>
-                    </article>
-                    <article>
-                      <strong>96%</strong>
-                      <span>流程完成率</span>
-                    </article>
-                    <article>
-                      <strong>3 模式</strong>
-                      <span>极速群发</span>
-                    </article>
-                  </div>
-                  <div class="task-card">
-                    <div class="task-card__header">
-                      <div>
-                        <h3>极速群发工作台</h3>
-                        <p>支持 只加群 / 边加边发 / 加完再发</p>
-                      </div>
-                      <span class="pill">运行中</span>
-                    </div>
-                    <div class="task-card__modes">
-                      <span class="pill pill--soft is-active">只加群</span>
-                      <span class="pill pill--soft">边加边发</span>
-                      <span class="pill pill--soft">加完再发</span>
-                    </div>
-                    <div class="task-card__timeline">
-                      <div><label>账号选择</label><b>64 个账号已接入</b></div>
-                      <div><label>发送内容</label><b>文案 / 图片 / 按钮</b></div>
-                      <div><label>结果回收</label><b>加群结果 + 发送结果分离统计</b></div>
-                    </div>
-                  </div>
-                </div>
+              <div class="hero-preview-grid">
+                <a class="hero-preview-card" href="./feature.html?slug=accounts">
+                  <img src="./assets/features/accounts.svg" alt="账号管理页面预览" />
+                  <span>账号管理</span>
+                </a>
+                <a class="hero-preview-card" href="./feature.html?slug=auto-join">
+                  <img src="./assets/features/auto-join.svg" alt="极速群发页面预览" />
+                  <span>极速群发</span>
+                </a>
+                <a class="hero-preview-card" href="./feature.html?slug=proxy-pool">
+                  <img src="./assets/features/proxy-pool.svg" alt="代理池页面预览" />
+                  <span>代理池</span>
+                </a>
+                <a class="hero-preview-card" href="./feature.html?slug=logs">
+                  <img src="./assets/features/logs.svg" alt="日志中心页面预览" />
+                  <span>日志中心</span>
+                </a>
               </div>
             </div>
           </div>
@@ -113,114 +78,48 @@
 
         <section class="section section--metrics">
           <div class="metric-card">
-            <span>统一入口</span>
-            <strong>多模块集中在同一工作台</strong>
+            <span>展示方式</span>
+            <strong>从“文字介绍”升级成“可点开的功能页目录”</strong>
           </div>
           <div class="metric-card">
-            <span>简单上手</span>
-            <strong>配置更直观，减少跳转与分散操作</strong>
+            <span>界面表达</span>
+            <strong>每个功能都补了对应 UI 预览图，风格统一</strong>
           </div>
           <div class="metric-card">
-            <span>结果清晰</span>
-            <strong>状态、日志、统计反馈更容易追踪</strong>
+            <span>教程说明</span>
+            <strong>每页都附带 3 步使用说明，方便直接给客户看</strong>
           </div>
         </section>
 
         <section class="section" id="features">
           <div class="section-heading">
-            <div class="eyebrow">核心能力</div>
-            <h2>围绕真实业务流程来设计，不是堆菜单</h2>
-            <p>首版官网聚焦 TG-Matrix 当前最有辨识度的能力：统一管理、批量执行、过程可视化、结果可回看。</p>
+            <div class="eyebrow">功能总览</div>
+            <h2>点击任意功能，直接查看对应界面与使用教程</h2>
+            <p>官网首版已经把主要模块都整理成可点击的详情页。后面如果你给我真实软件截图，我还能继续把这些预览图替换成正式 UI 截图版。</p>
           </div>
-          <div class="feature-grid">
-            <article class="feature-card">
-              <h3>账号管理</h3>
-              <p>集中导入、筛选、整理账号状态，减少散落在多个工具之间的切换成本。</p>
-            </article>
-            <article class="feature-card">
-              <h3>极速群发</h3>
-              <p>把加群与发送收敛到同一工作台，支持只加群、边加边发、加完再发三种模式。</p>
-            </article>
-            <article class="feature-card">
-              <h3>机器人中心</h3>
-              <p>统一管理 Bot 配置与执行入口，让自动化能力更容易组织起来。</p>
-            </article>
-            <article class="feature-card">
-              <h3>私信用户</h3>
-              <p>适合做点对点触达与业务通知，把批量私信流程放到桌面端集中处理。</p>
-            </article>
-            <article class="feature-card">
-              <h3>代理池</h3>
-              <p>代理资源集中维护，状态一眼可见，方便和其他执行任务配合使用。</p>
-            </article>
-            <article class="feature-card">
-              <h3>采集与日志</h3>
-              <p>采集用户、查看结果、追踪日志都放在统一视图里，方便复盘和后续处理。</p>
-            </article>
-          </div>
+          <div class="feature-grid feature-grid--interactive" id="feature-grid"></div>
         </section>
 
         <section class="section" id="workflow">
           <div class="section-heading">
-            <div class="eyebrow">工作流</div>
-            <h2>从导入到执行，再到结果回收</h2>
+            <div class="eyebrow">访问路径</div>
+            <h2>官网上的功能页，适合这样带人看产品</h2>
           </div>
           <div class="workflow">
             <article class="workflow-step">
               <span>01</span>
-              <h3>导入与整理</h3>
-              <p>先把账号、代理、目标数据集中导入，统一筛选状态，建立任务基础。</p>
+              <h3>先看总览</h3>
+              <p>在首页先看全部模块卡片，快速理解 TG-Matrix 有哪些能力。</p>
             </article>
             <article class="workflow-step">
               <span>02</span>
-              <h3>配置与执行</h3>
-              <p>按场景选择模块，配置文案、图片、按钮或策略参数，然后一键启动。</p>
+              <h3>再点功能页</h3>
+              <p>点进单个功能页，直接查看对应的 UI 预览、亮点和适用场景。</p>
             </article>
             <article class="workflow-step">
               <span>03</span>
-              <h3>结果与复盘</h3>
-              <p>查看日志、执行结果和统计反馈，把过程留痕，后续追踪更轻松。</p>
-            </article>
-          </div>
-        </section>
-
-        <section class="section" id="modules">
-          <div class="section-heading">
-            <div class="eyebrow">模块矩阵</div>
-            <h2>当前官网首版重点展示这些模块</h2>
-          </div>
-          <div class="modules-board">
-            <article>
-              <h3>账号管理</h3>
-              <p>导入、筛选、分组、状态查看</p>
-            </article>
-            <article>
-              <h3>定时群发</h3>
-              <p>按计划组织发送任务</p>
-            </article>
-            <article>
-              <h3>极速群发</h3>
-              <p>统一入口处理加群与发送链路</p>
-            </article>
-            <article>
-              <h3>批量创建</h3>
-              <p>批量化处理重复性动作</p>
-            </article>
-            <article>
-              <h3>机器人中心</h3>
-              <p>集中管理 Bot 相关配置与入口</p>
-            </article>
-            <article>
-              <h3>采集用户</h3>
-              <p>辅助后续触达、运营和筛选</p>
-            </article>
-            <article>
-              <h3>私信用户</h3>
-              <p>面向点对点消息场景</p>
-            </article>
-            <article>
-              <h3>代理池 / 日志中心</h3>
-              <p>资源与可观测性一起补齐</p>
+              <h3>最后看教程</h3>
+              <p>每页都带简明的使用步骤，方便用户理解上手路径。</p>
             </article>
           </div>
         </section>
@@ -228,10 +127,10 @@
         <section class="section section--highlight">
           <div class="highlight-card">
             <div>
-              <div class="eyebrow">为什么官网可以先这样上</div>
-              <h2>先把产品讲清楚，再慢慢补下载页、更新日志和案例页</h2>
+              <div class="eyebrow">这版已经够当正式官网首版</div>
+              <h2>现在就能展示产品逻辑，后面再替换成你的正式域名和真实联系方式</h2>
               <p>
-                这版已经能承担“官方官网”的基础职责：品牌展示、功能说明、流程表达和咨询转化。后面你只要换成自己的域名，再补真实下载链接和联系方式，就能直接对外用了。
+                目前这版官网已经适合对外展示：有品牌、有首页、有功能详情页、有 UI 预览、有使用教程。你后面只需要把域名切过去，再把咨询方式和下载链接换成你的即可。
               </p>
             </div>
             <img src="./assets/logo-source.jpg" alt="TG-Matrix 品牌图" />
@@ -240,42 +139,42 @@
 
         <section class="section section--contact" id="contact">
           <div class="section-heading">
-            <div class="eyebrow">联系与上线</div>
-            <h2>现在就能拿去部署，域名后面再换成你的</h2>
-            <p>首版先用临时地址预览，后续只需要把域名解析切过去即可，不影响页面本身。</p>
+            <div class="eyebrow">部署说明</div>
+            <h2>先用临时地址预览，后面再换成你的正式域名</h2>
+            <p>这套官网是纯静态站，后面部署和换域名都很轻。</p>
           </div>
           <div class="contact-grid">
             <article class="contact-card">
-              <h3>当前建议</h3>
+              <h3>部署方式</h3>
               <ul>
-                <li>先部署到 Vercel / Netlify / Cloudflare Pages 任一平台</li>
-                <li>先用平台临时域名预览确认内容</li>
-                <li>后面把你的正式域名 CNAME / 解析过去</li>
+                <li>直接部署 `website/` 目录</li>
+                <li>可用 Vercel / Netlify / Cloudflare Pages</li>
+                <li>先用平台给的临时域名预览</li>
               </ul>
             </article>
             <article class="contact-card">
-              <h3>待替换信息</h3>
+              <h3>后续替换</h3>
               <ul>
-                <li>下载地址</li>
-                <li>客服 / Telegram 联系方式</li>
-                <li>正式域名</li>
-                <li>更新日志与安装说明</li>
+                <li>把联系按钮替换成你的 Telegram / 客服方式</li>
+                <li>把下载按钮替换成安装包地址</li>
+                <li>把正式域名解析到部署平台</li>
               </ul>
             </article>
           </div>
           <div class="cta-panel">
             <a class="button button--primary" href="mailto:hello@tgmatrix.local">临时联系入口</a>
-            <span>把这个邮箱或按钮链接替换成你的真实联系方式即可。</span>
+            <span>后面把这个入口替换成你的正式联系方式就行。</span>
           </div>
         </section>
       </main>
 
       <footer class="footer">
-        <span>© <span id="year"></span> TG-Matrix. Official product landing page.</span>
-        <span>首版静态官网，可直接部署后再替换正式域名。</span>
+        <span>© <span id="year"></span> TG-Matrix. Official product site.</span>
+        <span>功能详情页 + UI 预览 + 使用教程已接入。</span>
       </footer>
     </div>
 
+    <script src="./features.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
