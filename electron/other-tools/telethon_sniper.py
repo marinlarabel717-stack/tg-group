@@ -487,12 +487,13 @@ async def _expand_source_entities(client: Any, refs: List[str], join_chatlists: 
 
 async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
     source_refs = [str(item).strip() for item in list(command.get('sourceRefs') or []) if str(item).strip()]
-    source_message_limit = max(1, min(100, _safe_int(command.get('sourceMessageLimit'), 20)))
+    source_message_limit = max(1, min(100, _safe_int(command.get('sourceMessageLimit'), 2)))
     include_keywords = [str(item).lower() for item in list(command.get('includeKeywords') or []) if str(item).strip()]
     exclude_keywords = [str(item).lower() for item in list(command.get('excludeKeywords') or []) if str(item).strip()]
     seen_message_keys = {str(item).strip() for item in list(command.get('seenMessageKeys') or []) if str(item).strip()}
     handled_candidate_keys = {str(item).strip().lower() for item in list(command.get('handledCandidateKeys') or []) if str(item).strip()}
     join_chatlists = bool(command.get('joinChatlists', True))
+    bootstrap_existing_messages = bool(command.get('bootstrapExistingMessages', False))
 
     expanded = await _expand_source_entities(client, source_refs, join_chatlists)
     expanded_sources = expanded['expanded_sources']
@@ -512,12 +513,9 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
             message_id = getattr(message, 'id', None)
             key = f"{source['ref']}:{message_id}" if message_id is not None else ''
             if key and key in seen_message_keys:
-                logs.append({
-                    'level': 'info',
-                    'message': f"{source_prefix} 旧消息 #{message_id}",
-                    'sourceRef': source['ref'],
-                    'sourceTitle': source['title']
-                })
+                continue
+            if key and bootstrap_existing_messages:
+                seen_message_keys.add(key)
                 continue
             if key:
                 seen_message_keys.add(key)

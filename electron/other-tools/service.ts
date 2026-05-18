@@ -1100,7 +1100,7 @@ export class OtherToolsService {
       claimAccountLabel: '',
       createCarrierAccountId: null,
       createCarrierAccountLabel: '',
-      pollIntervalSeconds: 15,
+      pollIntervalSeconds: 5,
       sourceCount: 0,
       expandedSourceCount: 0,
       checkedMessageCount: 0,
@@ -1367,8 +1367,8 @@ export class OtherToolsService {
     }
 
     const subscribeAccounts = payload.autoSubscribeSources ? taskAccounts : []
-    const pollIntervalSeconds = Math.max(5, Math.min(300, Math.trunc(payload.pollIntervalSeconds || 15)))
-    const sourceLimit = Math.max(1, Math.min(100, Math.trunc(payload.sourceMessageLimit || 10)))
+    const pollIntervalSeconds = Math.max(5, Math.min(300, Math.trunc(payload.pollIntervalSeconds || 5)))
+    const sourceLimit = Math.max(1, Math.min(100, Math.trunc(payload.sourceMessageLimit || 2)))
     const candidateLimit = Math.max(1, Math.min(500, Math.trunc(payload.candidateLimit || 100)))
     const includeKeywords = normalizeKeywordSet(payload.includeKeywords)
     const excludeKeywords = normalizeKeywordSet(payload.excludeKeywords)
@@ -1555,6 +1555,12 @@ export class OtherToolsService {
         })
         this.pushSniperListenerLog(task, {
           level: 'info',
+          message: `首次启动只对齐每个来源最近 ${sourceLimit} 条，后面只盯新帖里的用户名。`,
+          accountId: scanAccount.id,
+          accountLabel: readCheckResultTitle(scanAccount)
+        })
+        this.pushSniperListenerLog(task, {
+          level: 'info',
           message: `本次任务只会使用你选中的 ${taskAccounts.length} 个账号，不会去动账号列表里的其他号。`
         })
         if (!payload.scanAccountId || (payload.autoClaim && !payload.claimAccountId) || (payload.autoCreateCarrier && !payload.createCarrierAccountId)) {
@@ -1571,7 +1577,7 @@ export class OtherToolsService {
 
           this.pushSniperListenerLog(task, {
             level: 'info',
-            message: `第 ${task.tickCount} 轮监听开始：每 ${pollIntervalSeconds} 秒检查一次，每个来源看最近 ${sourceLimit} 条消息。`,
+            message: `第 ${task.tickCount} 轮监听开始：每 ${pollIntervalSeconds} 秒检查一次，每个来源只看最近 ${sourceLimit} 条新帖。`,
             accountId: scanAccount.id,
             accountLabel: readCheckResultTitle(scanAccount)
           })
@@ -1591,6 +1597,7 @@ export class OtherToolsService {
                   seenMessageKeys: Array.from(task.seenMessageKeys),
                   handledCandidateKeys: Array.from(task.handledCandidateKeys),
                   joinChatlists: joinChatlistsOnFirstTick,
+                  bootstrapExistingMessages: task.tickCount === 1,
                   timeoutSeconds: scanRetryTimeouts[attemptIndex] ?? undefined,
                   proxy: readCurrentProxyOrThrow(this.proxyPoolService)
                 })

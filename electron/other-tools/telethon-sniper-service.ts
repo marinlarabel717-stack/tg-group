@@ -66,6 +66,7 @@ interface TelethonSniperScanPayload {
   seenMessageKeys: string[]
   handledCandidateKeys: string[]
   joinChatlists?: boolean
+  bootstrapExistingMessages?: boolean
   timeoutSeconds?: number
   proxy?: AccountCheckProxy | null
 }
@@ -180,7 +181,7 @@ export class TelethonSniperService {
 
   async scanSources(payload: TelethonSniperScanPayload) {
     const dynamicTimeout = payload.timeoutSeconds
-      ?? Math.min(180, Math.max(35, 20 + (payload.sourceRefs?.length ?? 0) * 4 + Math.ceil((payload.sourceMessageLimit ?? 10) / 5) * 5))
+      ?? Math.min(180, Math.max(35, 20 + (payload.sourceRefs?.length ?? 0) * 4 + Math.ceil((payload.sourceMessageLimit ?? 2) / 5) * 5))
     return await this.runAction<TelethonSniperScanResult>('scan_sources', payload, Math.max(20, dynamicTimeout))
   }
 

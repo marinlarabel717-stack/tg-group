@@ -66,7 +66,7 @@ function createEmptySniperListenerState(message = '监听未启动。'): OtherTo
     claimAccountLabel: '',
     createCarrierAccountId: null,
     createCarrierAccountLabel: '',
-    pollIntervalSeconds: 15,
+    pollIntervalSeconds: 5,
     sourceCount: 0,
     expandedSourceCount: 0,
     checkedMessageCount: 0,
@@ -457,11 +457,11 @@ function SniperWorkbench() {
   const [subscribeKeyword, setSubscribeKeyword] = useState('')
   const [subscribeRangeStart, setSubscribeRangeStart] = useState('1')
   const [subscribeRangeEnd, setSubscribeRangeEnd] = useState('10')
-  const [sourceMessageLimit, setSourceMessageLimit] = useState(typeof savedDraft.sourceMessageLimit === 'number' ? Math.max(1, Math.min(100, savedDraft.sourceMessageLimit)) : 10)
+  const [sourceMessageLimit, setSourceMessageLimit] = useState(typeof savedDraft.sourceMessageLimit === 'number' ? Math.max(1, Math.min(100, savedDraft.sourceMessageLimit === 10 ? 2 : savedDraft.sourceMessageLimit)) : 2)
   const [candidateLimit, setCandidateLimit] = useState(typeof savedDraft.candidateLimit === 'number' ? Math.max(1, Math.min(500, savedDraft.candidateLimit)) : 80)
   const [autoClaim, setAutoClaim] = useState(savedDraft.autoClaim ?? true)
   const [autoSubscribeSources, setAutoSubscribeSources] = useState(savedDraft.autoSubscribeSources ?? true)
-  const [listenerPollSeconds, setListenerPollSeconds] = useState(typeof savedDraft.listenerPollSeconds === 'number' ? Math.max(5, Math.min(300, savedDraft.listenerPollSeconds)) : 15)
+  const [listenerPollSeconds, setListenerPollSeconds] = useState(typeof savedDraft.listenerPollSeconds === 'number' ? Math.max(5, Math.min(300, savedDraft.listenerPollSeconds === 15 ? 5 : savedDraft.listenerPollSeconds)) : 5)
   const [autoCreateCarrier, setAutoCreateCarrier] = useState(savedDraft.autoCreateCarrier ?? true)
   const [createCarrierTitleTemplate, setCreateCarrierTitleTemplate] = useState(savedDraft.createCarrierTitleTemplate ?? '监听占位_{candidate}')
   const [createCarrierAboutTemplate, setCreateCarrierAboutTemplate] = useState(savedDraft.createCarrierAboutTemplate ?? '自动监听命中 {candidate} 后创建的占位频道。')
@@ -729,10 +729,10 @@ function SniperWorkbench() {
               <input value={excludeKeywords} onChange={(event) => setExcludeKeywords(event.target.value)} placeholder="例如：广告 回收" className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
             <ConfigRow label="监听间隔（秒）" hint="多久检查一次新帖。">
-              <input type="number" min={5} max={300} value={listenerPollSeconds} onChange={(event) => setListenerPollSeconds(Math.max(5, Math.min(300, Number(event.target.value) || 15)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+              <input type="number" min={5} max={300} value={listenerPollSeconds} onChange={(event) => setListenerPollSeconds(Math.max(5, Math.min(300, Number(event.target.value) || 5)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
-            <ConfigRow label="每次读取多少条" hint="每个来源每轮看最近多少条消息，默认 10 条。">
-              <input type="number" min={1} max={100} value={sourceMessageLimit} onChange={(event) => setSourceMessageLimit(Math.max(1, Math.min(100, Number(event.target.value) || 10)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+            <ConfigRow label="每次读取多少条" hint="每个来源每轮只看最近多少条，默认 2 条。">
+              <input type="number" min={1} max={100} value={sourceMessageLimit} onChange={(event) => setSourceMessageLimit(Math.max(1, Math.min(100, Number(event.target.value) || 2)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
             </ConfigRow>
             <ConfigRow label="单轮最多处理多少个名字" hint="防止一次扫太多。">
               <input type="number" min={1} max={500} value={candidateLimit} onChange={(event) => setCandidateLimit(Math.max(1, Math.min(500, Number(event.target.value) || 80)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
@@ -800,7 +800,7 @@ function SniperWorkbench() {
                     停止监听
                   </button>
                 </div>
-                <div className="text-xs text-textMuted">点“开始监听”后会直接跳到日志中心；默认每 15 秒检查一次，每个来源每轮看最近 10 条消息，命中可抢名时会自动抢，池子不够就自动新建频道。</div>
+                <div className="text-xs text-textMuted">点“开始监听”后会直接跳到日志中心；默认每 5 秒检查一次，每个来源每轮只看最近 2 条，首次启动先对齐旧帖，后面只要有新帖就立刻扫用户名能不能抢，命中后会自动抢，池子不够就自动新建频道。</div>
                 {listenerState?.message ? <div className="rounded-[12px] border border-emerald-400/10 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-100">{listenerState.message}</div> : null}
               </div>
             </FoldSection>
