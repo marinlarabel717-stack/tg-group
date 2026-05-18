@@ -458,8 +458,13 @@ async def _expand_source_entities(client: Any, refs: List[str], join_chatlists: 
 
         if join_chatlists and peers_to_join:
             input_peers = [await client.get_input_entity(chat) for chat in peers_to_join]
-            await client(functions.chatlists.JoinChatlistInviteRequest(slug=slug, peers=input_peers))
-            chatlist_join_count += len(input_peers)
+            try:
+                await client(functions.chatlists.JoinChatlistInviteRequest(slug=slug, peers=input_peers))
+                chatlist_join_count += len(input_peers)
+            except Exception as error:
+                error_text = str(error or '')
+                if 'FILTER_INCLUDE_EMPTY' not in error_text:
+                    raise
 
         for entity in invite_chats:
             source_ref = _build_entity_ref(entity, f'https://t.me/addlist/{slug}')

@@ -949,6 +949,8 @@ async function joinPublicSource(client: TelegramClient, ref: string) {
 
 function formatSourceSubscribeError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
+  if (/FILTER_INCLUDE_EMPTY/i.test(message)) return '这个分组当前没有新的频道/群需要加入。'
+  if (/CHATLISTS_TOO_MUCH/i.test(message)) return '这个账号可导入的分组太多了，Telegram 不让再加新的分组。'
   if (/USER_ALREADY_PARTICIPANT/i.test(message)) return '这个账号已经在目标里了。'
   if (/CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(message)) return '这个账号加入得太多了，Telegram 不让继续加。'
   if (/INVITE_SLUG_EXPIRED|SLUG_EXPIRED/i.test(message)) return '这个分组分享链接已经失效了。'
@@ -1003,6 +1005,7 @@ async function subscribeSourcesForAccount(client: TelegramClient, account: Accou
           message: `已通过分组链接导入 ${peersToJoin.length} 个频道/群。`
         })
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
         items.push({
           id: createId('subscribe-item'),
           accountId: account.id,
@@ -1010,7 +1013,7 @@ async function subscribeSourcesForAccount(client: TelegramClient, account: Accou
           sourceRef: ref,
           sourceTitle: '分组分享链接',
           sourceKind: 'chatlist',
-          status: 'failed',
+          status: /FILTER_INCLUDE_EMPTY/i.test(message) ? 'already' : 'failed',
           message: formatSourceSubscribeError(error)
         })
       }
