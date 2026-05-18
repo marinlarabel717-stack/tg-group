@@ -955,6 +955,13 @@ function formatSourceSubscribeError(error: unknown) {
   return `加入失败：${formatSniperRuntimeError(error)}`
 }
 
+function readSubscribeSourceKindLabel(kind: OtherToolsSourceSubscribeItem['sourceKind']) {
+  if (kind === 'group') return '群组'
+  if (kind === 'channel') return '频道'
+  if (kind === 'chatlist') return '分组'
+  return '来源'
+}
+
 async function subscribeSourcesForAccount(client: TelegramClient, account: AccountRecord, refs: string[]): Promise<OtherToolsSourceSubscribeItem[]> {
   const items: OtherToolsSourceSubscribeItem[] = []
   for (const ref of refs) {
@@ -1498,6 +1505,16 @@ export class OtherToolsService {
                 accountId: account.id,
                 accountLabel: readCheckResultTitle(account)
               })
+              for (const failedItem of subscribeItems.filter((item) => item.status === 'failed')) {
+                this.pushSniperListenerLog(task, {
+                  level: 'warning',
+                  message: `${readCheckResultTitle(account)} 订阅失败：${readSubscribeSourceKindLabel(failedItem.sourceKind)} ${failedItem.sourceTitle}｜${failedItem.message}`,
+                  accountId: account.id,
+                  accountLabel: readCheckResultTitle(account),
+                  sourceRef: failedItem.sourceRef,
+                  sourceTitle: failedItem.sourceTitle
+                })
+              }
             }
           }
         }
@@ -2035,6 +2052,16 @@ export class OtherToolsService {
               accountId: account.id,
               accountLabel: readCheckResultTitle(account)
             })
+            for (const failedItem of accountItems.filter((item) => item.status === 'failed')) {
+              pushRunLog({
+                level: 'warning',
+                message: `${readCheckResultTitle(account)} 订阅失败：${readSubscribeSourceKindLabel(failedItem.sourceKind)} ${failedItem.sourceTitle}｜${failedItem.message}`,
+                accountId: account.id,
+                accountLabel: readCheckResultTitle(account),
+                sourceRef: failedItem.sourceRef,
+                sourceTitle: failedItem.sourceTitle
+              })
+            }
           } catch (error) {
             pushRunLog({
               level: 'error',
