@@ -854,27 +854,6 @@ function SniperWorkbench() {
         </div>
       </div>
 
-      <GlassPanel className="bg-card">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-base font-semibold text-white">实时监听日志</div>
-            <div className="mt-1 text-sm text-textMuted">最新 {listenerState?.logs.length ?? 0} 条</div>
-          </div>
-          <div className="text-xs text-textMuted">{listenerState?.running ? '监听运行中' : '监听未启动'}</div>
-        </div>
-        <div className="mt-4 space-y-2">
-          {!listenerState || listenerState.logs.length === 0 ? <div className="rounded-[14px] bg-panel/70 px-4 py-4 text-sm text-textMuted">启动监听后，这里会显示新帖命中、自动建频道、抢注成功/失败等日志。</div> : listenerState.logs.map((log) => (
-            <div key={log.id} className="rounded-[14px] bg-panel/70 px-4 py-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className={log.level === 'success' ? 'text-emerald-300' : log.level === 'error' ? 'text-rose-300' : log.level === 'warning' ? 'text-amber-200' : 'text-slate-200'}>{log.message}</div>
-                <div className="text-xs text-textMuted">{new Date(log.createdAt).toLocaleTimeString('zh-CN', { hour12: false })}</div>
-              </div>
-              {(log.sourceTitle || log.candidate || log.targetRef || log.accountLabel) ? <div className="mt-1 text-xs text-textMuted break-all">{[log.sourceTitle, log.candidate, log.targetRef, log.accountLabel].filter(Boolean).join(' · ')}</div> : null}
-            </div>
-          ))}
-        </div>
-      </GlassPanel>
-
       {pickerOpen ? (
         <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setPickerOpen(false)}>
           <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
