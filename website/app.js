@@ -123,7 +123,7 @@ function renderFeatureDetail() {
         <div class="section-heading">
           <div class="eyebrow">Not Found</div>
           <h2>功能页不存在</h2>
-          <p>请返回首页查看其他模块。</p>
+          <p>请返回首页。</p>
         </div>
       </section>
     `
@@ -135,7 +135,7 @@ function renderFeatureDetail() {
   mount.innerHTML = `
     <section class="section feature-hero">
       <div class="feature-hero__content">
-        <div class="eyebrow">Feature Detail</div>
+        <div class="eyebrow">功能详情</div>
         <h1>${feature.title}</h1>
         <p class="hero__lead">${feature.summary}</p>
         <p class="feature-hero__tagline">${feature.tagline}</p>
@@ -160,7 +160,7 @@ function renderFeatureDetail() {
     <section class="section">
       <div class="section-heading">
         <div class="eyebrow">页面重点</div>
-        <h2>${feature.title} 页面结构</h2>
+        <h2>${feature.title}</h2>
       </div>
       <div class="detail-grid detail-grid--highlights">
         ${feature.highlights.map((item, index) => `<article class="detail-card"><span class="detail-card__index">0${index + 1}</span><p>${item}</p></article>`).join('')}
@@ -169,8 +169,8 @@ function renderFeatureDetail() {
 
     <section class="section">
       <div class="section-heading">
-        <div class="eyebrow">图文教程</div>
-        <h2>建议操作顺序</h2>
+        <div class="eyebrow">使用说明</div>
+        <h2>操作顺序</h2>
       </div>
       <div class="tutorial-list tutorial-list--visual">
         ${feature.tutorial.map((step, index) => `
@@ -197,17 +197,17 @@ function renderFeatureDetail() {
     <section class="section">
       <div class="section-heading">
         <div class="eyebrow">适用场景</div>
-        <h2>适用范围</h2>
+        <h2>使用场景</h2>
       </div>
       <div class="badge-row badge-row--scenario">
         ${feature.scenarios.map((item) => `<span>${item}</span>`).join('')}
       </div>
       <div class="cta-panel cta-panel--detail cta-panel--brand">
         <div>
-          <strong>需要演示、合作或部署支持</strong>
+          <strong>联系客服</strong>
           <span>Telegram: @TGMX9haobot</span>
         </div>
-        <a class="button button--primary" href="${CONTACT_URL}" target="_blank" rel="noreferrer">立即联系</a>
+        <a class="button button--primary" href="${CONTACT_URL}" target="_blank" rel="noreferrer">联系咨询</a>
       </div>
     </section>
   `
