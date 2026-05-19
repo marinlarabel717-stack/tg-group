@@ -46,8 +46,8 @@ img { display: block; max-width: 100%; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 14px 18px;
+  gap: 24px;
+  padding: 16px 22px;
   margin-bottom: 28px;
   border: 1px solid var(--line);
   border-radius: 22px;
@@ -76,13 +76,15 @@ img { display: block; max-width: 100%; }
 .nav {
   display: inline-flex;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
+  margin-left: auto;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 18px;
+  font-weight: 700;
   flex-wrap: wrap;
 }
 .nav a {
-  padding: 8px 10px;
+  padding: 12px 18px;
   border-radius: 999px;
 }
 .nav a:hover,
@@ -95,11 +97,11 @@ img { display: block; max-width: 100%; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 48px;
-  padding: 0 18px;
-  border-radius: 14px;
+  min-height: 54px;
+  padding: 0 24px;
+  border-radius: 16px;
   border: 1px solid transparent;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   transition: 180ms ease;
 }
@@ -128,6 +130,11 @@ img { display: block; max-width: 100%; }
   gap: 34px;
   align-items: center;
   padding: 36px 0 24px;
+}
+.hero--center {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding: 64px 0 34px;
 }
 
 .eyebrow {
@@ -180,23 +187,36 @@ img { display: block; max-width: 100%; }
   max-width: 640px;
   font-size: 17px;
 }
+.hero__content--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 820px;
+}
+.hero__content--center .hero__lead {
+  max-width: 720px;
+  font-size: 20px;
+}
 .feature-hero__tagline {
   margin-top: 14px;
   font-size: 16px;
 }
 .hero__actions {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   flex-wrap: wrap;
-  margin-top: 28px;
+  justify-content: center;
+  margin-top: 32px;
 }
 .hero__meta {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  justify-content: center;
   list-style: none;
   padding: 0;
-  margin: 28px 0 0;
+  margin: 30px 0 0;
 }
 .hero__meta li,
 .badge-row span,
@@ -716,6 +736,10 @@ img { display: block; max-width: 100%; }
     flex-wrap: wrap;
     justify-content: center;
     text-align: center;
+  }
+  .nav {
+    margin-left: 0;
+    font-size: 16px;
   }
   .nav,
   .feature-nav {
