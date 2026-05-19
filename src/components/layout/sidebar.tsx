@@ -1,4 +1,4 @@
-import { Bot, ChartColumnBig, ChevronLeft, ChevronRight, ExternalLink, FileClock, MessageCircleMore, Network, PlusSquare, Radio, SearchCheck, Settings2, SlidersHorizontal, UserPlus2, Users } from 'lucide-react'
+import { Bot, ChartColumnBig, ChevronLeft, ChevronRight, FileClock, MessageCircleMore, Network, PlusSquare, Radio, SearchCheck, Settings2, SlidersHorizontal, UserPlus2, Users } from 'lucide-react'
 import { memo } from 'react'
 import type { ModuleKey } from '../../types'
 import { moduleLabelMap } from '../../lib/ui-text'
@@ -43,68 +43,6 @@ const SidebarBrand = memo(function SidebarBrand({ collapsed }: { collapsed: bool
   )
 })
 
-const CONTACT_US_URL = ''
-const PRODUCT_INTRO_URL = ''
-
-const SidebarLinks = memo(function SidebarLinks({ collapsed }: { collapsed: boolean }) {
-  const desktopWindow = window.desktopWindow
-
-  const openLink = (url: string) => {
-    if (!url) return
-    void desktopWindow?.openExternal?.(url)
-  }
-
-  const baseClassName = `mt-auto flex flex-col gap-2 ${collapsed ? 'items-center' : ''}`
-
-  if (collapsed) {
-    return (
-      <div className={baseClassName}>
-        <button
-          type="button"
-          disabled={!CONTACT_US_URL}
-          onClick={() => openLink(CONTACT_US_URL)}
-          className="inline-flex h-11 w-full items-center justify-center rounded-[14px] border border-white/[0.08] bg-card text-slate-100 transition hover:border-white/[0.12] hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-45"
-          title="联系我们"
-        >
-          <ExternalLink size={16} />
-        </button>
-        <button
-          type="button"
-          disabled={!PRODUCT_INTRO_URL}
-          onClick={() => openLink(PRODUCT_INTRO_URL)}
-          className="inline-flex h-11 w-full items-center justify-center rounded-[14px] border border-white/[0.08] bg-card text-slate-100 transition hover:border-white/[0.12] hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-45"
-          title="产品介绍"
-        >
-          <SearchCheck size={16} />
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className={baseClassName}>
-      <button
-        type="button"
-        disabled={!CONTACT_US_URL}
-        onClick={() => openLink(CONTACT_US_URL)}
-        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] border border-white/[0.08] bg-card px-4 text-sm font-medium text-slate-100 transition hover:border-white/[0.12] hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-45"
-      >
-        <ExternalLink size={15} />
-        联系我们
-      </button>
-      <button
-        type="button"
-        disabled={!PRODUCT_INTRO_URL}
-        onClick={() => openLink(PRODUCT_INTRO_URL)}
-        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] border border-white/[0.08] bg-card px-4 text-sm font-medium text-slate-100 transition hover:border-white/[0.12] hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-45"
-      >
-        <SearchCheck size={15} />
-        产品介绍
-      </button>
-    </div>
-  )
-})
-
 export const Sidebar = memo(function Sidebar() {
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed)
   const toggleSidebar = useUIStore((state) => state.toggleSidebar)
@@ -131,7 +69,6 @@ export const Sidebar = memo(function Sidebar() {
         </div>
       </div>
 
-      <SidebarLinks collapsed={sidebarCollapsed} />
     </aside>
   )
 })
