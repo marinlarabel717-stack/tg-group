@@ -775,7 +775,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
             ...account.profile,
             twoFA: item.matchedPassword ?? (typeof account.profile?.twoFA === 'string' ? account.profile.twoFA : null),
             last_connect_date: startedAt,
-            reauthorize_mode: 'desktop',
+            reauthorize_mode: 'official-code',
             reauthorize_at: startedAt,
             reauthorize_deleted_system_messages: Boolean(item.officialMessagesCleared)
           }
