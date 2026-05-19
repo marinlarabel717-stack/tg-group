@@ -2,14 +2,30 @@ import { memo, useEffect, useState } from 'react'
 import { Loader2, Save } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS } from '../common/settings-ui'
+import { formatDateTimeFull } from '../../lib/ui-text'
 import { useSettingsStore } from '../../stores/settingsstore'
 import { useAccountStore } from '../../stores/accountstore'
 import { useProxyPoolStore } from '../../stores/proxypoolstore'
+import { useLicenseStore } from '../../stores/licensestore'
 
 function normalizeConcurrency(value: string) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 3
   return Math.max(1, Math.trunc(parsed))
+}
+
+function formatLicenseStatus(status: 'missing' | 'valid' | 'expired' | 'invalid' | 'grace') {
+  if (status === 'valid') return '已激活'
+  if (status === 'grace') return '宽限期内'
+  if (status === 'expired') return '已过期'
+  if (status === 'invalid') return '无效'
+  return '未激活'
+}
+
+function formatLicenseExpireAt(cardKeyMasked: string | null, expireAt: string | null) {
+  if (!cardKeyMasked) return '未激活'
+  if (!expireAt) return '长期有效'
+  return formatDateTimeFull(expireAt)
 }
 
 export default memo(function SettingsView() {
@@ -26,13 +42,16 @@ export default memo(function SettingsView() {
   const proxyPoolErrorMessage = useProxyPoolStore((state) => state.errorMessage)
   const proxyPoolActionMessage = useProxyPoolStore((state) => state.lastActionMessage)
   const updateProxySettings = useProxyPoolStore((state) => state.updateSettings)
+  const initLicense = useLicenseStore((state) => state.init)
+  const licenseState = useLicenseStore((state) => state.state)
 
   const [concurrencyInput, setConcurrencyInput] = useState(String(settings.checkConcurrency))
 
   useEffect(() => {
     void init()
     void initProxyPool()
-  }, [init, initProxyPool])
+    void initLicense()
+  }, [init, initLicense, initProxyPool])
 
   useEffect(() => {
     setConcurrencyInput(String(settings.checkConcurrency))
@@ -49,6 +68,24 @@ export default memo(function SettingsView() {
         </div>
 
         <div className="space-y-5 px-5 py-5">
+          <FoldSection title="授权信息" hint="这里显示当前卡密和授权到期时间。" defaultOpen>
+            <ConfigRow label="当前状态" hint={licenseState.message}>
+              <div className="flex min-h-11 items-center rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 text-sm text-white">
+                {formatLicenseStatus(licenseState.status)}
+              </div>
+            </ConfigRow>
+            <ConfigRow label="当前卡密" hint="这里只展示脱敏后的卡密。" wide>
+              <div className="flex min-h-11 items-center rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 text-sm text-white/90">
+                {licenseState.cardKeyMasked || '未激活'}
+              </div>
+            </ConfigRow>
+            <ConfigRow label="有效期至" hint={licenseState.lastValidatedAt ? `最近校验：${formatDateTimeFull(licenseState.lastValidatedAt)}` : '当前显示的是授权记录里的到期时间。'} wide>
+              <div className="flex min-h-11 items-center rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 text-sm text-white/90">
+                {formatLicenseExpireAt(licenseState.cardKeyMasked, licenseState.expireAt)}
+              </div>
+            </ConfigRow>
+          </FoldSection>
+
           <FoldSection title="检测设置" hint="统一走设置页风格，常用参数一行一个。" defaultOpen>
             <ConfigRow label="检测并发线程" hint={`当前默认 ${runtimeConcurrency} 线程；改完后，新任务会按新的并发数继续调度。`}>
               <input
