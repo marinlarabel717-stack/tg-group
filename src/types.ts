@@ -279,6 +279,8 @@ export interface ReauthorizeOperationResultItem {
   message: string
   matchedPassword?: string | null
   officialMessagesCleared?: boolean
+  terminatedAuthorizationsCount?: number
+  terminatedWebAuthorizationsCount?: number
 }
 
 export interface ReauthorizeOperationResult {

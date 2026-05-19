@@ -54,6 +54,9 @@ function formatReauthorizeError(error: unknown) {
   if (upper.includes('REAUTHORIZE_NOT_AUTHORIZED')) {
     return '新设备授权没有完成，请稍后重试。'
   }
+  if (upper.includes('REAUTHORIZE_CURRENT_DEVICE_NOT_FOUND')) {
+    return '重新授权成功了，但没能确认当前新设备，会话未做批量注销。'
+  }
 
   return message.trim() || '重新授权失败，请稍后再试。'
 }
@@ -176,6 +179,44 @@ export class TelegramReauthorizationService {
     }))
   }
 
+  private async logoutOtherAuthorizations(client: TelegramClient) {
+    const { Api } = getTelegramModule()
+    const authorizationState = await client.invoke(new Api.account.GetAuthorizations())
+    const authorizations = Array.isArray(authorizationState.authorizations) ? authorizationState.authorizations : []
+    const currentAuthorization = authorizations.find((item) => Boolean(item.current))
+
+    if (!currentAuthorization) {
+      throw new Error('REAUTHORIZE_CURRENT_DEVICE_NOT_FOUND')
+    }
+
+    let resetCount = 0
+    for (const authorization of authorizations) {
+      if (authorization.hash === currentAuthorization.hash || authorization.current) {
+        continue
+      }
+
+      await client.invoke(new Api.account.ResetAuthorization({ hash: authorization.hash }))
+      resetCount += 1
+    }
+
+    let resetWebCount = 0
+    try {
+      const webAuthorizationState = await client.invoke(new Api.account.GetWebAuthorizations())
+      const webAuthorizations = Array.isArray(webAuthorizationState.authorizations) ? webAuthorizationState.authorizations : []
+      if (webAuthorizations.length > 0) {
+        await client.invoke(new Api.account.ResetWebAuthorizations())
+        resetWebCount = webAuthorizations.length
+      }
+    } catch {
+      resetWebCount = 0
+    }
+
+    return {
+      resetCount,
+      resetWebCount
+    }
+  }
+
   private async backupSessionFile(sessionPath: string) {
     const backupPath = `${sessionPath}.bak-${Date.now()}`
     await fs.copyFile(sessionPath, backupPath)
@@ -196,6 +237,8 @@ export class TelegramReauthorizationService {
     const nextClient = this.clientManager.createClient(new StringSession(''), { proxy })
     let matchedPassword: string | null = null
     let officialMessagesCleared = false
+    let resetCount = 0
+    let resetWebCount = 0
 
     try {
       const { Api } = getTelegramModule()
@@ -232,6 +275,10 @@ export class TelegramReauthorizationService {
 
       await nextClient.getMe()
 
+      const logoutResult = await this.logoutOtherAuthorizations(nextClient)
+      resetCount = logoutResult.resetCount
+      resetWebCount = logoutResult.resetWebCount
+
       if (payload.deleteOfficialMessages) {
         try {
           await this.clearOfficialServiceMessages(nextClient)
@@ -254,10 +301,14 @@ export class TelegramReauthorizationService {
         success: true,
         status: 'success',
         message: payload.deleteOfficialMessages
-          ? (officialMessagesCleared ? '重新授权成功，官方系统消息已清理。' : '重新授权成功，但官方系统消息清理失败。')
-          : '重新授权成功。',
+          ? (officialMessagesCleared
+              ? `重新授权成功，已注销其他 ${resetCount} 台设备${resetWebCount > 0 ? `，并清理 ${resetWebCount} 个 Web 授权` : ''}，官方系统消息已清理。`
+              : `重新授权成功，已注销其他 ${resetCount} 台设备${resetWebCount > 0 ? `，并清理 ${resetWebCount} 个 Web 授权` : ''}，但官方系统消息清理失败。`)
+          : `重新授权成功，已注销其他 ${resetCount} 台设备${resetWebCount > 0 ? `，并清理 ${resetWebCount} 个 Web 授权` : ''}。`,
         matchedPassword,
-        officialMessagesCleared
+        officialMessagesCleared,
+        terminatedAuthorizationsCount: resetCount,
+        terminatedWebAuthorizationsCount: resetWebCount
       }
     } catch (error) {
       return {
@@ -267,7 +318,9 @@ export class TelegramReauthorizationService {
         status: resolveStatusFromError(error),
         message: formatReauthorizeError(error),
         matchedPassword: null,
-        officialMessagesCleared: false
+        officialMessagesCleared: false,
+        terminatedAuthorizationsCount: 0,
+        terminatedWebAuthorizationsCount: 0
       }
     } finally {
       await this.clientManager.destroyClient(nextClient)
