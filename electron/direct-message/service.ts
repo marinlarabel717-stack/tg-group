@@ -831,8 +831,13 @@ function buildPostSendFeatureSummary(payload: DirectMessageSendPayload) {
 }
 
 async function deleteSentMessage(client: TelegramClient, entity: unknown, messageId: number, mode: DirectMessageSendPayload['deleteMode']) {
-  if (!messageId || mode === 'none' || !Number.isFinite(messageId)) return
-  await client.deleteMessages(entity as never, [messageId], { revoke: mode === 'both' })
+  if (mode === 'none') return
+  await client.invoke(new Api.messages.DeleteHistory({
+    peer: entity as never,
+    maxId: 0,
+    justClear: mode === 'self' ? true : undefined,
+    revoke: mode === 'both' ? true : undefined
+  }))
 }
 
 function readAccountLabel(account: AccountRecord) {
@@ -1041,7 +1046,7 @@ export class DirectMessageService {
   private async deleteViaTelethon(
     account: AccountRecord,
     item: DirectMessageSendPayload['items'][number],
-    messageId: number,
+    messageId: number | null,
     mode: DirectMessageSendPayload['deleteMode']
   ) {
     await this.telethonDirectMessageSender.delete({
@@ -1378,22 +1383,19 @@ export class DirectMessageService {
               accountId: item.accountId
             }
 
-            if (!resultItem.remoteMessageId) {
-              if (payload.pinAfterSendEnabled) {
+            const actions: Array<{ kind: 'pin' | 'delete'; delaySeconds: number }> = []
+            if (payload.pinAfterSendEnabled) {
+              if (resultItem.remoteMessageId) {
+                actions.push({ kind: 'pin', delaySeconds: normalizeDelaySeconds(payload.pinDelaySeconds, 3) })
+              } else {
                 actionNotes.push('已发送，但没拿到消息 ID，暂时无法自动置顶')
               }
-              if (payload.deleteMode && payload.deleteMode !== 'none') {
-                actionNotes.push(`已发送，但没拿到消息 ID，暂时无法自动执行${readDeleteModeLabel(payload.deleteMode)}`)
-              }
-            } else {
-              const actions: Array<{ kind: 'pin' | 'delete'; delaySeconds: number }> = []
-              if (payload.pinAfterSendEnabled) {
-                actions.push({ kind: 'pin', delaySeconds: normalizeDelaySeconds(payload.pinDelaySeconds, 3) })
-              }
-              if (payload.deleteMode && payload.deleteMode !== 'none') {
-                actions.push({ kind: 'delete', delaySeconds: normalizeDelaySeconds(payload.deleteDelaySeconds, 0) })
-              }
+            }
+            if (payload.deleteMode && payload.deleteMode !== 'none') {
+              actions.push({ kind: 'delete', delaySeconds: normalizeDelaySeconds(payload.deleteDelaySeconds, 0) })
+            }
 
+            if (actions.length > 0) {
               actions.sort((left, right) => left.delaySeconds - right.delaySeconds || (left.kind === 'pin' ? -1 : 1))
 
               let elapsedSeconds = 0
@@ -1416,9 +1418,9 @@ export class DirectMessageService {
                   }
                   try {
                     if (useTelethonPrimary) {
-                      await this.pinViaTelethon(account, item, resultItem.remoteMessageId)
+                      await this.pinViaTelethon(account, item, resultItem.remoteMessageId as number)
                     } else {
-                      await (client as TelegramClient).pinMessage((resolved as { entity: unknown }).entity as never, resultItem.remoteMessageId, {
+                      await (client as TelegramClient).pinMessage((resolved as { entity: unknown }).entity as never, resultItem.remoteMessageId as number, {
                         notify: false,
                         pmOneSide: true
                       })
@@ -1434,7 +1436,7 @@ export class DirectMessageService {
                   if (useTelethonPrimary) {
                     await this.deleteViaTelethon(account, item, resultItem.remoteMessageId, payload.deleteMode)
                   } else {
-                    await deleteSentMessage(client as TelegramClient, (resolved as { entity: unknown }).entity, resultItem.remoteMessageId, payload.deleteMode)
+                    await deleteSentMessage(client as TelegramClient, (resolved as { entity: unknown }).entity, resultItem.remoteMessageId ?? 0, payload.deleteMode)
                   }
                   messageDeleted = true
                   actionNotes.push(`已在发送后 ${action.delaySeconds} 秒自动${readDeleteModeLabel(payload.deleteMode)}`)
@@ -1462,14 +1464,14 @@ export class DirectMessageService {
                     accountId: item.accountId
                   }
 
-                  if (confirmed.messageId && payload.deleteMode && payload.deleteMode !== 'none') {
+                  if (payload.deleteMode && payload.deleteMode !== 'none') {
                     const waitSeconds = normalizeDelaySeconds(payload.deleteDelaySeconds, 0)
                     if (waitSeconds > 0) {
                       await this.sleepWithCancel(waitSeconds * 1000, task)
                     }
                     if (!task.cancelled) {
                       try {
-                        await deleteSentMessage(client as TelegramClient, resolved.entity, confirmed.messageId, payload.deleteMode)
+                        await deleteSentMessage(client as TelegramClient, resolved.entity, confirmed.messageId ?? 0, payload.deleteMode)
                         resultItem.errorMessage = `${resultItem.errorMessage}；已在发送后 ${waitSeconds} 秒自动${readDeleteModeLabel(payload.deleteMode)}`
                       } catch (deleteError) {
                         resultItem.errorMessage = `${resultItem.errorMessage}；${readDeleteModeLabel(payload.deleteMode)}失败：${formatDirectMessageError(deleteError)}`

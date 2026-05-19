@@ -40,8 +40,8 @@ const messageModes = [
 
 const deleteModes: Array<{ key: DirectMessageDeleteMode; label: string; hint: string }> = [
   { key: 'none', label: '不删除', hint: '发出去后保留消息。' },
-  { key: 'self', label: '仅自己删除', hint: '发送后自动在当前账号侧删除，对方那边保留。' },
-  { key: 'both', label: '双向删除', hint: '发送后尝试双方都删，更适合 @机器人 用户。' }
+  { key: 'self', label: '仅自己删除', hint: '发送后清空当前账号这边与对方的对话记录 / 聊天列表，对方那边保留。' },
+  { key: 'both', label: '双向删除', hint: '发送后清空双方对话记录，双方聊天列表都会一起消失。' }
 ]
 
 function readAccountLabel(account: { id: number; username?: string; phone?: string; profile?: Record<string, unknown> }) {

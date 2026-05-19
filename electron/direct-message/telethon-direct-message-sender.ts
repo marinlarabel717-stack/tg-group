@@ -36,7 +36,7 @@ interface TelethonDirectMessagePinPayload extends TelethonDirectMessageBasePaylo
 }
 
 interface TelethonDirectMessageDeletePayload extends TelethonDirectMessageBasePayload {
-  messageId: number
+  messageId?: number | null
   deleteMode: DirectMessageSendPayload['deleteMode']
 }
 
