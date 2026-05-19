@@ -103,6 +103,19 @@ def _is_frozen_rpc_error(exc: Exception) -> bool:
     return 'FROZEN_METHOD_INVALID' in name or 'FROZEN_PARTICIPANT_MISSING' in name
 
 
+def _classify_rpc_status(exc: Exception) -> str:
+    name = _extract_rpc_error_name(exc)
+    if 'PHONE_NUMBER_BANNED' in name or 'USER_DEACTIVATED_BAN' in name or 'USER_DEACTIVATED' in name:
+        return 'banned'
+    if 'AUTH_KEY_UNREGISTERED' in name or 'SESSION_REVOKED' in name or 'SESSION_EXPIRED' in name:
+        return 'session_expired'
+    if 'UNAUTHORIZED' in name or 'NOT AUTHORIZED' in name:
+        return 'not_logged_in'
+    if 'TIMEOUT' in name or 'TIMED OUT' in name:
+        return 'timeout'
+    return 'unknown'
+
+
 async def _fetch_freeze_metadata(client: Any, timeout_seconds: int) -> Dict[str, Any]:
     try:
         result = await asyncio.wait_for(client(functions.help.GetAppConfigRequest(hash=0)), timeout=timeout_seconds)
@@ -175,12 +188,38 @@ async def _read_spambot_reply(client: Any, timeout_seconds: int) -> Dict[str, An
 async def _probe_session(session_path: str, timeout_seconds: int, proxy: Dict[str, Any] | None = None) -> Dict[str, Any]:
     client = TelethonClient(session_path, DEFAULT_API_ID, DEFAULT_API_HASH, receive_updates=False, proxy=proxy)
     try:
-        await asyncio.wait_for(client.connect(), timeout=timeout_seconds)
-        authorized = await asyncio.wait_for(client.is_user_authorized(), timeout=timeout_seconds)
+        try:
+            await asyncio.wait_for(client.connect(), timeout=timeout_seconds)
+            authorized = await asyncio.wait_for(client.is_user_authorized(), timeout=timeout_seconds)
+        except Exception as exc:
+            if _is_frozen_rpc_error(exc):
+                return {
+                    'status': 'frozen',
+                    'reason': _extract_rpc_error_name(exc),
+                }
+            return {
+                'status': _classify_rpc_status(exc),
+                'reason': _extract_rpc_error_name(exc),
+            }
+
         if not authorized:
             return {'status': 'not_logged_in', 'reason': 'session_not_authorized'}
 
-        me = await asyncio.wait_for(client.get_me(), timeout=timeout_seconds)
+        try:
+            me = await asyncio.wait_for(client.get_me(), timeout=timeout_seconds)
+        except Exception as exc:
+            if _is_frozen_rpc_error(exc):
+                frozen_metadata = await _fetch_freeze_metadata(client, timeout_seconds)
+                return {
+                    'status': 'frozen',
+                    'reason': _extract_rpc_error_name(exc),
+                    **frozen_metadata,
+                }
+            return {
+                'status': _classify_rpc_status(exc),
+                'reason': _extract_rpc_error_name(exc),
+            }
+
         if me is None:
             return {'status': 'unknown', 'reason': 'account_not_found'}
 
