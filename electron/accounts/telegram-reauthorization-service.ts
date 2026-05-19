@@ -51,6 +51,9 @@ function formatReauthorizeError(error: unknown) {
   if (upper.includes('REAUTHORIZE_EXPORT_LOGIN_TOKEN_FAILED')) {
     return '生成新设备授权令牌失败，请稍后重试。'
   }
+  if (upper.includes('AUTH_TOKEN_EXPIRED')) {
+    return '新设备授权令牌已过期，请重新试一次。'
+  }
   if (upper.includes('REAUTHORIZE_NOT_AUTHORIZED')) {
     return '新设备授权没有完成，请稍后重试。'
   }
@@ -149,20 +152,27 @@ export class TelegramReauthorizationService {
     throw new Error('REAUTHORIZE_EXPORT_LOGIN_TOKEN_FAILED')
   }
 
-  private async finalizeLogin(client: TelegramClient, rawToken: Buffer) {
+  private async finalizeLogin(client: TelegramClient) {
     const { Api } = getTelegramModule()
-    let token = rawToken
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
-      const result = await client.invoke(new Api.auth.ImportLoginToken({ token }))
+      const result = await client.invoke(new Api.auth.ExportLoginToken({
+        apiId: Number(client.apiId),
+        apiHash: client.apiHash,
+        exceptIds: []
+      }))
+
       if (result instanceof Api.auth.LoginTokenSuccess) {
         return
       }
       if (result instanceof Api.auth.LoginTokenMigrateTo) {
         await (client as TelegramClient & { _switchDC: (dcId: number) => Promise<void> })._switchDC(result.dcId)
-        token = Buffer.from(result.token)
-        continue
+        const migratedResult = await client.invoke(new Api.auth.ImportLoginToken({ token: result.token }))
+        if (migratedResult instanceof Api.auth.LoginTokenSuccess) {
+          return
+        }
       }
+
       await sleep(600)
     }
 
@@ -265,7 +275,7 @@ export class TelegramReauthorizationService {
       const token = await this.extractLoginToken(nextClient)
       if (token) {
         await currentClient.invoke(new Api.auth.AcceptLoginToken({ token }))
-        await this.finalizeLogin(nextClient, token)
+        await this.finalizeLogin(nextClient)
       }
 
       const nextAuthorized = await nextClient.isUserAuthorized()
