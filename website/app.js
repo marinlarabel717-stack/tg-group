@@ -1,6 +1,14 @@
 document.getElementById('year').textContent = String(new Date().getFullYear())
 
 const features = window.TG_MATRIX_FEATURES || []
+const FEATURE_ORDER = ['accounts', 'auto-join', 'sniper-system', 'direct-message', 'session-manager', 'automation', 'bot-center', 'proxy-pool', 'logs']
+const orderedFeatures = [...features].sort((a, b) => {
+  const indexA = FEATURE_ORDER.indexOf(a.slug)
+  const indexB = FEATURE_ORDER.indexOf(b.slug)
+  const safeA = indexA === -1 ? Number.MAX_SAFE_INTEGER : indexA
+  const safeB = indexB === -1 ? Number.MAX_SAFE_INTEGER : indexB
+  return safeA - safeB
+})
 const pageType = document.body.dataset.page
 const CONTACT_URL = 'https://t.me/TGMX9haobot'
 
@@ -75,7 +83,7 @@ function renderFeatureGrid() {
   const grid = document.getElementById('feature-grid')
   if (!grid) return
 
-  grid.innerHTML = features
+  grid.innerHTML = orderedFeatures
     .map(
       (feature) => `
         <article class="feature-card feature-card--link">
@@ -108,11 +116,11 @@ function renderFeatureDetail() {
   if (!mount) return
 
   const params = new URLSearchParams(window.location.search)
-  const slug = params.get('slug') || features[0]?.slug
+  const slug = params.get('slug') || orderedFeatures[0]?.slug
   const feature = window.getFeatureBySlug ? window.getFeatureBySlug(slug) : null
 
   if (nav) {
-    nav.innerHTML = features
+    nav.innerHTML = orderedFeatures
       .map((item) => `<a href="./feature.html?slug=${item.slug}" class="${item.slug === slug ? 'is-active' : ''}">${item.shortTitle}</a>`)
       .join('')
   }

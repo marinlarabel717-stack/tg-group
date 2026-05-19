@@ -401,20 +401,34 @@ img { display: block; max-width: 100%; }
 .feature-card p { margin-top: 8px; }
 .feature-roadmap {
   margin-top: 18px;
-  padding: 20px 22px;
+  padding: 22px;
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
+  text-align: center;
 }
 .feature-roadmap strong {
   display: block;
-  font-size: 18px;
+  font-size: 20px;
   color: white;
 }
-.feature-roadmap p {
-  margin: 8px 0 0;
-  color: var(--muted);
-  line-height: 1.8;
+.feature-roadmap__tags {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.feature-roadmap__tags span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
 }
 
 .workflow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
