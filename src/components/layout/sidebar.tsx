@@ -1,4 +1,4 @@
-import { Bot, ChartColumnBig, ChevronLeft, ChevronRight, FileClock, MessageCircleMore, Network, PlusSquare, Radio, SearchCheck, Settings2, SlidersHorizontal, UserPlus2, Users } from 'lucide-react'
+import { Bot, ChartColumnBig, ChevronLeft, ChevronRight, FileClock, KeyRound, MessageCircleMore, Network, PlusSquare, Radio, SearchCheck, Settings2, SlidersHorizontal, UserPlus2, Users } from 'lucide-react'
 import { memo } from 'react'
 import type { ModuleKey } from '../../types'
 import { moduleLabelMap } from '../../lib/ui-text'
@@ -9,6 +9,7 @@ import { SidebarNavItem } from './sidebarnavitem'
 const items: { key: ModuleKey; label: string; icon: typeof ChartColumnBig }[] = [
   { key: 'dashboard', label: moduleLabelMap.dashboard, icon: ChartColumnBig },
   { key: 'accounts', label: moduleLabelMap.accounts, icon: Users },
+  { key: 'reauthorize', label: moduleLabelMap.reauthorize, icon: KeyRound },
   { key: 'automation', label: moduleLabelMap.automation, icon: Radio },
   { key: 'bot-center', label: moduleLabelMap['bot-center'], icon: Bot },
   { key: 'auto-join', label: moduleLabelMap['auto-join'], icon: UserPlus2 },

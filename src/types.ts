@@ -1,6 +1,7 @@
 export type ModuleKey =
   | 'dashboard'
   | 'accounts'
+  | 'reauthorize'
   | 'automation'
   | 'bot-center'
   | 'auto-join'

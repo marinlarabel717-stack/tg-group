@@ -11,6 +11,7 @@ export const GEO_RESTRICTED_MARKERS = [
 export const moduleLabelMap = {
   dashboard: '仪表盘',
   accounts: '账号管理',
+  reauthorize: '重新授权',
   automation: '定时群发',
   'bot-center': '机器人中心',
   'auto-join': '极速群发',
