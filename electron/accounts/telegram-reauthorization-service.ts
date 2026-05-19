@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import type { TelegramClient } from 'telegram'
 import type { AccountRecord, ReauthorizeOperationPayload, ReauthorizeOperationResultItem, ReauthorizeOperationStatus } from './types'
 import { SessionLoader } from './check-engine/session-loader'
@@ -6,6 +7,7 @@ import { TelegramClientManager, type AccountClientProxyOptions } from './check-e
 import { getSessionsModule, getTelegramModule } from './check-engine/gramjs-runtime'
 import { ProxyPoolService } from '../proxy-pool/service'
 
+const require = createRequire(import.meta.url)
 const { computeCheck } = require('telegram/Password') as { computeCheck: (request: unknown, password: string) => Promise<unknown> }
 
 type ReauthorizeLogLevel = 'info' | 'success' | 'warning' | 'error'
