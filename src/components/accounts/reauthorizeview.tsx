@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, KeyRound, Loader2, RefreshCcw, ScrollText, Search, Settings2, ShieldAlert, X } from 'lucide-react'
 import type { AccountRecord, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressState } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
-import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS } from '../common/settings-ui'
+import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 import { ResultStatCard } from './resultdialog'
 import { useAccountStore } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
@@ -32,18 +32,23 @@ function readStatusLabel(status: ReauthorizeOperationResultItem['status']) {
   return '重新授权失败'
 }
 
-function readLogBadgeClass(level: 'info' | 'success' | 'warning' | 'error') {
-  if (level === 'success') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
-  if (level === 'warning') return 'border-amber-300/20 bg-amber-300/10 text-amber-200'
-  if (level === 'error') return 'border-rose-400/20 bg-rose-400/10 text-rose-300'
-  return 'border-sky-400/20 bg-sky-400/10 text-sky-300'
+function readLogCellTone(level: 'info' | 'success' | 'warning' | 'error') {
+  if (level === 'success') return 'text-emerald-300'
+  if (level === 'warning') return 'text-amber-200'
+  if (level === 'error') return 'text-rose-300'
+  return 'text-slate-200'
 }
 
-function readLogLevelLabel(level: 'info' | 'success' | 'warning' | 'error') {
-  if (level === 'success') return '成功'
-  if (level === 'warning') return '提醒'
-  if (level === 'error') return '失败'
-  return '步骤'
+function readLogProgressText(level: 'info' | 'success' | 'warning' | 'error', message: string) {
+  return level === 'info' ? message : '--'
+}
+
+function readLogSuccessText(level: 'info' | 'success' | 'warning' | 'error', message: string) {
+  return level === 'success' ? message : '--'
+}
+
+function readLogFailureText(level: 'info' | 'success' | 'warning' | 'error', message: string) {
+  return level === 'warning' || level === 'error' ? message : '--'
 }
 
 function formatLogTime(createdAt?: string | null) {
@@ -340,28 +345,33 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
           <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-4 py-3">
             <div>
               <div className="text-sm font-medium text-white">详细步骤日志</div>
-              <div className="mt-1 text-xs text-textMuted">开始后会按账号逐步展示：连接旧设备、确认新设备、校验旧密码、注销其它设备、写回 session 等关键步骤。</div>
+              <div className="mt-1 text-xs text-textMuted">按你要的格式显示：时间 / 手机号 / 当前进度 / 成功 / 失败原因。</div>
             </div>
             <div className="text-xs text-textMuted">最新 {displayedLogs.length} 条</div>
           </div>
 
-          <div className="max-h-[560px] overflow-y-auto px-3 py-3">
+          <div className="max-h-[560px] overflow-auto">
             {displayedLogs.length > 0 ? (
-              <div className="space-y-2">
-                {displayedLogs.map((log) => (
-                  <div key={log.id} className="rounded-[14px] border border-white/[0.06] bg-black/[0.12] px-4 py-3">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] ${readLogBadgeClass(log.level)}`}>
-                          {readLogLevelLabel(log.level)}
-                        </span>
-                        <span className="truncate text-sm text-white">{log.phone || (log.accountId ? `账号#${log.accountId}` : '任务总览')}</span>
-                      </div>
-                      <div className="text-xs text-textMuted">{formatLogTime(log.createdAt)}</div>
+              <div className="min-w-[980px]">
+                <div className="grid grid-cols-[110px_180px_minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(220px,1fr)] border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.14em] text-textMuted">
+                  <div>时间</div>
+                  <div>手机号</div>
+                  <div>当前进度</div>
+                  <div>成功</div>
+                  <div>失败原因</div>
+                </div>
+                {displayedLogs.map((log) => {
+                  const phoneText = log.phone || (log.accountId ? `账号#${log.accountId}` : '任务总览')
+                  return (
+                    <div key={log.id} className="grid grid-cols-[110px_180px_minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(220px,1fr)] border-b border-white/[0.06] px-4 py-3 text-sm text-slate-200 transition hover:bg-white/[0.03]">
+                      <div className="pr-3 text-textMuted">{formatLogTime(log.createdAt)}</div>
+                      <div className="pr-3 text-white">{phoneText}</div>
+                      <div className={`pr-3 ${log.level === 'info' ? 'text-slate-200' : 'text-textMuted'}`}>{readLogProgressText(log.level, log.message)}</div>
+                      <div className={`pr-3 ${log.level === 'success' ? 'text-emerald-300' : 'text-textMuted'}`}>{readLogSuccessText(log.level, log.message)}</div>
+                      <div className={`pr-3 ${readLogCellTone(log.level)}`}>{readLogFailureText(log.level, log.message)}</div>
                     </div>
-                    <div className="mt-2 text-sm leading-6 text-slate-200">{log.message}</div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <div className="px-4 py-12 text-center text-sm text-textMuted">
@@ -388,11 +398,11 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
             </div>
           ) : null}
 
-          <div className="inline-flex rounded-[14px] border border-white/[0.06] bg-black/[0.08] p-1">
+          <div className="inline-flex rounded-[14px] border border-white/[0.06] bg-black/[0.06] p-1">
             <button
               type="button"
               onClick={() => setActiveTab('settings')}
-              className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm transition ${activeTab === 'settings' ? 'bg-white text-slate-950' : 'text-slate-200 hover:bg-white/[0.06]'}`}
+              className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'settings' ? 'bg-white text-slate-950 border-white' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
             >
               <Settings2 size={16} />
               <span>重新授权设置</span>
@@ -400,7 +410,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
             <button
               type="button"
               onClick={() => setActiveTab('logs')}
-              className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm transition ${activeTab === 'logs' ? 'bg-white text-slate-950' : 'text-slate-200 hover:bg-white/[0.06]'}`}
+              className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'logs' ? 'bg-white text-slate-950 border-white' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
             >
               <ScrollText size={16} />
               <span>执行日志</span>
