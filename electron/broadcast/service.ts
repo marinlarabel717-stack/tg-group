@@ -104,6 +104,7 @@ function formatBroadcastError(error: unknown) {
     const matched = normalized.match(/A wait of (\d+) seconds is required/i)
     return matched ? `当前发得有点快了，Telegram 要求先等 ${matched[1]} 秒，再继续发送。` : '当前发得有点快了，Telegram 要求先等几秒，再继续发送。'
   }
+  if (/Too many requests/i.test(normalized)) return '发送失败：请求过于频繁，请稍后再试。'
   return `发送失败：${normalized}`
 }
 

@@ -76,6 +76,7 @@ function formatDirectMessageError(error: unknown) {
     const matched = normalized.match(/FLOOD_WAIT_(\d+)/i)
     return matched ? `当前账号被限流了，请 ${matched[1]} 秒后再试。` : '当前账号被限流了，请稍后再试。'
   }
+  if (/Too many requests/i.test(normalized)) return '发送失败：请求过于频繁，请稍后再试。'
   return `发送失败：${normalized}`
 }
 

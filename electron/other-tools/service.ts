@@ -849,6 +849,7 @@ function formatSniperRuntimeError(error: unknown) {
   if (/GLOBAL_PROXY_REQUIRED/i.test(message)) return '你开了全局代理，但现在没有可用代理。'
   if (/TELETHON_SNIPER_SERVICE_UNAVAILABLE/i.test(message)) return '监听核心没准备好，当前这台机器上的监听组件不可用。'
   if (/TIMEOUT/i.test(message)) return '这次操作超时了，Telegram 那边太久没回。'
+  if (/Too many requests/i.test(message)) return '请求过于频繁，请稍后再试。'
   if (/InvokeWithLayer/i.test(message) && /AUTH_KEY_DUPLICATED/i.test(message)) return '这个账号会话冲突了：同一个号在别处占用连接，当前监听没法启动。'
   return message
 }
