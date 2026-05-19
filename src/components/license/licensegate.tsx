@@ -143,8 +143,8 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
 
         <div className="relative z-10 mt-auto pt-6" style={noDragRegionStyle}>
           <div className="rounded-[16px] border border-white/[0.05] bg-white/[0.03] px-4 py-3 text-center text-[12px] leading-6 text-white/45 backdrop-blur-xl">
-            <div>⚠️ 本软件仅供学习交流与功能测试，请严格遵守当地法律法规。</div>
-            <div>⚠️ 严禁将本软件用于任何违法违规、侵权或骚扰性用途，使用者需自行承担相关责任。</div>
+            <div>⚠️ 本软件仅供学习测试，请遵守当地法律法规。</div>
+            <div>⚠️ 禁止用于任何非法用途，后果由使用者自行承担。</div>
           </div>
         </div>
       </div>
