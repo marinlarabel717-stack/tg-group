@@ -6,6 +6,8 @@ import { TelegramClientManager, type AccountClientProxyOptions } from './check-e
 import { getSessionsModule, getTelegramModule } from './check-engine/gramjs-runtime'
 import { ProxyPoolService } from '../proxy-pool/service'
 
+const { computeCheck } = require('telegram/Password') as { computeCheck: (request: unknown, password: string) => Promise<unknown> }
+
 function splitPasswordCandidates(input: string) {
   return Array.from(new Set(
     input
@@ -110,12 +112,13 @@ export class TelegramReauthorizationService {
   }
 
   private async verifyPasswordCandidates(client: TelegramClient, candidates: string[]) {
+    const { Api } = getTelegramModule()
+
     for (const candidate of candidates) {
       try {
-        await client.updateTwoFaSettings({
-          isCheckPassword: true,
-          currentPassword: candidate
-        })
+        const passwordState = await client.invoke(new Api.account.GetPassword())
+        const passwordSrpCheck = await computeCheck(passwordState, candidate)
+        await client.invoke(new Api.auth.CheckPassword({ password: passwordSrpCheck as never }))
         return candidate
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -152,31 +155,71 @@ export class TelegramReauthorizationService {
     throw new Error('REAUTHORIZE_EXPORT_LOGIN_TOKEN_FAILED')
   }
 
-  private async finalizeLogin(client: TelegramClient) {
+  private async finalizeLogin(client: TelegramClient, passwordCandidates: string[]) {
     const { Api } = getTelegramModule()
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
-      const result = await client.invoke(new Api.auth.ExportLoginToken({
-        apiId: Number(client.apiId),
-        apiHash: client.apiHash,
-        exceptIds: []
-      }))
+      try {
+        const result = await client.invoke(new Api.auth.ExportLoginToken({
+          apiId: Number(client.apiId),
+          apiHash: client.apiHash,
+          exceptIds: []
+        }))
 
-      if (result instanceof Api.auth.LoginTokenSuccess) {
-        return
-      }
-      if (result instanceof Api.auth.LoginTokenMigrateTo) {
-        await (client as TelegramClient & { _switchDC: (dcId: number) => Promise<void> })._switchDC(result.dcId)
-        const migratedResult = await client.invoke(new Api.auth.ImportLoginToken({ token: result.token }))
-        if (migratedResult instanceof Api.auth.LoginTokenSuccess) {
-          return
+        if (result instanceof Api.auth.LoginTokenSuccess) {
+          return null
         }
+        if (result instanceof Api.auth.LoginTokenMigrateTo) {
+          await (client as TelegramClient & { _switchDC: (dcId: number) => Promise<void> })._switchDC(result.dcId)
+          const migratedResult = await client.invoke(new Api.auth.ImportLoginToken({ token: result.token }))
+          if (migratedResult instanceof Api.auth.LoginTokenSuccess) {
+            return null
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        const upper = message.trim().toUpperCase()
+        if (upper.includes('SESSION_PASSWORD_NEEDED')) {
+          if (passwordCandidates.length === 0) {
+            throw new Error('PASSWORD_MISSING')
+          }
+
+          const matchedPassword = await this.verifyPasswordCandidates(client, passwordCandidates)
+          if (!matchedPassword) {
+            throw new Error('PASSWORD_HASH_INVALID')
+          }
+
+          return matchedPassword
+        }
+        throw error
       }
 
       await sleep(600)
     }
 
     throw new Error('REAUTHORIZE_LOGIN_TOKEN_NOT_CONFIRMED')
+  }
+
+  private async ensureSessionAuthorized(client: TelegramClient, passwordCandidates: string[]) {
+    const authorized = await client.isUserAuthorized()
+    if (authorized) {
+      return null
+    }
+
+    if (passwordCandidates.length === 0) {
+      throw new Error('PASSWORD_MISSING')
+    }
+
+    const matchedPassword = await this.verifyPasswordCandidates(client, passwordCandidates)
+    if (!matchedPassword) {
+      throw new Error('PASSWORD_HASH_INVALID')
+    }
+
+    if (!await client.isUserAuthorized()) {
+      throw new Error('REAUTHORIZE_NOT_AUTHORIZED')
+    }
+
+    return matchedPassword
   }
 
   private async clearOfficialServiceMessages(client: TelegramClient) {
@@ -261,21 +304,19 @@ export class TelegramReauthorizationService {
 
       const passwordState = await currentClient.invoke(new Api.account.GetPassword())
       const hasPassword = Boolean((passwordState as { hasPassword?: boolean })?.hasPassword)
-      if (hasPassword) {
-        if (passwordCandidates.length === 0) {
-          throw new Error('PASSWORD_MISSING')
-        }
-        matchedPassword = await this.verifyPasswordCandidates(currentClient, passwordCandidates)
-        if (!matchedPassword) {
-          throw new Error('PASSWORD_HASH_INVALID')
-        }
+      if (!hasPassword) {
+        passwordCandidates.length = 0
       }
 
       await nextClient.connect()
       const token = await this.extractLoginToken(nextClient)
       if (token) {
         await currentClient.invoke(new Api.auth.AcceptLoginToken({ token }))
-        await this.finalizeLogin(nextClient)
+        matchedPassword = await this.finalizeLogin(nextClient, passwordCandidates)
+      }
+
+      if (!matchedPassword && hasPassword) {
+        matchedPassword = await this.ensureSessionAuthorized(nextClient, passwordCandidates)
       }
 
       const nextAuthorized = await nextClient.isUserAuthorized()
