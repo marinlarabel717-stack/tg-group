@@ -46,8 +46,8 @@ img { display: block; max-width: 100%; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 16px 22px;
+  gap: 28px;
+  padding: 18px 26px;
   margin-bottom: 28px;
   border: 1px solid var(--line);
   border-radius: 22px;
@@ -76,15 +76,15 @@ img { display: block; max-width: 100%; }
 .nav {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 18px;
   margin-left: auto;
   color: var(--muted);
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
   flex-wrap: wrap;
 }
 .nav a {
-  padding: 12px 18px;
+  padding: 14px 24px;
   border-radius: 999px;
 }
 .nav a:hover,
@@ -304,6 +304,8 @@ img { display: block; max-width: 100%; }
 }
 .section-heading {
   max-width: 760px;
+  margin: 0 auto;
+  text-align: center;
 }
 .section-heading p { margin-top: 16px; }
 
@@ -756,7 +758,7 @@ img { display: block; max-width: 100%; }
   }
   .nav {
     margin-left: 0;
-    font-size: 16px;
+    font-size: 18px;
   }
   .nav,
   .feature-nav {
