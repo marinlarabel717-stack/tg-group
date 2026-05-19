@@ -341,9 +341,26 @@ img { display: block; max-width: 100%; }
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.feature-card__preview--zoomable {
+.feature-card__preview--button {
   position: relative;
+  width: 100%;
+  border: 0;
   cursor: zoom-in;
+  text-align: left;
+}
+.feature-card__tag {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 2;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(6, 8, 14, 0.78);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 .feature-card__body { padding: 18px; }
 .feature-card__head {
@@ -363,6 +380,9 @@ img { display: block; max-width: 100%; }
   white-space: nowrap;
   color: rgba(255, 255, 255, 0.72);
   font-size: 13px;
+}
+.feature-card__cta:hover {
+  color: white;
 }
 .feature-card p { margin-top: 8px; }
 
@@ -413,6 +433,15 @@ img { display: block; max-width: 100%; }
   background: rgba(255, 255, 255, 0.03);
 }
 .cta-panel--detail { margin-top: 22px; }
+.cta-panel--brand {
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(24, 27, 42, 0.96), rgba(11, 14, 24, 0.96));
+}
+.cta-panel--brand strong {
+  display: block;
+  font-size: 18px;
+  color: white;
+}
 
 .feature-hero__preview {
   padding: 16px;
@@ -421,6 +450,13 @@ img { display: block; max-width: 100%; }
 }
 .image-panel {
   position: relative;
+  width: 100%;
+}
+.image-panel--annotated {
+  border-radius: 18px;
+  overflow: hidden;
+}
+.image-panel__trigger {
   width: 100%;
   padding: 0;
   border: 0;
@@ -447,9 +483,75 @@ img { display: block; max-width: 100%; }
   right: 12px;
   bottom: 12px;
 }
+.spotlight-dot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+.spotlight-dot__pulse {
+  position: absolute;
+  inset: -10px;
+  border-radius: 999px;
+  background: rgba(114, 222, 255, 0.16);
+  filter: blur(2px);
+}
+.spotlight-dot__core {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(135deg, rgba(157, 140, 255, 0.96), rgba(114, 222, 255, 0.96));
+  color: #0d1220;
+  font-size: 13px;
+  font-weight: 800;
+}
+.spotlight-dot__label {
+  position: absolute;
+  top: -8px;
+  left: 42px;
+  white-space: nowrap;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 10, 18, 0.82);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+}
 .detail-grid--highlights { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .detail-card { display: grid; gap: 16px; }
 .detail-card p { margin: 0; font-size: 15px; }
+.feature-specs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 26px;
+}
+.feature-spec {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+.feature-spec span {
+  display: block;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.feature-spec strong {
+  display: block;
+  margin-top: 10px;
+  font-size: 18px;
+  line-height: 1.45;
+}
 
 .tutorial-list {
   display: grid;
@@ -571,7 +673,8 @@ img { display: block; max-width: 100%; }
   .workflow,
   .contact-grid,
   .detail-grid--highlights,
-  .highlight-card {
+  .highlight-card,
+  .feature-specs {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -603,10 +706,16 @@ img { display: block; max-width: 100%; }
   .workflow,
   .contact-grid,
   .detail-grid--highlights,
-  .hero-preview-grid { grid-template-columns: 1fr; }
+  .hero-preview-grid,
+  .feature-specs { grid-template-columns: 1fr; }
   .tutorial-step,
   .tutorial-step--visual,
   .tutorial-step__content {
     grid-template-columns: 1fr;
+  }
+  .spotlight-dot__label {
+    left: 50%;
+    top: 40px;
+    transform: translateX(-50%);
   }
 }
