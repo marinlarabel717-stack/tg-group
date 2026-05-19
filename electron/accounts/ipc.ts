@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { AccountListQuery, CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeOperationResultItem, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
+import type { AccountListQuery, CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, ReauthorizeLogEntry, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressState, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
 import type { AppSettings } from '../app-settings-store'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
@@ -68,6 +68,20 @@ function createEmptyProfileOperationState(): ProfileOperationProgressState {
   }
 }
 
+function createEmptyReauthorizeState(): ReauthorizeProgressState {
+  return {
+    running: false,
+    total: 0,
+    completed: 0,
+    successCount: 0,
+    failedCount: 0,
+    currentAccountId: null,
+    currentPhone: null,
+    logs: [],
+    lastUpdatedAt: null
+  }
+}
+
 function createTwoFactorLogEntry(input: Omit<TwoFactorLogEntry, 'id' | 'createdAt'>): TwoFactorLogEntry {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -77,6 +91,14 @@ function createTwoFactorLogEntry(input: Omit<TwoFactorLogEntry, 'id' | 'createdA
 }
 
 function createProfileOperationLogEntry(input: Omit<ProfileOperationLogEntry, 'id' | 'createdAt'>): ProfileOperationLogEntry {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: new Date().toISOString(),
+    ...input
+  }
+}
+
+function createReauthorizeLogEntry(input: Omit<ReauthorizeLogEntry, 'id' | 'createdAt'>): ReauthorizeLogEntry {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: new Date().toISOString(),
@@ -241,6 +263,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, telegramReauthorizationService, telegramTwoFactorService, telegramProfileService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
   let twoFactorState = createEmptyTwoFactorState()
   let twoFactorStopRequested = false
+  let reauthorizeState = createEmptyReauthorizeState()
   let profileOperationState = createEmptyProfileOperationState()
   let profileOperationStopRequested = false
   let checkStateEmitTimer: NodeJS.Timeout | null = null
@@ -320,6 +343,12 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     mainWindow.webContents.send('accounts:two-factor-progress', twoFactorState)
   }
 
+  const emitReauthorizeProgress = () => {
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('accounts:reauthorize-progress', reauthorizeState)
+  }
+
   const emitProfileOperationProgress = () => {
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
@@ -333,6 +362,15 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       lastUpdatedAt: new Date().toISOString()
     }
     emitTwoFactorProgress()
+  }
+
+  const updateReauthorizeState = (patch: Partial<ReauthorizeProgressState>) => {
+    reauthorizeState = {
+      ...reauthorizeState,
+      ...patch,
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitReauthorizeProgress()
   }
 
   const bumpTwoFactorCounters = (kind: 'success' | 'failed') => {
@@ -354,6 +392,27 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       lastUpdatedAt: new Date().toISOString()
     }
     emitTwoFactorProgress()
+  }
+
+  const bumpReauthorizeCounters = (kind: 'success' | 'failed') => {
+    reauthorizeState = {
+      ...reauthorizeState,
+      completed: reauthorizeState.completed + 1,
+      successCount: reauthorizeState.successCount + (kind === 'success' ? 1 : 0),
+      failedCount: reauthorizeState.failedCount + (kind === 'failed' ? 1 : 0),
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitReauthorizeProgress()
+  }
+
+  const pushReauthorizeLog = (entry: Omit<ReauthorizeLogEntry, 'id' | 'createdAt'>) => {
+    const nextLogs = trimOperationLogs([...reauthorizeState.logs, createReauthorizeLogEntry(entry)])
+    reauthorizeState = {
+      ...reauthorizeState,
+      logs: nextLogs,
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitReauthorizeProgress()
   }
 
   const updateProfileOperationState = (patch: Partial<ProfileOperationProgressState>) => {
@@ -642,56 +701,138 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       throw new Error('没有找到可执行的账号。')
     }
 
+    reauthorizeState = {
+      running: true,
+      total: orderedAccounts.length,
+      completed: 0,
+      successCount: 0,
+      failedCount: 0,
+      currentAccountId: null,
+      currentPhone: null,
+      logs: [],
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitReauthorizeProgress()
+
+    pushReauthorizeLog({
+      accountId: null,
+      phone: '',
+      level: 'info',
+      message: `已开始执行 ${orderedAccounts.length} 个账号的重新授权任务。`
+    })
+
     const results: ReauthorizeOperationResultItem[] = []
     const profileUpdates: CheckResultInput[] = []
     const startedAt = new Date().toISOString()
 
-    for (const account of orderedAccounts) {
-      const item = await telegramReauthorizationService.reauthorize(account, payload)
-      results.push(item)
+    try {
+      for (const account of orderedAccounts) {
+        updateReauthorizeState({
+          currentAccountId: account.id,
+          currentPhone: account.phone || account.username || `账号#${account.id}`
+        })
+        pushReauthorizeLog({
+          accountId: account.id,
+          phone: account.phone,
+          level: 'info',
+          message: '开始处理当前账号。'
+        })
 
-      if (!item.success) {
-        continue
+        const item = await telegramReauthorizationService.reauthorize(account, payload, {
+          log: (level, message) => {
+            pushReauthorizeLog({
+              accountId: account.id,
+              phone: account.phone,
+              level,
+              message
+            })
+          }
+        })
+        results.push(item)
+        bumpReauthorizeCounters(item.success ? 'success' : 'failed')
+
+        if (!item.success) {
+          pushReauthorizeLog({
+            accountId: account.id,
+            phone: account.phone,
+            level: item.status === 'password_mismatch' || item.status === 'session_expired' ? 'warning' : 'error',
+            message: `账号处理结束：${item.message}`
+          })
+          continue
+        }
+
+        profileUpdates.push({
+          id: account.id,
+          status: account.status,
+          phone: account.phone,
+          username: account.username,
+          userId: account.userId,
+          country: account.country,
+          proxyDisplay: account.proxyDisplay ?? null,
+          lastCheckTime: account.lastCheckTime,
+          lastOnlineTime: account.lastOnlineTime,
+          profile: {
+            ...account.profile,
+            twoFA: item.matchedPassword ?? (typeof account.profile?.twoFA === 'string' ? account.profile.twoFA : null),
+            last_connect_date: startedAt,
+            reauthorize_mode: 'desktop',
+            reauthorize_at: startedAt,
+            reauthorize_deleted_system_messages: Boolean(item.officialMessagesCleared)
+          }
+        })
+
+        pushReauthorizeLog({
+          accountId: account.id,
+          phone: account.phone,
+          level: 'success',
+          message: `账号处理结束：${item.message}`
+        })
       }
 
-      profileUpdates.push({
-        id: account.id,
-        status: account.status,
-        phone: account.phone,
-        username: account.username,
-        userId: account.userId,
-        country: account.country,
-        proxyDisplay: account.proxyDisplay ?? null,
-        lastCheckTime: account.lastCheckTime,
-        lastOnlineTime: account.lastOnlineTime,
-        profile: {
-          ...account.profile,
-          twoFA: item.matchedPassword ?? (typeof account.profile?.twoFA === 'string' ? account.profile.twoFA : null),
-          last_connect_date: startedAt,
-          reauthorize_mode: 'desktop',
-          reauthorize_at: startedAt,
-          reauthorize_deleted_system_messages: Boolean(item.officialMessagesCleared)
-        }
+      if (profileUpdates.length > 0) {
+        emitAccountsUpdated(accountRepository.applyCheckResults(profileUpdates))
+      }
+
+      const successCount = results.filter((item) => item.success).length
+      const failedCount = results.length - successCount
+
+      pushReauthorizeLog({
+        accountId: null,
+        phone: '',
+        level: successCount > 0 ? 'success' : 'warning',
+        message: successCount > 0
+          ? `重新授权任务完成：共 ${results.length} 个账号，成功 ${successCount} 个，失败 ${failedCount} 个。`
+          : `重新授权任务完成：共 ${results.length} 个账号，全部执行失败。`
+      })
+
+      return {
+        total: results.length,
+        successCount,
+        failedCount,
+        results,
+        message: successCount > 0
+          ? `本次已完成 ${results.length} 个账号的重新授权，其中成功 ${successCount} 个。`
+          : '本次没有账号重新授权成功。'
+      }
+    } finally {
+      updateReauthorizeState({
+        running: false,
+        currentAccountId: null,
+        currentPhone: null
       })
     }
-
-    if (profileUpdates.length > 0) {
-      emitAccountsUpdated(accountRepository.applyCheckResults(profileUpdates))
-    }
-
-    const successCount = results.filter((item) => item.success).length
-    const failedCount = results.length - successCount
-
-    return {
-      total: results.length,
-      successCount,
-      failedCount,
-      results,
-      message: successCount > 0
-        ? `本次已完成 ${results.length} 个账号的重新授权，其中成功 ${successCount} 个。`
-        : '本次没有账号重新授权成功。'
-    }
   }))
+
+  ipcMain.handle('accounts:get-reauthorize-state', () => reauthorizeState)
+  ipcMain.handle('accounts:clear-reauthorize-logs', () => {
+    reauthorizeState = {
+      ...reauthorizeState,
+      logs: [],
+      lastUpdatedAt: new Date().toISOString()
+    }
+    emitReauthorizeProgress()
+    return reauthorizeState
+  })
 
   ipcMain.handle('accounts:get-two-factor-state', () => twoFactorState)
   ipcMain.handle('accounts:clear-two-factor-logs', () => {

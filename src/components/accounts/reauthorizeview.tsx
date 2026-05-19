@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, KeyRound, RefreshCcw, Search, ShieldAlert, X } from 'lucide-react'
-import type { AccountRecord, ReauthorizeOperationResult, ReauthorizeOperationResultItem } from '../../types'
+import { CheckCircle2, KeyRound, Loader2, RefreshCcw, ScrollText, Search, Settings2, ShieldAlert, X } from 'lucide-react'
+import type { AccountRecord, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressState } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS } from '../common/settings-ui'
 import { ResultStatCard } from './resultdialog'
@@ -30,6 +30,27 @@ function readStatusLabel(status: ReauthorizeOperationResultItem['status']) {
   if (status === 'password_mismatch') return '旧密码不匹配'
   if (status === 'session_expired') return '登录失效'
   return '重新授权失败'
+}
+
+function readLogBadgeClass(level: 'info' | 'success' | 'warning' | 'error') {
+  if (level === 'success') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+  if (level === 'warning') return 'border-amber-300/20 bg-amber-300/10 text-amber-200'
+  if (level === 'error') return 'border-rose-400/20 bg-rose-400/10 text-rose-300'
+  return 'border-sky-400/20 bg-sky-400/10 text-sky-300'
+}
+
+function readLogLevelLabel(level: 'info' | 'success' | 'warning' | 'error') {
+  if (level === 'success') return '成功'
+  if (level === 'warning') return '提醒'
+  if (level === 'error') return '失败'
+  return '步骤'
+}
+
+function formatLogTime(createdAt?: string | null) {
+  if (!createdAt) return '--:--:--'
+  const date = new Date(createdAt)
+  if (Number.isNaN(date.getTime())) return '--:--:--'
+  return date.toLocaleTimeString('zh-CN', { hour12: false })
 }
 
 function sortAccounts(accounts: AccountRecord[], selectedIds: number[]) {
@@ -96,6 +117,8 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<ReauthorizeOperationResult | null>(null)
+  const [progressState, setProgressState] = useState<ReauthorizeProgressState | null>(null)
+  const [activeTab, setActiveTab] = useState<'settings' | 'logs'>('settings')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draftIds, setDraftIds] = useState<number[]>(selectedIds)
   const [keyword, setKeyword] = useState('')
@@ -107,6 +130,16 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
   useEffect(() => {
     void init()
   }, [init])
+
+  useEffect(() => {
+    const api = window.desktopAccounts
+    if (!api?.getReauthorizeState || !api?.onReauthorizeProgress) return
+
+    void api.getReauthorizeState().then(setProgressState).catch(() => {})
+    return api.onReauthorizeProgress((state) => {
+      setProgressState(state)
+    })
+  }, [])
 
   useEffect(() => {
     if (!pickerOpen) {
@@ -148,6 +181,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const selectedAccounts = useMemo(() => accounts.filter((account) => selectedSet.has(account.id)), [accounts, selectedSet])
+  const displayedLogs = useMemo(() => [...(progressState?.logs ?? [])].reverse(), [progressState])
 
   const applyPicker = () => {
     setSelectedIds(draftIds.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied))
@@ -170,7 +204,9 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
       return
     }
 
+    setActiveTab('logs')
     setSubmitting(true)
+    setResult(null)
     try {
       const nextResult = await api.reauthorize({
         accountIds: selectedIds,
@@ -183,6 +219,159 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const renderSettingsTab = () => (
+    <FoldSection title="重新授权设置" hint="保持和现有账号模块同一套表单风格，不额外拆步骤页。">
+      <ConfigRow label="选择账号" hint="点击按钮，从账号列表弹窗里勾选要重新授权的账号。">
+        <div className="space-y-3">
+          <button
+            type="button"
+            disabled={submitting || taskBusy}
+            onClick={() => setPickerOpen(true)}
+            className="h-11 w-full rounded-[12px] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            已选 {selectedIds.length} 个账号
+          </button>
+
+          {selectedAccounts.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {selectedAccounts.slice(0, 12).map((account) => (
+                <span key={account.id} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200">
+                  {account.phone || readAccountLabel(account)}
+                </span>
+              ))}
+              {selectedAccounts.length > 12 ? (
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">还有 {selectedAccounts.length - 12} 个</span>
+              ) : null}
+            </div>
+          ) : (
+            <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-4 py-3 text-sm text-textMuted">
+              还没有选择账号。
+            </div>
+          )}
+        </div>
+      </ConfigRow>
+
+      <ConfigRow label="旧密码" wide>
+        <div className="space-y-2">
+          <input
+            value={oldPasswords}
+            onChange={(event) => setOldPasswords(event.target.value)}
+            placeholder="支持多个旧密码，使用 | 分隔"
+            className={`h-11 w-full rounded-[12px] px-4 text-sm ${SOFT_INPUT_CLASS}`}
+          />
+          <div className="text-xs text-textMuted">如果账号本地已存旧密码，执行时也会自动一起兜底尝试。</div>
+        </div>
+      </ConfigRow>
+
+      <ConfigRow label="删除官方系统消息" hint="开启后，会删除 Telegram 官方系统消息。">
+        <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+          <span>{deleteOfficialMessages ? '已开启' : '已关闭'}</span>
+          <input
+            type="checkbox"
+            checked={deleteOfficialMessages}
+            onChange={(event) => setDeleteOfficialMessages(event.target.checked)}
+            className="h-4 w-4 rounded border-white/20 bg-transparent"
+          />
+        </label>
+      </ConfigRow>
+
+      <ConfigRow label="新设备模式">
+        <div className="flex h-11 items-center rounded-[12px] border border-white/[0.06] bg-black/10 px-4 text-sm text-white">
+          桌面版（固定）
+        </div>
+      </ConfigRow>
+
+      <ConfigRow label="开始重新授权">
+        <button
+          type="button"
+          onClick={() => void handleStart()}
+          disabled={submitting || taskBusy || selectedIds.length === 0}
+          className="h-11 w-full rounded-[12px] bg-violet-300 px-4 text-sm font-medium text-slate-950 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {submitting ? '重新授权中...' : '开始重新授权'}
+        </button>
+      </ConfigRow>
+    </FoldSection>
+  )
+
+  const renderLogsTab = () => {
+    const currentProgress = progressState?.running ? `${progressState.completed} / ${progressState.total}` : result ? `${result.total} / ${result.total}` : `${progressState?.completed ?? 0} / ${progressState?.total ?? 0}`
+
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-3 text-center text-sm md:grid-cols-4">
+          <ResultStatCard label="执行进度" value={currentProgress} tone="neutral" />
+          <ResultStatCard label="成功" value={result?.successCount ?? progressState?.successCount ?? 0} tone="success" />
+          <ResultStatCard label="失败" value={result?.failedCount ?? progressState?.failedCount ?? 0} tone={(result?.failedCount ?? progressState?.failedCount ?? 0) > 0 ? 'danger' : 'info'} />
+          <ResultStatCard label="当前账号" value={progressState?.currentPhone || '等待中'} tone="info" />
+        </div>
+
+        {progressState?.running ? (
+          <div className="flex items-center gap-2 rounded-[14px] border border-violet-300/18 bg-violet-300/10 px-4 py-3 text-sm text-violet-100">
+            <Loader2 size={16} className="animate-spin" />
+            <span>正在执行重新授权，页面会实时刷新步骤日志。</span>
+          </div>
+        ) : null}
+
+        {result?.message ? (
+          <div className={`px-4 py-3 text-sm text-slate-200 ${SOFT_NOTICE_CLASS}`}>{result.message}</div>
+        ) : null}
+
+        {result ? (
+          <div className="space-y-2">
+            {result.results.map((item) => (
+              <div key={`${item.accountId}-${item.status}`} className="flex flex-col gap-3 rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm text-white">{item.phone || `账号#${item.accountId}`}</div>
+                  <div className="mt-1 text-xs text-textMuted">{item.message}</div>
+                </div>
+                <div className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-xs ${readStatusBadgeClass(item.status)}`}>
+                  {item.status === 'success' ? <CheckCircle2 size={14} /> : item.status === 'password_mismatch' ? <KeyRound size={14} /> : item.status === 'session_expired' ? <ShieldAlert size={14} /> : <RefreshCcw size={14} />}
+                  <span>{readStatusLabel(item.status)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="overflow-hidden rounded-[16px] border border-white/[0.06] bg-black/[0.08]">
+          <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-4 py-3">
+            <div>
+              <div className="text-sm font-medium text-white">详细步骤日志</div>
+              <div className="mt-1 text-xs text-textMuted">开始后会按账号逐步展示：连接旧设备、确认新设备、校验旧密码、注销其它设备、写回 session 等关键步骤。</div>
+            </div>
+            <div className="text-xs text-textMuted">最新 {displayedLogs.length} 条</div>
+          </div>
+
+          <div className="max-h-[560px] overflow-y-auto px-3 py-3">
+            {displayedLogs.length > 0 ? (
+              <div className="space-y-2">
+                {displayedLogs.map((log) => (
+                  <div key={log.id} className="rounded-[14px] border border-white/[0.06] bg-black/[0.12] px-4 py-3">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] ${readLogBadgeClass(log.level)}`}>
+                          {readLogLevelLabel(log.level)}
+                        </span>
+                        <span className="truncate text-sm text-white">{log.phone || (log.accountId ? `账号#${log.accountId}` : '任务总览')}</span>
+                      </div>
+                      <div className="text-xs text-textMuted">{formatLogTime(log.createdAt)}</div>
+                    </div>
+                    <div className="mt-2 text-sm leading-6 text-slate-200">{log.message}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-4 py-12 text-center text-sm text-textMuted">
+                暂无执行日志。点击“开始重新授权”后，会自动切到这里并实时显示步骤。
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -199,78 +388,26 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
             </div>
           ) : null}
 
-          <FoldSection title="重新授权设置" hint="保持和现有账号模块同一套表单风格，不额外拆步骤页。">
-            <ConfigRow label="选择账号" hint="点击按钮，从账号列表弹窗里勾选要重新授权的账号。">
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  disabled={submitting || taskBusy}
-                  onClick={() => setPickerOpen(true)}
-                  className="h-11 w-full rounded-[12px] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  已选 {selectedIds.length} 个账号
-                </button>
+          <div className="inline-flex rounded-[14px] border border-white/[0.06] bg-black/[0.08] p-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('settings')}
+              className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm transition ${activeTab === 'settings' ? 'bg-white text-slate-950' : 'text-slate-200 hover:bg-white/[0.06]'}`}
+            >
+              <Settings2 size={16} />
+              <span>重新授权设置</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('logs')}
+              className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm transition ${activeTab === 'logs' ? 'bg-white text-slate-950' : 'text-slate-200 hover:bg-white/[0.06]'}`}
+            >
+              <ScrollText size={16} />
+              <span>执行日志</span>
+            </button>
+          </div>
 
-                {selectedAccounts.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedAccounts.slice(0, 12).map((account) => (
-                      <span key={account.id} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200">
-                        {account.phone || readAccountLabel(account)}
-                      </span>
-                    ))}
-                    {selectedAccounts.length > 12 ? (
-                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">还有 {selectedAccounts.length - 12} 个</span>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-4 py-3 text-sm text-textMuted">
-                    还没有选择账号。
-                  </div>
-                )}
-              </div>
-            </ConfigRow>
-
-            <ConfigRow label="旧密码" wide>
-              <div className="space-y-2">
-                <input
-                  value={oldPasswords}
-                  onChange={(event) => setOldPasswords(event.target.value)}
-                  placeholder="支持多个旧密码，使用 | 分隔"
-                  className={`h-11 w-full rounded-[12px] px-4 text-sm ${SOFT_INPUT_CLASS}`}
-                />
-                <div className="text-xs text-textMuted">如果账号本地已存旧密码，执行时也会自动一起兜底尝试。</div>
-              </div>
-            </ConfigRow>
-
-            <ConfigRow label="删除官方系统消息" hint="开启后，会删除 Telegram 官方系统消息。">
-              <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
-                <span>{deleteOfficialMessages ? '已开启' : '已关闭'}</span>
-                <input
-                  type="checkbox"
-                  checked={deleteOfficialMessages}
-                  onChange={(event) => setDeleteOfficialMessages(event.target.checked)}
-                  className="h-4 w-4 rounded border-white/20 bg-transparent"
-                />
-              </label>
-            </ConfigRow>
-
-            <ConfigRow label="新设备模式">
-              <div className="flex h-11 items-center rounded-[12px] border border-white/[0.06] bg-black/10 px-4 text-sm text-white">
-                桌面版（固定）
-              </div>
-            </ConfigRow>
-
-            <ConfigRow label="开始重新授权">
-              <button
-                type="button"
-                onClick={() => void handleStart()}
-                disabled={submitting || taskBusy || selectedIds.length === 0}
-                className="h-11 w-full rounded-[12px] bg-violet-300 px-4 text-sm font-medium text-slate-950 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {submitting ? '重新授权中...' : '开始重新授权'}
-              </button>
-            </ConfigRow>
-          </FoldSection>
+          {activeTab === 'settings' ? renderSettingsTab() : renderLogsTab()}
 
           {error ? (
             <div className="rounded-[14px] border border-rose-400/18 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
@@ -278,45 +415,6 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
             </div>
           ) : null}
         </div>
-      </GlassPanel>
-
-      <GlassPanel>
-        <FoldSection title="执行结果" defaultOpen>
-          <div className="space-y-4 px-3 py-3">
-            {result ? (
-              <>
-                <div className="grid grid-cols-1 gap-3 text-center text-sm md:grid-cols-3">
-                  <ResultStatCard label="处理总数" value={result.total} tone="neutral" />
-                  <ResultStatCard label="成功" value={result.successCount} tone="success" />
-                  <ResultStatCard label="失败" value={result.failedCount} tone={result.failedCount > 0 ? 'danger' : 'info'} />
-                </div>
-
-                {result.message ? (
-                  <div className={`px-4 py-3 text-sm text-slate-200 ${SOFT_NOTICE_CLASS}`}>{result.message}</div>
-                ) : null}
-
-                <div className="space-y-2">
-                  {result.results.map((item) => (
-                    <div key={`${item.accountId}-${item.status}`} className="flex flex-col gap-3 rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-3 md:flex-row md:items-center md:justify-between">
-                      <div className="min-w-0">
-                        <div className="text-sm text-white">{item.phone || `账号#${item.accountId}`}</div>
-                        <div className="mt-1 text-xs text-textMuted">{item.message}</div>
-                      </div>
-                      <div className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-xs ${readStatusBadgeClass(item.status)}`}>
-                        {item.status === 'success' ? <CheckCircle2 size={14} /> : item.status === 'password_mismatch' ? <KeyRound size={14} /> : item.status === 'session_expired' ? <ShieldAlert size={14} /> : <RefreshCcw size={14} />}
-                        <span>{readStatusLabel(item.status)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-8 text-center text-sm text-textMuted">
-                暂无执行结果。开始重新授权后，会在这里按账号展示：成功 / 旧密码不匹配 / 登录失效 / 重新授权失败。
-              </div>
-            )}
-          </div>
-        </FoldSection>
       </GlassPanel>
 
       {pickerOpen ? (

@@ -237,6 +237,27 @@ export interface ReauthorizeOperationResult {
   message?: string
 }
 
+export interface ReauthorizeLogEntry {
+  id: string
+  accountId: number | null
+  phone: string
+  level: CheckLogLevel
+  message: string
+  createdAt: string
+}
+
+export interface ReauthorizeProgressState {
+  running: boolean
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  currentAccountId: number | null
+  currentPhone: string | null
+  logs: ReauthorizeLogEntry[]
+  lastUpdatedAt: string | null
+}
+
 export interface TwoFactorOperationResultItem {
   accountId: number
   phone: string
