@@ -227,6 +227,7 @@ function formatBatchCreateError(error: unknown) {
   if (/CHAT_TITLE_EMPTY/i.test(normalized)) return '群名或频道名不能为空。'
   if (/CHAT_ABOUT_TOO_LONG|ABOUT_TOO_LONG/i.test(normalized)) return '简介太长了，缩短一点再试。'
   if (/No user has\s+"username"/i.test(normalized)) return '当前公开链接没设置成功。'
+  if (/Too many requests/i.test(normalized)) return '请求过于频繁，请稍后再试。'
   return `创建失败：${normalized}`
 }
 

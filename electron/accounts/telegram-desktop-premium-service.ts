@@ -83,6 +83,9 @@ export function formatPremiumReadError(error: unknown) {
   if (lower.includes('auth_key_duplicated')) {
     return '当前账号存在多 IP / Session 冲突，MTProto 读取失败。'
   }
+  if (lower.includes('too many requests')) {
+    return '请求过于频繁，请稍后再试。'
+  }
   if (lower.includes('timeout')) {
     return 'MTProto 读取会员时间超时，请稍后重试。'
   }

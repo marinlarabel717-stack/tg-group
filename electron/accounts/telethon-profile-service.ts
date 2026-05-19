@@ -399,6 +399,9 @@ function formatProfileError(error: string) {
     }
     return 'Telegram 暂时限流了这个账号，请稍后再试。'
   }
+  if (lower.includes('too many requests')) {
+    return '请求过于频繁，请稍后再试。'
+  }
   if (lower.includes('timeout')) {
     return '更新个人资料超时了，请稍后重试。'
   }

@@ -445,6 +445,7 @@ function formatCollectorGroupError(error: unknown) {
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '这个群限制加入，当前账号没法直接进'
   if (/INVITE_REQUEST_SENT/i.test(normalized)) return '这个群需要审核，当前账号只提交了入群申请，暂时还采不了'
   if (/USERS_TOO_MUCH|CHANNELS_TOO_MUCH|USER_CHANNELS_TOO_MUCH/i.test(normalized)) return '这个账号的加群数量已经接近上限了，先清理一些群再试'
+  if (/Too many requests/i.test(normalized)) return '采集失败：请求过于频繁，请稍后再试。'
   return `采集失败：${normalized}`
 }
 

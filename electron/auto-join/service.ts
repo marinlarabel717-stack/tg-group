@@ -207,6 +207,7 @@ function formatAutoJoinError(error: unknown) {
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '这个群限制加入，当前账号没法直接进'
   if (/INVITE_REQUEST_SENT/i.test(normalized)) return '这个群需要审核，已经提交申请了'
   if (/PEER_FLOOD/i.test(normalized)) return '这个账号操作太频繁了，被 Telegram 限流了'
+  if (/Too many requests/i.test(normalized)) return '请求过于频繁，请稍后再试。'
   if (/FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(normalized)) return '这个账号已经冻结了，没法继续加群'
   if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(normalized)) return '这个账号已经被封了，没法继续加群'
   if (/ACCOUNT_RESTRICTED/i.test(normalized)) return '这个账号当前被限制了，没法继续加群'

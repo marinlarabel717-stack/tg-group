@@ -42,6 +42,7 @@ function formatWebLoginError(error: unknown) {
     return '当前账号 Session 未登录，无法直接打开已登录的 Telegram Web。'
   }
   if (lower.includes('auth_key_duplicated')) return '当前账号存在多 IP / Session 冲突，Telegram Web 自动注入失败。'
+  if (lower.includes('too many requests')) return '请求过于频繁，请稍后再试。'
   if (lower.includes('timeout')) return 'Telegram Web 打开超时，请稍后重试。'
   return `Telegram Web 打开失败：${message}`
 }
