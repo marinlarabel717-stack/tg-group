@@ -1,7 +1,9 @@
-import { memo } from 'react'
-import { CheckCircle2, Download, Loader2, Trash2, Upload } from 'lucide-react'
+import { memo, useEffect, useState } from 'react'
+import { CheckCircle2, Download, KeyRound, Loader2, TableProperties, Trash2, Upload } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
+import { SOFT_TAB_CLASS } from '../common/settings-ui'
 import { AccountTable } from './accounttable'
+import { AccountReauthorizeView } from './reauthorizeview'
 import { CheckResultDialog } from './checkresultdialog'
 import { useAccountStore } from '../../stores/accountstore'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from './resultdialog'
@@ -21,6 +23,8 @@ function readDeleteHeroValue(mode: 'selected' | 'all' | 'flagged' | 'banned' | '
 }
 
 export function AccountsView() {
+  const [activeTab, setActiveTab] = useState<'table' | 'reauthorize'>('table')
+  const init = useAccountStore((state) => state.init)
   const importProgress = useAccountStore((state) => state.importProgress)
   const importResultDialog = useAccountStore((state) => state.importResultDialog)
   const exportResultDialog = useAccountStore((state) => state.exportResultDialog)
@@ -54,6 +58,10 @@ export function AccountsView() {
   const progressThirdCountLabel = progressMode === 'export' || progressMode === 'delete' ? '总数量' : '跳过'
   const progressThirdCount = progressMode === 'export' || progressMode === 'delete' ? (importProgress?.total ?? 0) : (importProgress?.skippedCount ?? 0)
 
+  useEffect(() => {
+    void init()
+  }, [init])
+
   return (
     <div className="space-y-5 contain-layout">
       {!showImportResultDialog && !showExportResultDialog && !showDeleteResultDialog && !showCheckResultDialog && lastActionMessage ? (
@@ -63,7 +71,28 @@ export function AccountsView() {
         </GlassPanel>
       ) : null}
 
-      <AccountTable />
+      <GlassPanel className="py-0">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('table')}
+            className={`inline-flex items-center gap-2 rounded-[12px] px-4 py-2.5 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'table' ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
+          >
+            <TableProperties size={16} />
+            账号列表
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('reauthorize')}
+            className={`inline-flex items-center gap-2 rounded-[12px] px-4 py-2.5 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'reauthorize' ? 'border-white/[0.12] bg-violet-400/10 text-violet-300' : 'bg-card text-slate-200 hover:border-white/[0.09] hover:bg-white/[0.03]'}`}
+          >
+            <KeyRound size={16} />
+            重新授权
+          </button>
+        </div>
+      </GlassPanel>
+
+      {activeTab === 'table' ? <AccountTable /> : <AccountReauthorizeView />}
 
       <ResultDialogShell
         open={showImportProgressDialog && Boolean(importProgress)}

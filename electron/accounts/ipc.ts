@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { AccountListQuery, CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
+import type { AccountListQuery, CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeOperationResultItem, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
 import type { AppSettings } from '../app-settings-store'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
@@ -10,6 +10,7 @@ import type { CheckQueue } from './check-engine/check-queue'
 import type { AppSettingsStore } from '../app-settings-store'
 import type { TelegramWebService } from './telegram-web-service'
 import type { TelegramDesktopPremiumService } from './telegram-desktop-premium-service'
+import type { TelegramReauthorizationService } from './telegram-reauthorization-service'
 import type { ProxyPoolService } from '../proxy-pool/service'
 import type { TelethonTwoFactorService } from './telethon-two-factor-service'
 import type { TelethonProfileService } from './telethon-profile-service'
@@ -25,6 +26,7 @@ interface RegisterAccountIpcOptions {
   proxyPoolService: ProxyPoolService
   telegramWebService: TelegramWebService
   telegramDesktopPremiumService: TelegramDesktopPremiumService
+  telegramReauthorizationService: TelegramReauthorizationService
   telegramTwoFactorService: TelethonTwoFactorService
   telegramProfileService: TelethonProfileService
   emitAccountsUpdated: (accounts: ReturnType<AccountRepository['list']>) => void
@@ -236,7 +238,7 @@ function buildProfileUpdateItemFromOperation(account: ReturnType<AccountReposito
 }
 
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
-  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, telegramTwoFactorService, telegramProfileService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
+  const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, telegramReauthorizationService, telegramTwoFactorService, telegramProfileService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
   let twoFactorState = createEmptyTwoFactorState()
   let twoFactorStopRequested = false
   let profileOperationState = createEmptyProfileOperationState()
@@ -623,6 +625,73 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths[0]
   })
+
+  ipcMain.handle('accounts:reauthorize', async (_event, payload: ReauthorizeOperationPayload): Promise<ReauthorizeOperationResult> => withManagedSessionsWatcherSuspended(async () => {
+    const accountIds = Array.isArray(payload?.accountIds) ? payload.accountIds.filter((id) => Number.isFinite(id)) : []
+    if (accountIds.length === 0) {
+      throw new Error('请先选择需要重新授权的账号。')
+    }
+
+    const accounts = accountRepository.getByIds(accountIds)
+    const accountMap = new Map(accounts.map((account) => [account.id, account]))
+    const orderedAccounts = accountIds
+      .map((id) => accountMap.get(id))
+      .filter((account): account is NonNullable<typeof account> => Boolean(account))
+
+    if (orderedAccounts.length === 0) {
+      throw new Error('没有找到可执行的账号。')
+    }
+
+    const results: ReauthorizeOperationResultItem[] = []
+    const profileUpdates: CheckResultInput[] = []
+    const startedAt = new Date().toISOString()
+
+    for (const account of orderedAccounts) {
+      const item = await telegramReauthorizationService.reauthorize(account, payload)
+      results.push(item)
+
+      if (!item.success) {
+        continue
+      }
+
+      profileUpdates.push({
+        id: account.id,
+        status: account.status,
+        phone: account.phone,
+        username: account.username,
+        userId: account.userId,
+        country: account.country,
+        proxyDisplay: account.proxyDisplay ?? null,
+        lastCheckTime: account.lastCheckTime,
+        lastOnlineTime: account.lastOnlineTime,
+        profile: {
+          ...account.profile,
+          twoFA: item.matchedPassword ?? (typeof account.profile?.twoFA === 'string' ? account.profile.twoFA : null),
+          last_connect_date: startedAt,
+          reauthorize_mode: 'desktop',
+          reauthorize_at: startedAt,
+          reauthorize_deleted_system_messages: Boolean(item.officialMessagesCleared)
+        }
+      })
+    }
+
+    if (profileUpdates.length > 0) {
+      emitAccountsUpdated(accountRepository.applyCheckResults(profileUpdates))
+    }
+
+    const successCount = results.filter((item) => item.success).length
+    const failedCount = results.length - successCount
+
+    return {
+      total: results.length,
+      successCount,
+      failedCount,
+      results,
+      message: successCount > 0
+        ? `本次已完成 ${results.length} 个账号的重新授权，其中成功 ${successCount} 个。`
+        : '本次没有账号重新授权成功。'
+    }
+  }))
 
   ipcMain.handle('accounts:get-two-factor-state', () => twoFactorState)
   ipcMain.handle('accounts:clear-two-factor-logs', () => {

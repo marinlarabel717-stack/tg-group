@@ -24,6 +24,7 @@ import { FileScanner } from './accounts/services/file-scanner'
 import { JsonTemplateService } from './accounts/services/json-template-service'
 import { TelegramWebService } from './accounts/telegram-web-service'
 import { TelegramDesktopPremiumService } from './accounts/telegram-desktop-premium-service'
+import { TelegramReauthorizationService } from './accounts/telegram-reauthorization-service'
 import { TelethonPremiumReader } from './accounts/telethon-premium-reader'
 import { TelethonWebStateReader } from './accounts/telethon-web-state-reader'
 import { TelethonTwoFactorService } from './accounts/telethon-two-factor-service'
@@ -303,6 +304,7 @@ async function bootstrap() {
     telethonPremiumReader,
     proxyPoolService
   )
+  const telegramReauthorizationService = new TelegramReauthorizationService(sessionLoader, clientManager, proxyPoolService)
   const telethonTwoFactorService = new TelethonTwoFactorService()
   const telethonProfileService = new TelethonProfileService()
   const spamBotChecker = new SpamBotChecker()
@@ -382,6 +384,7 @@ async function bootstrap() {
     proxyPoolService,
     telegramWebService,
     telegramDesktopPremiumService,
+    telegramReauthorizationService,
     telegramTwoFactorService: telethonTwoFactorService,
     telegramProfileService: telethonProfileService,
     emitAccountsUpdated,

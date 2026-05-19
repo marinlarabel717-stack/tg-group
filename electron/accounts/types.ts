@@ -209,6 +209,32 @@ export interface TwoFactorOperationPayload {
   recoveryCodes?: Array<{ accountId: number; code: string }>
 }
 
+export type ReauthorizeOperationStatus = 'success' | 'password_mismatch' | 'session_expired' | 'failed'
+
+export interface ReauthorizeOperationPayload {
+  accountIds: number[]
+  oldPasswords: string
+  deleteOfficialMessages: boolean
+}
+
+export interface ReauthorizeOperationResultItem {
+  accountId: number
+  phone: string
+  success: boolean
+  status: ReauthorizeOperationStatus
+  message: string
+  matchedPassword?: string | null
+  officialMessagesCleared?: boolean
+}
+
+export interface ReauthorizeOperationResult {
+  total: number
+  successCount: number
+  failedCount: number
+  results: ReauthorizeOperationResultItem[]
+  message?: string
+}
+
 export interface TwoFactorOperationResultItem {
   accountId: number
   phone: string
