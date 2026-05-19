@@ -140,6 +140,13 @@ export const LicenseGate = memo(function LicenseGate({ children }: { children: R
         {statusMessage ? <div className="relative z-10 mt-3 rounded-[14px] border border-white/[0.06] bg-white/[0.04] px-4 py-2.5 text-sm text-slate-100 backdrop-blur-xl">{statusMessage}</div> : null}
         {errorMessage ? <div className="relative z-10 mt-3 rounded-[14px] border border-rose-300/[0.14] bg-rose-400/[0.08] px-4 py-2.5 text-sm text-rose-100 backdrop-blur-xl">{errorMessage}</div> : null}
         {!state.apiConfigured ? <div className="relative z-10 mt-3 rounded-[14px] border border-amber-300/[0.16] bg-amber-300/[0.08] px-4 py-2.5 text-sm text-amber-50 backdrop-blur-xl">授权服务暂未配置完成，请联系技术处理。</div> : null}
+
+        <div className="relative z-10 mt-auto pt-6" style={noDragRegionStyle}>
+          <div className="rounded-[16px] border border-white/[0.05] bg-white/[0.03] px-4 py-3 text-center text-[12px] leading-6 text-white/45 backdrop-blur-xl">
+            <div>⚠️ 本软件仅供学习交流与功能测试，请严格遵守当地法律法规。</div>
+            <div>⚠️ 严禁将本软件用于任何违法违规、侵权或骚扰性用途，使用者需自行承担相关责任。</div>
+          </div>
+        </div>
       </div>
     </div>
   )
