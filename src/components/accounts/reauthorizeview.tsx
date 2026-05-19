@@ -1,10 +1,12 @@
-import { memo, useMemo, useState } from 'react'
-import { CheckCircle2, KeyRound, RefreshCcw, Search, ShieldAlert } from 'lucide-react'
+import { memo, useEffect, useMemo, useState } from 'react'
+import { CheckCircle2, KeyRound, RefreshCcw, Search, ShieldAlert, X } from 'lucide-react'
 import type { AccountRecord, ReauthorizeOperationResult, ReauthorizeOperationResultItem } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS } from '../common/settings-ui'
 import { ResultStatCard } from './resultdialog'
 import { useAccountStore } from '../../stores/accountstore'
+import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
+import { formatAccountStatus } from '../../lib/ui-text'
 
 function readAccountLabel(account: AccountRecord) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
@@ -42,7 +44,44 @@ function sortAccounts(accounts: AccountRecord[], selectedIds: number[]) {
   })
 }
 
+function getAccountStatusTone(status?: string) {
+  if (status === 'alive') return 'bg-emerald-400/12 text-emerald-300'
+  if (status === 'limited') return 'bg-sky-400/12 text-sky-300'
+  if (status === 'temporary_limited') return 'bg-orange-400/12 text-orange-300'
+  if (status === 'geo_restricted') return 'bg-amber-300/12 text-amber-200'
+  if (status === 'frozen') return 'bg-cyan-400/12 text-cyan-300'
+  if (status === 'multi_ip') return 'bg-indigo-400/12 text-indigo-300'
+  if (status === 'timeout') return 'bg-violet-400/12 text-violet-300'
+  if (status === 'banned' || status === 'session_expired' || status === 'not_logged_in') return 'bg-rose-400/12 text-rose-200'
+  if (status === 'checking') return 'bg-teal-400/12 text-teal-300'
+  return 'bg-white/10 text-slate-200'
+}
+
+function readCustomRangeIds<T extends { id: number }>(accounts: T[], startInput: string, endInput: string) {
+  const start = Number(startInput)
+  const end = Number(endInput)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return [] as number[]
+  const normalizedStart = Math.max(1, Math.min(start, end))
+  const normalizedEnd = Math.min(accounts.length, Math.max(start, end))
+  if (normalizedStart > normalizedEnd) return [] as number[]
+  return accounts.slice(normalizedStart - 1, normalizedEnd).map((item) => item.id)
+}
+
+function toggleAccountRange(currentIds: number[], rangeIds: number[]) {
+  const currentSet = new Set(currentIds)
+  const fullySelected = rangeIds.every((id) => currentSet.has(id))
+  if (fullySelected) {
+    return currentIds.filter((id) => !rangeIds.includes(id))
+  }
+  const next = [...currentIds]
+  rangeIds.forEach((id) => {
+    if (!currentSet.has(id)) next.push(id)
+  })
+  return next
+}
+
 export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
+  const init = useAccountStore((state) => state.init)
   const accounts = useAccountStore((state) => state.accounts)
   const selectedIds = useAccountStore((state) => state.selectedIds)
   const setSelectedIds = useAccountStore((state) => state.setSelectedIds)
@@ -50,20 +89,41 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
   const twoFactorState = useAccountStore((state) => state.twoFactorState)
   const profileOperationState = useAccountStore((state) => state.profileOperationState)
   const importProgress = useAccountStore((state) => state.importProgress)
+  const accountTaskStatusMap = useAccountTaskStatusMap()
 
-  const [search, setSearch] = useState('')
   const [oldPasswords, setOldPasswords] = useState('')
   const [deleteOfficialMessages, setDeleteOfficialMessages] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<ReauthorizeOperationResult | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [draftIds, setDraftIds] = useState<number[]>(selectedIds)
+  const [keyword, setKeyword] = useState('')
+  const [rangeStart, setRangeStart] = useState('1')
+  const [rangeEnd, setRangeEnd] = useState('10')
 
   const taskBusy = checkState.running || twoFactorState.running || profileOperationState.running || Boolean(importProgress)
 
+  useEffect(() => {
+    void init()
+  }, [init])
+
+  useEffect(() => {
+    if (!pickerOpen) {
+      setDraftIds(selectedIds)
+    }
+  }, [pickerOpen, selectedIds])
+
+  useEffect(() => {
+    if (!pickerOpen) return
+    setRangeStart('1')
+    setRangeEnd(String(Math.min(10, Math.max(accounts.length, 1))))
+  }, [pickerOpen, accounts.length])
+
   const sortedAccounts = useMemo(() => sortAccounts(accounts, selectedIds), [accounts, selectedIds])
   const filteredAccounts = useMemo(() => {
-    const keyword = search.trim().toLowerCase()
-    if (!keyword) return sortedAccounts
+    const searchValue = keyword.trim().toLowerCase()
+    if (!searchValue) return sortedAccounts
 
     return sortedAccounts.filter((account) => {
       const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name : ''
@@ -77,23 +137,21 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
         readAccountLabel(account)
       ].join(' ').toLowerCase()
 
-      return haystack.includes(keyword)
+      return haystack.includes(searchValue)
     })
-  }, [accounts, search, sortedAccounts])
+  }, [accounts, keyword, sortedAccounts])
+
+  const selectableFilteredAccounts = useMemo(
+    () => filteredAccounts.filter((account) => !getAccountTaskMeta(accountTaskStatusMap, account.id).occupied),
+    [accountTaskStatusMap, filteredAccounts]
+  )
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const selectedAccounts = useMemo(() => accounts.filter((account) => selectedSet.has(account.id)), [accounts, selectedSet])
 
-  const toggleAccount = (accountId: number) => {
-    if (selectedSet.has(accountId)) {
-      setSelectedIds(selectedIds.filter((id) => id !== accountId))
-      return
-    }
-    setSelectedIds([...selectedIds, accountId])
-  }
-
-  const selectFilteredAccounts = () => {
-    setSelectedIds(Array.from(new Set(filteredAccounts.map((account) => account.id))))
+  const applyPicker = () => {
+    setSelectedIds(draftIds.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied))
+    setPickerOpen(false)
   }
 
   const handleStart = async () => {
@@ -132,7 +190,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
       <GlassPanel>
         <div className="space-y-5">
           <div className={`px-4 py-3 text-sm text-slate-200 ${SOFT_NOTICE_CLASS}`}>
-            这里只做 <span className="text-white">合法账号持有人的重新授权</span>。会把所选账号重新切到 <span className="text-white">桌面版（固定）</span> 模式；如勾选，还会顺手清理官方系统消息。
+            这里只做 <span className="text-white">合法账号持有人的重新授权</span>。会把所选账号重新切到 <span className="text-white">桌面版（固定）</span> 模式，并在成功后只保留当前新设备。
           </div>
 
           {taskBusy ? (
@@ -142,57 +200,16 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
           ) : null}
 
           <FoldSection title="重新授权设置" hint="保持和现有账号模块同一套表单风格，不额外拆步骤页。">
-            <ConfigRow label="选择账号" wide>
+            <ConfigRow label="选择账号" hint="点击按钮，从账号列表弹窗里勾选要重新授权的账号。">
               <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={selectFilteredAccounts} className="h-10 rounded-[12px] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.09]">
-                    选中当前列表
-                  </button>
-                  <button type="button" onClick={() => setSelectedIds([])} className="h-10 rounded-[12px] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.09]">
-                    清空选择
-                  </button>
-                  <span className="text-sm text-textMuted">已选 {selectedIds.length} 个账号</span>
-                </div>
-
-                <label className="relative block">
-                  <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
-                  <input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="搜索手机号 / 用户名 / 昵称"
-                    className={`h-11 w-full rounded-[12px] pl-10 pr-4 text-sm ${SOFT_INPUT_CLASS}`}
-                  />
-                </label>
-
-                <div className="max-h-[320px] space-y-2 overflow-y-auto rounded-[14px] border border-white/[0.06] bg-black/[0.08] p-2">
-                  {filteredAccounts.map((account) => {
-                    const checked = selectedSet.has(account.id)
-                    return (
-                      <button
-                        key={account.id}
-                        type="button"
-                        onClick={() => toggleAccount(account.id)}
-                        className={`flex w-full items-center justify-between gap-3 rounded-[12px] border px-3 py-3 text-left transition ${checked ? 'border-violet-300/30 bg-violet-300/10' : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04]'}`}
-                      >
-                        <div className="flex min-w-0 items-start gap-3">
-                          <span className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded border text-xs ${checked ? 'border-violet-300/50 bg-violet-300 text-slate-950' : 'border-white/12 bg-black/10 text-transparent'}`}>
-                            ✓
-                          </span>
-                          <div className="min-w-0">
-                            <div className="truncate text-sm text-white">{readAccountLabel(account)}</div>
-                            <div className="mt-1 truncate text-xs text-textMuted">
-                              {account.phone || '—'} {account.username ? `· ${account.username}` : ''}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-xs text-textMuted">#{account.id}</div>
-                      </button>
-                    )
-                  })}
-                  {filteredAccounts.length === 0 ? (
-                    <div className="rounded-[12px] px-3 py-6 text-center text-sm text-textMuted">当前没有匹配到账号。</div>
-                  ) : null}
-                </div>
+                <button
+                  type="button"
+                  disabled={submitting || taskBusy}
+                  onClick={() => setPickerOpen(true)}
+                  className="h-11 w-full rounded-[12px] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  已选 {selectedIds.length} 个账号
+                </button>
 
                 {selectedAccounts.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -205,7 +222,11 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
                       <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">还有 {selectedAccounts.length - 12} 个</span>
                     ) : null}
                   </div>
-                ) : null}
+                ) : (
+                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-4 py-3 text-sm text-textMuted">
+                    还没有选择账号。
+                  </div>
+                )}
               </div>
             </ConfigRow>
 
@@ -221,15 +242,15 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
               </div>
             </ConfigRow>
 
-            <ConfigRow label="删除官方系统消息">
-              <label className="flex h-11 items-center gap-3 rounded-[12px] border border-white/[0.06] bg-black/10 px-4 text-sm text-white">
+            <ConfigRow label="删除官方系统消息" hint="开启后，会删除 Telegram 官方系统消息。">
+              <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+                <span>{deleteOfficialMessages ? '已开启' : '已关闭'}</span>
                 <input
                   type="checkbox"
                   checked={deleteOfficialMessages}
                   onChange={(event) => setDeleteOfficialMessages(event.target.checked)}
-                  className="h-4 w-4 rounded border-white/20 bg-transparent accent-violet-300"
+                  className="h-4 w-4 rounded border-white/20 bg-transparent"
                 />
-                <span>执行后顺手清理当前账号里的官方系统消息</span>
               </label>
             </ConfigRow>
 
@@ -297,6 +318,101 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
           </div>
         </FoldSection>
       </GlassPanel>
+
+      {pickerOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setPickerOpen(false)}>
+          <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.06] bg-card px-5 py-4">
+              <div className="text-lg font-semibold text-white">账号列表</div>
+              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setPickerOpen(false)}><X size={16} /></button>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="relative w-full lg:max-w-[360px]">
+                  <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
+                  <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索手机号 / 用户名" className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-white/[0.12]" />
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={() => setDraftIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">选中筛选结果</button>
+                  <button type="button" onClick={() => setDraftIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
+                </div>
+              </div>
+
+              {filteredAccounts.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-sm text-textMuted">范围</div>
+                  <input
+                    inputMode="numeric"
+                    value={rangeStart}
+                    onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="开始"
+                    className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
+                  />
+                  <span className="text-textMuted">-</span>
+                  <input
+                    inputMode="numeric"
+                    value={rangeEnd}
+                    onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="结束"
+                    className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rangeIds = readCustomRangeIds(selectableFilteredAccounts, rangeStart, rangeEnd)
+                      if (rangeIds.length === 0) return
+                      setDraftIds((current) => toggleAccountRange(current, rangeIds))
+                    }}
+                    className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18"
+                  >
+                    应用范围
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="overflow-hidden rounded-[16px] border border-white/[0.06] bg-panel/80">
+                <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.18em] text-textMuted">
+                  <div className="text-center">选择</div>
+                  <div>手机号</div>
+                  <div>账号</div>
+                  <div>状态</div>
+                </div>
+
+                <div className="max-h-[420px] overflow-y-auto">
+                  {filteredAccounts.length === 0 ? (
+                    <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号</div>
+                  ) : filteredAccounts.map((account) => {
+                    const checked = draftIds.includes(account.id)
+                    const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
+                    return (
+                      <label key={account.id} className={`grid grid-cols-[64px_220px_1.4fr_160px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${taskMeta.occupied ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${checked ? 'bg-violet-400/10' : taskMeta.occupied ? '' : 'hover:bg-white/[0.04]'}`}>
+                        <div className="flex items-center justify-center"><input type="checkbox" checked={checked} disabled={taskMeta.occupied} onChange={(event) => setDraftIds((current) => event.target.checked ? [...current, account.id] : current.filter((item) => item !== account.id))} /></div>
+                        <div className="truncate text-white">{account.phone || '-'}</div>
+                        <div className="min-w-0">
+                          <div className="truncate text-white">{readAccountLabel(account)}</div>
+                          <div className="mt-1 truncate text-xs text-textMuted">{account.username ? `@${account.username}` : account.userId || `账号#${account.id}`}</div>
+                          {taskMeta.occupied ? <div className="mt-1 text-xs text-textMuted">占用中：{taskMeta.label}</div> : null}
+                        </div>
+                        <div>
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>
+                            {formatAccountStatus(account.status)}
+                          </span>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/[0.06] bg-card px-5 py-4">
+              <button type="button" onClick={() => setPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
+              <button type="button" onClick={applyPicker} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">确认选择</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 })
