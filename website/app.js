@@ -80,7 +80,7 @@ function renderFeatureGrid() {
       (feature) => `
         <article class="feature-card feature-card--link">
           <button class="feature-card__preview feature-card__preview--button" type="button" data-zoom-src="${feature.preview}" data-zoom-alt="${feature.title} UI 预览" data-zoom-caption="${feature.title} · 页面截图">
-            <span class="feature-card__tag">Real UI</span>
+            <span class="feature-card__tag">${feature.cardTag || 'Real UI'}</span>
             <img src="${feature.preview}" alt="${feature.title} UI 预览" loading="lazy" />
             <span class="image-panel__hint image-panel__hint--small">查看大图</span>
           </button>

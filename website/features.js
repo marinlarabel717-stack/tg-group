@@ -210,6 +210,37 @@ window.TG_MATRIX_FEATURES = [
     scenarios: ['用户沉淀', '成员采集', '营销筛选']
   },
   {
+    slug: 'sniper-system',
+    title: '抢注系统',
+    shortTitle: '抢注系统',
+    summary: '白名单来源监听、候选筛选、自动抢注与结果回看集中在同一页面。',
+    tagline: '适合持续盯词、自动占位、快速回看抢注结果。',
+    preview: './assets/features-real/sniper-system.svg',
+    cardTag: '功能页',
+    badges: ['监听来源', '自动抢注', '结果回看'],
+    specs: [
+      { label: '页面定位', value: '抢注工作台' },
+      { label: '核心动作', value: '监听 / 命中 / 抢注' },
+      { label: '适用阶段', value: '实时执行' }
+    ],
+    spotlights: [
+      { x: 33, y: 33, label: '基础参数区' },
+      { x: 82, y: 30, label: '统计卡片' },
+      { x: 82, y: 69, label: '结果日志区' }
+    ],
+    highlights: [
+      '左侧集中填写监听来源、任务账号与备用池。',
+      '右侧直接启动监听并查看候选、已抢到、新建频道等统计。',
+      '下方日志区持续回看命中记录、抢注状态与失败原因。'
+    ],
+    tutorial: [
+      { title: '配置监听来源与任务账号', body: '先填白名单来源、选择任务账号，再决定是否自动抢注与自动新建频道。', image: './assets/features-real/crops/sniper-system-step1.svg', points: ['来源、账号、备用池集中填写。', '常用开关默认就在同一页。'] },
+      { title: '启动监听并盯实时状态', body: '点击开始监听后，页面会实时刷新来源数量、候选数量、已抢到数量等关键数据。', image: './assets/features-real/crops/sniper-system-step2.svg', points: ['运行按钮独立。', '统计卡片适合快速盯状态。'] },
+      { title: '回看命中与抢注结果', body: '在结果日志区查看每次命中、抢注成功、失败或跳过的详细反馈，方便继续复盘。', image: './assets/features-real/crops/sniper-system-step3.svg', points: ['日志持续更新。', '适合回看结果和排查。'] }
+    ],
+    scenarios: ['频道名抢注', '关键词盯盘', '实时占位']
+  },
+  {
     slug: 'logs',
     title: '日志中心',
     shortTitle: '日志',
