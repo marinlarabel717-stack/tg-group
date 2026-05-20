@@ -5,17 +5,19 @@ import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS, SOFT_PANEL_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
 import { AccountSummaryCards } from '../accounts/accountsummarycards'
+import { TableFilters } from '../accounts/tablefilters'
 import { useAccountStore } from '../../stores/accountstore'
 import { parseGroupInviteTargets, useGroupInviteStore, type GroupInviteTabKey, type GroupInviteTaskSnapshot } from '../../stores/groupinvitestore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
-import { formatAccountStatus } from '../../lib/ui-text'
+import { formatAccountStatus, formatCountryDisplay } from '../../lib/ui-text'
 
 const tabs: Array<{ key: GroupInviteTabKey; label: string; icon: typeof Play }> = [
   { key: 'settings', label: '邀请设置', icon: Users },
   { key: 'logs', label: '执行日志', icon: Clock3 }
 ]
 
-type GroupInviteAccountStatusFilter = 'all' | AccountStatus | 'limited-group' | 'timeout-group'
+type GroupInviteAccountStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
+type PresenceFilter = 'all' | 'has' | 'none'
 
 function readAccountLabel(account: AccountRecord) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
@@ -45,10 +47,39 @@ function checkboxClass() {
 
 function matchesAccountStatusFilter(account: AccountRecord, filter: GroupInviteAccountStatusFilter) {
   if (filter === 'all') return true
+  if (filter === 'premium') return Boolean(account.profile?.is_premium)
   if (filter === 'alive') return account.status === 'alive' || account.status === 'geo_restricted'
   if (filter === 'limited-group') return account.status === 'limited' || account.status === 'temporary_limited'
   if (filter === 'timeout-group') return account.status === 'timeout' || account.status === 'unknown' || account.status === 'checking'
   return account.status === filter
+}
+
+function readProxy(account: AccountRecord) {
+  if (typeof account.proxyDisplay === 'string' && account.proxyDisplay.trim()) return '代理'
+  if (account.profile?.proxy === true) return '代理'
+  return '直连'
+}
+
+function readTwoFactor(account: AccountRecord) {
+  const raw = account.profile?.twoFA
+  if (typeof raw === 'string' && raw.trim()) return raw.trim()
+  return ''
+}
+
+function hasAvatar(account: AccountRecord) {
+  return Boolean(account.profile?.avatar || account.profile?.has_profile_pic || account.profile?.hasProfilePhoto)
+}
+
+function hasUsername(account: AccountRecord) {
+  const profileUsername = typeof account.profile?.username === 'string' ? account.profile.username.trim() : ''
+  if (profileUsername) return true
+  return Boolean(account.username?.trim())
+}
+
+function matchesPresenceFilter(hasValue: boolean, filter: PresenceFilter) {
+  if (filter === 'has') return hasValue
+  if (filter === 'none') return !hasValue
+  return true
 }
 
 function formatDateTime(value?: string | null) {
@@ -131,7 +162,13 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draftIds, setDraftIds] = useState<number[]>(selectedAccountIds)
   const [accountKeyword, setAccountKeyword] = useState('')
+  const [accountCountryFilter, setAccountCountryFilter] = useState('')
   const [accountStatusFilter, setAccountStatusFilter] = useState<GroupInviteAccountStatusFilter>('all')
+  const [accountProxyFilter, setAccountProxyFilter] = useState('')
+  const [accountTwoFactorFilter, setAccountTwoFactorFilter] = useState<PresenceFilter>('all')
+  const [accountAvatarFilter, setAccountAvatarFilter] = useState<PresenceFilter>('all')
+  const [accountTaskFilter, setAccountTaskFilter] = useState<PresenceFilter>('all')
+  const [accountUsernameFilter, setAccountUsernameFilter] = useState<PresenceFilter>('all')
 
   useEffect(() => {
     void initAccounts()
@@ -142,7 +179,13 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
     if (!pickerOpen) {
       setDraftIds(selectedAccountIds)
       setAccountKeyword('')
+      setAccountCountryFilter('')
       setAccountStatusFilter('all')
+      setAccountProxyFilter('')
+      setAccountTwoFactorFilter('all')
+      setAccountAvatarFilter('all')
+      setAccountTaskFilter('all')
+      setAccountUsernameFilter('all')
     }
   }, [pickerOpen, selectedAccountIds])
 
@@ -163,14 +206,26 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
   const parsedSummary = useMemo(() => parseGroupInviteTargets(deferredTargetInput), [deferredTargetInput])
   const selectedSet = useMemo(() => new Set(selectedAccountIds), [selectedAccountIds])
   const selectedAccounts = useMemo(() => accounts.filter((account) => selectedSet.has(account.id)), [accounts, selectedSet])
-  const summaryScopedAccounts = useMemo(() => {
+  const basePickerAccounts = useMemo(() => {
     const keyword = accountKeyword.trim().toLowerCase()
-    if (!keyword) return accounts
-    return accounts.filter((account) => {
+    const searchedAccounts = !keyword ? accounts : accounts.filter((account) => {
       const fullName = readAccountLabel(account).toLowerCase()
       return [fullName, account.phone || '', account.username || '', account.userId || ''].some((value) => value.toLowerCase().includes(keyword))
     })
-  }, [accountKeyword, accounts])
+    if (!accountCountryFilter) return searchedAccounts
+    return searchedAccounts.filter((account) => formatCountryDisplay(account.country, account.phone) === accountCountryFilter)
+  }, [accountCountryFilter, accountKeyword, accounts])
+  const summaryScopedAccounts = useMemo(
+    () => basePickerAccounts.filter((account) => {
+      if (accountProxyFilter && readProxy(account) !== accountProxyFilter) return false
+      if (!matchesPresenceFilter(Boolean(readTwoFactor(account)), accountTwoFactorFilter)) return false
+      if (!matchesPresenceFilter(hasAvatar(account), accountAvatarFilter)) return false
+      if (!matchesPresenceFilter(getAccountTaskMeta(accountTaskStatusMap, account.id).occupied, accountTaskFilter)) return false
+      if (!matchesPresenceFilter(hasUsername(account), accountUsernameFilter)) return false
+      return true
+    }),
+    [accountAvatarFilter, accountProxyFilter, accountTaskFilter, accountTaskStatusMap, accountTwoFactorFilter, accountUsernameFilter, basePickerAccounts]
+  )
   const filteredAccounts = useMemo(
     () => summaryScopedAccounts.filter((account) => matchesAccountStatusFilter(account, accountStatusFilter)),
     [accountStatusFilter, summaryScopedAccounts]
@@ -217,6 +272,48 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
       { key: 'timeout-group' as GroupInviteAccountStatusFilter, label: '超时/未检测', count: timeoutCount }
     ]
   }, [summaryScopedAccounts])
+  const pickerCountries = useMemo(
+    () => Array.from(new Set(accounts.map((account) => formatCountryDisplay(account.country, account.phone)).filter(Boolean))).map((value) => ({ label: value, value })),
+    [accounts]
+  )
+  const pickerStatuses = useMemo(() => {
+    const statusSamples = new Map<AccountStatus, AccountRecord>()
+    let hasPremiumAccounts = false
+    for (const account of accounts) {
+      if (!statusSamples.has(account.status)) statusSamples.set(account.status, account)
+      if (account.profile?.is_premium) hasPremiumAccounts = true
+    }
+    const options: Array<{ label: string; value: GroupInviteAccountStatusFilter }> = Array.from(statusSamples.entries()).map(([value, sampleAccount]) => {
+      const checkMode = sampleAccount?.profile?.check_mode === 'account-survival'
+        ? 'account-survival'
+        : sampleAccount?.profile?.check_mode === 'account-status'
+          ? 'account-status'
+          : null
+      return {
+        label: formatAccountStatus(value, typeof sampleAccount?.profile?.check_error === 'string' ? sampleAccount.profile.check_error : null, checkMode),
+        value
+      }
+    })
+    options.unshift(
+      { label: '超时/未检测', value: 'timeout-group' },
+      { label: '双向', value: 'limited-group' }
+    )
+    if (hasPremiumAccounts) {
+      options.unshift({ label: '会员', value: 'premium' })
+    }
+    return options
+  }, [accounts])
+  const pickerProxies = useMemo(
+    () => Array.from(new Set(accounts.map((account) => readProxy(account)).filter(Boolean))).map((value) => ({ label: value, value })),
+    [accounts]
+  )
+  const pickerPresenceOptions = useMemo(
+    () => [
+      { label: '有', value: 'has' },
+      { label: '无', value: 'none' }
+    ],
+    []
+  )
   const filteredGroups = useMemo(() => {
     const keyword = groupSearch.trim().toLowerCase()
     if (!keyword) return groups
@@ -488,13 +585,38 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
             />
 
             <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-              <div className="relative">
-                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={accountKeyword}
-                  onChange={(event) => setAccountKeyword(event.target.value)}
-                  placeholder="搜索手机号 / 昵称 / 用户名"
-                  className={`h-11 w-full rounded-[12px] pl-9 pr-3 ${SOFT_INPUT_CLASS}`}
+              <div className="min-w-0">
+                <TableFilters
+                  search={accountKeyword}
+                  countryFilter={accountCountryFilter}
+                  statusFilter={accountStatusFilter === 'all' ? '' : accountStatusFilter}
+                  proxyFilter={accountProxyFilter}
+                  twoFactorFilter={accountTwoFactorFilter}
+                  avatarFilter={accountAvatarFilter}
+                  taskFilter={accountTaskFilter}
+                  usernameFilter={accountUsernameFilter}
+                  countries={pickerCountries}
+                  statuses={pickerStatuses}
+                  proxies={pickerProxies}
+                  presences={pickerPresenceOptions}
+                  onSearchChange={setAccountKeyword}
+                  onCountryChange={setAccountCountryFilter}
+                  onStatusChange={(value) => setAccountStatusFilter((value || 'all') as GroupInviteAccountStatusFilter)}
+                  onProxyChange={setAccountProxyFilter}
+                  onTwoFactorChange={(value) => setAccountTwoFactorFilter((value || 'all') as PresenceFilter)}
+                  onAvatarChange={(value) => setAccountAvatarFilter((value || 'all') as PresenceFilter)}
+                  onTaskChange={(value) => setAccountTaskFilter((value || 'all') as PresenceFilter)}
+                  onUsernameChange={(value) => setAccountUsernameFilter((value || 'all') as PresenceFilter)}
+                  onRefresh={() => {
+                    setAccountKeyword('')
+                    setAccountCountryFilter('')
+                    setAccountStatusFilter('all')
+                    setAccountProxyFilter('')
+                    setAccountTwoFactorFilter('all')
+                    setAccountAvatarFilter('all')
+                    setAccountTaskFilter('all')
+                    setAccountUsernameFilter('all')
+                  }}
                 />
               </div>
               <div className="flex gap-3">
