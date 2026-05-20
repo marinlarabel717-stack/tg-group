@@ -346,7 +346,7 @@ export class AccountCheckEngine {
       return this.persistFailure(
         account,
         'not_logged_in',
-        `${source}：GramJS 消息解析异常，Telethon 判定 Session 未登录`,
+        `${source}：GramJS 消息解析异常，Telethon 判定 Session文件已失效`,
         Date.now() - startedAt,
         false,
         'account-status',
@@ -673,9 +673,9 @@ export class AccountCheckEngine {
     const authorizationStatus = this.statusResolver.resolveAuthorization(authorized)
     if (authorizationStatus === 'not_logged_in') {
       const failedPhone = account.phone || account.profile.phone || `账号#${account.id}`
-      logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session 未登录' })
+      logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session文件已失效' })
       const durationMs = Date.now() - startedAt
-      return this.persistFailure(account, 'banned', 'Session 未登录', durationMs, false, 'account-status', proxyMeta)
+      return this.persistFailure(account, 'banned', 'Session文件已失效', durationMs, false, 'account-status', proxyMeta)
     }
 
     const liveUser = await withStepTimeout(client.getMe(), this.timeoutMs, '账号资料读取')
@@ -707,12 +707,12 @@ export class AccountCheckEngine {
 
     if (result.status === 'not_logged_in') {
       const failedPhone = account.phone || account.profile.phone || `账号#${account.id}`
-      logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session 未登录' })
+      logger({ type: 'login_failed', phone: String(failedPhone), reason: 'Session文件已失效' })
       return {
         result: null,
         failure: {
           status: 'banned',
-          errorMessage: '账号存活检测失败：Session 未登录',
+          errorMessage: '账号存活检测失败：Session文件已失效',
           retryable: false
         }
       }

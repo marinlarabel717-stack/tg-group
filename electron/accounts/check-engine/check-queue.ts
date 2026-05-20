@@ -16,8 +16,8 @@ const STATUS_LABELS: Record<AccountCheckResult['status'], string> = {
   temporary_limited: '临时双向',
   geo_restricted: '地理位置限制',
   frozen: '冻结',
-  session_expired: 'Session 失效',
-  not_logged_in: '未登录',
+  session_expired: 'Session文件已失效',
+  not_logged_in: 'Session文件已失效',
   multi_ip: '多 IP 登录',
   timeout: '超时',
   checking: '检测中',
@@ -43,8 +43,8 @@ function readSummaryLabel(status: AccountCheckResult['status'], runMode: 'accoun
   if (status === 'geo_restricted') return '地理位置限制'
   if (status === 'frozen') return '冻结'
   if (status === 'banned') return '封禁'
-  if (status === 'session_expired') return 'Session 失效'
-  if (status === 'not_logged_in') return '未登录'
+  if (status === 'session_expired') return 'Session文件已失效'
+  if (status === 'not_logged_in') return 'Session文件已失效'
   if (status === 'multi_ip') return '多 IP 登录'
   if (status === 'timeout') return '超时'
   return '未知'
@@ -396,8 +396,8 @@ export class CheckQueue extends EventEmitter {
     }
 
     if (!baseError) {
-      if (result.status === 'not_logged_in') return 'Session 未登录'
-      if (result.status === 'session_expired') return 'Session 已失效'
+      if (result.status === 'not_logged_in') return 'Session文件已失效'
+      if (result.status === 'session_expired') return 'Session文件已失效'
       if (result.status === 'multi_ip') return '检测到多 IP 登录'
       if (result.status === 'geo_restricted') return '地理位置限制'
       if (result.status === 'unknown') return '未拿到有效结果'
@@ -412,8 +412,8 @@ export class CheckQueue extends EventEmitter {
     if (normalized.includes('冻结发送探针')) return appendProbeHint('冻结发送探针超时')
     if (normalized.includes('完整资料读取')) return appendProbeHint('读取完整资料超时')
     if (normalized.includes('spambot 检测')) return appendProbeHint('SpamBot 检测超时')
-    if (normalized.includes('session 未登录')) return 'Session 未登录'
-    if (normalized.includes('session revoked') || normalized.includes('session expired') || normalized.includes('auth_key_unregistered')) return 'Session 已失效'
+    if (normalized.includes('session 未登录')) return 'Session文件已失效'
+    if (normalized.includes('session revoked') || normalized.includes('session expired') || normalized.includes('auth_key_unregistered')) return 'Session文件已失效'
     if (normalized.includes('auth_key_duplicated')) return '检测到多 IP 登录'
     if (normalized.includes('phone number banned') || normalized.includes('user_deactivated_ban') || normalized.includes('banned')) return '账号已封禁'
     if (normalized.includes('network') || normalized.includes('socket') || normalized.includes('disconnect')) return appendProbeHint('网络连接失败')

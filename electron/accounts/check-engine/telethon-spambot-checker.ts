@@ -56,8 +56,8 @@ function buildSummary(status: TelethonSpamBotCheckResult['status'], raw: Teletho
 
   if (status === 'frozen') return '账号处于冻结状态'
   if (status === 'banned') return '账号已封禁'
-  if (status === 'session_expired') return 'Session 已失效'
-  if (status === 'not_logged_in') return 'Session 未登录'
+  if (status === 'session_expired') return 'Session文件已失效'
+  if (status === 'not_logged_in') return 'Session文件已失效'
   if (status === 'timeout') return '未在超时时间内收到 SpamBot 回复'
   return raw.reason?.trim() || 'Telethon SpamBot 检测未返回明确结果'
 }
