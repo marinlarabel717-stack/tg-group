@@ -5,6 +5,7 @@ export type ModuleKey =
   | 'automation'
   | 'bot-center'
   | 'auto-join'
+  | 'group-invite'
   | 'batch-create'
   | 'other-tools'
   | 'direct-message'
@@ -755,6 +756,74 @@ export interface BroadcastJoinedGroup {
   type: 'group' | 'supergroup'
 }
 
+export interface GroupInviteTargetItem {
+  id: string
+  raw: string
+  normalized: string
+  kind: 'username' | 'phone'
+}
+
+export interface GroupInvitePayload {
+  accountIds: number[]
+  groupRef: string
+  groupTitle: string
+  items: GroupInviteTargetItem[]
+  inviteIntervalSeconds: number
+  accountFrequencySeconds: number
+  retryWaitSeconds: number
+  perRoundLimit: number
+  riskWaitSeconds: number
+}
+
+export interface GroupInviteResultItem {
+  targetValue: string
+  accountId: number | null
+  accountPhone: string
+  success: boolean
+  status: 'invited' | 'already' | 'failed' | 'skipped'
+  message: string
+}
+
+export interface GroupInviteTaskResult {
+  total: number
+  successCount: number
+  failedCount: number
+  results: GroupInviteResultItem[]
+  message: string
+}
+
+export interface GroupInviteStopResult {
+  stopped: boolean
+  message: string
+}
+
+export interface GroupInviteLogEntry {
+  id: string
+  accountId: number | null
+  accountPhone: string
+  level: CheckLogLevel
+  targetValue: string
+  message: string
+  createdAt: string
+}
+
+export interface GroupInviteProgressState {
+  running: boolean
+  stopRequested: boolean
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  currentAccountId: number | null
+  currentPhone: string | null
+  currentTargetValue: string | null
+  groupRef: string
+  groupTitle: string
+  runningAccountIds: number[]
+  logs: GroupInviteLogEntry[]
+  lastUpdatedAt: string | null
+}
+
 export interface DirectMessageSendPayloadItem {
   id: string
   targetId: string
@@ -1417,6 +1486,13 @@ export interface DesktopAutoJoinApi {
   onProgress: (callback: (payload: AutoJoinProgress) => void) => () => void
 }
 
+export interface DesktopGroupInviteApi {
+  start: (payload: GroupInvitePayload) => Promise<GroupInviteTaskResult>
+  stop: () => Promise<GroupInviteStopResult>
+  getState: () => Promise<GroupInviteProgressState>
+  onProgress: (callback: (payload: GroupInviteProgressState) => void) => () => void
+}
+
 export interface DesktopBatchCreateApi {
   start: (payload: BatchCreatePayload) => Promise<BatchCreateTaskResult>
   stop: () => Promise<BatchCreateStopResult>
@@ -1473,6 +1549,7 @@ declare global {
     desktopBroadcast?: DesktopBroadcastApi
     desktopDirectMessage?: DesktopDirectMessageApi
     desktopAutoJoin?: DesktopAutoJoinApi
+    desktopGroupInvite?: DesktopGroupInviteApi
     desktopBatchCreate?: DesktopBatchCreateApi
     desktopOtherTools?: DesktopOtherToolsApi
     desktopUpdater?: DesktopUpdaterApi

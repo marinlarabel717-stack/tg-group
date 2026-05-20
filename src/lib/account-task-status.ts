@@ -5,9 +5,10 @@ import { useAutoJoinStore } from '../stores/autojoinstore'
 import { useBatchCreateStore } from '../stores/batchcreatestore'
 import { useBroadcastStore } from '../stores/broadcaststore'
 import { useDirectMessageStore } from '../stores/directmessagestore'
+import { useGroupInviteStore } from '../stores/groupinvitestore'
 import { useOtherToolsStore } from '../stores/othertoolsstore'
 
-export type AccountTaskKind = 'idle' | 'checking' | 'direct-message' | 'broadcast' | 'auto-join' | 'batch-create' | 'sniper' | 'two-factor' | 'profile'
+export type AccountTaskKind = 'idle' | 'checking' | 'direct-message' | 'broadcast' | 'auto-join' | 'group-invite' | 'batch-create' | 'sniper' | 'two-factor' | 'profile'
 
 export interface AccountTaskMeta {
   kind: AccountTaskKind
@@ -45,6 +46,12 @@ const ACCOUNT_TASK_META: Record<AccountTaskKind, AccountTaskMeta> = {
     kind: 'auto-join',
     label: '加群中',
     tone: 'border-violet-400/18 bg-violet-400/12 text-violet-200',
+    occupied: true
+  },
+  'group-invite': {
+    kind: 'group-invite',
+    label: '邀请中',
+    tone: 'border-fuchsia-400/18 bg-fuchsia-400/12 text-fuchsia-200',
     occupied: true
   },
   'batch-create': {
@@ -87,6 +94,7 @@ export function buildAccountTaskStatusMap(input: {
   directMessage: { sending: boolean; stopping: boolean; runningAccountIds: number[] }
   broadcast: { syncing: boolean; stopping: boolean; syncingAccountIds: number[] }
   autoJoin: { running: boolean; stopping: boolean; runningAccountIds: number[] }
+  groupInvite: { running: boolean; stopping: boolean; runningAccountIds: number[] }
   batchCreate: { running: boolean; stopping: boolean; runningAccountIds: number[] }
   sniper: { running: boolean; stopping: boolean; runningAccountIds: number[] }
   twoFactor: { running: boolean; stopping: boolean; runningAccountIds: number[] }
@@ -108,6 +116,10 @@ export function buildAccountTaskStatusMap(input: {
 
   if (input.autoJoin.running || input.autoJoin.stopping) {
     assignTask(map, input.autoJoin.runningAccountIds, 'auto-join')
+  }
+
+  if (input.groupInvite.running || input.groupInvite.stopping) {
+    assignTask(map, input.groupInvite.runningAccountIds, 'group-invite')
   }
 
   if (input.batchCreate.running || input.batchCreate.stopping) {
@@ -149,6 +161,9 @@ export function useAccountTaskStatusMap() {
   const autoJoinRunning = useAutoJoinStore((state) => state.running)
   const autoJoinStopping = useAutoJoinStore((state) => state.stopping)
   const autoJoinRunningAccountIds = useAutoJoinStore((state) => state.runningAccountIds)
+  const groupInviteRunning = useGroupInviteStore((state) => state.running)
+  const groupInviteStopping = useGroupInviteStore((state) => state.stopping)
+  const groupInviteRunningAccountIds = useGroupInviteStore((state) => state.runningAccountIds)
   const batchCreateRunning = useBatchCreateStore((state) => state.running)
   const batchCreateStopping = useBatchCreateStore((state) => state.stopping)
   const batchCreateRunningAccountIds = useBatchCreateStore((state) => state.runningAccountIds)
@@ -187,6 +202,11 @@ export function useAccountTaskStatusMap() {
       stopping: autoJoinStopping,
       runningAccountIds: autoJoinRunningAccountIds
     },
+    groupInvite: {
+      running: groupInviteRunning,
+      stopping: groupInviteStopping,
+      runningAccountIds: groupInviteRunningAccountIds
+    },
     batchCreate: {
       running: batchCreateRunning,
       stopping: batchCreateStopping,
@@ -222,6 +242,9 @@ export function useAccountTaskStatusMap() {
     directMessageRunningAccountIds,
     directMessageSending,
     directMessageStopping,
+    groupInviteRunning,
+    groupInviteRunningAccountIds,
+    groupInviteStopping,
     profileOperationState,
     sniperListenerState,
     sniperRunningAccountIds,

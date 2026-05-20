@@ -6,6 +6,7 @@ import { useAccountStore } from '../../stores/accountstore'
 import { useBroadcastStore, type BroadcastTabKey } from '../../stores/broadcaststore'
 import { useDirectMessageStore, type DirectMessageTabKey } from '../../stores/directmessagestore'
 import { useAutoJoinStore, type AutoJoinTabKey } from '../../stores/autojoinstore'
+import { useGroupInviteStore } from '../../stores/groupinvitestore'
 import { useBatchCreateStore } from '../../stores/batchcreatestore'
 import { useOtherToolsStore } from '../../stores/othertoolsstore'
 import { useProxyPoolStore } from '../../stores/proxypoolstore'
@@ -23,6 +24,7 @@ type DashboardTaskCard = {
   autoJoinTabKey?: AutoJoinTabKey
   logsContext?: LogsContext
   reauthorizeTab?: ReauthorizeTab
+  groupInviteTabKey?: 'settings' | 'logs'
   icon: typeof FileClock
 }
 
@@ -61,6 +63,13 @@ export function DashboardView() {
   const autoJoinStopping = useAutoJoinStore((state) => state.stopping)
   const setAutoJoinTab = useAutoJoinStore((state) => state.setActiveTab)
 
+  const initGroupInvite = useGroupInviteStore((state) => state.init)
+  const groupInviteProgressState = useGroupInviteStore((state) => state.progressState)
+  const groupInviteRunning = useGroupInviteStore((state) => state.running)
+  const groupInviteStopping = useGroupInviteStore((state) => state.stopping)
+  const groupInviteLastActionMessage = useGroupInviteStore((state) => state.lastActionMessage)
+  const setGroupInviteTab = useGroupInviteStore((state) => state.setActiveTab)
+
   const initBatchCreate = useBatchCreateStore((state) => state.init)
   const batchCreateTasks = useBatchCreateStore((state) => state.tasks)
   const batchCreateCurrentTaskId = useBatchCreateStore((state) => state.currentTaskId)
@@ -82,10 +91,11 @@ export function DashboardView() {
   useEffect(() => {
     void initAccounts()
     initAutoJoin()
+    initGroupInvite()
     initBatchCreate()
     initOtherTools()
     void initProxyPool()
-  }, [initAccounts, initAutoJoin, initBatchCreate, initOtherTools, initProxyPool])
+  }, [initAccounts, initAutoJoin, initGroupInvite, initBatchCreate, initOtherTools, initProxyPool])
 
   useEffect(() => {
     const api = window.desktopAccounts
@@ -236,6 +246,19 @@ export function DashboardView() {
       })
     }
 
+    if (groupInviteRunning || groupInviteStopping) {
+      items.push({
+        id: 'group-invite',
+        title: groupInviteStopping ? '邀请任务收尾中' : '群组成员邀请',
+        subtitle: groupInviteLastActionMessage || groupInviteProgressState?.logs[groupInviteProgressState.logs.length - 1]?.message || '邀请任务进行中',
+        progress: groupInviteProgressState ? `${groupInviteProgressState.completed} / ${groupInviteProgressState.total}` : '运行中',
+        accentClass: 'border-fuchsia-300/18 bg-fuchsia-400/8 text-fuchsia-200',
+        moduleKey: 'group-invite',
+        groupInviteTabKey: 'logs',
+        icon: UserPlus2
+      })
+    }
+
     if (batchCreateRunning || batchCreateStopping) {
       const activeBatchCreateTask = batchCreateTasks.find((task) => task.id === batchCreateCurrentTaskId) ?? batchCreateTasks[0] ?? null
       items.push({
@@ -302,6 +325,10 @@ export function DashboardView() {
     batchCreateCurrentTaskId,
     batchCreateLastActionMessage,
     batchCreateRunning,
+    groupInviteLastActionMessage,
+    groupInviteProgressState,
+    groupInviteRunning,
+    groupInviteStopping,
     batchCreateStopping,
     batchCreateTasks,
     broadcastLastActionMessage,
@@ -341,6 +368,9 @@ export function DashboardView() {
     }
     if (task.autoJoinTabKey) {
       setAutoJoinTab(task.autoJoinTabKey)
+    }
+    if (task.groupInviteTabKey) {
+      setGroupInviteTab(task.groupInviteTabKey)
     }
 
     setActiveModule(task.moduleKey)

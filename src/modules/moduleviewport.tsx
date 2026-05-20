@@ -10,6 +10,7 @@ const ReauthorizeModule = lazy(() => import('./reauthorize-module'))
 const AutomationModule = lazy(() => import('./automation-module'))
 const BotCenterModule = lazy(() => import('./bot-center-module'))
 const AutoJoinModule = lazy(() => import('./auto-join-module'))
+const GroupInviteModule = lazy(() => import('./group-invite-module'))
 const BatchCreateModule = lazy(() => import('./batch-create-module'))
 const OtherToolsModule = lazy(() => import('./other-tools-module'))
 const DirectMessageModule = lazy(() => import('./direct-message-module'))
@@ -25,6 +26,7 @@ const moduleMap: Record<ModuleKey, LazyExoticComponent<ComponentType>> = {
   automation: AutomationModule,
   'bot-center': BotCenterModule,
   'auto-join': AutoJoinModule,
+  'group-invite': GroupInviteModule,
   'batch-create': BatchCreateModule,
   'other-tools': OtherToolsModule,
   'direct-message': DirectMessageModule,

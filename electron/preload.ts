@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountListPageResult, AccountListQuery, AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BatchCreatePayload, BatchCreateProgress, BatchCreateStopResult, BatchCreateTaskResult, BotCenterConfig, BotCenterState, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DeleteAccountsResult, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, ImportProgressPayload, OtherToolsSniperListenerPayload, OtherToolsSniperListenerState, OtherToolsSniperListenerStopResult, OtherToolsSniperPayload, OtherToolsSniperResult, OtherToolsUsernameFilterPayload, OtherToolsUsernameFilterResult, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationStopResult, ProxyPoolSettings, ProxyPoolState, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeProgressState, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState, TwoFactorStopResult } from '../src/types'
+import type { AccountListPageResult, AccountListQuery, AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BatchCreatePayload, BatchCreateProgress, BatchCreateStopResult, BatchCreateTaskResult, BotCenterConfig, BotCenterState, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DeleteAccountsResult, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, GroupInvitePayload, GroupInviteProgressState, GroupInviteStopResult, GroupInviteTaskResult, ImportProgressPayload, OtherToolsSniperListenerPayload, OtherToolsSniperListenerState, OtherToolsSniperListenerStopResult, OtherToolsSniperPayload, OtherToolsSniperResult, OtherToolsUsernameFilterPayload, OtherToolsUsernameFilterResult, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationStopResult, ProxyPoolSettings, ProxyPoolState, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeProgressState, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState, TwoFactorStopResult } from '../src/types'
 
 const runtimeAppVersion = String(ipcRenderer.sendSync('desktop-info:get-version') || '').trim()
 
@@ -189,6 +189,17 @@ contextBridge.exposeInMainWorld('desktopAutoJoin', {
     const listener = (_event: Electron.IpcRendererEvent, payload: AutoJoinProgress) => callback(payload)
     ipcRenderer.on('auto-join:progress', listener)
     return () => ipcRenderer.removeListener('auto-join:progress', listener)
+  }
+})
+
+contextBridge.exposeInMainWorld('desktopGroupInvite', {
+  start: (payload: GroupInvitePayload) => ipcRenderer.invoke('group-invite:start', payload) as Promise<GroupInviteTaskResult>,
+  stop: () => ipcRenderer.invoke('group-invite:stop') as Promise<GroupInviteStopResult>,
+  getState: () => ipcRenderer.invoke('group-invite:get-state') as Promise<GroupInviteProgressState>,
+  onProgress: (callback: (payload: GroupInviteProgressState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: GroupInviteProgressState) => callback(payload)
+    ipcRenderer.on('group-invite:progress', listener)
+    return () => ipcRenderer.removeListener('group-invite:progress', listener)
   }
 })
 

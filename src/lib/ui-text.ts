@@ -15,6 +15,7 @@ export const moduleLabelMap = {
   automation: '定时群发',
   'bot-center': '机器人中心',
   'auto-join': '极速群发',
+  'group-invite': '群组成员邀请管理',
   'batch-create': '批量创建',
   'other-tools': '其他功能',
   'direct-message': '私信用户',

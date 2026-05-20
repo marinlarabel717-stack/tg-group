@@ -1,4 +1,4 @@
-import { Bot, ChartColumnBig, ChevronLeft, ChevronRight, FileClock, KeyRound, MessageCircleMore, Network, PlusSquare, Radio, SearchCheck, Settings2, SlidersHorizontal, UserPlus2, Users } from 'lucide-react'
+import { Bot, ChartColumnBig, ChevronLeft, ChevronRight, FileClock, KeyRound, MessageCircleMore, Network, PlusSquare, Radio, SearchCheck, Settings2, SlidersHorizontal, UserPlus2, Users, UsersRound } from 'lucide-react'
 import { memo } from 'react'
 import type { ModuleKey } from '../../types'
 import { moduleLabelMap } from '../../lib/ui-text'
@@ -13,6 +13,7 @@ const items: { key: ModuleKey; label: string; icon: typeof ChartColumnBig }[] = 
   { key: 'automation', label: moduleLabelMap.automation, icon: Radio },
   { key: 'bot-center', label: moduleLabelMap['bot-center'], icon: Bot },
   { key: 'auto-join', label: moduleLabelMap['auto-join'], icon: UserPlus2 },
+  { key: 'group-invite', label: moduleLabelMap['group-invite'], icon: UsersRound },
   { key: 'batch-create', label: moduleLabelMap['batch-create'], icon: PlusSquare },
   { key: 'other-tools', label: moduleLabelMap['other-tools'], icon: SlidersHorizontal },
   { key: 'direct-message', label: moduleLabelMap['direct-message'], icon: MessageCircleMore },
