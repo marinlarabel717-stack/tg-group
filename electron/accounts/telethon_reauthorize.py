@@ -5,6 +5,7 @@ import re
 import shutil
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -68,6 +69,16 @@ def _format_error_reason(exc: Exception) -> str:
         if isinstance(value, str) and value.strip() and value.strip() not in pieces:
             pieces.append(value.strip())
     return ' | '.join(pieces) or 'REAUTHORIZE_FAILED'
+
+
+def _format_unix_time(value: Any) -> Optional[str]:
+    if value in (None, ''):
+        return None
+    try:
+        timestamp = int(value)
+    except Exception:
+        return None
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
 
 
 async def _ensure_authorized(client: TelegramClient, timeout_seconds: int):
@@ -149,6 +160,55 @@ async def _clear_official_messages(new_client: TelegramClient, timeout_seconds: 
     _emit_progress('success', '官方系统消息已清理。')
 
 
+async def _read_recovery_state(client: TelegramClient, timeout_seconds: int) -> Dict[str, Any]:
+    password_state = await asyncio.wait_for(client(functions.account.GetPasswordRequest()), timeout=timeout_seconds)
+    has_password = bool(getattr(password_state, 'has_password', False))
+    has_recovery = bool(getattr(password_state, 'has_recovery', False))
+    recovery_email_pattern = str(getattr(password_state, 'login_email_pattern', '') or '').strip() or None
+    unconfirmed_recovery_email_pattern = str(getattr(password_state, 'email_unconfirmed_pattern', '') or '').strip() or None
+    pending_recovery_reset_at = _format_unix_time(getattr(password_state, 'pending_reset_date', None))
+
+    return {
+        'has_password': has_password,
+        'has_recovery': has_recovery,
+        'recovery_email_pattern': recovery_email_pattern,
+        'unconfirmed_recovery_email_pattern': unconfirmed_recovery_email_pattern,
+        'pending_recovery_reset_at': pending_recovery_reset_at,
+    }
+
+
+async def _cleanup_expired_recovery_state(client: TelegramClient, state: Dict[str, Any], timeout_seconds: int) -> Dict[str, bool]:
+    cancelled_recovery_email = False
+    declined_recovery_reset = False
+
+    if not state.get('has_password'):
+        _emit_progress('warning', '检测到当前账号没有 2FA 密码，已跳过恢复方式清理，避免把账号清成无保护状态。')
+        return {
+            'cancelled_recovery_email': False,
+            'declined_recovery_reset': False,
+        }
+
+    if state.get('unconfirmed_recovery_email_pattern'):
+        _emit_progress('info', '检测到待确认的恢复邮箱，正在取消这条旧恢复设置。')
+        await asyncio.wait_for(client(functions.account.CancelPasswordEmailRequest()), timeout=timeout_seconds)
+        cancelled_recovery_email = True
+        _emit_progress('success', '已取消待确认的旧恢复邮箱。')
+
+    if state.get('pending_recovery_reset_at'):
+        _emit_progress('info', '检测到旧的密码重置等待期，正在撤销这条恢复请求。')
+        await asyncio.wait_for(client(functions.account.DeclinePasswordResetRequest()), timeout=timeout_seconds)
+        declined_recovery_reset = True
+        _emit_progress('success', '已撤销旧的密码重置等待期。')
+
+    if not cancelled_recovery_email and not declined_recovery_reset:
+        _emit_progress('info', '没有检测到需要清理的过期恢复方式。')
+
+    return {
+        'cancelled_recovery_email': cancelled_recovery_email,
+        'declined_recovery_reset': declined_recovery_reset,
+    }
+
+
 def _replace_session_files(source_base: Path, target_base: Path):
     suffixes = ['.session', '.session-journal', '.session-wal', '.session-shm']
     for suffix in suffixes:
@@ -164,6 +224,7 @@ def _replace_session_files(source_base: Path, target_base: Path):
 async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
     session_path = _normalize_session_path(str(payload.get('sessionPath') or ''))
     delete_official_messages = bool(payload.get('deleteOfficialMessages'))
+    cleanup_expired_recovery = bool(payload.get('cleanupExpiredRecovery'))
     timeout_seconds = max(30, int(payload.get('timeoutSeconds') or DEFAULT_TIMEOUT_SECONDS))
     raw_candidates = payload.get('passwordCandidates') or []
     password_candidates = [str(item).strip() for item in raw_candidates if str(item).strip()]
@@ -179,6 +240,15 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
     official_messages_cleared = False
     reset_count = 0
     reset_web_count = 0
+    recovery_state = {
+        'has_password': False,
+        'has_recovery': False,
+        'recovery_email_pattern': None,
+        'unconfirmed_recovery_email_pattern': None,
+        'pending_recovery_reset_at': None,
+    }
+    cancelled_recovery_email = False
+    declined_recovery_reset = False
 
     try:
         _emit_progress('info', '步骤 0：正在连接旧设备会话。')
@@ -231,6 +301,25 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
         await asyncio.wait_for(new_client.get_me(), timeout=timeout_seconds)
         _emit_progress('success', '步骤 6：新设备账号校验通过。')
 
+        recovery_state = await _read_recovery_state(new_client, timeout_seconds)
+        if recovery_state.get('has_password'):
+            _emit_progress('success', '已确认当前账号仍保留 2FA 密码。')
+        else:
+            _emit_progress('warning', '当前账号没有检测到 2FA 密码。')
+
+        if recovery_state.get('recovery_email_pattern'):
+            _emit_progress('info', f"当前仍保留有效恢复邮箱：{recovery_state['recovery_email_pattern']}。")
+        if recovery_state.get('unconfirmed_recovery_email_pattern'):
+            _emit_progress('warning', f"检测到待确认的旧恢复邮箱：{recovery_state['unconfirmed_recovery_email_pattern']}。")
+        if recovery_state.get('pending_recovery_reset_at'):
+            _emit_progress('warning', f"检测到旧的密码重置等待期：{recovery_state['pending_recovery_reset_at']}。")
+
+        if cleanup_expired_recovery:
+            cleanup_state = await _cleanup_expired_recovery_state(new_client, recovery_state, timeout_seconds)
+            cancelled_recovery_email = cleanup_state.get('cancelled_recovery_email', False)
+            declined_recovery_reset = cleanup_state.get('declined_recovery_reset', False)
+            recovery_state = await _read_recovery_state(new_client, timeout_seconds)
+
         if delete_official_messages:
             try:
                 await _clear_official_messages(new_client, timeout_seconds)
@@ -262,14 +351,26 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
         _replace_session_files(Path(temp_session_base), original_base)
         _emit_progress('success', '步骤 8 完成：新 session 已写回本地。')
 
+        success_message = '重新授权成功：已先清理其它旧设备，再用官方验证码完成新设备登录，最后让旧设备退出。'
+        if cleanup_expired_recovery:
+            if cancelled_recovery_email or declined_recovery_reset:
+                success_message += ' 已顺带清理旧的恢复痕迹。'
+            else:
+                success_message += ' 恢复方式已检查，没发现需要清理的过期项。'
+
         return {
             'ok': True,
-            'message': '重新授权成功：已先清理其它旧设备，再用官方验证码完成新设备登录，最后让旧设备退出。',
+            'message': success_message,
             'matched_password': matched_password,
             'official_messages_cleared': official_messages_cleared,
             'terminated_authorizations_count': reset_count,
             'terminated_web_authorizations_count': reset_web_count,
             'phone': phone_with_prefix,
+            'recovery_email_pattern': recovery_state.get('recovery_email_pattern'),
+            'unconfirmed_recovery_email_pattern': recovery_state.get('unconfirmed_recovery_email_pattern'),
+            'pending_recovery_reset_at': recovery_state.get('pending_recovery_reset_at'),
+            'cancelled_recovery_email': cancelled_recovery_email,
+            'declined_recovery_reset': declined_recovery_reset,
         }
     except Exception as exc:
         return {
@@ -279,6 +380,11 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
             'official_messages_cleared': official_messages_cleared,
             'terminated_authorizations_count': reset_count,
             'terminated_web_authorizations_count': reset_web_count,
+            'recovery_email_pattern': recovery_state.get('recovery_email_pattern'),
+            'unconfirmed_recovery_email_pattern': recovery_state.get('unconfirmed_recovery_email_pattern'),
+            'pending_recovery_reset_at': recovery_state.get('pending_recovery_reset_at'),
+            'cancelled_recovery_email': cancelled_recovery_email,
+            'declined_recovery_reset': declined_recovery_reset,
         }
     finally:
         try:

@@ -16,6 +16,11 @@ interface TelethonReauthorizeRawResult {
   official_messages_cleared?: boolean
   terminated_authorizations_count?: number
   terminated_web_authorizations_count?: number
+  recovery_email_pattern?: string | null
+  unconfirmed_recovery_email_pattern?: string | null
+  pending_recovery_reset_at?: string | null
+  cancelled_recovery_email?: boolean
+  declined_recovery_reset?: boolean
 }
 
 type ReauthorizeLogLevel = 'info' | 'success' | 'warning' | 'error'
@@ -234,7 +239,12 @@ export class TelegramReauthorizationService {
         matchedPassword: null,
         officialMessagesCleared: false,
         terminatedAuthorizationsCount: 0,
-        terminatedWebAuthorizationsCount: 0
+        terminatedWebAuthorizationsCount: 0,
+        recoveryEmailPattern: null,
+        unconfirmedRecoveryEmailPattern: null,
+        pendingRecoveryResetAt: null,
+        cancelledRecoveryEmail: false,
+        declinedRecoveryReset: false
       }
     }
 
@@ -252,7 +262,12 @@ export class TelegramReauthorizationService {
         matchedPassword: null,
         officialMessagesCleared: false,
         terminatedAuthorizationsCount: 0,
-        terminatedWebAuthorizationsCount: 0
+        terminatedWebAuthorizationsCount: 0,
+        recoveryEmailPattern: null,
+        unconfirmedRecoveryEmailPattern: null,
+        pendingRecoveryResetAt: null,
+        cancelledRecoveryEmail: false,
+        declinedRecoveryReset: false
       }
     }
 
@@ -266,7 +281,12 @@ export class TelegramReauthorizationService {
         matchedPassword: null,
         officialMessagesCleared: false,
         terminatedAuthorizationsCount: 0,
-        terminatedWebAuthorizationsCount: 0
+        terminatedWebAuthorizationsCount: 0,
+        recoveryEmailPattern: null,
+        unconfirmedRecoveryEmailPattern: null,
+        pendingRecoveryResetAt: null,
+        cancelledRecoveryEmail: false,
+        declinedRecoveryReset: false
       }
     }
 
@@ -282,6 +302,7 @@ export class TelegramReauthorizationService {
       const raw = await this.runScript(account.id, {
         sessionPath: account.sessionPath,
         deleteOfficialMessages: payload.deleteOfficialMessages,
+        cleanupExpiredRecovery: payload.cleanupExpiredRecovery,
         passwordCandidates,
         timeoutSeconds: 180,
         proxy: proxyPayload ? JSON.parse(proxyPayload) : null
@@ -301,7 +322,12 @@ export class TelegramReauthorizationService {
         matchedPassword: typeof raw.matched_password === 'string' ? raw.matched_password : null,
         officialMessagesCleared: Boolean(raw.official_messages_cleared),
         terminatedAuthorizationsCount: Number(raw.terminated_authorizations_count || 0),
-        terminatedWebAuthorizationsCount: Number(raw.terminated_web_authorizations_count || 0)
+        terminatedWebAuthorizationsCount: Number(raw.terminated_web_authorizations_count || 0),
+        recoveryEmailPattern: typeof raw.recovery_email_pattern === 'string' ? raw.recovery_email_pattern : null,
+        unconfirmedRecoveryEmailPattern: typeof raw.unconfirmed_recovery_email_pattern === 'string' ? raw.unconfirmed_recovery_email_pattern : null,
+        pendingRecoveryResetAt: typeof raw.pending_recovery_reset_at === 'string' ? raw.pending_recovery_reset_at : null,
+        cancelledRecoveryEmail: Boolean(raw.cancelled_recovery_email),
+        declinedRecoveryReset: Boolean(raw.declined_recovery_reset)
       }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
@@ -315,7 +341,12 @@ export class TelegramReauthorizationService {
         matchedPassword: null,
         officialMessagesCleared: false,
         terminatedAuthorizationsCount: 0,
-        terminatedWebAuthorizationsCount: 0
+        terminatedWebAuthorizationsCount: 0,
+        recoveryEmailPattern: null,
+        unconfirmedRecoveryEmailPattern: null,
+        pendingRecoveryResetAt: null,
+        cancelledRecoveryEmail: false,
+        declinedRecoveryReset: false
       }
     }
   }

@@ -119,6 +119,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
 
   const [oldPasswords, setOldPasswords] = useState('')
   const [deleteOfficialMessages, setDeleteOfficialMessages] = useState(false)
+  const [cleanupExpiredRecovery, setCleanupExpiredRecovery] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<ReauthorizeOperationResult | null>(null)
@@ -216,7 +217,8 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
       const nextResult = await api.reauthorize({
         accountIds: selectedIds,
         oldPasswords,
-        deleteOfficialMessages
+        deleteOfficialMessages,
+        cleanupExpiredRecovery
       })
       setResult(nextResult)
     } catch (submitError) {
@@ -277,6 +279,18 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
             type="checkbox"
             checked={deleteOfficialMessages}
             onChange={(event) => setDeleteOfficialMessages(event.target.checked)}
+            className="h-4 w-4 rounded border-white/20 bg-transparent"
+          />
+        </label>
+      </ConfigRow>
+
+      <ConfigRow label="清理过期恢复方式" hint="仅清理待确认 / 已过期的恢复痕迹，不会删除已生效的 2FA 密码恢复方式。">
+        <label className="flex items-center justify-end gap-3 text-sm text-slate-200">
+          <span>{cleanupExpiredRecovery ? '已开启' : '已关闭'}</span>
+          <input
+            type="checkbox"
+            checked={cleanupExpiredRecovery}
+            onChange={(event) => setCleanupExpiredRecovery(event.target.checked)}
             className="h-4 w-4 rounded border-white/20 bg-transparent"
           />
         </label>

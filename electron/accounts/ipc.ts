@@ -777,7 +777,12 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
             last_connect_date: startedAt,
             reauthorize_mode: 'official-code',
             reauthorize_at: startedAt,
-            reauthorize_deleted_system_messages: Boolean(item.officialMessagesCleared)
+            reauthorize_deleted_system_messages: Boolean(item.officialMessagesCleared),
+            reauthorize_recovery_email_pattern: item.recoveryEmailPattern ?? null,
+            reauthorize_unconfirmed_recovery_email_pattern: item.unconfirmedRecoveryEmailPattern ?? null,
+            reauthorize_pending_recovery_reset_at: item.pendingRecoveryResetAt ?? null,
+            reauthorize_cancelled_recovery_email: Boolean(item.cancelledRecoveryEmail),
+            reauthorize_declined_recovery_reset: Boolean(item.declinedRecoveryReset)
           }
         })
 

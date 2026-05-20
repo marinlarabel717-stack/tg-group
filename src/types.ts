@@ -270,6 +270,7 @@ export interface ReauthorizeOperationPayload {
   accountIds: number[]
   oldPasswords: string
   deleteOfficialMessages: boolean
+  cleanupExpiredRecovery: boolean
 }
 
 export interface ReauthorizeOperationResultItem {
@@ -282,6 +283,11 @@ export interface ReauthorizeOperationResultItem {
   officialMessagesCleared?: boolean
   terminatedAuthorizationsCount?: number
   terminatedWebAuthorizationsCount?: number
+  recoveryEmailPattern?: string | null
+  unconfirmedRecoveryEmailPattern?: string | null
+  pendingRecoveryResetAt?: string | null
+  cancelledRecoveryEmail?: boolean
+  declinedRecoveryReset?: boolean
 }
 
 export interface ReauthorizeOperationResult {
