@@ -1622,10 +1622,16 @@ export class OtherToolsService {
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             if (/TIMEOUT/i.test(message)) {
-              task.cancelled = true
-              task.state.running = false
-              task.state.message = '监听已停止：监听扫描超时了，本次没有自动重连。'
-              throw new Error('监听扫描超时后已自动停止任务，本次不会自动重连；请优先减少来源数量、降低每轮复查条数，或检查代理速度后再重新启动。')
+              task.state.message = '监听扫描超时，正在自动重连…'
+              this.pushSniperListenerLog(task, {
+                level: 'warning',
+                message: '监听扫描超时了，稍后会自动重连继续监听。',
+                accountId: scanAccount.id,
+                accountLabel: readCheckResultTitle(scanAccount)
+              })
+              this.emitSniperListenerState(task)
+              await sleep(Math.max(3, pollIntervalSeconds) * 1000)
+              continue
             }
             const fatal = isFatalAccountError(error)
             if (fatal) {
@@ -1963,10 +1969,10 @@ export class OtherToolsService {
         const isTimeout = /TIMEOUT/i.test(error instanceof Error ? error.message : String(error))
         this.pushSniperListenerLog(task, {
           level: 'error',
-          message: `${isTimeout ? '监听已停止' : '监听启动失败'}：${runtimeMessage}`
+          message: `${isTimeout ? '监听超时' : '监听启动失败'}：${runtimeMessage}`
         })
         if (isTimeout) {
-          task.state.message = `监听已停止：${runtimeMessage}`
+          task.state.message = `监听超时：${runtimeMessage}`
         }
       } finally {
         task.state.running = false
