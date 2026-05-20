@@ -1,9 +1,10 @@
 import { memo, useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { CheckCircle2, Clock3, Play, Search, Square, Upload, Users, X } from 'lucide-react'
-import type { AccountRecord } from '../../types'
+import type { AccountRecord, AccountStatus } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS, SOFT_PANEL_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
+import { AccountSummaryCards } from '../accounts/accountsummarycards'
 import { useAccountStore } from '../../stores/accountstore'
 import { parseGroupInviteTargets, useGroupInviteStore, type GroupInviteTabKey, type GroupInviteTaskSnapshot } from '../../stores/groupinvitestore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
@@ -13,6 +14,8 @@ const tabs: Array<{ key: GroupInviteTabKey; label: string; icon: typeof Play }> 
   { key: 'settings', label: '邀请设置', icon: Users },
   { key: 'logs', label: '执行日志', icon: Clock3 }
 ]
+
+type GroupInviteAccountStatusFilter = 'all' | AccountStatus | 'limited-group' | 'timeout-group'
 
 function readAccountLabel(account: AccountRecord) {
   const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
@@ -34,6 +37,18 @@ function getAccountStatusTone(status?: string) {
   if (status === 'timeout') return 'bg-violet-400/12 text-violet-300'
   if (status === 'banned' || status === 'session_expired' || status === 'not_logged_in') return 'bg-rose-400/12 text-rose-300'
   return 'bg-white/10 text-slate-200'
+}
+
+function checkboxClass() {
+  return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
+}
+
+function matchesAccountStatusFilter(account: AccountRecord, filter: GroupInviteAccountStatusFilter) {
+  if (filter === 'all') return true
+  if (filter === 'alive') return account.status === 'alive' || account.status === 'geo_restricted'
+  if (filter === 'limited-group') return account.status === 'limited' || account.status === 'temporary_limited'
+  if (filter === 'timeout-group') return account.status === 'timeout' || account.status === 'unknown' || account.status === 'checking'
+  return account.status === filter
 }
 
 function formatDateTime(value?: string | null) {
@@ -116,6 +131,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draftIds, setDraftIds] = useState<number[]>(selectedAccountIds)
   const [accountKeyword, setAccountKeyword] = useState('')
+  const [accountStatusFilter, setAccountStatusFilter] = useState<GroupInviteAccountStatusFilter>('all')
 
   useEffect(() => {
     void initAccounts()
@@ -125,6 +141,8 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
   useEffect(() => {
     if (!pickerOpen) {
       setDraftIds(selectedAccountIds)
+      setAccountKeyword('')
+      setAccountStatusFilter('all')
     }
   }, [pickerOpen, selectedAccountIds])
 
@@ -145,7 +163,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
   const parsedSummary = useMemo(() => parseGroupInviteTargets(deferredTargetInput), [deferredTargetInput])
   const selectedSet = useMemo(() => new Set(selectedAccountIds), [selectedAccountIds])
   const selectedAccounts = useMemo(() => accounts.filter((account) => selectedSet.has(account.id)), [accounts, selectedSet])
-  const filteredAccounts = useMemo(() => {
+  const summaryScopedAccounts = useMemo(() => {
     const keyword = accountKeyword.trim().toLowerCase()
     if (!keyword) return accounts
     return accounts.filter((account) => {
@@ -153,10 +171,52 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
       return [fullName, account.phone || '', account.username || '', account.userId || ''].some((value) => value.toLowerCase().includes(keyword))
     })
   }, [accountKeyword, accounts])
+  const filteredAccounts = useMemo(
+    () => summaryScopedAccounts.filter((account) => matchesAccountStatusFilter(account, accountStatusFilter)),
+    [accountStatusFilter, summaryScopedAccounts]
+  )
   const selectableFilteredAccounts = useMemo(
     () => filteredAccounts.filter((account) => !getAccountTaskMeta(accountTaskStatusMap, account.id).occupied),
     [accountTaskStatusMap, filteredAccounts]
   )
+  const pickerSummaryCards = useMemo(() => {
+    let aliveCount = 0
+    let limitedCount = 0
+    let frozenCount = 0
+    let bannedCount = 0
+    let timeoutCount = 0
+
+    for (const account of summaryScopedAccounts) {
+      if (account.status === 'alive' || account.status === 'geo_restricted') {
+        aliveCount += 1
+        continue
+      }
+      if (account.status === 'limited' || account.status === 'temporary_limited') {
+        limitedCount += 1
+        continue
+      }
+      if (account.status === 'frozen') {
+        frozenCount += 1
+        continue
+      }
+      if (account.status === 'banned' || account.status === 'session_expired' || account.status === 'not_logged_in') {
+        bannedCount += 1
+        continue
+      }
+      if (account.status === 'timeout' || account.status === 'unknown' || account.status === 'checking') {
+        timeoutCount += 1
+      }
+    }
+
+    return [
+      { key: 'all' as GroupInviteAccountStatusFilter, label: '总数量', count: summaryScopedAccounts.length },
+      { key: 'alive' as GroupInviteAccountStatusFilter, label: '无限制', count: aliveCount },
+      { key: 'limited-group' as GroupInviteAccountStatusFilter, label: '双向', count: limitedCount },
+      { key: 'frozen' as GroupInviteAccountStatusFilter, label: '冻结', count: frozenCount },
+      { key: 'banned' as GroupInviteAccountStatusFilter, label: '封禁', count: bannedCount },
+      { key: 'timeout-group' as GroupInviteAccountStatusFilter, label: '超时/未检测', count: timeoutCount }
+    ]
+  }, [summaryScopedAccounts])
   const filteredGroups = useMemo(() => {
     const keyword = groupSearch.trim().toLowerCase()
     if (!keyword) return groups
@@ -410,16 +470,22 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
 
       {pickerOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-[960px] rounded-[24px] border border-white/[0.06] bg-[#11131c] p-5 shadow-[0_26px_90px_rgba(0,0,0,0.45)]">
+          <div className="w-full max-w-[1180px] rounded-[24px] border border-white/[0.06] bg-[#11131c] p-5 shadow-[0_26px_90px_rgba(0,0,0,0.45)]">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-lg font-semibold text-white">选择执行账号</div>
-                <div className="mt-1 text-sm text-textMuted">支持多选，已被其他任务占用的账号会自动禁用。</div>
+                <div className="mt-1 text-sm text-textMuted">先点顶部筛选卡片缩小范围，也可以在下面继续手动勾选。</div>
               </div>
               <button type="button" onClick={() => setPickerOpen(false)} className="rounded-full p-2 text-slate-400 transition hover:bg-white/[0.05] hover:text-white">
                 <X size={16} />
               </button>
             </div>
+
+            <AccountSummaryCards
+              items={pickerSummaryCards}
+              activeFilter={accountStatusFilter}
+              onSelect={(value) => setAccountStatusFilter(value as GroupInviteAccountStatusFilter)}
+            />
 
             <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
               <div className="relative">
@@ -431,45 +497,95 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                   className={`h-11 w-full rounded-[12px] pl-9 pr-3 ${SOFT_INPUT_CLASS}`}
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => setDraftIds(selectableFilteredAccounts.map((account) => account.id))}
-                className="h-11 rounded-[12px] border border-white/[0.06] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08]"
-              >
-                选中当前列表
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDraftIds(selectableFilteredAccounts.map((account) => account.id))}
+                  className="h-11 rounded-[12px] border border-white/[0.06] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08]"
+                >
+                  选中当前列表
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraftIds([])}
+                  className="h-11 rounded-[12px] border border-white/[0.06] bg-white/[0.04] px-4 text-sm text-slate-200 transition hover:bg-white/[0.08]"
+                >
+                  清空勾选
+                </button>
+              </div>
             </div>
 
-            <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+            <div className="mb-3 rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-4 py-3 text-sm text-textMuted">
+              当前结果 <span className="text-white">{filteredAccounts.length}</span> 个，已勾选 <span className="text-white">{draftIds.length}</span> 个，可执行 <span className="text-white">{selectableFilteredAccounts.length}</span> 个。
+            </div>
+
+            <div className="max-h-[520px] overflow-auto rounded-[16px] border border-white/[0.06] bg-black/[0.08]">
               {loadingAccounts ? (
-                <div className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-6 text-sm text-textMuted">账号列表读取中…</div>
-              ) : filteredAccounts.map((account) => {
-                const checked = draftIds.includes(account.id)
-                const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
-                const disabled = taskMeta.occupied
-                return (
-                  <button
-                    key={account.id}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => {
-                      setDraftIds((current) => checked ? current.filter((id) => id !== account.id) : [...current, account.id])
-                    }}
-                    className={`w-full rounded-[14px] border px-4 py-3 text-left transition ${checked ? 'border-violet-400/20 bg-violet-400/10' : 'border-white/[0.06] bg-black/[0.08] hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-white">{account.phone || readAccountLabel(account)}</div>
-                        <div className="mt-1 truncate text-xs text-textMuted">{readAccountLabel(account)} {account.username ? `· @${account.username.replace(/^@+/, '')}` : ''}</div>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        <span className={`rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>{formatAccountStatus(account.status)}</span>
-                        {disabled ? <span className="rounded-full border border-amber-300/16 bg-amber-300/10 px-2.5 py-1 text-xs text-amber-200">{taskMeta.label}</span> : null}
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
+                <div className="px-4 py-6 text-sm text-textMuted">账号列表读取中…</div>
+              ) : filteredAccounts.length > 0 ? (
+                <div className="min-w-[920px]">
+                  <div className="grid grid-cols-[52px_minmax(160px,1.2fr)_minmax(180px,1.4fr)_120px_minmax(120px,0.9fr)_minmax(120px,0.9fr)] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
+                    <label className="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        className={checkboxClass()}
+                        checked={selectableFilteredAccounts.length > 0 && selectableFilteredAccounts.every((account) => draftIds.includes(account.id))}
+                        onChange={(event) => {
+                          if (event.currentTarget.checked) {
+                            setDraftIds(selectableFilteredAccounts.map((account) => account.id))
+                          } else {
+                            setDraftIds([])
+                          }
+                        }}
+                      />
+                    </label>
+                    <div>手机号</div>
+                    <div>账号</div>
+                    <div>状态</div>
+                    <div>用户 ID</div>
+                    <div>任务</div>
+                  </div>
+
+                  {filteredAccounts.map((account) => {
+                    const checked = draftIds.includes(account.id)
+                    const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
+                    const disabled = taskMeta.occupied
+                    return (
+                      <label
+                        key={account.id}
+                        className={`grid cursor-pointer grid-cols-[52px_minmax(160px,1.2fr)_minmax(180px,1.4fr)_120px_minmax(120px,0.9fr)_minmax(120px,0.9fr)] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
+                      >
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            className={checkboxClass()}
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={(event) => {
+                              const nextChecked = event.currentTarget.checked
+                              setDraftIds((current) => nextChecked ? [...current, account.id] : current.filter((id) => id !== account.id))
+                            }}
+                          />
+                        </div>
+                        <div className="min-w-0 text-white">{account.phone || '--'}</div>
+                        <div className="min-w-0">
+                          <div className="truncate text-white">{readAccountLabel(account)}</div>
+                          <div className="mt-1 truncate text-xs text-textMuted">{account.username ? `@${account.username.replace(/^@+/, '')}` : '无用户名'}</div>
+                        </div>
+                        <div>
+                          <span className={`rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>{formatAccountStatus(account.status)}</span>
+                        </div>
+                        <div className="truncate text-slate-300">{account.userId || '--'}</div>
+                        <div>
+                          {disabled ? <span className="rounded-full border border-amber-300/16 bg-amber-300/10 px-2.5 py-1 text-xs text-amber-200">{taskMeta.label}</span> : <span className="text-xs text-textMuted">空闲</span>}
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="px-4 py-8 text-center text-sm text-textMuted">当前筛选下没有可选账号。</div>
+              )}
             </div>
 
             <div className="mt-5 flex items-center justify-end gap-3">
