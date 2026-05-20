@@ -39,6 +39,11 @@ interface TelethonCheckOutcome {
   failure?: CheckFailureMeta | null
 }
 
+function normalizeFailureStatus(status: AccountCheckResult['status']): AccountCheckResult['status'] {
+  if (status === 'session_expired' || status === 'not_logged_in') return 'banned'
+  return status
+}
+
 function withStepTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`${label} 超时（${timeoutMs}ms）`)), timeoutMs)
@@ -182,15 +187,16 @@ export class AccountCheckEngine {
     const status = mode === 'account-survival'
       ? this.statusResolver.resolveHealthCheckError(error)
       : this.statusResolver.resolveFromError(error)
+    const normalizedStatus = normalizeFailureStatus(status)
     const baseErrorMessage = error instanceof Error ? error.message : String(error)
     const probeSuffix = probes.length > 0 ? ` | ${buildProbeSummary(probes)}` : ''
     const proxySuffix = proxyMeta.proxyDisplay ? ` | 代理:${proxyMeta.proxyDisplay}` : ''
     const errorMessage = `${baseErrorMessage}${probeSuffix}${proxySuffix}`
 
     return {
-      status,
+      status: normalizedStatus,
       errorMessage,
-      retryable: this.statusResolver.isRetryable(status, error)
+      retryable: this.statusResolver.isRetryable(normalizedStatus, error)
     }
   }
 
@@ -1125,9 +1131,10 @@ export class AccountCheckEngine {
     mode: 'account-status' | 'account-survival' = 'account-status',
     proxyMeta: ProxyUsageMeta = { proxyUsed: false, proxyDisplay: null }
   ) {
+    const normalizedStatus = normalizeFailureStatus(status)
     const updated = this.updateService.buildFailureProfile({
       account,
-      status,
+      status: normalizedStatus,
       checkMode: mode,
       errorMessage,
       proxyUsed: proxyMeta.proxyUsed,
@@ -1138,7 +1145,7 @@ export class AccountCheckEngine {
     const payload: CheckResultInput = {
       id: account.id,
       profile: updated.profile,
-      status,
+      status: normalizedStatus,
       phone: updated.phone,
       username: updated.username,
       userId: updated.userId,
@@ -1152,7 +1159,7 @@ export class AccountCheckEngine {
 
     return {
       accountId: account.id,
-      status,
+      status: normalizedStatus,
       profile: updated.profile,
       phone: updated.phone,
       username: updated.username,
