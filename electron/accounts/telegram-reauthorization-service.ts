@@ -38,6 +38,11 @@ interface StableDesktopClientProfile {
   systemLangCode: string
 }
 
+const WINDOWS_DEVICE_MODEL_VARIANTS = ['Windows PC 64bit', 'Desktop PC 64bit', 'Office PC 64bit', 'Workstation 64bit']
+const MAC_DEVICE_MODEL_VARIANTS = ['Mac 64bit', 'Desktop Mac 64bit', 'Mac Workstation 64bit']
+const LINUX_DEVICE_MODEL_VARIANTS = ['Linux PC 64bit', 'Desktop Linux 64bit', 'Linux Workstation 64bit']
+const GENERIC_DEVICE_MODEL_VARIANTS = ['Desktop 64bit', 'Desktop PC 64bit', 'Workstation 64bit']
+
 type ReauthorizeLogLevel = 'info' | 'success' | 'warning' | 'error'
 
 interface ReauthorizeLogger {
@@ -70,6 +75,29 @@ function normalizeSystemLangCode(locale: string) {
   return normalized || 'en-US'
 }
 
+function readStableAccountSeed(account: AccountRecord) {
+  return [
+    readTrimmedString(account.phone),
+    readTrimmedString(account.userId),
+    String(account.id)
+  ].find(Boolean) || String(account.id)
+}
+
+function hashSeed(seed: string) {
+  let hash = 0
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(index)) | 0
+  }
+  return Math.abs(hash)
+}
+
+function pickStableVariant<T>(items: T[], seed: string) {
+  if (items.length === 0) {
+    throw new Error('stable variant candidates are empty')
+  }
+  return items[hashSeed(seed) % items.length]
+}
+
 function resolveDesktopSystemVersion() {
   const platform = os.platform()
   const release = readTrimmedString(os.release())
@@ -97,22 +125,36 @@ function resolveDesktopDeviceModel() {
   return `Desktop ${arch}`
 }
 
+function deriveStableDeviceModel(account: AccountRecord) {
+  const seed = readStableAccountSeed(account)
+  const platform = os.platform()
+  if (platform === 'win32') return pickStableVariant(WINDOWS_DEVICE_MODEL_VARIANTS, seed)
+  if (platform === 'darwin') return pickStableVariant(MAC_DEVICE_MODEL_VARIANTS, seed)
+  if (platform === 'linux') return pickStableVariant(LINUX_DEVICE_MODEL_VARIANTS, seed)
+  return pickStableVariant(GENERIC_DEVICE_MODEL_VARIANTS, seed)
+}
+
 function buildStableDesktopClientProfile(account: AccountRecord): StableDesktopClientProfile {
   const storedDeviceModel = readTrimmedString(account.profile?.reauthorize_device_model)
   const storedSystemVersion = readTrimmedString(account.profile?.reauthorize_system_version)
   const storedAppVersion = readTrimmedString(account.profile?.reauthorize_app_version)
   const storedLangCode = readTrimmedString(account.profile?.reauthorize_lang_code)
   const storedSystemLangCode = readTrimmedString(account.profile?.reauthorize_system_lang_code)
+  const originalDeviceModel = readTrimmedString(account.profile?.device_model) || readTrimmedString(account.profile?.device)
+  const originalSystemVersion = readTrimmedString(account.profile?.system_version) || readTrimmedString(account.profile?.sdk)
+  const originalAppVersion = readTrimmedString(account.profile?.app_version)
+  const originalLangCode = readTrimmedString(account.profile?.lang_code)
+  const originalSystemLangCode = readTrimmedString(account.profile?.system_lang_code)
 
   const locale = normalizeSystemLangCode(app.getLocale?.() || Intl.DateTimeFormat().resolvedOptions().locale || 'en-US')
   const appVersion = readTrimmedString(app.getVersion?.()) || '0.0.0'
 
   return {
-    deviceModel: storedDeviceModel || resolveDesktopDeviceModel(),
-    systemVersion: storedSystemVersion || resolveDesktopSystemVersion(),
-    appVersion: storedAppVersion || `TG-Matrix ${appVersion}`,
-    langCode: storedLangCode || normalizeLangCode(locale),
-    systemLangCode: storedSystemLangCode || locale
+    deviceModel: storedDeviceModel || originalDeviceModel || deriveStableDeviceModel(account) || resolveDesktopDeviceModel(),
+    systemVersion: storedSystemVersion || originalSystemVersion || resolveDesktopSystemVersion(),
+    appVersion: storedAppVersion || originalAppVersion || `TG-Matrix ${appVersion}`,
+    langCode: storedLangCode || originalLangCode || normalizeLangCode(locale),
+    systemLangCode: storedSystemLangCode || originalSystemLangCode || locale
   }
 }
 
