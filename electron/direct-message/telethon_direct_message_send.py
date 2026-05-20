@@ -377,6 +377,11 @@ async def _run(command: Dict[str, Any]) -> Dict[str, Any]:
             return {'ok': False, 'reason': 'MESSAGE_ID_INVALID'}
 
         await asyncio.wait_for(client.delete_messages(entity, [message_id], revoke=True), timeout=timeout_seconds)
+        await asyncio.wait_for(client(functions.messages.DeleteHistoryRequest(
+            peer=entity,
+            max_id=0,
+            just_clear=True,
+        )), timeout=timeout_seconds)
         return {'ok': True, 'messageId': message_id}
     except Exception as exc:
         return {'ok': False, 'reason': str(exc) or exc.__class__.__name__}

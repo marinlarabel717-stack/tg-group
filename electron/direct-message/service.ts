@@ -809,7 +809,7 @@ function extractResponseMessageId(result: unknown) {
 
 function readDeleteModeLabel(mode: DirectMessageSendPayload['deleteMode']) {
   if (mode === 'self') return '仅自己删除'
-  if (mode === 'both') return '双向删除'
+  if (mode === 'both') return '撤回消息'
   return '不删除'
 }
 
@@ -849,6 +849,12 @@ async function deleteSentMessage(client: TelegramClient, entity: unknown, messag
   await client.deleteMessages(entity as never, [messageId], {
     revoke: true
   })
+
+  await client.invoke(new Api.messages.DeleteHistory({
+    peer: entity as never,
+    maxId: 0,
+    justClear: true
+  }))
 }
 
 function readAccountLabel(account: AccountRecord) {

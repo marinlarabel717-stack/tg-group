@@ -41,7 +41,7 @@ const messageModes = [
 const deleteModes: Array<{ key: DirectMessageDeleteMode; label: string; hint: string }> = [
   { key: 'none', label: '不删除', hint: '发出去后保留消息。' },
   { key: 'self', label: '仅自己删除', hint: '发送后清空当前账号这边与对方的对话记录 / 聊天列表，对方那边保留。' },
-  { key: 'both', label: '双向删除', hint: '发送后直接撤回这条消息，双方都会看不到这条文案。' }
+  { key: 'both', label: '撤回消息', hint: '保持当前功能不变：在仅自己删除的基础上，再把这条消息从对方那边撤回。' }
 ]
 
 function readAccountLabel(account: { id: number; username?: string; phone?: string; profile?: Record<string, unknown> }) {
