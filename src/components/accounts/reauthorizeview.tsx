@@ -401,10 +401,6 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
       <div className="space-y-5">
         <GlassPanel>
           <div className="space-y-5">
-            <div className={`px-4 py-3 text-sm text-slate-200 ${SOFT_NOTICE_CLASS}`}>
-              这里只做 <span className="text-white">合法账号持有人的重新授权</span>。会把所选账号重新切到 <span className="text-white">桌面版（固定）</span> 模式，并在成功后只保留当前新设备。
-            </div>
-
             {taskBusy ? (
               <div className="rounded-[14px] border border-amber-300/18 bg-amber-300/10 px-4 py-3 text-sm text-amber-200">
                 当前还有别的账号任务在运行，先等它完成，再执行重新授权会更稳。
