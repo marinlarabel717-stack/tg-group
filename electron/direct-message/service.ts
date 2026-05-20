@@ -849,12 +849,6 @@ async function deleteSentMessage(client: TelegramClient, entity: unknown, messag
   await client.deleteMessages(entity as never, [messageId], {
     revoke: true
   })
-
-  await client.invoke(new Api.messages.DeleteHistory({
-    peer: entity as never,
-    maxId: 0,
-    justClear: true
-  }))
 }
 
 function readAccountLabel(account: AccountRecord) {
