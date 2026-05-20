@@ -1,6 +1,6 @@
 import { Copy, Filter, ImageIcon, Loader2, Radar, Search, SquareTerminal, Type, X } from 'lucide-react'
 import { type ChangeEvent, memo, useEffect, useMemo, useState } from 'react'
-import type { AccountRecord, BatchCreatePostType, OtherToolsSniperCandidateItem, OtherToolsSniperListenerState, OtherToolsSourceSubscribeItem, OtherToolsUsernameFilterItem, OtherToolsUsernameFilterResult } from '../../types'
+import type { AccountRecord, BatchCreatePostType, OtherToolsSniperCandidateItem, OtherToolsSniperListenerClaimedItem, OtherToolsSniperListenerCreatedCarrierItem, OtherToolsSniperListenerState, OtherToolsSourceSubscribeItem, OtherToolsUsernameFilterItem, OtherToolsUsernameFilterResult } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
@@ -77,6 +77,8 @@ function createEmptySniperListenerState(message = '监听未启动。'): OtherTo
     startedAt: null,
     lastTickAt: null,
     logs: [],
+    claimedItems: [],
+    createdCarrierItems: [],
     message
   }
 }
@@ -92,6 +94,25 @@ function formatTime(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '--:--:--'
   return date.toLocaleTimeString('zh-CN', { hour12: false })
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '--'
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function isOpenableLink(value?: string | null) {
+  const text = String(value || '').trim()
+  return /^https?:\/\//i.test(text)
+}
+
+function openExternalLink(value?: string | null) {
+  const text = String(value || '').trim()
+  if (!isOpenableLink(text)) return
+  const api = window.desktopWindow
+  if (!api?.openExternal) return
+  void api.openExternal(text)
 }
 
 function PostTypeTabs({ value, onChange }: { value: BatchCreatePostType; onChange: (value: BatchCreatePostType) => void }) {
@@ -197,6 +218,115 @@ function ResultBlock(props: { title: string; items: OtherToolsUsernameFilterItem
         ))}
       </div>
     </GlassPanel>
+  )
+}
+
+function SniperStatCard(props: { title: string; value: number | string; onClick?: () => void; hint?: string }) {
+  const { title, value, onClick, hint } = props
+  const clickable = typeof onClick === 'function'
+  return (
+    <button
+      type="button"
+      onClick={() => onClick?.()}
+      disabled={!clickable}
+      className={`rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-left transition ${clickable ? 'cursor-pointer hover:border-violet-300/30 hover:bg-violet-400/10' : 'cursor-default'}`}
+    >
+      <div className="text-xs text-textMuted">{title}</div>
+      <div className="mt-1 text-xl font-semibold text-white">{value}</div>
+      {hint ? <div className="mt-2 text-[11px] text-textMuted">{hint}</div> : null}
+    </button>
+  )
+}
+
+function SniperClaimedDialog(props: { open: boolean; items: OtherToolsSniperListenerClaimedItem[]; onClose: () => void }) {
+  const { open, items, onClose } = props
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={onClose}>
+      <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.06] bg-card px-5 py-4">
+          <div>
+            <div className="text-lg font-semibold text-white">已抢到明细</div>
+            <div className="mt-1 text-xs text-textMuted">可以直接看到是从哪个来源命中的、最后抢到了哪个链接。</div>
+          </div>
+          <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-5">
+          {items.length === 0 ? <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-4 py-8 text-center text-sm text-textMuted">暂时还没有抢到记录。</div> : items.map((item) => (
+            <div key={item.id} className="rounded-[16px] border border-white/[0.06] bg-black/[0.08] p-4 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-base font-semibold text-white break-all">{item.candidate}</div>
+                <div className="text-xs text-textMuted">{formatDateTime(item.sourceDate)}</div>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className="rounded-[12px] bg-white/[0.03] p-3">
+                  <div className="text-xs text-textMuted">命中来源</div>
+                  <div className="mt-1 text-white break-all">{item.sourceTitle || item.sourceRef || '未知来源'}</div>
+                  <div className="mt-1 text-xs text-textMuted">消息 ID：{item.sourceMessageId || '—'}</div>
+                </div>
+                <div className="rounded-[12px] bg-white/[0.03] p-3">
+                  <div className="text-xs text-textMuted">抢到的链接</div>
+                  <div className="mt-1 text-white break-all">{item.claimTargetRef || item.claimTargetTitle || '—'}</div>
+                  <div className="mt-1 text-xs text-textMuted">处理账号：{item.claimAccountLabel || '—'}{item.createdCarrier ? ' · 自动新建频道' : ' · 池子改绑'}</div>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {isOpenableLink(item.claimTargetRef) ? <button type="button" onClick={() => openExternalLink(item.claimTargetRef)} className="rounded-[10px] bg-violet-400 px-3 py-2 text-xs font-medium text-slate-950 transition hover:bg-violet-300">打开抢到链接</button> : null}
+                {isOpenableLink(item.sourceRef) ? <button type="button" onClick={() => openExternalLink(item.sourceRef)} className="rounded-[10px] bg-white/[0.06] px-3 py-2 text-xs text-white transition hover:bg-white/[0.1]">打开来源</button> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SniperCreatedCarrierDialog(props: { open: boolean; items: OtherToolsSniperListenerCreatedCarrierItem[]; onClose: () => void }) {
+  const { open, items, onClose } = props
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={onClose}>
+      <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.06] bg-card px-5 py-4">
+          <div>
+            <div className="text-lg font-semibold text-white">新建频道明细</div>
+            <div className="mt-1 text-xs text-textMuted">这里直接看自动新建出来的频道链接。</div>
+          </div>
+          <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-5">
+          {items.length === 0 ? <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-4 py-8 text-center text-sm text-textMuted">暂时还没有自动新建频道记录。</div> : items.map((item) => (
+            <div key={item.id} className="rounded-[16px] border border-white/[0.06] bg-black/[0.08] p-4 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-base font-semibold text-white break-all">{item.candidate}</div>
+                <div className="text-xs text-textMuted">{formatDateTime(item.sourceDate)}</div>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className="rounded-[12px] bg-white/[0.03] p-3">
+                  <div className="text-xs text-textMuted">来源</div>
+                  <div className="mt-1 text-white break-all">{item.sourceTitle || item.sourceRef || '未知来源'}</div>
+                  <div className="mt-1 text-xs text-textMuted">消息 ID：{item.sourceMessageId || '—'}</div>
+                </div>
+                <div className="rounded-[12px] bg-white/[0.03] p-3">
+                  <div className="text-xs text-textMuted">频道链接</div>
+                  <div className="mt-1 text-white break-all">{item.carrierRef || item.carrierTitle || '—'}</div>
+                  <div className="mt-1 text-xs text-textMuted">创建账号：{item.accountLabel || '—'}</div>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {isOpenableLink(item.carrierRef) ? <button type="button" onClick={() => openExternalLink(item.carrierRef)} className="rounded-[10px] bg-violet-400 px-3 py-2 text-xs font-medium text-slate-950 transition hover:bg-violet-300">打开频道链接</button> : null}
+                {isOpenableLink(item.sourceRef) ? <button type="button" onClick={() => openExternalLink(item.sourceRef)} className="rounded-[10px] bg-white/[0.06] px-3 py-2 text-xs text-white transition hover:bg-white/[0.1]">打开来源</button> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -461,6 +591,7 @@ function SniperWorkbench() {
   const [subscribeKeyword, setSubscribeKeyword] = useState('')
   const [subscribeRangeStart, setSubscribeRangeStart] = useState('1')
   const [subscribeRangeEnd, setSubscribeRangeEnd] = useState('10')
+  const [detailDialog, setDetailDialog] = useState<'claimed' | 'carriers' | null>(null)
   const [sourceMessageLimit, setSourceMessageLimit] = useState(typeof savedDraft.sourceMessageLimit === 'number' ? Math.max(1, Math.min(100, savedDraft.sourceMessageLimit === 10 ? 2 : savedDraft.sourceMessageLimit)) : 2)
   const [candidateLimit, setCandidateLimit] = useState(typeof savedDraft.candidateLimit === 'number' ? Math.max(1, Math.min(500, savedDraft.candidateLimit)) : 80)
   const [autoClaim, setAutoClaim] = useState(savedDraft.autoClaim ?? true)
@@ -557,6 +688,8 @@ function SniperWorkbench() {
     [accountTaskStatusMap, subscribeFilteredAccounts]
   )
   const listening = Boolean(listenerState?.running)
+  const claimedItems = listenerState?.claimedItems ?? []
+  const createdCarrierItems = listenerState?.createdCarrierItems ?? []
 
   const applySubscribePicker = () => {
     setSubscribeAccountIds(draftSubscribeIds.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied))
@@ -785,30 +918,12 @@ function SniperWorkbench() {
             <FoldSection title="统计" hint="这里只显示当前监听状态。">
               <div className="px-3 py-3 text-sm">
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
-                    <div className="text-xs text-textMuted">来源 / 池子</div>
-                    <div className="mt-1 text-xl font-semibold text-white">{sourcePreviewCount} / {poolPreviewCount}</div>
-                  </div>
-                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
-                    <div className="text-xs text-textMuted">任务账号</div>
-                    <div className="mt-1 text-xl font-semibold text-white">{subscribeSelectedAccounts.length}</div>
-                  </div>
-                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
-                    <div className="text-xs text-textMuted">已检查</div>
-                    <div className="mt-1 text-xl font-semibold text-white">{listenerState?.checkedMessageCount ?? 0}</div>
-                  </div>
-                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
-                    <div className="text-xs text-textMuted">候选</div>
-                    <div className="mt-1 text-xl font-semibold text-white">{listenerState?.candidateCount ?? 0}</div>
-                  </div>
-                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
-                    <div className="text-xs text-textMuted">已抢到</div>
-                    <div className="mt-1 text-xl font-semibold text-white">{listenerState?.claimedCount ?? 0}</div>
-                  </div>
-                  <div className="rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-3 py-3">
-                    <div className="text-xs text-textMuted">新建频道</div>
-                    <div className="mt-1 text-xl font-semibold text-white">{listenerState?.createdCarrierCount ?? 0}</div>
-                  </div>
+                  <SniperStatCard title="来源 / 池子" value={`${sourcePreviewCount} / ${poolPreviewCount}`} />
+                  <SniperStatCard title="任务账号" value={subscribeSelectedAccounts.length} />
+                  <SniperStatCard title="已检查" value={listenerState?.checkedMessageCount ?? 0} />
+                  <SniperStatCard title="候选" value={listenerState?.candidateCount ?? 0} />
+                  <SniperStatCard title="已抢到" value={listenerState?.claimedCount ?? 0} onClick={claimedItems.length > 0 ? () => setDetailDialog('claimed') : undefined} hint={claimedItems.length > 0 ? '点击查看是从哪个来源抢到的' : undefined} />
+                  <SniperStatCard title="新建频道" value={listenerState?.createdCarrierCount ?? 0} onClick={createdCarrierItems.length > 0 ? () => setDetailDialog('carriers') : undefined} hint={createdCarrierItems.length > 0 ? '点击查看频道链接' : undefined} />
                 </div>
               </div>
             </FoldSection>
@@ -920,6 +1035,9 @@ function SniperWorkbench() {
           </div>
         </div>
       ) : null}
+
+      <SniperClaimedDialog open={detailDialog === 'claimed'} items={claimedItems} onClose={() => setDetailDialog(null)} />
+      <SniperCreatedCarrierDialog open={detailDialog === 'carriers'} items={createdCarrierItems} onClose={() => setDetailDialog(null)} />
     </div>
   )
 }

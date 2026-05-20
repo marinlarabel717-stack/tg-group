@@ -1113,6 +1113,8 @@ export class OtherToolsService {
       startedAt: null,
       lastTickAt: null,
       logs: [],
+      claimedItems: [],
+      createdCarrierItems: [],
       message
     }
   }
@@ -1121,7 +1123,9 @@ export class OtherToolsService {
     const state = task?.state ?? this.createEmptySniperListenerState()
     this.sniperListenerStateSink?.({
       ...state,
-      logs: [...state.logs]
+      logs: [...state.logs],
+      claimedItems: [...state.claimedItems],
+      createdCarrierItems: [...state.createdCarrierItems]
     })
   }
 
@@ -1129,7 +1133,9 @@ export class OtherToolsService {
     if (!this.sniperListenerTask) return this.createEmptySniperListenerState()
     return {
       ...this.sniperListenerTask.state,
-      logs: [...this.sniperListenerTask.state.logs]
+      logs: [...this.sniperListenerTask.state.logs],
+      claimedItems: [...this.sniperListenerTask.state.claimedItems],
+      createdCarrierItems: [...this.sniperListenerTask.state.createdCarrierItems]
     }
   }
 
@@ -1416,6 +1422,8 @@ export class OtherToolsService {
         startedAt: new Date().toISOString(),
         lastTickAt: null,
         logs: [],
+        claimedItems: [],
+        createdCarrierItems: [],
         message: '监听准备启动中…'
       },
       scanClient: null,
@@ -1859,6 +1867,39 @@ export class OtherToolsService {
               item.claimAccountId = claimByAccount?.id ?? null
               item.claimAccountLabel = readCheckResultTitle(claimByAccount)
               task.state.claimedCount += 1
+              task.state.claimedItems = [
+                {
+                  id: createId('sniper-claimed'),
+                  candidate: item.normalized,
+                  sourceRef: item.sourceRef,
+                  sourceTitle: item.sourceTitle,
+                  sourceMessageId: item.sourceMessageId,
+                  sourceDate: item.sourceDate,
+                  claimTargetRef: claimed.claimTargetRef,
+                  claimTargetTitle: claimed.claimTargetTitle,
+                  claimAccountId: claimByAccount?.id ?? null,
+                  claimAccountLabel: readCheckResultTitle(claimByAccount),
+                  createdCarrier: claimed.createdCarrier
+                },
+                ...task.state.claimedItems
+              ].slice(0, 200)
+              if (claimed.createdCarrier) {
+                task.state.createdCarrierItems = [
+                  {
+                    id: createId('sniper-carrier'),
+                    candidate: item.normalized,
+                    carrierRef: claimed.claimTargetRef,
+                    carrierTitle: claimed.claimTargetTitle,
+                    sourceRef: item.sourceRef,
+                    sourceTitle: item.sourceTitle,
+                    sourceMessageId: item.sourceMessageId,
+                    sourceDate: item.sourceDate,
+                    accountId: claimByAccount?.id ?? null,
+                    accountLabel: readCheckResultTitle(claimByAccount)
+                  },
+                  ...task.state.createdCarrierItems
+                ].slice(0, 200)
+              }
               this.pushSniperListenerLog(task, {
                 level: 'success',
                 message: claimed.createdCarrier

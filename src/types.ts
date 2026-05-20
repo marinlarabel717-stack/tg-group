@@ -1292,6 +1292,33 @@ export interface OtherToolsSniperListenerLogEntry {
   accountLabel?: string | null
 }
 
+export interface OtherToolsSniperListenerClaimedItem {
+  id: string
+  candidate: string
+  sourceRef: string
+  sourceTitle: string
+  sourceMessageId: string
+  sourceDate: string
+  claimTargetRef: string
+  claimTargetTitle: string
+  claimAccountId?: number | null
+  claimAccountLabel?: string | null
+  createdCarrier: boolean
+}
+
+export interface OtherToolsSniperListenerCreatedCarrierItem {
+  id: string
+  candidate: string
+  carrierRef: string
+  carrierTitle: string
+  sourceRef: string
+  sourceTitle: string
+  sourceMessageId: string
+  sourceDate: string
+  accountId?: number | null
+  accountLabel?: string | null
+}
+
 export interface OtherToolsSniperListenerState {
   running: boolean
   taskAccountIds: number[]
@@ -1312,6 +1339,8 @@ export interface OtherToolsSniperListenerState {
   startedAt: string | null
   lastTickAt: string | null
   logs: OtherToolsSniperListenerLogEntry[]
+  claimedItems: OtherToolsSniperListenerClaimedItem[]
+  createdCarrierItems: OtherToolsSniperListenerCreatedCarrierItem[]
   message: string
 }
 
