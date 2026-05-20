@@ -95,7 +95,14 @@ async def _clear_other_authorizations(old_client: TelegramClient, timeout_second
     other_authorizations = [item for item in authorizations if not getattr(item, 'current', False)]
     reset_count = len(other_authorizations)
     if reset_count > 0:
-        await asyncio.wait_for(old_client(functions.auth.ResetAuthorizationsRequest()), timeout=timeout_seconds)
+        try:
+            await asyncio.wait_for(old_client(functions.auth.ResetAuthorizationsRequest()), timeout=timeout_seconds)
+        except Exception as exc:
+            reason = _format_error_reason(exc).upper()
+            if 'FRESHRESETAUTHORISATIONFORBIDDEN' in reason or 'CURRENT SESSION IS TOO NEW' in reason:
+                _emit_progress('warning', '步骤 1 失败：当前这台旧设备登录时间太近，Telegram 暂时不让它清理其它设备，本次不会继续新设备登录。')
+                raise RuntimeError('OLD_DEVICE_RESET_FORBIDDEN')
+            raise
         _emit_progress('success', f'步骤 1 完成：已清理其它 {reset_count} 台设备，只保留当前旧设备。')
     else:
         _emit_progress('success', '步骤 1 完成：当前本来就只有旧设备自己。')

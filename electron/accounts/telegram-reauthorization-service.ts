@@ -78,6 +78,9 @@ function formatReauthorizeError(error: string) {
   if (upper.includes('PHONE_NUMBER_BANNED') || upper.includes('USERDEACTIVATEDBANERROR') || upper.includes('USER_DEACTIVATED_BAN') || upper.includes('USERDEACTIVATEDERROR') || upper.includes('USER_DEACTIVATED')) {
     return '这个账号已被 Telegram 封禁或注销，无法重新授权。'
   }
+  if (upper.includes('OLD_DEVICE_RESET_FORBIDDEN') || upper.includes('FRESHRESETAUTHORISATIONFORBIDDEN') || lower.includes('current session is too new')) {
+    return '当前这台旧设备登录时间太近，Telegram 暂时不让它清理其它设备。本次已停在旧设备清场这一步，没有继续新设备登录，请晚点再试。'
+  }
   if (upper.includes('FLOOD_WAIT')) {
     const match = upper.match(/FLOOD_WAIT_?(\d+)/)
     if (match?.[1]) {
