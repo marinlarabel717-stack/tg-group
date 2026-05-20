@@ -586,7 +586,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
 
       {pickerOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-[1180px] rounded-[24px] border border-white/[0.06] bg-[#11131c] p-5 shadow-[0_26px_90px_rgba(0,0,0,0.45)]">
+          <div className="w-full max-w-[1320px] rounded-[24px] border border-white/[0.06] bg-[#11131c] p-5 shadow-[0_26px_90px_rgba(0,0,0,0.45)]">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-lg font-semibold text-white">选择执行账号</div>
@@ -720,8 +720,8 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
               {loadingAccounts ? (
                 <div className="px-4 py-6 text-sm text-textMuted">账号列表读取中…</div>
               ) : filteredAccounts.length > 0 ? (
-                <div className="min-w-[1100px]">
-                  <div className="grid grid-cols-[52px_64px_180px_126px_118px_88px_240px_128px_92px] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
+                <div className="min-w-[1180px]">
+                  <div className="grid grid-cols-[52px_64px_180px_126px_118px_88px_240px_128px_128px] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
                     <label className="flex items-center justify-center">
                       <input
                         type="checkbox"
@@ -754,7 +754,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                     return (
                       <label
                         key={account.id}
-                        className={`grid cursor-pointer grid-cols-[52px_64px_180px_126px_118px_88px_240px_128px_92px] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
+                        className={`grid cursor-pointer grid-cols-[52px_64px_180px_126px_118px_88px_240px_128px_128px] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
                       >
                         <div className="flex items-center justify-center">
                           <input
@@ -790,7 +790,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                             {taskMeta.label}
                           </span>
                         </div>
-                        <div className="truncate text-slate-300">{readProxy(account)}</div>
+                        <div className="text-slate-300">{readProxy(account)}</div>
                       </label>
                     )
                   })}
