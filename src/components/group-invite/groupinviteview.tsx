@@ -1,5 +1,5 @@
 import { memo, useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { CheckCircle2, Clock3, Play, Search, Square, Upload, Users, X } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Clock3, FileJson2, FolderOpen, Play, Search, Square, Upload, Users, X } from 'lucide-react'
 import type { AccountRecord, AccountStatus } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS, SOFT_PANEL_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
@@ -43,6 +43,10 @@ function getAccountStatusTone(status?: string) {
 
 function checkboxClass() {
   return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
+}
+
+function actionClass() {
+  return 'flex h-8 w-8 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft'
 }
 
 function matchesAccountStatusFilter(account: AccountRecord, filter: GroupInviteAccountStatusFilter) {
@@ -169,6 +173,9 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
   const [accountAvatarFilter, setAccountAvatarFilter] = useState<PresenceFilter>('all')
   const [accountTaskFilter, setAccountTaskFilter] = useState<PresenceFilter>('all')
   const [accountUsernameFilter, setAccountUsernameFilter] = useState<PresenceFilter>('all')
+  const [rangeMenuOpen, setRangeMenuOpen] = useState(false)
+  const [rangeStart, setRangeStart] = useState('1')
+  const [rangeEnd, setRangeEnd] = useState('20')
 
   useEffect(() => {
     void initAccounts()
@@ -186,6 +193,9 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
       setAccountAvatarFilter('all')
       setAccountTaskFilter('all')
       setAccountUsernameFilter('all')
+      setRangeMenuOpen(false)
+      setRangeStart('1')
+      setRangeEnd('20')
     }
   }, [pickerOpen, selectedAccountIds])
 
@@ -339,6 +349,20 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
       setGroupSourceAccountId(nextIds[0] ?? null)
     }
     setPickerOpen(false)
+  }
+
+  const handleSelectRange = () => {
+    const start = Number(rangeStart)
+    const end = Number(rangeEnd)
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return
+    const normalizedStart = Math.max(1, Math.min(start, end))
+    const normalizedEnd = Math.max(start, end)
+    const ids = filteredAccounts
+      .filter((account) => !getAccountTaskMeta(accountTaskStatusMap, account.id).occupied)
+      .slice(normalizedStart - 1, normalizedEnd)
+      .map((account) => account.id)
+    setDraftIds(ids)
+    setRangeMenuOpen(false)
   }
 
   const handleStart = async () => {
@@ -573,9 +597,12 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                 <div className="text-lg font-semibold text-white">选择执行账号</div>
                 <div className="mt-1 text-sm text-textMuted">先点顶部筛选卡片缩小范围，也可以在下面继续手动勾选。</div>
               </div>
-              <button type="button" onClick={() => setPickerOpen(false)} className="rounded-full p-2 text-slate-400 transition hover:bg-white/[0.05] hover:text-white">
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={applyPicker} className="h-10 rounded-[12px] bg-violet-500 px-4 text-sm font-medium text-white transition hover:bg-violet-400">确认选择</button>
+                <button type="button" onClick={() => setPickerOpen(false)} className="rounded-full p-2 text-slate-400 transition hover:bg-white/[0.05] hover:text-white">
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <AccountSummaryCards
@@ -584,7 +611,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
               onSelect={(value) => setAccountStatusFilter(value as GroupInviteAccountStatusFilter)}
             />
 
-            <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="mb-4 space-y-3">
               <div className="min-w-0">
                 <TableFilters
                   search={accountKeyword}
@@ -619,21 +646,59 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                   }}
                 />
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
                   onClick={() => setDraftIds(selectableFilteredAccounts.map((account) => account.id))}
                   className="h-11 rounded-[12px] border border-white/[0.06] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08]"
                 >
-                  选中当前列表
+                  全选当前结果
                 </button>
                 <button
                   type="button"
                   onClick={() => setDraftIds([])}
                   className="h-11 rounded-[12px] border border-white/[0.06] bg-white/[0.04] px-4 text-sm text-slate-200 transition hover:bg-white/[0.08]"
                 >
-                  清空勾选
+                  取消选中
                 </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setRangeMenuOpen((value) => !value)}
+                    className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-white/[0.06] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08]"
+                  >
+                    选择区间
+                    <ChevronDown size={15} className={`transition ${rangeMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {rangeMenuOpen ? (
+                    <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[240px] rounded-[14px] border border-white/8 bg-card p-3 shadow-2xl">
+                      <div className="mb-2 text-xs tracking-[0.2em] text-textMuted">选择区间号</div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          inputMode="numeric"
+                          value={rangeStart}
+                          onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
+                          className="h-10 w-full rounded-[10px] bg-panel px-3 text-sm text-white outline-none transition focus:bg-hover"
+                        />
+                        <span className="text-sm text-textMuted">-</span>
+                        <input
+                          inputMode="numeric"
+                          value={rangeEnd}
+                          onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
+                          className="h-10 w-full rounded-[10px] bg-panel px-3 text-sm text-white outline-none transition focus:bg-hover"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSelectRange}
+                        className="mt-3 h-10 w-full rounded-[10px] bg-neon/10 text-sm font-medium text-neonSoft transition hover:bg-neon/14"
+                      >
+                        应用区间
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 
@@ -645,8 +710,8 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
               {loadingAccounts ? (
                 <div className="px-4 py-6 text-sm text-textMuted">账号列表读取中…</div>
               ) : filteredAccounts.length > 0 ? (
-                <div className="min-w-[920px]">
-                  <div className="grid grid-cols-[52px_minmax(160px,1.2fr)_minmax(180px,1.4fr)_120px_minmax(120px,0.9fr)_minmax(120px,0.9fr)] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
+                <div className="min-w-[1080px]">
+                  <div className="grid grid-cols-[52px_150px_96px_110px_72px_200px_120px_90px_100px] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
                     <label className="flex items-center justify-center">
                       <input
                         type="checkbox"
@@ -662,10 +727,13 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                       />
                     </label>
                     <div>手机号</div>
-                    <div>账号</div>
+                    <div>国家</div>
                     <div>状态</div>
-                    <div>用户 ID</div>
+                    <div>头像</div>
+                    <div>名字</div>
                     <div>任务</div>
+                    <div>网络</div>
+                    <div>操作</div>
                   </div>
 
                   {filteredAccounts.map((account) => {
@@ -675,7 +743,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                     return (
                       <label
                         key={account.id}
-                        className={`grid cursor-pointer grid-cols-[52px_minmax(160px,1.2fr)_minmax(180px,1.4fr)_120px_minmax(120px,0.9fr)_minmax(120px,0.9fr)] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
+                        className={`grid cursor-pointer grid-cols-[52px_150px_96px_110px_72px_200px_120px_90px_100px] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
                       >
                         <div className="flex items-center justify-center">
                           <input
@@ -690,16 +758,38 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                           />
                         </div>
                         <div className="min-w-0 text-white">{account.phone || '--'}</div>
+                        <div className="truncate text-slate-300">{formatCountryDisplay(account.country, account.phone)}</div>
+                        <div>
+                          <span className={`rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>{formatAccountStatus(account.status)}</span>
+                        </div>
+                        <div className="flex items-center justify-center">
+                          {hasAvatar(account) ? (
+                            <div className="h-10 w-10 overflow-hidden rounded-full bg-slate-900/70 ring-1 ring-white/8">
+                              {typeof account.profile?.avatar === 'string' && account.profile.avatar.trim() ? (
+                                <img src={account.profile.avatar} alt={readAccountLabel(account)} className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-slate-200">图</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900/70 text-[11px] font-semibold text-slate-500">无</div>
+                          )}
+                        </div>
                         <div className="min-w-0">
                           <div className="truncate text-white">{readAccountLabel(account)}</div>
                           <div className="mt-1 truncate text-xs text-textMuted">{account.username ? `@${account.username.replace(/^@+/, '')}` : '无用户名'}</div>
                         </div>
                         <div>
-                          <span className={`rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>{formatAccountStatus(account.status)}</span>
-                        </div>
-                        <div className="truncate text-slate-300">{account.userId || '--'}</div>
-                        <div>
                           {disabled ? <span className="rounded-full border border-amber-300/16 bg-amber-300/10 px-2.5 py-1 text-xs text-amber-200">{taskMeta.label}</span> : <span className="text-xs text-textMuted">空闲</span>}
+                        </div>
+                        <div className="truncate text-slate-300">{readProxy(account)}</div>
+                        <div className="flex items-center gap-2">
+                          <button type="button" title="打开 Session" className={actionClass()} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void window.desktopAccounts?.revealPath?.(account.sessionPath) }}>
+                            <FolderOpen size={14} />
+                          </button>
+                          <button type="button" title="打开 JSON" className={actionClass()} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void window.desktopAccounts?.revealPath?.(account.jsonPath) }}>
+                            <FileJson2 size={14} />
+                          </button>
                         </div>
                       </label>
                     )
