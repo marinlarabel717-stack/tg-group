@@ -1,5 +1,5 @@
 import { memo, useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { CheckCircle2, ChevronDown, Clock3, FileJson2, FolderOpen, Play, Search, Square, Upload, Users, X } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Clock3, Play, Search, Square, Upload, Users, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
 import type { AccountRecord, AccountStatus } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
@@ -34,10 +34,6 @@ function readAccountLabel(account: AccountRecord) {
 
 function checkboxClass() {
   return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
-}
-
-function actionClass() {
-  return 'flex h-9 w-9 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft'
 }
 
 function cellTextClass(extra = '') {
@@ -670,13 +666,22 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
               <div className="text-sm text-textMuted">
                 当前结果 <span className="font-semibold text-white">{filteredAccounts.length}</span> 个，已勾选 <span className="font-semibold text-white">{draftIds.length}</span> 个，可执行 <span className="font-semibold text-white">{selectableFilteredAccounts.length}</span> 个。
               </div>
-              <button
-                type="button"
-                onClick={applyPicker}
-                className="inline-flex h-11 items-center rounded-[12px] bg-violet-500 px-5 text-sm font-medium text-white transition hover:bg-violet-400"
-              >
-                确认选择账号
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(false)}
+                  className="inline-flex h-11 items-center rounded-[12px] border border-white/[0.08] bg-white/[0.05] px-5 text-sm font-medium text-slate-200 transition hover:bg-white/[0.08] hover:text-white"
+                >
+                  取消选择
+                </button>
+                <button
+                  type="button"
+                  onClick={applyPicker}
+                  className="inline-flex h-11 items-center rounded-[12px] bg-violet-500 px-5 text-sm font-medium text-white transition hover:bg-violet-400"
+                >
+                  确认选择账号
+                </button>
+              </div>
             </div>
 
             <AccountSummaryCards
@@ -780,8 +785,8 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
               {loadingAccounts ? (
                 <div className="px-4 py-6 text-sm text-textMuted">账号列表读取中…</div>
               ) : filteredAccounts.length > 0 ? (
-                <div className="min-w-[1230px]">
-                  <div className="grid grid-cols-[52px_64px_160px_118px_118px_88px_220px_128px_92px_112px] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
+                <div className="min-w-[1100px]">
+                  <div className="grid grid-cols-[52px_64px_180px_126px_118px_88px_240px_128px_92px] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
                     <label className="flex items-center justify-center">
                       <input
                         type="checkbox"
@@ -804,7 +809,6 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                     <div>名字</div>
                     <div>任务</div>
                     <div>网络</div>
-                    <div className="text-center">操作</div>
                   </div>
 
                   {filteredAccounts.map((account, index) => {
@@ -815,7 +819,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                     return (
                       <label
                         key={account.id}
-                        className={`grid cursor-pointer grid-cols-[52px_64px_160px_118px_118px_88px_220px_128px_92px_112px] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
+                        className={`grid cursor-pointer grid-cols-[52px_64px_180px_126px_118px_88px_240px_128px_92px] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
                       >
                         <div className="flex items-center justify-center">
                           <input
@@ -852,14 +856,6 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                           </span>
                         </div>
                         <div className="truncate text-slate-300">{readProxy(account)}</div>
-                        <div className="flex items-center justify-center gap-2">
-                          <button type="button" title="打开 Session" className={actionClass()} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void window.desktopAccounts?.revealPath?.(account.sessionPath) }}>
-                            <FolderOpen size={16} />
-                          </button>
-                          <button type="button" title="打开 JSON" className={actionClass()} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void window.desktopAccounts?.revealPath?.(account.jsonPath) }}>
-                            <FileJson2 size={16} />
-                          </button>
-                        </div>
                       </label>
                     )
                   })}
