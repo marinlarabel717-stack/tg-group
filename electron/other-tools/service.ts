@@ -1603,52 +1603,29 @@ export class OtherToolsService {
 
           let scanResult: Awaited<ReturnType<TelethonSniperService['scanSources']>> | null = null
           try {
-            const scanRetryTimeouts = [undefined, 120, 180] as const
-            let lastScanError: unknown = null
-            for (let attemptIndex = 0; attemptIndex < scanRetryTimeouts.length; attemptIndex += 1) {
-              try {
-                scanResult = await this.telethonSniperService.scanSources({
-                  sessionPath: scanAccount.sessionPath,
-                  sourceRefs,
-                  sourceMessageLimit: sourceLimit,
-                  includeKeywords,
-                  excludeKeywords,
-                  seenMessageKeys: Array.from(task.seenMessageKeys),
-                  handledCandidateKeys: Array.from(task.handledCandidateKeys),
-                  recheckCandidateKeys: Array.from(task.recheckCandidateKeys),
-                  joinChatlists: joinChatlistsOnFirstTick,
-                  bootstrapExistingMessages: task.tickCount === 1,
-                  timeoutSeconds: scanRetryTimeouts[attemptIndex] ?? undefined,
-                  proxy: readCurrentProxyOrThrow(this.proxyPoolService)
-                })
-                break
-              } catch (error) {
-                lastScanError = error
-                const message = error instanceof Error ? error.message : String(error)
-                if (!/TIMEOUT/i.test(message)) {
-                  throw error
-                }
-                if (attemptIndex < scanRetryTimeouts.length - 1) {
-                  this.pushSniperListenerLog(task, {
-                    level: 'warning',
-                    message: `第 ${task.tickCount} 轮扫描超时，正在自动重试（第 ${attemptIndex + 2}/${scanRetryTimeouts.length} 次）。`,
-                    accountId: scanAccount.id,
-                    accountLabel: readCheckResultTitle(scanAccount)
-                  })
-                  continue
-                }
-              }
-            }
-            if (!scanResult && lastScanError) {
-              throw lastScanError
-            }
+            scanResult = await this.telethonSniperService.scanSources({
+              sessionPath: scanAccount.sessionPath,
+              sourceRefs,
+              sourceMessageLimit: sourceLimit,
+              includeKeywords,
+              excludeKeywords,
+              seenMessageKeys: Array.from(task.seenMessageKeys),
+              handledCandidateKeys: Array.from(task.handledCandidateKeys),
+              recheckCandidateKeys: Array.from(task.recheckCandidateKeys),
+              joinChatlists: joinChatlistsOnFirstTick,
+              bootstrapExistingMessages: task.tickCount === 1,
+              proxy: readCurrentProxyOrThrow(this.proxyPoolService)
+            })
             if (!scanResult) {
               throw new Error('监听扫描这轮没拿到结果。')
             }
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             if (/TIMEOUT/i.test(message)) {
-              throw new Error(`监听扫描已自动重试 ${3} 次，但还是超时。可能是来源太多、代理太慢，或者 Telegram 返回太慢。`)
+              task.cancelled = true
+              task.state.running = false
+              task.state.message = '监听已停止：监听扫描超时了，本次没有自动重连。'
+              throw new Error('监听扫描超时后已自动停止任务，本次不会自动重连；请优先减少来源数量、降低每轮复查条数，或检查代理速度后再重新启动。')
             }
             const fatal = isFatalAccountError(error)
             if (fatal) {
@@ -1982,10 +1959,15 @@ export class OtherToolsService {
         }
       } catch (error) {
         task.state.running = false
+        const runtimeMessage = formatSniperRuntimeError(error)
+        const isTimeout = /TIMEOUT/i.test(error instanceof Error ? error.message : String(error))
         this.pushSniperListenerLog(task, {
           level: 'error',
-          message: `监听启动失败：${formatSniperRuntimeError(error)}`
+          message: `${isTimeout ? '监听已停止' : '监听启动失败'}：${runtimeMessage}`
         })
+        if (isTimeout) {
+          task.state.message = `监听已停止：${runtimeMessage}`
+        }
       } finally {
         task.state.running = false
         task.state.lastTickAt = new Date().toISOString()
