@@ -1,14 +1,17 @@
 import { memo, useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { CheckCircle2, ChevronDown, Clock3, FileJson2, FolderOpen, Play, Search, Square, Upload, Users, X } from 'lucide-react'
+import * as FlagIcons from 'country-flag-icons/react/3x2'
 import type { AccountRecord, AccountStatus } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS, SOFT_PANEL_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
 import { AccountSummaryCards } from '../accounts/accountsummarycards'
+import { StatusBadge } from '../accounts/statusbadge'
 import { TableFilters } from '../accounts/tablefilters'
 import { useAccountStore } from '../../stores/accountstore'
 import { parseGroupInviteTargets, useGroupInviteStore, type GroupInviteTabKey, type GroupInviteTaskSnapshot } from '../../stores/groupinvitestore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
+import { resolveCountryMeta } from '../../lib/phone-country'
 import { formatAccountStatus, formatCountryDisplay } from '../../lib/ui-text'
 
 const tabs: Array<{ key: GroupInviteTabKey; label: string; icon: typeof Play }> = [
@@ -29,24 +32,85 @@ function readAccountLabel(account: AccountRecord) {
   return `账号#${account.id}`
 }
 
-function getAccountStatusTone(status?: string) {
-  if (status === 'alive') return 'bg-emerald-400/12 text-emerald-300'
-  if (status === 'limited') return 'bg-yellow-400/12 text-yellow-200'
-  if (status === 'temporary_limited') return 'bg-orange-400/12 text-orange-300'
-  if (status === 'geo_restricted') return 'bg-lime-400/12 text-lime-300'
-  if (status === 'frozen') return 'bg-sky-400/12 text-sky-300'
-  if (status === 'multi_ip') return 'bg-pink-400/12 text-pink-300'
-  if (status === 'timeout') return 'bg-violet-400/12 text-violet-300'
-  if (status === 'banned' || status === 'session_expired' || status === 'not_logged_in') return 'bg-rose-400/12 text-rose-300'
-  return 'bg-white/10 text-slate-200'
-}
-
 function checkboxClass() {
   return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
 }
 
 function actionClass() {
-  return 'flex h-8 w-8 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft'
+  return 'flex h-9 w-9 items-center justify-center rounded-[10px] bg-panel text-slate-300 transition hover:bg-hover hover:text-neonSoft'
+}
+
+function cellTextClass(extra = '') {
+  return `block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${extra}`.trim()
+}
+
+function readNickname(account: AccountRecord) {
+  const firstName = typeof account.profile?.first_name === 'string' ? account.profile.first_name.trim() : ''
+  const lastName = typeof account.profile?.last_name === 'string' ? account.profile.last_name.trim() : ''
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
+  return fullName || '-'
+}
+
+function normalizeAvatarSrc(value: unknown) {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('data:') || trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('file://')) {
+    return trimmed
+  }
+  if (/^[A-Za-z]:\\/.test(trimmed)) {
+    return `file:///${trimmed.replace(/\\/g, '/')}`
+  }
+  return trimmed
+}
+
+function readAvatarSrc(account: AccountRecord) {
+  return normalizeAvatarSrc(account.profile?.avatar)
+}
+
+function readAvatarFallback(account: AccountRecord) {
+  const nickname = readNickname(account)
+  if (nickname && nickname !== '-') return nickname.slice(0, 1).toUpperCase()
+  const phone = (account.phone || '').replace(/\D/g, '')
+  if (phone) return phone.slice(-2)
+  return 'TG'
+}
+
+function AvatarCell({ account }: { account: AccountRecord }) {
+  const [failed, setFailed] = useState(false)
+  const src = readAvatarSrc(account)
+  const fallback = readAvatarFallback(account)
+  const showImage = Boolean(src) && !failed
+
+  return (
+    <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-slate-900/70 ring-1 ring-white/8 shadow-[0_0_0_1px_rgba(59,130,246,0.08)]">
+      {showImage ? (
+        <img src={src} alt={readNickname(account)} className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        <span className="text-[11px] font-semibold tracking-[0.08em] text-slate-200">{fallback}</span>
+      )}
+    </div>
+  )
+}
+
+function CountryCell({ country, phone }: { country: string; phone: string }) {
+  const meta = resolveCountryMeta(phone, country)
+  const value = formatCountryDisplay(country, phone)
+
+  if (!meta) {
+    return <div className={cellTextClass()} title={value}>{value}</div>
+  }
+
+  const FlagComponent = FlagIcons[meta.iso2 as keyof typeof FlagIcons] as ((props: { title?: string; className?: string }) => JSX.Element) | undefined
+
+  return (
+    <div className="flex min-w-0 items-center gap-2" title={value}>
+      {FlagComponent ? (
+        <FlagComponent className="h-3.5 w-5 shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]" title={meta.nameZh} />
+      ) : null}
+      <span className={cellTextClass()}>{meta.nameZh}</span>
+    </div>
+  )
 }
 
 function matchesAccountStatusFilter(account: AccountRecord, filter: GroupInviteAccountStatusFilter) {
@@ -71,7 +135,7 @@ function readTwoFactor(account: AccountRecord) {
 }
 
 function hasAvatar(account: AccountRecord) {
-  return Boolean(account.profile?.avatar || account.profile?.has_profile_pic || account.profile?.hasProfilePhoto)
+  return Boolean(readAvatarSrc(account) || account.profile?.has_profile_pic || account.profile?.hasProfilePhoto)
 }
 
 function hasUsername(account: AccountRecord) {
@@ -595,14 +659,24 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-lg font-semibold text-white">选择执行账号</div>
-                <div className="mt-1 text-sm text-textMuted">先点顶部筛选卡片缩小范围，也可以在下面继续手动勾选。</div>
+                <div className="mt-1 text-sm text-textMuted">直接按账号管理那套表格来选，筛完后在顶部确认。</div>
               </div>
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={applyPicker} className="h-10 rounded-[12px] bg-violet-500 px-4 text-sm font-medium text-white transition hover:bg-violet-400">确认选择</button>
-                <button type="button" onClick={() => setPickerOpen(false)} className="rounded-full p-2 text-slate-400 transition hover:bg-white/[0.05] hover:text-white">
-                  <X size={16} />
-                </button>
+              <button type="button" onClick={() => setPickerOpen(false)} className="rounded-full p-2 text-slate-400 transition hover:bg-white/[0.05] hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+              <div className="text-sm text-textMuted">
+                当前结果 <span className="font-semibold text-white">{filteredAccounts.length}</span> 个，已勾选 <span className="font-semibold text-white">{draftIds.length}</span> 个，可执行 <span className="font-semibold text-white">{selectableFilteredAccounts.length}</span> 个。
               </div>
+              <button
+                type="button"
+                onClick={applyPicker}
+                className="inline-flex h-11 items-center rounded-[12px] bg-violet-500 px-5 text-sm font-medium text-white transition hover:bg-violet-400"
+              >
+                确认选择账号
+              </button>
             </div>
 
             <AccountSummaryCards
@@ -702,16 +776,12 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
               </div>
             </div>
 
-            <div className="mb-3 rounded-[12px] border border-white/[0.06] bg-black/[0.08] px-4 py-3 text-sm text-textMuted">
-              当前结果 <span className="text-white">{filteredAccounts.length}</span> 个，已勾选 <span className="text-white">{draftIds.length}</span> 个，可执行 <span className="text-white">{selectableFilteredAccounts.length}</span> 个。
-            </div>
-
             <div className="max-h-[520px] overflow-auto rounded-[16px] border border-white/[0.06] bg-black/[0.08]">
               {loadingAccounts ? (
                 <div className="px-4 py-6 text-sm text-textMuted">账号列表读取中…</div>
               ) : filteredAccounts.length > 0 ? (
-                <div className="min-w-[1080px]">
-                  <div className="grid grid-cols-[52px_150px_96px_110px_72px_200px_120px_90px_100px] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
+                <div className="min-w-[1160px]">
+                  <div className="grid grid-cols-[52px_160px_118px_118px_88px_220px_128px_92px_112px] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
                     <label className="flex items-center justify-center">
                       <input
                         type="checkbox"
@@ -729,21 +799,22 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                     <div>手机号</div>
                     <div>国家</div>
                     <div>状态</div>
-                    <div>头像</div>
+                    <div className="text-center">头像</div>
                     <div>名字</div>
                     <div>任务</div>
                     <div>网络</div>
-                    <div>操作</div>
+                    <div className="text-center">操作</div>
                   </div>
 
                   {filteredAccounts.map((account) => {
                     const checked = draftIds.includes(account.id)
                     const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
                     const disabled = taskMeta.occupied
+                    const checkMode = account.profile?.check_mode === 'account-survival' ? 'account-survival' : 'account-status'
                     return (
                       <label
                         key={account.id}
-                        className={`grid cursor-pointer grid-cols-[52px_150px_96px_110px_72px_200px_120px_90px_100px] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
+                        className={`grid cursor-pointer grid-cols-[52px_160px_118px_118px_88px_220px_128px_92px_112px] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
                       >
                         <div className="flex items-center justify-center">
                           <input
@@ -757,38 +828,34 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                             }}
                           />
                         </div>
-                        <div className="min-w-0 text-white">{account.phone || '--'}</div>
-                        <div className="truncate text-slate-300">{formatCountryDisplay(account.country, account.phone)}</div>
-                        <div>
-                          <span className={`rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>{formatAccountStatus(account.status)}</span>
+                        <div className="min-w-0 text-white" title={account.phone || '--'}>{account.phone || '--'}</div>
+                        <CountryCell country={account.country} phone={account.phone} />
+                        <div className="flex justify-center">
+                          <StatusBadge
+                            status={account.status}
+                            errorMessage={typeof account.profile?.check_error === 'string' ? account.profile.check_error : null}
+                            checkMode={checkMode}
+                          />
                         </div>
-                        <div className="flex items-center justify-center">
-                          {hasAvatar(account) ? (
-                            <div className="h-10 w-10 overflow-hidden rounded-full bg-slate-900/70 ring-1 ring-white/8">
-                              {typeof account.profile?.avatar === 'string' && account.profile.avatar.trim() ? (
-                                <img src={account.profile.avatar} alt={readAccountLabel(account)} className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-slate-200">图</div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900/70 text-[11px] font-semibold text-slate-500">无</div>
-                          )}
+                        <div className="flex justify-center">
+                          <AvatarCell account={account} />
                         </div>
                         <div className="min-w-0">
                           <div className="truncate text-white">{readAccountLabel(account)}</div>
                           <div className="mt-1 truncate text-xs text-textMuted">{account.username ? `@${account.username.replace(/^@+/, '')}` : '无用户名'}</div>
                         </div>
                         <div>
-                          {disabled ? <span className="rounded-full border border-amber-300/16 bg-amber-300/10 px-2.5 py-1 text-xs text-amber-200">{taskMeta.label}</span> : <span className="text-xs text-textMuted">空闲</span>}
+                          <span className={`inline-flex rounded-full border px-2 py-[3px] text-[11px] leading-none ${taskMeta.tone}`}>
+                            {taskMeta.label}
+                          </span>
                         </div>
                         <div className="truncate text-slate-300">{readProxy(account)}</div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-center gap-2">
                           <button type="button" title="打开 Session" className={actionClass()} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void window.desktopAccounts?.revealPath?.(account.sessionPath) }}>
-                            <FolderOpen size={14} />
+                            <FolderOpen size={16} />
                           </button>
                           <button type="button" title="打开 JSON" className={actionClass()} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void window.desktopAccounts?.revealPath?.(account.jsonPath) }}>
-                            <FileJson2 size={14} />
+                            <FileJson2 size={16} />
                           </button>
                         </div>
                       </label>
