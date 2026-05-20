@@ -52,13 +52,19 @@ def _build_proxy_config(raw_proxy):
 
 
 def _is_benign_profile_clear_error(error: Exception) -> bool:
-    message = str(error or '').strip().upper()
+    raw_message = str(error or '').strip()
+    message = raw_message.upper()
     return any(token in message for token in [
         'USERNAME_NOT_MODIFIED',
         'ABOUT_NOT_MODIFIED',
         'NO PHOTO',
         'PHOTO_ID_INVALID',
         'PHOTO_INVALID'
+    ]) or any(fragment in raw_message for fragment in [
+        'The username is not different from the current username',
+        'The about text has not changed',
+        'The first name is not modified',
+        'The last name is not modified'
     ])
 
 

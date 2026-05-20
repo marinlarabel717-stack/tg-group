@@ -377,7 +377,15 @@ function formatProfileError(error: string) {
   if (upper.includes('USERNAME_INVALID')) {
     return '这个用户名格式不对，Telegram 没有接受。'
   }
-  if (upper.includes('USERNAME_NOT_MODIFIED') || upper.includes('ABOUT_NOT_MODIFIED') || upper.includes('FIRSTNAME_NOT_MODIFIED')) {
+  if (
+    upper.includes('USERNAME_NOT_MODIFIED')
+    || upper.includes('ABOUT_NOT_MODIFIED')
+    || upper.includes('FIRSTNAME_NOT_MODIFIED')
+    || lower.includes('the username is not different from the current username')
+    || lower.includes('the about text has not changed')
+    || lower.includes('the first name is not modified')
+    || lower.includes('the last name is not modified')
+  ) {
     return '资料没有变化，Telegram 没有执行更新。'
   }
   if (upper.includes('PHOTO_INVALID') || upper.includes('IMAGE_PROCESS_FAILED')) {
