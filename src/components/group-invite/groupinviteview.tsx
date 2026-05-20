@@ -1,10 +1,11 @@
 import { memo, useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { Clock3, Play, Search, Square, Upload, Users, X } from 'lucide-react'
+import { CheckCircle2, Clock3, Play, Search, Square, Upload, Users, X } from 'lucide-react'
 import type { AccountRecord } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS, SOFT_PANEL_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
+import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
 import { useAccountStore } from '../../stores/accountstore'
-import { parseGroupInviteTargets, useGroupInviteStore, type GroupInviteTabKey } from '../../stores/groupinvitestore'
+import { parseGroupInviteTargets, useGroupInviteStore, type GroupInviteTabKey, type GroupInviteTaskSnapshot } from '../../stores/groupinvitestore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
 
@@ -43,6 +44,12 @@ function formatDateTime(value?: string | null) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
+function getResultTone(snapshot: GroupInviteTaskSnapshot) {
+  if (snapshot.failedCount === 0) return 'success'
+  if (snapshot.successCount === 0) return 'danger'
+  return 'warning'
+}
+
 const TabBar = memo(function TabBar() {
   const activeTab = useGroupInviteStore((state) => state.activeTab)
   const setActiveTab = useGroupInviteStore((state) => state.setActiveTab)
@@ -75,7 +82,6 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
   const accountTaskStatusMap = useAccountTaskStatusMap()
 
   const init = useGroupInviteStore((state) => state.init)
-  const activeTab = useGroupInviteStore((state) => state.activeTab)
   const setActiveTab = useGroupInviteStore((state) => state.setActiveTab)
   const selectedAccountIds = useGroupInviteStore((state) => state.selectedAccountIds)
   const setSelectedAccountIds = useGroupInviteStore((state) => state.setSelectedAccountIds)
@@ -481,6 +487,8 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const init = useGroupInviteStore((state) => state.init)
   const progressState = useGroupInviteStore((state) => state.progressState)
   const clearLogs = useGroupInviteStore((state) => state.clearLogs)
+  const taskSnapshots = useGroupInviteStore((state) => state.taskSnapshots)
+  const openCompletionDialog = useGroupInviteStore((state) => state.openCompletionDialog)
 
   useEffect(() => {
     init()
@@ -489,56 +497,162 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const logs = useMemo(() => [...(progressState?.logs ?? [])].reverse(), [progressState])
 
   return (
-    <GlassPanel className="space-y-4 rounded-[22px] px-5 py-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-base font-semibold text-white">执行日志</div>
-          <div className="mt-1 text-sm text-textMuted">只显示：时间 / 手机号 / 当前进度。</div>
+    <div className="space-y-4">
+      <GlassPanel className="space-y-4 rounded-[22px] px-5 py-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-base font-semibold text-white">执行日志</div>
+            <div className="mt-1 text-sm text-textMuted">只显示：时间 / 手机号 / 当前进度。</div>
+          </div>
+          <button
+            type="button"
+            onClick={clearLogs}
+            className="rounded-[12px] border border-white/[0.06] bg-white/[0.05] px-4 py-2 text-sm text-slate-200 transition hover:bg-white/[0.08]"
+          >
+            清空日志
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={clearLogs}
-          className="rounded-[12px] border border-white/[0.06] bg-white/[0.05] px-4 py-2 text-sm text-slate-200 transition hover:bg-white/[0.08]"
-        >
-          清空日志
-        </button>
-      </div>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="rounded-[16px] border border-white/[0.06] bg-black/[0.12] px-4 py-3">
+            <div className="text-xs text-textMuted">总数</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{progressState?.total ?? 0}</div>
+          </div>
+          <div className="rounded-[16px] border border-white/[0.06] bg-black/[0.12] px-4 py-3">
+            <div className="text-xs text-textMuted">已完成</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{progressState?.completed ?? 0}</div>
+          </div>
+          <div className="rounded-[16px] border border-white/[0.06] bg-black/[0.12] px-4 py-3">
+            <div className="text-xs text-textMuted">成功</div>
+            <div className="mt-2 text-2xl font-semibold text-emerald-300">{progressState?.successCount ?? 0}</div>
+          </div>
+          <div className="rounded-[16px] border border-white/[0.06] bg-black/[0.12] px-4 py-3">
+            <div className="text-xs text-textMuted">失败</div>
+            <div className="mt-2 text-2xl font-semibold text-rose-300">{progressState?.failedCount ?? 0}</div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {logs.length > 0 ? logs.map((log) => {
+            const tone = log.level === 'error' ? 'text-rose-300' : log.level === 'warning' ? 'text-amber-200' : log.level === 'success' ? 'text-emerald-300' : 'text-slate-200'
+            return (
+              <div key={log.id} className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-3">
+                <div className="text-xs text-slate-400">[{formatDateTime(log.createdAt)}] [{log.accountPhone || '--'}]</div>
+                <div className={`mt-2 text-sm leading-6 ${tone}`}>{log.message}</div>
+              </div>
+            )
+          }) : (
+            <div className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-8 text-center text-sm text-textMuted">
+              还没有执行日志。
+            </div>
+          )}
+        </div>
+      </GlassPanel>
+
+      <GlassPanel className="space-y-4 rounded-[22px] px-5 py-5">
+        <div>
+          <div className="text-base font-semibold text-white">结果记录</div>
+          <div className="mt-1 text-sm text-textMuted">停止后的成功 / 失败明细会保留在这里，随时可以重新打开查看。</div>
+        </div>
+
+        <div className="space-y-3">
+          {taskSnapshots.length > 0 ? taskSnapshots.map((snapshot) => {
+            const tone = getResultTone(snapshot)
+            return (
+              <div key={snapshot.taskId} className="rounded-[16px] border border-white/[0.06] bg-black/[0.08] px-4 py-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-white">{snapshot.groupTitle || '群组邀请任务'}</div>
+                    <div className="mt-1 text-xs text-textMuted">完成时间：{formatDateTime(snapshot.finishedAt)}</div>
+                    <div className="mt-1 text-xs text-textMuted">{snapshot.message}</div>
+                  </div>
+                  <div className={`rounded-full border px-3 py-1 text-xs ${tone === 'success' ? 'border-emerald-400/18 bg-emerald-400/10 text-emerald-300' : tone === 'danger' ? 'border-rose-400/18 bg-rose-400/10 text-rose-300' : 'border-amber-400/18 bg-amber-400/10 text-amber-200'}`}>
+                    {snapshot.stopped ? '已停止' : '已完成'}
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                  <ResultStatCard label="总数" value={snapshot.total} tone="neutral" />
+                  <ResultStatCard label="已处理" value={snapshot.completed} tone="info" />
+                  <ResultStatCard label="成功" value={snapshot.successCount} tone="success" />
+                  <ResultStatCard label="失败" value={snapshot.failedCount} tone="danger" />
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => openCompletionDialog(snapshot.taskId)}
+                    className="rounded-[12px] border border-white/[0.06] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]"
+                  >
+                    查看明细
+                  </button>
+                </div>
+              </div>
+            )
+          }) : (
+            <div className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-8 text-center text-sm text-textMuted">
+              还没有可查看的结果记录。
+            </div>
+          )}
+        </div>
+      </GlassPanel>
+    </div>
+  )
+})
+
+const ResultDialog = memo(function ResultDialog() {
+  const completionDialogTaskId = useGroupInviteStore((state) => state.completionDialogTaskId)
+  const taskSnapshots = useGroupInviteStore((state) => state.taskSnapshots)
+  const closeCompletionDialog = useGroupInviteStore((state) => state.closeCompletionDialog)
+
+  const snapshot = useMemo(
+    () => taskSnapshots.find((item) => item.taskId === completionDialogTaskId) ?? null,
+    [completionDialogTaskId, taskSnapshots]
+  )
+
+  if (!snapshot) return null
+
+  const tone = getResultTone(snapshot)
+
+  return (
+    <ResultDialogShell
+      open={Boolean(snapshot)}
+      onClose={closeCompletionDialog}
+      title={snapshot.stopped ? '邀请任务已停止' : '邀请任务已完成'}
+      subtitle={snapshot.groupTitle || '群组成员邀请管理'}
+      icon={<CheckCircle2 size={18} />}
+      tone={tone}
+      maxWidth="max-w-[920px]"
+    >
+      <ResultHero label="结果汇总" value={snapshot.message} tone={tone} />
 
       <div className="grid gap-3 md:grid-cols-4">
-        <div className="rounded-[16px] border border-white/[0.06] bg-black/[0.12] px-4 py-3">
-          <div className="text-xs text-textMuted">总数</div>
-          <div className="mt-2 text-2xl font-semibold text-white">{progressState?.total ?? 0}</div>
-        </div>
-        <div className="rounded-[16px] border border-white/[0.06] bg-black/[0.12] px-4 py-3">
-          <div className="text-xs text-textMuted">已完成</div>
-          <div className="mt-2 text-2xl font-semibold text-white">{progressState?.completed ?? 0}</div>
-        </div>
-        <div className="rounded-[16px] border border-white/[0.06] bg-black/[0.12] px-4 py-3">
-          <div className="text-xs text-textMuted">成功</div>
-          <div className="mt-2 text-2xl font-semibold text-emerald-300">{progressState?.successCount ?? 0}</div>
-        </div>
-        <div className="rounded-[16px] border border-white/[0.06] bg-black/[0.12] px-4 py-3">
-          <div className="text-xs text-textMuted">失败</div>
-          <div className="mt-2 text-2xl font-semibold text-rose-300">{progressState?.failedCount ?? 0}</div>
-        </div>
+        <ResultStatCard label="总数" value={snapshot.total} tone="neutral" />
+        <ResultStatCard label="已处理" value={snapshot.completed} tone="info" />
+        <ResultStatCard label="成功" value={snapshot.successCount} tone="success" />
+        <ResultStatCard label="失败" value={snapshot.failedCount} tone="danger" />
       </div>
 
-      <div className="space-y-2">
-        {logs.length > 0 ? logs.map((log) => {
-          const tone = log.level === 'error' ? 'text-rose-300' : log.level === 'warning' ? 'text-amber-200' : log.level === 'success' ? 'text-emerald-300' : 'text-slate-200'
+      <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+        {snapshot.items.map((item, index) => {
+          const rowTone = item.success ? 'text-emerald-300' : item.status === 'skipped' ? 'text-amber-200' : 'text-rose-300'
           return (
-            <div key={log.id} className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-3">
-              <div className="text-xs text-slate-400">[{formatDateTime(log.createdAt)}] [{log.accountPhone || '--'}]</div>
-              <div className={`mt-2 text-sm leading-6 ${tone}`}>{log.message}</div>
+            <div key={`${snapshot.taskId}_${index}_${item.targetValue}`} className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-white">{item.targetValue}</div>
+                  <div className="mt-1 text-xs text-textMuted">执行账号：{item.accountPhone || '--'}</div>
+                </div>
+                <div className={`rounded-full border px-3 py-1 text-xs ${item.success ? 'border-emerald-400/18 bg-emerald-400/10 text-emerald-300' : item.status === 'skipped' ? 'border-amber-400/18 bg-amber-400/10 text-amber-200' : 'border-rose-400/18 bg-rose-400/10 text-rose-300'}`}>
+                  {item.success ? (item.status === 'already' ? '已在群' : '成功') : item.status === 'skipped' ? '已跳过' : '失败'}
+                </div>
+              </div>
+              <div className={`mt-2 text-sm leading-6 ${rowTone}`}>{item.message}</div>
             </div>
           )
-        }) : (
-          <div className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-8 text-center text-sm text-textMuted">
-            还没有执行日志。
-          </div>
-        )}
+        })}
       </div>
-    </GlassPanel>
+
+      <ResultPrimaryButton label="知道了" onClick={closeCompletionDialog} tone={tone} />
+    </ResultDialogShell>
   )
 })
 
@@ -549,6 +663,7 @@ export default function GroupInviteView() {
     <div className="space-y-5 pb-6">
       <TabBar />
       {activeTab === 'logs' ? <LogsWorkbench /> : <SettingsWorkbench />}
+      <ResultDialog />
     </div>
   )
 }

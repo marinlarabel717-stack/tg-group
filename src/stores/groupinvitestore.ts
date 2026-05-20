@@ -1,12 +1,39 @@
 import { create } from 'zustand'
-import type { BroadcastJoinedGroup, GroupInvitePayload, GroupInviteProgressState, GroupInviteTargetItem } from '../types'
+import type { BroadcastJoinedGroup, GroupInvitePayload, GroupInviteProgressState, GroupInviteTargetItem, GroupInviteTaskResult } from '../types'
 
 export type GroupInviteTabKey = 'settings' | 'logs'
+export type GroupInviteTaskStatus = 'running' | 'completed' | 'stopped'
 
 export interface GroupInviteParsedSummary {
   items: GroupInviteTargetItem[]
   duplicates: string[]
   invalids: string[]
+}
+
+export interface GroupInviteTaskRecord {
+  id: string
+  status: GroupInviteTaskStatus
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  startedAt: string
+  finishedAt: string | null
+  lastMessage: string
+  groupTitle: string
+}
+
+export interface GroupInviteTaskSnapshot {
+  taskId: string
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  items: GroupInviteTaskResult['results']
+  message: string
+  finishedAt: string
+  stopped?: boolean
+  groupTitle: string
 }
 
 interface GroupInviteState {
@@ -30,6 +57,10 @@ interface GroupInviteState {
   loadingGroups: boolean
   lastActionMessage: string
   progressState: GroupInviteProgressState | null
+  currentTaskId: string | null
+  tasks: GroupInviteTaskRecord[]
+  taskSnapshots: GroupInviteTaskSnapshot[]
+  completionDialogTaskId: string | null
   setActiveTab: (tab: GroupInviteTabKey) => void
   setSelectedAccountIds: (ids: number[]) => void
   setGroupSourceAccountId: (id: number | null) => void
@@ -45,10 +76,41 @@ interface GroupInviteState {
   startTask: () => Promise<void>
   stopTask: () => Promise<void>
   clearLogs: () => void
+  closeCompletionDialog: () => void
+  openCompletionDialog: (taskId: string) => void
   init: () => void
 }
 
 let subscribed = false
+
+function createId(prefix: string) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+function upsertTask(tasks: GroupInviteTaskRecord[], task: GroupInviteTaskRecord) {
+  const next = tasks.filter((item) => item.id !== task.id)
+  return [task, ...next].slice(0, 20)
+}
+
+function upsertTaskSnapshot(snapshots: GroupInviteTaskSnapshot[], snapshot: GroupInviteTaskSnapshot) {
+  const next = snapshots.filter((item) => item.taskId !== snapshot.taskId)
+  return [snapshot, ...next].slice(0, 10)
+}
+
+function createTaskRecord(taskId: string, total: number, groupTitle: string): GroupInviteTaskRecord {
+  return {
+    id: taskId,
+    status: 'running',
+    total,
+    completed: 0,
+    successCount: 0,
+    failedCount: 0,
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    lastMessage: '群组邀请任务已启动。',
+    groupTitle
+  }
+}
 
 function normalizeInviteTarget(input: string) {
   const raw = input.trim()
@@ -145,6 +207,10 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
   loadingGroups: false,
   lastActionMessage: '',
   progressState: null,
+  currentTaskId: null,
+  tasks: [],
+  taskSnapshots: [],
+  completionDialogTaskId: null,
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedAccountIds: (ids) => set((state) => ({
     selectedAccountIds: Array.from(new Set(ids.filter((id) => Number.isFinite(id)))),
@@ -211,9 +277,56 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
       throw new Error('请先导入待邀请联系人。')
     }
 
-    set({ activeTab: 'logs', lastActionMessage: '正在启动群组邀请任务…' })
+    const taskId = createId('group-invite-task')
+    const taskRecord = createTaskRecord(taskId, payload.items.length, payload.groupTitle || payload.groupRef)
+
+    set((state) => ({
+      activeTab: 'logs',
+      currentTaskId: taskId,
+      tasks: upsertTask(state.tasks, taskRecord),
+      lastActionMessage: '正在启动群组邀请任务…'
+    }))
+
     const result = await api.start(payload)
-    set({ lastActionMessage: result.message })
+    const currentTaskId = get().currentTaskId ?? taskId
+    const finishedAt = new Date().toISOString()
+
+    set((state) => {
+      const prevTask = state.tasks.find((item) => item.id === currentTaskId) ?? taskRecord
+      const stopped = state.stopping || !state.running
+      const nextTask: GroupInviteTaskRecord = {
+        ...prevTask,
+        status: stopped ? 'stopped' : 'completed',
+        total: result.total,
+        completed: result.results.length,
+        successCount: result.successCount,
+        failedCount: result.failedCount,
+        finishedAt,
+        lastMessage: result.message,
+        groupTitle: payload.groupTitle || payload.groupRef
+      }
+      const nextSnapshot: GroupInviteTaskSnapshot = {
+        taskId: currentTaskId,
+        total: result.total,
+        completed: result.results.length,
+        successCount: result.successCount,
+        failedCount: result.failedCount,
+        items: result.results,
+        message: result.message,
+        finishedAt,
+        stopped,
+        groupTitle: payload.groupTitle || payload.groupRef
+      }
+
+      return {
+        tasks: upsertTask(state.tasks, nextTask),
+        taskSnapshots: upsertTaskSnapshot(state.taskSnapshots, nextSnapshot),
+        completionDialogTaskId: currentTaskId,
+        currentTaskId: null,
+        lastActionMessage: result.message,
+        stopping: false
+      }
+    })
   },
   stopTask: async () => {
     const api = window.desktopGroupInvite
@@ -225,7 +338,7 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
       const result = await api.stop()
       set({ lastActionMessage: result.message })
     } finally {
-      set({ stopping: false })
+      set({ stopping: true })
     }
   },
   clearLogs: () => set((state) => ({
@@ -237,6 +350,8 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
       : state.progressState,
     lastActionMessage: state.progressState ? '已清空本地日志显示。' : state.lastActionMessage
   })),
+  closeCompletionDialog: () => set({ completionDialogTaskId: null }),
+  openCompletionDialog: (taskId) => set({ completionDialogTaskId: taskId }),
   init: () => {
     if (subscribed) return
     subscribed = true
@@ -249,13 +364,30 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
 
     void api.getState()
       .then((state) => {
-        set({
-          progressState: state,
-          running: state.running,
-          stopping: state.stopRequested,
-          runningAccountIds: state.runningAccountIds,
-          runtimeReady: true,
-          lastActionMessage: readLastMessage(state)
+        set((current) => {
+          const currentTaskId = state.running ? current.currentTaskId ?? createId('group-invite-task') : current.currentTaskId
+          const nextTasks = state.running && currentTaskId
+            ? upsertTask(current.tasks, {
+                ...(current.tasks.find((item) => item.id === currentTaskId) ?? createTaskRecord(currentTaskId, state.total, state.groupTitle || state.groupRef)),
+                total: state.total,
+                completed: state.completed,
+                successCount: state.successCount,
+                failedCount: state.failedCount,
+                lastMessage: readLastMessage(state) || '群组邀请任务进行中',
+                groupTitle: state.groupTitle || state.groupRef
+              })
+            : current.tasks
+
+          return {
+            progressState: state,
+            running: state.running,
+            stopping: state.stopRequested,
+            runningAccountIds: state.runningAccountIds,
+            runtimeReady: true,
+            currentTaskId,
+            tasks: nextTasks,
+            lastActionMessage: readLastMessage(state)
+          }
         })
       })
       .catch((error) => {
@@ -263,13 +395,32 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
       })
 
     api.onProgress((state) => {
-      set({
-        progressState: state,
-        running: state.running,
-        stopping: state.stopRequested,
-        runningAccountIds: state.runningAccountIds,
-        runtimeReady: true,
-        lastActionMessage: readLastMessage(state)
+      set((current) => {
+        const currentTaskId = state.running ? current.currentTaskId ?? createId('group-invite-task') : current.currentTaskId
+        const nextTasks = currentTaskId
+          ? upsertTask(current.tasks, {
+              ...(current.tasks.find((item) => item.id === currentTaskId) ?? createTaskRecord(currentTaskId, state.total, state.groupTitle || state.groupRef)),
+              total: state.total,
+              completed: state.completed,
+              successCount: state.successCount,
+              failedCount: state.failedCount,
+              lastMessage: readLastMessage(state) || '群组邀请任务进行中',
+              groupTitle: state.groupTitle || state.groupRef,
+              status: state.running ? 'running' : current.stopping ? 'stopped' : 'completed',
+              finishedAt: state.running ? null : new Date().toISOString()
+            })
+          : current.tasks
+
+        return {
+          progressState: state,
+          running: state.running,
+          stopping: state.stopRequested,
+          runningAccountIds: state.runningAccountIds,
+          runtimeReady: true,
+          currentTaskId: state.running ? currentTaskId : current.currentTaskId,
+          tasks: nextTasks,
+          lastActionMessage: readLastMessage(state)
+        }
       })
     })
   }
