@@ -5,6 +5,7 @@ import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 import { ResultDialogShell, ResultStatCard } from './resultdialog'
 import { useAccountStore } from '../../stores/accountstore'
+import { useUIStore } from '../../stores/uistore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
 
@@ -104,6 +105,8 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
   const profileOperationState = useAccountStore((state) => state.profileOperationState)
   const importProgress = useAccountStore((state) => state.importProgress)
   const accountTaskStatusMap = useAccountTaskStatusMap()
+  const activeTab = useUIStore((state) => state.reauthorizeTab)
+  const setActiveTab = useUIStore((state) => state.setReauthorizeTab)
 
   const [oldPasswords, setOldPasswords] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -113,7 +116,6 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
   const [error, setError] = useState('')
   const [result, setResult] = useState<ReauthorizeOperationResult | null>(null)
   const [progressState, setProgressState] = useState<ReauthorizeProgressState | null>(null)
-  const [activeTab, setActiveTab] = useState<'settings' | 'logs'>('settings')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [resultDialogOpen, setResultDialogOpen] = useState(false)
   const [draftIds, setDraftIds] = useState<number[]>(selectedIds)

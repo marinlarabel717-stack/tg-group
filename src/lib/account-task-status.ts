@@ -155,6 +155,16 @@ export function useAccountTaskStatusMap() {
   const sniperListenerState = useOtherToolsStore((state) => state.listenerState)
   const twoFactorState = useAccountStore((state) => state.twoFactorState)
   const profileOperationState = useAccountStore((state) => state.profileOperationState)
+  const sniperRunningAccountIds = useMemo(() => {
+    const accountIds = [
+      ...(sniperListenerState?.taskAccountIds ?? []),
+      sniperListenerState?.scanAccountId ?? null,
+      sniperListenerState?.claimAccountId ?? null,
+      sniperListenerState?.createCarrierAccountId ?? null
+    ].filter((accountId): accountId is number => typeof accountId === 'number' && Number.isFinite(accountId))
+
+    return Array.from(new Set(accountIds))
+  }, [sniperListenerState])
 
   return useMemo(() => buildAccountTaskStatusMap({
     checkState: {
@@ -183,9 +193,9 @@ export function useAccountTaskStatusMap() {
       runningAccountIds: batchCreateRunningAccountIds
     },
     sniper: {
-      running: Boolean(sniperListenerState?.taskAccountIds?.length),
+      running: Boolean(sniperListenerState?.running),
       stopping: false,
-      runningAccountIds: sniperListenerState?.taskAccountIds ?? []
+      runningAccountIds: sniperRunningAccountIds
     },
     twoFactor: {
       running: twoFactorState.running,
@@ -214,6 +224,7 @@ export function useAccountTaskStatusMap() {
     directMessageStopping,
     profileOperationState,
     sniperListenerState,
+    sniperRunningAccountIds,
     twoFactorState
   ])
 }

@@ -180,6 +180,48 @@ function createPendingTransferProgress(mode: 'import' | 'export' | 'delete', opt
   }
 }
 
+async function syncRuntimeProgressState(
+  set: (partial: Partial<AccountStoreState>) => void,
+  get: () => AccountStoreState
+) {
+  const api = getDesktopAccountsApi()
+  if (!api) return
+
+  const previousCheckState = get().checkState
+  const previousCheckLogs = get().checkLogs
+  const previousTwoFactorState = get().twoFactorState
+  const previousProfileOperationState = get().profileOperationState
+
+  const [checkState, checkLogs, twoFactorState, profileOperationState] = await Promise.all([
+    api.getCheckState().catch(() => previousCheckState),
+    api.getCheckLogs().catch(() => previousCheckLogs),
+    api.getTwoFactorState?.().catch(() => previousTwoFactorState) ?? Promise.resolve(previousTwoFactorState),
+    api.getProfileOperationState?.().catch(() => previousProfileOperationState) ?? Promise.resolve(previousProfileOperationState)
+  ])
+
+  const normalizedCheckState = {
+    ...checkState,
+    queuedAccountIds: areSameNumberArrays(previousCheckState.queuedAccountIds, checkState.queuedAccountIds)
+      ? previousCheckState.queuedAccountIds
+      : checkState.queuedAccountIds,
+    activeAccountIds: areSameNumberArrays(previousCheckState.activeAccountIds, checkState.activeAccountIds)
+      ? previousCheckState.activeAccountIds
+      : checkState.activeAccountIds
+  }
+
+  const nextCheckTaskAccountIds = normalizedCheckState.running
+    ? Array.from(new Set([...normalizedCheckState.activeAccountIds, ...normalizedCheckState.queuedAccountIds]))
+    : []
+
+  set({
+    checkState: normalizedCheckState,
+    checkLogs,
+    checkTaskAccountIds: nextCheckTaskAccountIds,
+    twoFactorState,
+    profileOperationState
+  })
+}
+
 const LARGE_IMPORT_REFRESH_THRESHOLD = 2000
 
 let subscribed = false
@@ -419,7 +461,10 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
     if (initPromise) return initPromise
 
     set({ loading: true, errorMessage: '' })
-    initPromise = syncAccounts(set, get).finally(() => {
+    initPromise = Promise.all([
+      syncAccounts(set, get),
+      syncRuntimeProgressState(set, get)
+    ]).then(() => undefined).finally(() => {
       initPromise = null
     })
     await initPromise
