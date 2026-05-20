@@ -782,7 +782,12 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
             reauthorize_unconfirmed_recovery_email_pattern: item.unconfirmedRecoveryEmailPattern ?? null,
             reauthorize_pending_recovery_reset_at: item.pendingRecoveryResetAt ?? null,
             reauthorize_cancelled_recovery_email: Boolean(item.cancelledRecoveryEmail),
-            reauthorize_declined_recovery_reset: Boolean(item.declinedRecoveryReset)
+            reauthorize_declined_recovery_reset: Boolean(item.declinedRecoveryReset),
+            reauthorize_device_model: item.deviceModel ?? null,
+            reauthorize_system_version: item.systemVersion ?? null,
+            reauthorize_app_version: item.appVersion ?? null,
+            reauthorize_lang_code: item.langCode ?? null,
+            reauthorize_system_lang_code: item.systemLangCode ?? null
           }
         })
 

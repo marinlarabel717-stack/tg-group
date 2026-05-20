@@ -1,5 +1,7 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import { execFile, type ChildProcess } from 'node:child_process'
+import { app } from 'electron'
 import type { AccountRecord, ReauthorizeOperationPayload, ReauthorizeOperationResultItem, ReauthorizeOperationStatus } from './types'
 import type { SessionLoader } from './check-engine/session-loader'
 import type { TelegramClientManager, AccountClientProxyOptions } from './check-engine/telegram-client-manager'
@@ -21,6 +23,19 @@ interface TelethonReauthorizeRawResult {
   pending_recovery_reset_at?: string | null
   cancelled_recovery_email?: boolean
   declined_recovery_reset?: boolean
+  device_model?: string | null
+  system_version?: string | null
+  app_version?: string | null
+  lang_code?: string | null
+  system_lang_code?: string | null
+}
+
+interface StableDesktopClientProfile {
+  deviceModel: string
+  systemVersion: string
+  appVersion: string
+  langCode: string
+  systemLangCode: string
 }
 
 type ReauthorizeLogLevel = 'info' | 'success' | 'warning' | 'error'
@@ -38,6 +53,67 @@ const PROGRESS_PREFIX = '__PROGRESS__'
 
 function resolveScriptPath() {
   return resolveRuntimeAssetPath('accounts', 'telethon_reauthorize.py')
+}
+
+function readTrimmedString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : ''
+}
+
+function normalizeLangCode(locale: string) {
+  const normalized = locale.replace('_', '-').trim()
+  if (!normalized) return 'en'
+  return normalized.split('-')[0]?.toLowerCase() || 'en'
+}
+
+function normalizeSystemLangCode(locale: string) {
+  const normalized = locale.replace('_', '-').trim()
+  return normalized || 'en-US'
+}
+
+function resolveDesktopSystemVersion() {
+  const platform = os.platform()
+  const release = readTrimmedString(os.release())
+  const version = readTrimmedString(typeof os.version === 'function' ? os.version() : '')
+
+  if (platform === 'win32') {
+    if (version) return version
+    return release ? `Windows ${release}` : 'Windows'
+  }
+  if (platform === 'darwin') {
+    return release ? `macOS ${release}` : 'macOS'
+  }
+  if (platform === 'linux') {
+    return release ? `Linux ${release}` : 'Linux'
+  }
+  return version || release || platform || 'Desktop OS'
+}
+
+function resolveDesktopDeviceModel() {
+  const arch = os.arch() === 'x64' ? '64bit' : os.arch() === 'ia32' ? '32bit' : os.arch().toUpperCase()
+  const platform = os.platform()
+  if (platform === 'win32') return `Windows PC ${arch}`
+  if (platform === 'darwin') return `Mac ${arch}`
+  if (platform === 'linux') return `Linux PC ${arch}`
+  return `Desktop ${arch}`
+}
+
+function buildStableDesktopClientProfile(account: AccountRecord): StableDesktopClientProfile {
+  const storedDeviceModel = readTrimmedString(account.profile?.reauthorize_device_model)
+  const storedSystemVersion = readTrimmedString(account.profile?.reauthorize_system_version)
+  const storedAppVersion = readTrimmedString(account.profile?.reauthorize_app_version)
+  const storedLangCode = readTrimmedString(account.profile?.reauthorize_lang_code)
+  const storedSystemLangCode = readTrimmedString(account.profile?.reauthorize_system_lang_code)
+
+  const locale = normalizeSystemLangCode(app.getLocale?.() || Intl.DateTimeFormat().resolvedOptions().locale || 'en-US')
+  const appVersion = readTrimmedString(app.getVersion?.()) || '0.0.0'
+
+  return {
+    deviceModel: storedDeviceModel || resolveDesktopDeviceModel(),
+    systemVersion: storedSystemVersion || resolveDesktopSystemVersion(),
+    appVersion: storedAppVersion || `TG-Matrix ${appVersion}`,
+    langCode: storedLangCode || normalizeLangCode(locale),
+    systemLangCode: storedSystemLangCode || locale
+  }
 }
 
 function splitPasswordCandidates(input: string) {
@@ -247,7 +323,12 @@ export class TelegramReauthorizationService {
         unconfirmedRecoveryEmailPattern: null,
         pendingRecoveryResetAt: null,
         cancelledRecoveryEmail: false,
-        declinedRecoveryReset: false
+        declinedRecoveryReset: false,
+        deviceModel: null,
+        systemVersion: null,
+        appVersion: null,
+        langCode: null,
+        systemLangCode: null
       }
     }
 
@@ -270,7 +351,12 @@ export class TelegramReauthorizationService {
         unconfirmedRecoveryEmailPattern: null,
         pendingRecoveryResetAt: null,
         cancelledRecoveryEmail: false,
-        declinedRecoveryReset: false
+        declinedRecoveryReset: false,
+        deviceModel: null,
+        systemVersion: null,
+        appVersion: null,
+        langCode: null,
+        systemLangCode: null
       }
     }
 
@@ -289,7 +375,12 @@ export class TelegramReauthorizationService {
         unconfirmedRecoveryEmailPattern: null,
         pendingRecoveryResetAt: null,
         cancelledRecoveryEmail: false,
-        declinedRecoveryReset: false
+        declinedRecoveryReset: false,
+        deviceModel: null,
+        systemVersion: null,
+        appVersion: null,
+        langCode: null,
+        systemLangCode: null
       }
     }
 
@@ -301,6 +392,8 @@ export class TelegramReauthorizationService {
 
     try {
       logger?.log('info', '已切换到 Telethon 官方验证码重新授权链路。')
+      const clientProfile = buildStableDesktopClientProfile(account)
+      logger?.log('info', `本次使用稳定桌面参数：${clientProfile.deviceModel} / ${clientProfile.systemVersion} / ${clientProfile.appVersion}`)
       const proxyPayload = serializeTelethonProxy(proxy)
       const raw = await this.runScript(account.id, {
         sessionPath: account.sessionPath,
@@ -308,7 +401,12 @@ export class TelegramReauthorizationService {
         cleanupExpiredRecovery: payload.cleanupExpiredRecovery,
         passwordCandidates,
         timeoutSeconds: 180,
-        proxy: proxyPayload ? JSON.parse(proxyPayload) : null
+        proxy: proxyPayload ? JSON.parse(proxyPayload) : null,
+        deviceModel: clientProfile.deviceModel,
+        systemVersion: clientProfile.systemVersion,
+        appVersion: clientProfile.appVersion,
+        langCode: clientProfile.langCode,
+        systemLangCode: clientProfile.systemLangCode
       }, logger)
       const ok = Boolean(raw.ok)
       const reason = typeof raw.reason === 'string' ? raw.reason : ''
@@ -330,7 +428,12 @@ export class TelegramReauthorizationService {
         unconfirmedRecoveryEmailPattern: typeof raw.unconfirmed_recovery_email_pattern === 'string' ? raw.unconfirmed_recovery_email_pattern : null,
         pendingRecoveryResetAt: typeof raw.pending_recovery_reset_at === 'string' ? raw.pending_recovery_reset_at : null,
         cancelledRecoveryEmail: Boolean(raw.cancelled_recovery_email),
-        declinedRecoveryReset: Boolean(raw.declined_recovery_reset)
+        declinedRecoveryReset: Boolean(raw.declined_recovery_reset),
+        deviceModel: typeof raw.device_model === 'string' ? raw.device_model : clientProfile.deviceModel,
+        systemVersion: typeof raw.system_version === 'string' ? raw.system_version : clientProfile.systemVersion,
+        appVersion: typeof raw.app_version === 'string' ? raw.app_version : clientProfile.appVersion,
+        langCode: typeof raw.lang_code === 'string' ? raw.lang_code : clientProfile.langCode,
+        systemLangCode: typeof raw.system_lang_code === 'string' ? raw.system_lang_code : clientProfile.systemLangCode
       }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
@@ -349,7 +452,12 @@ export class TelegramReauthorizationService {
         unconfirmedRecoveryEmailPattern: null,
         pendingRecoveryResetAt: null,
         cancelledRecoveryEmail: false,
-        declinedRecoveryReset: false
+        declinedRecoveryReset: false,
+        deviceModel: null,
+        systemVersion: null,
+        appVersion: null,
+        langCode: null,
+        systemLangCode: null
       }
     }
   }

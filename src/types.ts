@@ -288,6 +288,11 @@ export interface ReauthorizeOperationResultItem {
   pendingRecoveryResetAt?: string | null
   cancelledRecoveryEmail?: boolean
   declinedRecoveryReset?: boolean
+  deviceModel?: string | null
+  systemVersion?: string | null
+  appVersion?: string | null
+  langCode?: string | null
+  systemLangCode?: string | null
 }
 
 export interface ReauthorizeOperationResult {

@@ -236,6 +236,11 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
     raw_candidates = payload.get('passwordCandidates') or []
     password_candidates = [str(item).strip() for item in raw_candidates if str(item).strip()]
     proxy = _build_proxy_config(payload.get('proxy'))
+    device_model = str(payload.get('deviceModel') or '').strip() or 'Desktop'
+    system_version = str(payload.get('systemVersion') or '').strip() or 'Desktop OS'
+    app_version = str(payload.get('appVersion') or '').strip() or 'TG-Matrix'
+    lang_code = str(payload.get('langCode') or '').strip() or 'en'
+    system_lang_code = str(payload.get('systemLangCode') or '').strip() or 'en-US'
 
     if not session_path:
         return {'ok': False, 'reason': 'SESSION_PATH_REQUIRED'}
@@ -282,10 +287,13 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
             API_HASH,
             receive_updates=False,
             proxy=proxy,
-            device_model='Desktop',
-            system_version='Windows 10',
-            app_version='TG-Matrix'
+            device_model=device_model,
+            system_version=system_version,
+            app_version=app_version,
+            lang_code=lang_code,
+            system_lang_code=system_lang_code
         )
+        _emit_progress('info', f'步骤 2：本次新会话使用稳定桌面参数 {device_model} / {system_version} / {app_version}。')
 
         _emit_progress('info', '步骤 2：正在建立新设备会话并请求官方验证码。')
         await asyncio.wait_for(new_client.connect(), timeout=timeout_seconds)
@@ -378,6 +386,11 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
             'pending_recovery_reset_at': recovery_state.get('pending_recovery_reset_at'),
             'cancelled_recovery_email': cancelled_recovery_email,
             'declined_recovery_reset': declined_recovery_reset,
+            'device_model': device_model,
+            'system_version': system_version,
+            'app_version': app_version,
+            'lang_code': lang_code,
+            'system_lang_code': system_lang_code,
         }
     except Exception as exc:
         return {
@@ -392,6 +405,11 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
             'pending_recovery_reset_at': recovery_state.get('pending_recovery_reset_at'),
             'cancelled_recovery_email': cancelled_recovery_email,
             'declined_recovery_reset': declined_recovery_reset,
+            'device_model': device_model,
+            'system_version': system_version,
+            'app_version': app_version,
+            'lang_code': lang_code,
+            'system_lang_code': system_lang_code,
         }
     finally:
         try:
