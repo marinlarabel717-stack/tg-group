@@ -788,6 +788,7 @@ export interface GroupInviteTaskResult {
   total: number
   successCount: number
   failedCount: number
+  remainingCount: number
   results: GroupInviteResultItem[]
   message: string
 }

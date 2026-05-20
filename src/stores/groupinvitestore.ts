@@ -172,6 +172,23 @@ function readLastMessage(state: GroupInviteProgressState | null) {
   return state?.logs[state.logs.length - 1]?.message || ''
 }
 
+function removeSuccessfulTargetsFromInput(input: string, successTargets: Set<string>) {
+  if (successTargets.size === 0) return input
+
+  const tokens = input
+    .split(/([\n,\r\t ]+)/)
+
+  return tokens
+    .filter((token) => {
+      if (!token.trim()) return true
+      const parsed = normalizeInviteTarget(token)
+      if (!parsed) return true
+      return !successTargets.has(parsed.normalized)
+    })
+    .join('')
+    .trim()
+}
+
 function buildPayload(state: GroupInviteState): GroupInvitePayload {
   const summary = parseGroupInviteTargets(state.targetInput)
   return {
@@ -283,7 +300,7 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
     }
 
     const taskId = createId('group-invite-task')
-    const taskRecord = createTaskRecord(taskId, payload.items.length, payload.groupTitle || payload.groupRef)
+    const taskRecord = createTaskRecord(taskId, Math.min(payload.items.length, Math.max(1, payload.accountIds.length * payload.perRoundLimit)), payload.groupTitle || payload.groupRef)
 
     set((state) => ({
       activeTab: 'logs',
@@ -295,6 +312,7 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
     const result = await api.start(payload)
     const currentTaskId = get().currentTaskId ?? taskId
     const finishedAt = new Date().toISOString()
+    const successfulTargets = new Set(result.results.filter((item) => item.success).map((item) => item.targetValue))
 
     set((state) => {
       const prevTask = state.tasks.find((item) => item.id === currentTaskId) ?? taskRecord
@@ -328,6 +346,7 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
         taskSnapshots: upsertTaskSnapshot(state.taskSnapshots, nextSnapshot),
         completionDialogTaskId: currentTaskId,
         currentTaskId: null,
+        targetInput: removeSuccessfulTargetsFromInput(state.targetInput, successfulTargets),
         lastActionMessage: result.message,
         stopping: false
       }

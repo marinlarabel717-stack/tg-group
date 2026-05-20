@@ -332,9 +332,9 @@ async function sleepForTask(task: ActiveGroupInviteTask, ms: number) {
 
 function buildAssignments(accountIds: number[], items: GroupInviteTargetItem[], perRoundLimit: number) {
   const assignments = new Map<number, GroupInviteTargetItem[]>()
-  const overflow: GroupInviteTargetItem[] = []
   const normalizedLimit = perRoundLimit > 0 ? perRoundLimit : Number.POSITIVE_INFINITY
   let cursor = 0
+  let assignedCount = 0
 
   for (const item of items) {
     let assigned = false
@@ -345,17 +345,22 @@ function buildAssignments(accountIds: number[], items: GroupInviteTargetItem[], 
         current.push(item)
         assignments.set(accountId, current)
         cursor = (cursor + tried + 1) % accountIds.length
+        assignedCount += 1
         assigned = true
         break
       }
     }
 
     if (!assigned) {
-      overflow.push(item)
+      break
     }
   }
 
-  return { assignments, overflow }
+  return {
+    assignments,
+    assignedCount,
+    remainingCount: Math.max(0, items.length - assignedCount)
+  }
 }
 
 export class GroupInviteService {
@@ -476,13 +481,14 @@ export class GroupInviteService {
     }
     this.activeTask = task
 
-    const { assignments, overflow } = buildAssignments(orderedAccounts.map((account) => account.id), payload.items, payload.perRoundLimit)
+    const { assignments, assignedCount, remainingCount } = buildAssignments(orderedAccounts.map((account) => account.id), payload.items, payload.perRoundLimit)
     const results: GroupInviteResultItem[] = []
+    const plannedTotal = assignedCount
 
     this.state = {
       running: true,
       stopRequested: false,
-      total: payload.items.length,
+      total: plannedTotal,
       completed: 0,
       successCount: 0,
       failedCount: 0,
@@ -501,29 +507,17 @@ export class GroupInviteService {
       accountId: null,
       accountPhone: '',
       targetValue: '',
-      message: `已开始执行 ${payload.items.length} 个联系人的群组邀请任务，目标群组 ${payload.groupTitle || payload.groupRef}。`
+      message: `本轮准备执行 ${plannedTotal} 个联系人，目标群组 ${payload.groupTitle || payload.groupRef}。`
     })
 
-    if (overflow.length > 0) {
-      for (const item of overflow) {
-        const resultItem: GroupInviteResultItem = {
-          targetValue: item.normalized,
-          accountId: null,
-          accountPhone: '',
-          success: false,
-          status: 'skipped',
-          message: '超过本轮执行上限，本次未安排执行。'
-        }
-        results.push(resultItem)
-        this.updateState({ completed: this.state.completed + 1, failedCount: this.state.failedCount + 1 })
-        this.pushLog({
-          level: 'warning',
-          accountId: null,
-          accountPhone: '',
-          targetValue: item.normalized,
-          message: `跳过 ${item.normalized}：超过本轮执行上限。`
-        })
-      }
+    if (remainingCount > 0) {
+      this.pushLog({
+        level: 'warning',
+        accountId: null,
+        accountPhone: '',
+        targetValue: '',
+        message: `还有 ${remainingCount} 个联系人超出本轮上限，先保留在名单里，下一轮再继续。`
+      })
     }
 
     const intervalSeconds = Math.max(0, payload.inviteIntervalSeconds, payload.accountFrequencySeconds)
@@ -713,8 +707,8 @@ export class GroupInviteService {
         runningAccountIds: []
       })
       const finalMessage = stopped
-        ? `群组邀请任务已停止：成功 ${this.state.successCount}，失败 ${this.state.failedCount}。`
-        : `群组邀请任务执行完成：成功 ${this.state.successCount}，失败 ${this.state.failedCount}。`
+        ? `群组邀请任务已停止：本轮成功 ${this.state.successCount}，失败 ${this.state.failedCount}，剩余 ${remainingCount} 个未处理。`
+        : `群组邀请任务执行完成：本轮成功 ${this.state.successCount}，失败 ${this.state.failedCount}，剩余 ${remainingCount} 个未处理。`
       this.pushLog({
         level: 'info',
         accountId: null,
@@ -723,9 +717,10 @@ export class GroupInviteService {
         message: finalMessage
       })
       return {
-        total: payload.items.length,
+        total: plannedTotal,
         successCount: this.state.successCount,
         failedCount: this.state.failedCount,
+        remainingCount,
         results,
         message: finalMessage
       }
