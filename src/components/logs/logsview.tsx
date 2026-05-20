@@ -29,6 +29,7 @@ function getAccountLogLineClass(log: CheckLogEntry) {
   if (log.status === 'geo_restricted') return 'text-lime-300'
   if (log.status === 'multi_ip') return 'text-pink-300'
   if (log.status === 'frozen') return 'text-blue-300'
+  if (log.status === 'session_expired' || log.status === 'not_logged_in') return 'text-rose-300'
   if (log.status === 'banned') return 'text-rose-300'
   if (log.status === 'timeout') return 'text-violet-300'
   if (log.status === 'unknown' && isGeoRestrictedError(log.message)) return 'text-lime-300'
