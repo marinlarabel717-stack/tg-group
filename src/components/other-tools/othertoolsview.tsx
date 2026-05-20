@@ -2,6 +2,7 @@ import { Copy, Filter, ImageIcon, Loader2, Radar, Search, SquareTerminal, Type, 
 import { type ChangeEvent, memo, useEffect, useMemo, useState } from 'react'
 import type { AccountRecord, BatchCreatePostType, OtherToolsSniperCandidateItem, OtherToolsSniperListenerClaimedItem, OtherToolsSniperListenerCreatedCarrierItem, OtherToolsSniperListenerState, OtherToolsSourceSubscribeItem, OtherToolsUsernameFilterItem, OtherToolsUsernameFilterResult } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
+import { AccountPickerDialog } from '../accounts/accountpickerdialog'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
 import { useOtherToolsStore } from '../../stores/othertoolsstore'
@@ -587,10 +588,6 @@ function SniperWorkbench() {
   const [excludeKeywords, setExcludeKeywords] = useState(savedDraft.excludeKeywords ?? '')
   const [subscribeAccountIds, setSubscribeAccountIds] = useState<number[]>(Array.isArray(savedDraft.subscribeAccountIds) ? savedDraft.subscribeAccountIds.filter((item): item is number => typeof item === 'number') : [])
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [draftSubscribeIds, setDraftSubscribeIds] = useState<number[]>([])
-  const [subscribeKeyword, setSubscribeKeyword] = useState('')
-  const [subscribeRangeStart, setSubscribeRangeStart] = useState('1')
-  const [subscribeRangeEnd, setSubscribeRangeEnd] = useState('10')
   const [detailDialog, setDetailDialog] = useState<'claimed' | 'carriers' | null>(null)
   const [sourceMessageLimit, setSourceMessageLimit] = useState(typeof savedDraft.sourceMessageLimit === 'number' ? Math.max(1, Math.min(100, savedDraft.sourceMessageLimit === 10 ? 2 : savedDraft.sourceMessageLimit)) : 2)
   const [candidateLimit, setCandidateLimit] = useState(typeof savedDraft.candidateLimit === 'number' ? Math.max(1, Math.min(500, savedDraft.candidateLimit)) : 80)
@@ -623,19 +620,6 @@ function SniperWorkbench() {
   useEffect(() => {
     initOtherToolsStore()
   }, [initOtherToolsStore])
-
-  useEffect(() => {
-    if (!pickerOpen) {
-      setDraftSubscribeIds(subscribeAccountIds)
-      setSubscribeKeyword('')
-    }
-  }, [pickerOpen, subscribeAccountIds])
-
-  useEffect(() => {
-    if (!pickerOpen) return
-    setSubscribeRangeStart('1')
-    setSubscribeRangeEnd(String(Math.min(10, Math.max(accounts.length, 1))))
-  }, [pickerOpen, accounts.length])
 
   useEffect(() => {
     saveSniperDraft({
@@ -678,21 +662,12 @@ function SniperWorkbench() {
   const sourcePreviewCount = useMemo(() => splitPreviewInput(sourceInput).length, [sourceInput])
   const poolPreviewCount = useMemo(() => splitPreviewInput(poolInput).length, [poolInput])
   const subscribeSelectedAccounts = useMemo(() => accounts.filter((account) => subscribeAccountIds.includes(account.id)), [accounts, subscribeAccountIds])
-  const subscribeFilteredAccounts = useMemo(() => {
-    const value = subscribeKeyword.trim().toLowerCase()
-    if (!value) return accounts
-    return accounts.filter((account) => [readAccountOptionLabel(account), account.username || '', account.phone || ''].some((part) => part.toLowerCase().includes(value)))
-  }, [accounts, subscribeKeyword])
-  const selectableSubscribeAccounts = useMemo(
-    () => subscribeFilteredAccounts.filter((account) => !getAccountTaskMeta(accountTaskStatusMap, account.id).occupied),
-    [accountTaskStatusMap, subscribeFilteredAccounts]
-  )
   const listening = Boolean(listenerState?.running)
   const claimedItems = listenerState?.claimedItems ?? []
   const createdCarrierItems = listenerState?.createdCarrierItems ?? []
 
-  const applySubscribePicker = () => {
-    setSubscribeAccountIds(draftSubscribeIds.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied))
+  const applySubscribePicker = (ids: number[]) => {
+    setSubscribeAccountIds(ids.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied))
     setPickerOpen(false)
   }
 
@@ -954,87 +929,20 @@ function SniperWorkbench() {
         </div>
       </div>
 
-      {pickerOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setPickerOpen(false)}>
-          <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-card px-5 py-4">
-              <div className="text-lg font-semibold text-white">选择订阅账号</div>
-              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setPickerOpen(false)}><X size={16} /></button>
-            </div>
-
-            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative w-full lg:max-w-[360px]">
-                  <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
-                  <input value={subscribeKeyword} onChange={(event) => setSubscribeKeyword(event.target.value)} placeholder="搜索手机号 / 账号名" className={`h-11 w-full rounded-[12px] pl-11 pr-4 text-sm ${SOFT_INPUT_CLASS}`} />
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button type="button" onClick={() => setDraftSubscribeIds(selectableSubscribeAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
-                  <button type="button" onClick={() => setDraftSubscribeIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
-                </div>
-              </div>
-
-              {subscribeFilteredAccounts.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-sm text-textMuted">区间选择</div>
-                  <input inputMode="numeric" value={subscribeRangeStart} onChange={(event) => setSubscribeRangeStart(event.target.value.replace(/[^\d]/g, ''))} placeholder="开始" className={`h-10 w-20 rounded-[12px] px-3 text-sm ${SOFT_INPUT_CLASS}`} />
-                  <span className="text-textMuted">-</span>
-                  <input inputMode="numeric" value={subscribeRangeEnd} onChange={(event) => setSubscribeRangeEnd(event.target.value.replace(/[^\d]/g, ''))} placeholder="结束" className={`h-10 w-20 rounded-[12px] px-3 text-sm ${SOFT_INPUT_CLASS}`} />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const rangeIds = readCustomRangeIds(selectableSubscribeAccounts, subscribeRangeStart, subscribeRangeEnd)
-                      if (rangeIds.length === 0) return
-                      setDraftSubscribeIds((current) => toggleAccountRange(current, rangeIds))
-                    }}
-                    className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18"
-                  >
-                    应用区间
-                  </button>
-                </div>
-              ) : null}
-
-              <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
-                <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/6 px-4 py-3 text-xs uppercase tracking-[0.16em] text-textMuted">
-                  <div>选择</div>
-                  <div>手机号</div>
-                  <div>账号名</div>
-                  <div>状态</div>
-                </div>
-
-                <div className="max-h-[520px] overflow-y-auto">
-                  {subscribeFilteredAccounts.length === 0 ? (
-                    <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号</div>
-                  ) : subscribeFilteredAccounts.map((account) => {
-                    const checked = draftSubscribeIds.includes(account.id)
-                    const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
-                    return (
-                      <label key={`subscribe_picker_${account.id}`} className={`grid grid-cols-[64px_220px_1.4fr_160px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${taskMeta.occupied ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${checked ? 'bg-violet-400/10' : taskMeta.occupied ? '' : 'hover:bg-white/[0.04]'}`}>
-                        <div className="flex items-center justify-center"><input type="checkbox" checked={checked} disabled={taskMeta.occupied} onChange={(event) => setDraftSubscribeIds((current) => event.target.checked ? [...current, account.id] : current.filter((item) => item !== account.id))} /></div>
-                        <div className="truncate text-white">{account.phone || '—'}</div>
-                        <div className="min-w-0">
-                          <div className="truncate text-white">{readAccountOptionLabel(account)}</div>
-                          {taskMeta.occupied ? <div className="mt-1 text-xs text-textMuted">任务：{taskMeta.label}</div> : null}
-                        </div>
-                        <div>
-                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>
-                            {formatAccountStatus(account.status, account.profile?.check_error as string | undefined, account.profile?.check_mode as 'account-status' | 'account-survival' | null | undefined)}
-                          </span>
-                        </div>
-                      </label>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/8 bg-card px-5 py-4">
-              <button type="button" onClick={() => setPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
-              <button type="button" onClick={applySubscribePicker} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">应用账号选择</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <AccountPickerDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        accounts={accounts}
+        selectedIds={subscribeAccountIds}
+        title="选择订阅账号"
+        subtitle="直接按群组成员邀请那套表格来选，筛完后在顶部确认。"
+        confirmText="确认选择账号"
+        onConfirm={applySubscribePicker}
+        resolveBusyMeta={(account) => {
+          const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
+          return { busy: taskMeta.occupied, label: taskMeta.label, tone: taskMeta.tone }
+        }}
+      />
 
       <SniperClaimedDialog open={detailDialog === 'claimed'} items={claimedItems} onClose={() => setDetailDialog(null)} />
       <SniperCreatedCarrierDialog open={detailDialog === 'carriers'} items={createdCarrierItems} onClose={() => setDetailDialog(null)} />

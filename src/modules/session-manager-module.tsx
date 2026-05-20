@@ -3,6 +3,7 @@ import { Check, Clock3, Copy, FolderSearch2, Hash, ListFilter, Play, RadioTower,
 import { GlassPanel } from '../components/common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_TAB_CLASS } from '../components/common/settings-ui'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../components/accounts/resultdialog'
+import { AccountPickerDialog } from '../components/accounts/accountpickerdialog'
 import { formatAccountStatus } from '../lib/ui-text'
 import { useAccountStore } from '../stores/accountstore'
 import { useDirectMessageStore } from '../stores/directmessagestore'
@@ -310,8 +311,6 @@ export default function SessionManagerModule() {
   const [mode, setMode] = useState<GroupCollectorMode>('public_members')
   const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([])
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
-  const [draftAccountIds, setDraftAccountIds] = useState<number[]>([])
-  const [accountSearch, setAccountSearch] = useState('')
   const [groupInput, setGroupInput] = useState('')
   const [groupSources, setGroupSources] = useState<GroupSourceRecord[]>([])
   const [groupInputSummary, setGroupInputSummary] = useState<GroupInputSummary>({ added: 0, duplicate: 0, invalid: 0 })
@@ -415,32 +414,12 @@ export default function SessionManagerModule() {
     [accounts, selectedAccountIds]
   )
 
-  const filteredAccounts = useMemo(() => {
-    const keyword = accountSearch.trim().toLowerCase()
-    return accounts.filter((account) => {
-      if (!keyword) return true
-      const label = `${readAccountLabel(account)} ${readAccountPhone(account)}`.toLowerCase()
-      return label.includes(keyword)
-    })
-  }, [accountSearch, accounts])
-
-  const selectableFilteredAccounts = useMemo(
-    () => filteredAccounts.filter((account) => !busyAccountIds.has(account.id) || selectedAccountIds.includes(account.id)),
-    [busyAccountIds, filteredAccounts, selectedAccountIds]
-  )
 
   const activeTask = useMemo(
     () => tasks.find((task) => task.id === activeTaskId) || tasks[0] || null,
     [activeTaskId, tasks]
   )
 
-  useEffect(() => {
-    if (!accountPickerOpen) {
-      setDraftAccountIds(selectedAccountIds)
-      return
-    }
-    setAccountSearch('')
-  }, [accountPickerOpen, selectedAccountIds])
 
   useEffect(() => {
     if (!activeTaskId && tasks[0]) {
@@ -670,8 +649,8 @@ export default function SessionManagerModule() {
     setHintMessage('采集频道列表已清空。')
   }
 
-  const applyAccountSelection = () => {
-    setSelectedAccountIds(draftAccountIds.filter((accountId) => !busyAccountIds.has(accountId) || selectedAccountIds.includes(accountId)))
+  const applyAccountSelection = (ids: number[]) => {
+    setSelectedAccountIds(ids.filter((accountId) => !busyAccountIds.has(accountId) || selectedAccountIds.includes(accountId)))
     setAccountPickerOpen(false)
   }
 
@@ -1091,69 +1070,25 @@ export default function SessionManagerModule() {
         {tabContent}
       </div>
 
-      {accountPickerOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setAccountPickerOpen(false)}>
-          <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/8 bg-card px-5 py-4">
-              <div className="text-lg font-semibold text-white">选择采集账号</div>
-              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setAccountPickerOpen(false)}><X size={16} /></button>
-            </div>
-
-            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative w-full lg:max-w-[360px]">
-                  <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
-                  <input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="搜索手机号 / 账号名" className={`h-11 w-full rounded-[12px] pl-11 pr-4 text-sm ${SOFT_INPUT_CLASS}`} />
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button type="button" onClick={() => setDraftAccountIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
-                  <button type="button" onClick={() => setDraftAccountIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
-                </div>
-              </div>
-
-              <div className="overflow-hidden rounded-[18px] border border-white/8 bg-panel">
-                <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/6 px-4 py-3 text-xs uppercase tracking-[0.16em] text-textMuted">
-                  <div>选择</div>
-                  <div>手机号</div>
-                  <div>账号名</div>
-                  <div>状态</div>
-                </div>
-
-                <div className="max-h-[520px] overflow-y-auto">
-                  {loading && accounts.length === 0 ? (
-                    <div className="px-4 py-12 text-center text-sm text-textMuted">正在读取账号...</div>
-                  ) : filteredAccounts.length === 0 ? (
-                    <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号</div>
-                  ) : filteredAccounts.map((account) => {
-                    const checked = draftAccountIds.includes(account.id)
-                    const busy = busyAccountIds.has(account.id) && !selectedAccountIds.includes(account.id)
-                    return (
-                      <label key={account.id} className={`grid grid-cols-[64px_220px_1.4fr_160px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${busy ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${checked ? 'bg-violet-400/10' : busy ? '' : 'hover:bg-white/[0.04]'}`}>
-                        <div className="flex items-center justify-center"><input type="checkbox" checked={checked} disabled={busy} onChange={(event) => setDraftAccountIds((current) => event.target.checked ? [...current, account.id] : current.filter((item) => item !== account.id))} /></div>
-                        <div className="truncate text-white">{account.phone || '—'}</div>
-                        <div className="min-w-0">
-                          <div className="truncate text-white">{readAccountLabel(account)}</div>
-                          {busy ? <div className="mt-1 text-xs text-textMuted">任务：当前已被其他采集任务占用</div> : null}
-                        </div>
-                        <div>
-                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status, busy)}`}>
-                            {busy ? '占用中' : formatAccountStatus(account.status as never)}
-                          </span>
-                        </div>
-                      </label>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/8 bg-card px-5 py-4">
-              <button type="button" onClick={() => setAccountPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
-              <button type="button" onClick={applyAccountSelection} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">应用账号选择</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <AccountPickerDialog
+        open={accountPickerOpen}
+        onClose={() => setAccountPickerOpen(false)}
+        accounts={accounts}
+        loading={loading}
+        selectedIds={selectedAccountIds}
+        title="选择采集账号"
+        subtitle="直接按群组成员邀请那套表格来选，筛完后在顶部确认。"
+        confirmText="确认选择账号"
+        onConfirm={applyAccountSelection}
+        resolveBusyMeta={(account, draftSelectedIds) => {
+          const busy = busyAccountIds.has(account.id) && !draftSelectedIds.includes(account.id)
+          return {
+            busy,
+            label: busy ? '当前已被其他采集任务占用' : undefined,
+            tone: busy ? 'border-amber-300/20 bg-amber-300/10 text-amber-200' : undefined
+          }
+        }}
+      />
 
       <ResultDialogShell
         open={resultDialog.open && Boolean(resultDialog.result)}

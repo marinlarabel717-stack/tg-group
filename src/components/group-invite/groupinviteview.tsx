@@ -6,6 +6,7 @@ import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS, SOFT_PANEL_INPUT_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../accounts/resultdialog'
 import { AccountSummaryCards } from '../accounts/accountsummarycards'
+import { AccountPickerDialog } from '../accounts/accountpickerdialog'
 import { StatusBadge } from '../accounts/statusbadge'
 import { TableFilters } from '../accounts/tablefilters'
 import { useAccountStore } from '../../stores/accountstore'
@@ -403,8 +404,8 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
     event.target.value = ''
   }
 
-  const applyPicker = () => {
-    const nextIds = draftIds.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied)
+  const applyPicker = (nextDraftIds = draftIds) => {
+    const nextIds = nextDraftIds.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied)
     setSelectedAccountIds(nextIds)
     if (!nextIds.includes(groupSourceAccountId ?? -1)) {
       setGroupSourceAccountId(nextIds[0] ?? null)
@@ -584,229 +585,21 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
         </div>
       </GlassPanel>
 
-      {pickerOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-          <div className="w-full max-w-[1320px] rounded-[24px] border border-white/[0.06] bg-[#11131c] p-5 shadow-[0_26px_90px_rgba(0,0,0,0.45)]">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-lg font-semibold text-white">选择执行账号</div>
-                <div className="mt-1 text-sm text-textMuted">直接按账号管理那套表格来选，筛完后在顶部确认。</div>
-              </div>
-              <button type="button" onClick={() => setPickerOpen(false)} className="rounded-full p-2 text-slate-400 transition hover:bg-white/[0.05] hover:text-white">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-              <div className="text-sm text-textMuted">
-                当前结果 <span className="font-semibold text-white">{filteredAccounts.length}</span> 个，已勾选 <span className="font-semibold text-white">{draftIds.length}</span> 个，可执行 <span className="font-semibold text-white">{selectableFilteredAccounts.length}</span> 个。
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPickerOpen(false)}
-                  className="inline-flex h-11 items-center rounded-[12px] border border-white/[0.08] bg-white/[0.05] px-5 text-sm font-medium text-slate-200 transition hover:bg-white/[0.08] hover:text-white"
-                >
-                  取消选择
-                </button>
-                <button
-                  type="button"
-                  onClick={applyPicker}
-                  className="inline-flex h-11 items-center rounded-[12px] bg-violet-500 px-5 text-sm font-medium text-white transition hover:bg-violet-400"
-                >
-                  确认选择账号
-                </button>
-              </div>
-            </div>
-
-            <AccountSummaryCards
-              items={pickerSummaryCards}
-              activeFilter={accountStatusFilter}
-              onSelect={(value) => setAccountStatusFilter(value as GroupInviteAccountStatusFilter)}
-            />
-
-            <div className="mb-4 space-y-3">
-              <div className="min-w-0">
-                <TableFilters
-                  search={accountKeyword}
-                  countryFilter={accountCountryFilter}
-                  statusFilter={accountStatusFilter === 'all' ? '' : accountStatusFilter}
-                  proxyFilter={accountProxyFilter}
-                  twoFactorFilter={accountTwoFactorFilter}
-                  avatarFilter={accountAvatarFilter}
-                  taskFilter={accountTaskFilter}
-                  usernameFilter={accountUsernameFilter}
-                  countries={pickerCountries}
-                  statuses={pickerStatuses}
-                  proxies={pickerProxies}
-                  presences={pickerPresenceOptions}
-                  onSearchChange={setAccountKeyword}
-                  onCountryChange={setAccountCountryFilter}
-                  onStatusChange={(value) => setAccountStatusFilter((value || 'all') as GroupInviteAccountStatusFilter)}
-                  onProxyChange={setAccountProxyFilter}
-                  onTwoFactorChange={(value) => setAccountTwoFactorFilter((value || 'all') as PresenceFilter)}
-                  onAvatarChange={(value) => setAccountAvatarFilter((value || 'all') as PresenceFilter)}
-                  onTaskChange={(value) => setAccountTaskFilter((value || 'all') as PresenceFilter)}
-                  onUsernameChange={(value) => setAccountUsernameFilter((value || 'all') as PresenceFilter)}
-                  onRefresh={() => {
-                    setAccountKeyword('')
-                    setAccountCountryFilter('')
-                    setAccountStatusFilter('all')
-                    setAccountProxyFilter('')
-                    setAccountTwoFactorFilter('all')
-                    setAccountAvatarFilter('all')
-                    setAccountTaskFilter('all')
-                    setAccountUsernameFilter('all')
-                  }}
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setDraftIds(selectableFilteredAccounts.map((account) => account.id))}
-                  className="h-11 rounded-[12px] border border-white/[0.06] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08]"
-                >
-                  全选当前结果
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDraftIds([])}
-                  className="h-11 rounded-[12px] border border-white/[0.06] bg-white/[0.04] px-4 text-sm text-slate-200 transition hover:bg-white/[0.08]"
-                >
-                  取消选中
-                </button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setRangeMenuOpen((value) => !value)}
-                    className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-white/[0.06] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08]"
-                  >
-                    选择区间
-                    <ChevronDown size={15} className={`transition ${rangeMenuOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {rangeMenuOpen ? (
-                    <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[240px] rounded-[14px] border border-white/8 bg-card p-3 shadow-2xl">
-                      <div className="mb-2 text-xs tracking-[0.2em] text-textMuted">选择区间号</div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          inputMode="numeric"
-                          value={rangeStart}
-                          onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
-                          className="h-10 w-full rounded-[10px] bg-panel px-3 text-sm text-white outline-none transition focus:bg-hover"
-                        />
-                        <span className="text-sm text-textMuted">-</span>
-                        <input
-                          inputMode="numeric"
-                          value={rangeEnd}
-                          onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
-                          className="h-10 w-full rounded-[10px] bg-panel px-3 text-sm text-white outline-none transition focus:bg-hover"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleSelectRange}
-                        className="mt-3 h-10 w-full rounded-[10px] bg-neon/10 text-sm font-medium text-neonSoft transition hover:bg-neon/14"
-                      >
-                        应用区间
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-
-            <div className="max-h-[520px] overflow-auto rounded-[16px] border border-white/[0.06] bg-black/[0.08]">
-              {loadingAccounts ? (
-                <div className="px-4 py-6 text-sm text-textMuted">账号列表读取中…</div>
-              ) : filteredAccounts.length > 0 ? (
-                <div className="min-w-[1180px]">
-                  <div className="grid grid-cols-[52px_64px_180px_126px_118px_88px_240px_128px_128px] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
-                    <label className="flex items-center justify-center">
-                      <input
-                        type="checkbox"
-                        className={checkboxClass()}
-                        checked={selectableFilteredAccounts.length > 0 && selectableFilteredAccounts.every((account) => draftIds.includes(account.id))}
-                        onChange={(event) => {
-                          if (event.currentTarget.checked) {
-                            setDraftIds(selectableFilteredAccounts.map((account) => account.id))
-                          } else {
-                            setDraftIds([])
-                          }
-                        }}
-                      />
-                    </label>
-                    <div className="text-center">序号</div>
-                    <div>手机号</div>
-                    <div>国家</div>
-                    <div>状态</div>
-                    <div className="text-center">头像</div>
-                    <div>名字</div>
-                    <div>任务</div>
-                    <div>网络</div>
-                  </div>
-
-                  {filteredAccounts.map((account, index) => {
-                    const checked = draftIds.includes(account.id)
-                    const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
-                    const disabled = taskMeta.occupied
-                    const checkMode = account.profile?.check_mode === 'account-survival' ? 'account-survival' : 'account-status'
-                    return (
-                      <label
-                        key={account.id}
-                        className={`grid cursor-pointer grid-cols-[52px_64px_180px_126px_118px_88px_240px_128px_128px] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
-                      >
-                        <div className="flex items-center justify-center">
-                          <input
-                            type="checkbox"
-                            className={checkboxClass()}
-                            checked={checked}
-                            disabled={disabled}
-                            onChange={(event) => {
-                              const nextChecked = event.currentTarget.checked
-                              setDraftIds((current) => nextChecked ? [...current, account.id] : current.filter((id) => id !== account.id))
-                            }}
-                          />
-                        </div>
-                        <div className="text-center text-slate-300">{index + 1}</div>
-                        <div className="min-w-0 text-white" title={account.phone || '--'}>{account.phone || '--'}</div>
-                        <CountryCell country={account.country} phone={account.phone} />
-                        <div className="flex justify-center">
-                          <StatusBadge
-                            status={account.status}
-                            errorMessage={typeof account.profile?.check_error === 'string' ? account.profile.check_error : null}
-                            checkMode={checkMode}
-                          />
-                        </div>
-                        <div className="flex justify-center">
-                          <AvatarCell account={account} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate text-white">{readAccountLabel(account)}</div>
-                          <div className="mt-1 truncate text-xs text-textMuted">{account.username ? `@${account.username.replace(/^@+/, '')}` : '无用户名'}</div>
-                        </div>
-                        <div>
-                          <span className={`inline-flex rounded-full border px-2 py-[3px] text-[11px] leading-none ${taskMeta.tone}`}>
-                            {taskMeta.label}
-                          </span>
-                        </div>
-                        <div className="text-slate-300">{readProxy(account)}</div>
-                      </label>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="px-4 py-8 text-center text-sm text-textMuted">当前筛选下没有可选账号。</div>
-              )}
-            </div>
-
-            <div className="mt-5 flex items-center justify-end gap-3">
-              <button type="button" onClick={() => setPickerOpen(false)} className="h-11 rounded-[12px] border border-white/[0.06] bg-white/[0.04] px-4 text-sm text-slate-200 transition hover:bg-white/[0.08]">取消</button>
-              <button type="button" onClick={applyPicker} className="h-11 rounded-[12px] bg-violet-500 px-5 text-sm font-medium text-white transition hover:bg-violet-400">确认选择</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <AccountPickerDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        accounts={accounts}
+        loading={loadingAccounts}
+        selectedIds={selectedAccountIds}
+        title="选择执行账号"
+        subtitle="直接按账号管理那套表格来选，筛完后在顶部确认。"
+        confirmText="确认选择账号"
+        onConfirm={(ids) => applyPicker(ids)}
+        resolveBusyMeta={(account) => {
+          const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
+          return { busy: taskMeta.occupied, label: taskMeta.label, tone: taskMeta.tone }
+        }}
+      />
     </div>
   )
 })

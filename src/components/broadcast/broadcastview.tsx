@@ -3,6 +3,7 @@ import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Clock3
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_SELECT_OPTION_CLASS } from '../common/settings-ui'
 import { useBroadcastStore, type BroadcastPreviewItem, type BroadcastTabKey } from '../../stores/broadcaststore'
+import { AccountPickerDialog } from '../accounts/accountpickerdialog'
 import { useAccountStore } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus, formatDateTimeFull } from '../../lib/ui-text'
@@ -861,10 +862,6 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   const createCreative = useBroadcastStore((state) => state.createCreative)
   const updateCreative = useBroadcastStore((state) => state.updateCreative)
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
-  const [draftAccountIds, setDraftAccountIds] = useState<number[]>([])
-  const [accountSearch, setAccountSearch] = useState('')
-  const [rangeStart, setRangeStart] = useState('1')
-  const [rangeEnd, setRangeEnd] = useState('10')
   const [groupListExpanded, setGroupListExpanded] = useState(false)
   const [groupSearch, setGroupSearch] = useState('')
   const [showOnlyCheckedGroups, setShowOnlyCheckedGroups] = useState(false)
@@ -976,21 +973,6 @@ const BroadcastConsole = memo(function BroadcastConsole() {
     if (groupListExpanded) return joinedGroups
     return filteredJoinedGroups.slice(0, DEFAULT_VISIBLE_JOINED_GROUPS)
   }, [filteredJoinedGroups, groupListExpanded])
-  const filteredAccounts = useMemo(() => {
-    const keyword = accountSearch.trim().toLowerCase()
-    if (!keyword) return accounts
-    return accounts.filter((account) => {
-      const nickname = readAccountNickname(account).toLowerCase()
-      return nickname.includes(keyword)
-        || String(account.phone || '').toLowerCase().includes(keyword)
-        || String(account.username || '').toLowerCase().includes(keyword)
-        || String(account.userId || '').toLowerCase().includes(keyword)
-    })
-  }, [accountSearch, accounts])
-  const selectableFilteredAccounts = useMemo(
-    () => filteredAccounts.filter((account) => !getAccountTaskMeta(accountTaskStatusMap, account.id).occupied),
-    [accountTaskStatusMap, filteredAccounts]
-  )
 
   useEffect(() => {
     if (selectedTask?.accountIds[0] && selectedTargetAccountId == null) {
@@ -1014,20 +996,16 @@ const BroadcastConsole = memo(function BroadcastConsole() {
   }
 
   const openAccountPicker = () => {
-    setDraftAccountIds(selectedTask?.accountIds ?? [])
-    setAccountSearch('')
-    setRangeStart('1')
-    setRangeEnd(String(Math.min(10, Math.max(accounts.length, 1))))
     setAccountPickerOpen(true)
   }
 
-  const applyAccountSelection = async () => {
+  const applyAccountSelection = async (pickedIds: number[]) => {
     if (!selectedTask) {
       setAccountPickerOpen(false)
       return
     }
 
-    const nextAccountIds = draftAccountIds.filter((accountId) => !getAccountTaskMeta(accountTaskStatusMap, accountId).occupied)
+    const nextAccountIds = pickedIds.filter((accountId) => !getAccountTaskMeta(accountTaskStatusMap, accountId).occupied)
     const nextAccountIdSet = new Set(nextAccountIds)
     const nextActive = nextAccountIds.includes(selectedAccountId ?? -1) ? selectedAccountId : (nextAccountIds[0] ?? null)
     const nextGroupIds = nextAccountIdSet.size === 0
@@ -1404,120 +1382,20 @@ const BroadcastConsole = memo(function BroadcastConsole() {
         )}
       </div>
 
-      {accountPickerOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/60 px-4 py-6" onClick={() => setAccountPickerOpen(false)}>
-          <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/[0.06] bg-card px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <div className="text-lg font-semibold text-white">选择账号</div>
-                <div className="mt-1 text-sm text-textMuted">按账号管理的表格方式来选：能搜索、全选、手动勾选。</div>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <button type="button" onClick={() => setAccountPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
-                <button type="button" onClick={() => void applyAccountSelection()} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">确定使用这些账号</button>
-                <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setAccountPickerOpen(false)}>
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <input
-                  value={accountSearch}
-                  onChange={(event) => setAccountSearch(event.target.value)}
-                  placeholder="搜索账号名 / 手机号 / 用户名"
-                  className={`h-11 w-full rounded-[12px] px-4 text-sm lg:max-w-[360px] ${SOFT_INPUT_CLASS}`}
-                />
-                <div className="flex flex-wrap gap-3">
-                  <button type="button" onClick={() => setDraftAccountIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">全选当前结果</button>
-                  <button type="button" onClick={() => setDraftAccountIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
-                  <div className="rounded-full bg-white/[0.04] px-3 py-2 text-sm text-textMuted">已选 {draftAccountIds.length} / {accounts.length}</div>
-                </div>
-              </div>
-
-              {filteredAccounts.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-sm text-textMuted">区间选择</div>
-                  <input
-                    inputMode="numeric"
-                    value={rangeStart}
-                    onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="开始"
-                    className={`h-10 w-20 rounded-[12px] px-3 text-sm ${SOFT_INPUT_CLASS}`}
-                  />
-                  <span className="text-textMuted">-</span>
-                  <input
-                    inputMode="numeric"
-                    value={rangeEnd}
-                    onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="结束"
-                    className={`h-10 w-20 rounded-[12px] px-3 text-sm ${SOFT_INPUT_CLASS}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const rangeIds = readCustomRangeIds(selectableFilteredAccounts, rangeStart, rangeEnd)
-                      if (rangeIds.length === 0) return
-                      setDraftAccountIds((current) => toggleAccountRange(current, rangeIds))
-                    }}
-                    className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18"
-                  >
-                    应用区间
-                  </button>
-                </div>
-              ) : null}
-
-              <div className="overflow-hidden rounded-[18px] border border-white/[0.06] bg-panel">
-                <div className="grid grid-cols-[64px_180px_1.2fr_140px_120px] border-b border-white/[0.06] bg-white/[0.04] px-4 py-3 text-xs tracking-[0.16em] text-textMuted">
-                  <div className="flex items-center justify-center">
-                    <input
-                      type="checkbox"
-                      checked={selectableFilteredAccounts.length > 0 && selectableFilteredAccounts.every((account) => draftAccountIds.includes(account.id))}
-                      onChange={(event) => setDraftAccountIds(event.target.checked ? selectableFilteredAccounts.map((item) => item.id) : [])}
-                    />
-                  </div>
-                  <div>手机号</div>
-                  <div>账号名</div>
-                  <div>状态</div>
-                  <div>用户 ID</div>
-                </div>
-
-                <div className="max-h-[520px] overflow-y-auto">
-                  {filteredAccounts.length === 0 ? (
-                    <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号。</div>
-                  ) : filteredAccounts.map((account) => {
-                    const checked = draftAccountIds.includes(account.id)
-                    const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
-                    return (
-                      <label key={account.id} className={`grid grid-cols-[64px_180px_1.2fr_140px_120px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${taskMeta.occupied ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${checked ? 'bg-violet-400/10' : taskMeta.occupied ? '' : 'hover:bg-white/[0.04]'}`}>
-                        <div className="flex items-center justify-center">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={taskMeta.occupied}
-                            onChange={() => setDraftAccountIds((current) => current.includes(account.id) ? current.filter((item) => item !== account.id) : [...current, account.id])}
-                          />
-                        </div>
-                        <div className="truncate text-white">{account.phone || '—'}</div>
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-white">{readAccountNickname(account)}</div>
-                          <div className="mt-1 truncate text-xs text-textMuted">{taskMeta.occupied ? `任务：${taskMeta.label}` : `@${account.username || '无用户名'}`}</div>
-                        </div>
-                        <div>
-                          <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-xs text-slate-200">{formatAccountStatus(account.status)}</span>
-                        </div>
-                        <div className="truncate text-textMuted">{account.userId || '—'}</div>
-                      </label>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      ) : null}
+      <AccountPickerDialog
+        open={accountPickerOpen}
+        onClose={() => setAccountPickerOpen(false)}
+        accounts={accounts}
+        selectedIds={selectedTask?.accountIds ?? []}
+        title="选择群发账号"
+        subtitle="直接按群组成员邀请那套表格来选，筛完后在顶部确认。"
+        confirmText="确认选择账号"
+        onConfirm={(ids) => void applyAccountSelection(ids)}
+        resolveBusyMeta={(account) => {
+          const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
+          return { busy: taskMeta.occupied, label: taskMeta.label, tone: taskMeta.tone }
+        }}
+      />
     </>
   )
 })
