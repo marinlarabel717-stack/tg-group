@@ -832,12 +832,12 @@ function buildPostSendFeatureSummary(payload: DirectMessageSendPayload) {
 
 async function deleteSentMessage(client: TelegramClient, entity: unknown, messageId: number, mode: DirectMessageSendPayload['deleteMode']) {
   if (mode === 'none') return
-  await client.invoke(new Api.messages.DeleteHistory({
-    peer: entity as never,
-    maxId: 0,
-    justClear: mode === 'self' ? true : undefined,
-    revoke: mode === 'both' ? true : undefined
-  }))
+  if (!Number.isFinite(messageId) || messageId <= 0) {
+    throw new Error('MESSAGE_ID_INVALID')
+  }
+  await client.deleteMessages(entity as never, [messageId], {
+    revoke: mode === 'both'
+  })
 }
 
 function readAccountLabel(account: AccountRecord) {

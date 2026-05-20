@@ -364,15 +364,11 @@ async def _run(command: Dict[str, Any]) -> Dict[str, Any]:
             return {'ok': True, 'messageId': message_id}
 
         delete_mode = str(command.get('deleteMode') or 'none').strip().lower()
-        revoke = delete_mode == 'both'
-        just_clear = delete_mode == 'self'
-        await asyncio.wait_for(client(functions.messages.DeleteHistoryRequest(
-            peer=entity,
-            max_id=0,
-            just_clear=just_clear,
-            revoke=revoke,
-        )), timeout=timeout_seconds)
-        return {'ok': True, 'messageId': _safe_int(command.get('messageId'), 0) or None}
+        message_id = _safe_int(command.get('messageId'), 0)
+        if message_id <= 0:
+            return {'ok': False, 'reason': 'MESSAGE_ID_INVALID'}
+        await asyncio.wait_for(client.delete_messages(entity, [message_id], revoke=(delete_mode == 'both')), timeout=timeout_seconds)
+        return {'ok': True, 'messageId': message_id}
     except Exception as exc:
         return {'ok': False, 'reason': str(exc) or exc.__class__.__name__}
     finally:
