@@ -66,6 +66,7 @@ interface GroupInviteState {
   setGroupSourceAccountId: (id: number | null) => void
   setGroupSearch: (value: string) => void
   setSelectedGroup: (group: BroadcastJoinedGroup | null) => void
+  setSelectedGroupRef: (value: string) => void
   setTargetInput: (value: string) => void
   setInviteIntervalSeconds: (value: number) => void
   setAccountFrequencySeconds: (value: number) => void
@@ -176,7 +177,7 @@ function buildPayload(state: GroupInviteState): GroupInvitePayload {
   return {
     accountIds: state.selectedAccountIds,
     groupRef: state.selectedGroupRef,
-    groupTitle: state.selectedGroupTitle,
+    groupTitle: state.selectedGroupTitle || state.selectedGroupRef,
     items: summary.items,
     inviteIntervalSeconds: state.inviteIntervalSeconds,
     accountFrequencySeconds: state.accountFrequencySeconds,
@@ -224,6 +225,10 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
     selectedGroupRef: group?.targetRef || '',
     selectedGroupTitle: group?.title || ''
   }),
+  setSelectedGroupRef: (value) => set({
+    selectedGroupRef: value,
+    selectedGroupTitle: value.trim()
+  }),
   setTargetInput: (value) => set({ targetInput: value }),
   setInviteIntervalSeconds: (value) => set({ inviteIntervalSeconds: Math.max(1, Number(value) || 1) }),
   setAccountFrequencySeconds: (value) => set({ accountFrequencySeconds: Math.max(1, Number(value) || 1) }),
@@ -270,8 +275,8 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
     if (payload.accountIds.length === 0) {
       throw new Error('请先选择执行账号。')
     }
-    if (!payload.groupRef) {
-      throw new Error('请先选择目标群组。')
+    if (!payload.groupRef.trim()) {
+      throw new Error('请先填写目标群。')
     }
     if (payload.items.length === 0) {
       throw new Error('请先导入待邀请联系人。')

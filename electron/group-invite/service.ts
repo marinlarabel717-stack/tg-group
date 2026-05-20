@@ -106,6 +106,11 @@ function isAlreadyParticipantError(error: unknown) {
   return /USER_ALREADY_PARTICIPANT/i.test(message)
 }
 
+function isInviteRequestSentError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /INVITE_REQUEST_SENT/i.test(message)
+}
+
 function isFatalAccountError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   return /AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED|PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN|ACCOUNT_RESTRICTED|FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(message)
@@ -123,6 +128,11 @@ function formatInviteError(error: unknown) {
   if (/USERS_TOO_MUCH/i.test(normalized)) return '目标群组当前不再接受更多成员'
   if (/CHAT_ADMIN_REQUIRED/i.test(normalized)) return '当前账号没有邀请权限'
   if (/CHAT_WRITE_FORBIDDEN|CHAT_RESTRICTED|USER_BANNED_IN_CHANNEL/i.test(normalized)) return '当前账号在目标群组受限'
+  if (/INVITE_HASH_INVALID|INVITE_HASH_EXPIRED/i.test(normalized)) return '目标群邀请链接无效或已过期'
+  if (/CHANNEL_INVALID|CHAT_ID_INVALID|TARGET_GROUP_INVALID/i.test(normalized)) return '目标群格式不正确'
+  if (/CHANNEL_PRIVATE/i.test(normalized)) return '无法访问目标群，请确认链接或账号权限'
+  if (/CHANNELS_TOO_MUCH/i.test(normalized)) return '当前账号加入的群组太多了'
+  if (/INVITE_REQUEST_SENT/i.test(normalized)) return '已提交加群申请，需管理员通过后才能继续邀请'
   if (/USERNAME_INVALID/i.test(normalized)) return '用户名格式不正确'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '用户名不存在'
   if (/PHONE_NUMBER_INVALID/i.test(normalized)) return '手机号格式不正确'
@@ -181,6 +191,59 @@ async function resolveGroupEntity(client: TelegramClient, groupRef: ReturnType<t
   }
 
   return client.getEntity(groupRef.value as never)
+}
+
+async function ensureJoinedGroupEntity(client: TelegramClient, groupRef: ReturnType<typeof normalizeGroupRef>) {
+  if (!groupRef) return { entity: null, joined: false }
+
+  if (groupRef.kind === 'invite') {
+    const invite = await client.invoke(new Api.messages.CheckChatInvite({ hash: groupRef.value }))
+    if ((invite as { className?: string }).className === 'ChatInviteAlready') {
+      return {
+        entity: (invite as { chat?: unknown }).chat ?? null,
+        joined: false
+      }
+    }
+
+    await client.invoke(new Api.messages.ImportChatInvite({ hash: groupRef.value }))
+    const joinedInvite = await client.invoke(new Api.messages.CheckChatInvite({ hash: groupRef.value }))
+    if ((joinedInvite as { className?: string }).className === 'ChatInviteAlready') {
+      return {
+        entity: (joinedInvite as { chat?: unknown }).chat ?? null,
+        joined: true
+      }
+    }
+
+    throw new Error('TARGET_GROUP_INVALID')
+  }
+
+  const entity = await resolveGroupEntity(client, groupRef)
+  if (!entity) {
+    return { entity: null, joined: false }
+  }
+
+  const className = String((entity as { className?: string })?.className || '')
+  if (!className.includes('Channel')) {
+    return { entity, joined: false }
+  }
+
+  try {
+    await client.invoke(new Api.channels.JoinChannel({
+      channel: utils.getInputChannel(await client.getInputEntity(entity as never))
+    }))
+    return {
+      entity: await resolveGroupEntity(client, groupRef),
+      joined: true
+    }
+  } catch (error) {
+    if (isAlreadyParticipantError(error)) {
+      return { entity, joined: false }
+    }
+    if (isInviteRequestSentError(error)) {
+      throw error
+    }
+    throw error
+  }
 }
 
 async function resolveInviteTarget(client: TelegramClient, item: GroupInviteTargetItem) {
@@ -471,9 +534,18 @@ export class GroupInviteService {
       try {
         client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
         task.clients.set(account.id, client)
-        const groupEntity = await resolveGroupEntity(client, normalizedGroupRef)
+        const { entity: groupEntity, joined } = await ensureJoinedGroupEntity(client, normalizedGroupRef)
         if (!groupEntity) {
           throw new Error('TARGET_GROUP_INVALID')
+        }
+        if (joined) {
+          this.pushLog({
+            level: 'info',
+            accountId: account.id,
+            accountPhone: readAccountLabel(account),
+            targetValue: payload.groupRef,
+            message: `当前账号已自动加入目标群 ${payload.groupTitle || payload.groupRef}`
+          })
         }
 
         for (let index = 0; index < items.length; index += 1) {

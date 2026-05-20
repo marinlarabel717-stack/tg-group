@@ -203,6 +203,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
   const selectedGroupRef = useGroupInviteStore((state) => state.selectedGroupRef)
   const selectedGroupTitle = useGroupInviteStore((state) => state.selectedGroupTitle)
   const setSelectedGroup = useGroupInviteStore((state) => state.setSelectedGroup)
+  const setSelectedGroupRef = useGroupInviteStore((state) => state.setSelectedGroupRef)
   const targetInput = useGroupInviteStore((state) => state.targetInput)
   const setTargetInput = useGroupInviteStore((state) => state.setTargetInput)
   const inviteIntervalSeconds = useGroupInviteStore((state) => state.inviteIntervalSeconds)
@@ -498,83 +499,17 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
           </ConfigRow>
         </FoldSection>
 
-        <FoldSection title="选择目标群组" hint="用一个已入群账号读取群列表，支持搜索后直接点选。">
-          <ConfigRow label="读取账号" hint="用于拉取目标群组列表。" wide>
-            <div className="flex gap-3">
-              <select
-                value={groupSourceAccountId ?? ''}
-                onChange={(event) => setGroupSourceAccountId(event.target.value ? Number(event.target.value) : null)}
-                className={`h-11 min-w-0 flex-1 rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
-              >
-                <option value="">请选择账号</option>
-                {selectedAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.phone || readAccountLabel(account)}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => void refreshGroups()}
-                disabled={loadingGroups || !groupSourceAccountId}
-                className="h-11 rounded-[12px] border border-white/[0.06] bg-white/[0.05] px-4 text-sm text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loadingGroups ? '读取中…' : '刷新群组'}
-              </button>
-            </div>
-          </ConfigRow>
-
-          <ConfigRow label="群组搜索" hint="支持按群名、@username 搜索。" wide>
-            <div className="relative">
-              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={groupSearch}
-                onChange={(event) => setGroupSearch(event.target.value)}
-                placeholder="搜索群组"
-                className={`h-11 w-full rounded-[12px] pl-9 pr-3 ${SOFT_INPUT_CLASS}`}
-              />
-            </div>
-          </ConfigRow>
-
-          <ConfigRow label="目标群组" hint="从当前读取结果里选一个目标群。" wide>
+        <FoldSection title="目标群设置" hint="目标群直接手动填写；执行账号会先尝试自动加入，再邀请导入的用户名或手机号。">
+          <ConfigRow label="目标群" hint="支持 @群用户名、群链接、邀请链接。" wide>
             <div className="space-y-3">
-              {selectedGroup ? (
-                <div className="rounded-[14px] border border-violet-400/20 bg-violet-400/10 px-4 py-3 text-sm text-violet-200">
-                  当前已选：{selectedGroup.title} {selectedGroup.username ? `(${selectedGroup.username})` : ''}
-                </div>
-              ) : selectedGroupTitle ? (
-                <div className="rounded-[14px] border border-violet-400/20 bg-violet-400/10 px-4 py-3 text-sm text-violet-200">
-                  当前已选：{selectedGroupTitle}
-                </div>
-              ) : null}
-
-              <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1">
-                {filteredGroups.length > 0 ? filteredGroups.map((group) => {
-                  const active = group.targetRef === selectedGroupRef || group.username === selectedGroupRef
-                  return (
-                    <button
-                      key={`${group.peerId}_${group.targetRef}`}
-                      type="button"
-                      onClick={() => setSelectedGroup(group)}
-                      className={`w-full rounded-[14px] border px-4 py-3 text-left transition ${active ? 'border-violet-400/20 bg-violet-400/10 text-violet-200' : 'border-white/[0.06] bg-black/[0.08] text-slate-200 hover:bg-white/[0.03]'}`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white">{group.title}</div>
-                          <div className="mt-1 text-xs text-textMuted">{group.username || group.targetRef}</div>
-                        </div>
-                        <div className="text-right text-xs text-textMuted">
-                          <div>{group.type === 'supergroup' ? '超级群' : '普通群'}</div>
-                          <div>{group.memberCount ? `${group.memberCount} 人` : '人数未知'}</div>
-                        </div>
-                      </div>
-                    </button>
-                  )
-                }) : (
-                  <div className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-5 text-sm text-textMuted">
-                    {loadingGroups ? '正在读取群组列表…' : '当前没有可选群组。'}
-                  </div>
-                )}
+              <input
+                value={selectedGroupRef}
+                onChange={(event) => setSelectedGroupRef(event.target.value)}
+                placeholder="例如：@mygroup / https://t.me/mygroup / https://t.me/+xxxx"
+                className={`h-11 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`}
+              />
+              <div className={`rounded-[12px] px-4 py-3 text-sm ${SOFT_NOTICE_CLASS}`}>
+                填好目标群后，所选账号会自动尝试加入这个群，再邀请你导入的 @用户名 或手机号。
               </div>
             </div>
           </ConfigRow>
@@ -631,7 +566,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
           <button
             type="button"
             onClick={handleStart}
-            disabled={running || stopping || selectedAccountIds.length === 0 || !selectedGroupRef || parsedSummary.items.length === 0}
+            disabled={running || stopping || selectedAccountIds.length === 0 || !selectedGroupRef.trim() || parsedSummary.items.length === 0}
             className="inline-flex h-12 items-center gap-2 rounded-[14px] bg-violet-500 px-5 text-sm font-medium text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Play size={16} />
