@@ -76,9 +76,22 @@ async function ensureAuthorizedClient(
   if (proxyPoolService.isEnabled() && !proxy) {
     throw new Error('GLOBAL_PROXY_REQUIRED')
   }
-  return clientManager.createClient(session, {
+
+  const client = clientManager.createClient(session, {
     proxy: toClientProxy(proxy)
   })
+
+  try {
+    await client.connect()
+    const authorized = await client.isUserAuthorized()
+    if (!authorized) {
+      throw new Error('AUTH_KEY_UNREGISTERED')
+    }
+    return client
+  } catch (error) {
+    await clientManager.destroyClient(client).catch(() => undefined)
+    throw error
+  }
 }
 
 function readRequiredWaitSeconds(error: unknown) {
