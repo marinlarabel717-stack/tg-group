@@ -600,6 +600,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
     exclude_keywords = [str(item).lower() for item in list(command.get('excludeKeywords') or []) if str(item).strip()]
     seen_message_keys = {str(item).strip() for item in list(command.get('seenMessageKeys') or []) if str(item).strip()}
     handled_candidate_keys = {str(item).strip().lower() for item in list(command.get('handledCandidateKeys') or []) if str(item).strip()}
+    recheck_candidate_keys = {str(item).strip().lower() for item in list(command.get('recheckCandidateKeys') or []) if str(item).strip()}
     join_chatlists = bool(command.get('joinChatlists', True))
     bootstrap_existing_messages = bool(command.get('bootstrapExistingMessages', False))
 
@@ -648,6 +649,8 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 if not normalized.get('candidate') or not candidate_key:
                     continue
                 if candidate_key in handled_in_pass:
+                    continue
+                if candidate_key in handled_candidate_keys and candidate_key not in recheck_candidate_keys:
                     continue
 
                 logs.append({

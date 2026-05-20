@@ -65,6 +65,7 @@ interface TelethonSniperScanPayload {
   excludeKeywords: string[]
   seenMessageKeys: string[]
   handledCandidateKeys: string[]
+  recheckCandidateKeys: string[]
   joinChatlists?: boolean
   bootstrapExistingMessages?: boolean
   timeoutSeconds?: number

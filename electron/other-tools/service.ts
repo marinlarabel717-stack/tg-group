@@ -219,6 +219,7 @@ interface ActiveSniperListenerTask {
   subscribeClients: Map<number, TelegramClient>
   seenMessageKeys: Set<string>
   handledCandidateKeys: Set<string>
+  recheckCandidateKeys: Set<string>
 }
 
 function normalizeCandidate(raw: string): NormalizedCandidate {
@@ -1431,7 +1432,8 @@ export class OtherToolsService {
       createCarrierClient: null,
       subscribeClients: new Map(),
       seenMessageKeys: new Set(),
-      handledCandidateKeys: new Set()
+      handledCandidateKeys: new Set(),
+      recheckCandidateKeys: new Set()
     }
     this.sniperListenerTask = task
     this.emitSniperListenerState(task)
@@ -1572,7 +1574,7 @@ export class OtherToolsService {
         })
         this.pushSniperListenerLog(task, {
           level: 'info',
-          message: `首次启动会先对齐每个来源最近 ${sourceLimit} 条；从下一轮开始，每轮都会复查最近 ${sourceLimit} 条里的用户名。`,
+          message: `首次启动会先对齐每个来源最近 ${sourceLimit} 条；从下一轮开始，每轮只复查最近 ${sourceLimit} 条里“曾经已占用”的候选，新候选仍会首次检查一次。`,
           accountId: scanAccount.id,
           accountLabel: readCheckResultTitle(scanAccount)
         })
@@ -1594,7 +1596,7 @@ export class OtherToolsService {
 
           this.pushSniperListenerLog(task, {
             level: 'info',
-            message: `第 ${task.tickCount} 轮监听开始：每 ${pollIntervalSeconds} 秒检查一次，每个来源复查最近 ${sourceLimit} 条消息。`,
+            message: `第 ${task.tickCount} 轮监听开始：每 ${pollIntervalSeconds} 秒检查一次，每个来源会先扫最近 ${sourceLimit} 条，再只复查里面曾经已占用的候选。`,
             accountId: scanAccount.id,
             accountLabel: readCheckResultTitle(scanAccount)
           })
@@ -1613,6 +1615,7 @@ export class OtherToolsService {
                   excludeKeywords,
                   seenMessageKeys: Array.from(task.seenMessageKeys),
                   handledCandidateKeys: Array.from(task.handledCandidateKeys),
+                  recheckCandidateKeys: Array.from(task.recheckCandidateKeys),
                   joinChatlists: joinChatlistsOnFirstTick,
                   bootstrapExistingMessages: task.tickCount === 1,
                   timeoutSeconds: scanRetryTimeouts[attemptIndex] ?? undefined,
@@ -1665,6 +1668,7 @@ export class OtherToolsService {
           task.state.expandedSourceCount = scanResult.expandedSourceCount
           task.state.checkedMessageCount += scanResult.checkedMessageCount
           task.state.candidateCount += scanResult.candidateCount
+          const nextRecheckCandidateKeys = new Set<string>()
           for (const key of scanResult.newSeenMessageKeys) {
             task.seenMessageKeys.add(key)
           }
@@ -1704,6 +1708,16 @@ export class OtherToolsService {
           for (const detected of scanResult.items) {
             if (task.cancelled) break
             const candidateKey = detected.normalized.toLowerCase()
+            if (detected.category === 'valid') {
+              nextRecheckCandidateKeys.add(candidateKey)
+              continue
+            }
+
+            if (detected.category === 'forbidden') {
+              task.handledCandidateKeys.add(candidateKey)
+              continue
+            }
+
             if (detected.category !== 'occupiable') continue
 
             if (task.handledCandidateKeys.has(candidateKey)) continue
@@ -1960,6 +1974,8 @@ export class OtherToolsService {
             }
           }
 
+          task.recheckCandidateKeys = nextRecheckCandidateKeys
+
           if (!task.cancelled) {
             await sleep(pollIntervalSeconds * 1000)
           }
@@ -2192,6 +2208,7 @@ export class OtherToolsService {
           excludeKeywords,
           seenMessageKeys: [],
           handledCandidateKeys: [],
+          recheckCandidateKeys: [],
           joinChatlists: shouldJoinChatlistsForScan,
           bootstrapExistingMessages: false,
           proxy: readCurrentProxyOrThrow(this.proxyPoolService)
