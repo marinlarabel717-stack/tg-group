@@ -780,8 +780,8 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
               {loadingAccounts ? (
                 <div className="px-4 py-6 text-sm text-textMuted">账号列表读取中…</div>
               ) : filteredAccounts.length > 0 ? (
-                <div className="min-w-[1160px]">
-                  <div className="grid grid-cols-[52px_160px_118px_118px_88px_220px_128px_92px_112px] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
+                <div className="min-w-[1230px]">
+                  <div className="grid grid-cols-[52px_64px_160px_118px_118px_88px_220px_128px_92px_112px] gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs text-textMuted">
                     <label className="flex items-center justify-center">
                       <input
                         type="checkbox"
@@ -796,6 +796,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                         }}
                       />
                     </label>
+                    <div className="text-center">序号</div>
                     <div>手机号</div>
                     <div>国家</div>
                     <div>状态</div>
@@ -806,7 +807,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                     <div className="text-center">操作</div>
                   </div>
 
-                  {filteredAccounts.map((account) => {
+                  {filteredAccounts.map((account, index) => {
                     const checked = draftIds.includes(account.id)
                     const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
                     const disabled = taskMeta.occupied
@@ -814,7 +815,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                     return (
                       <label
                         key={account.id}
-                        className={`grid cursor-pointer grid-cols-[52px_160px_118px_118px_88px_220px_128px_92px_112px] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
+                        className={`grid cursor-pointer grid-cols-[52px_64px_160px_118px_118px_88px_220px_128px_92px_112px] items-center gap-3 border-b border-white/[0.06] px-4 py-3 text-sm transition ${checked ? 'bg-violet-400/10' : 'hover:bg-white/[0.03]'} ${disabled ? 'cursor-not-allowed opacity-55' : ''}`}
                       >
                         <div className="flex items-center justify-center">
                           <input
@@ -828,6 +829,7 @@ const SettingsWorkbench = memo(function SettingsWorkbench() {
                             }}
                           />
                         </div>
+                        <div className="text-center text-slate-300">{index + 1}</div>
                         <div className="min-w-0 text-white" title={account.phone || '--'}>{account.phone || '--'}</div>
                         <CountryCell country={account.country} phone={account.phone} />
                         <div className="flex justify-center">
