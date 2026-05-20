@@ -3,7 +3,7 @@ import { CheckCircle2, KeyRound, Loader2, RefreshCcw, ScrollText, Search, Settin
 import type { AccountRecord, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressState } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
-import { ResultStatCard } from './resultdialog'
+import { ResultDialogShell, ResultStatCard } from './resultdialog'
 import { useAccountStore } from '../../stores/accountstore'
 import { getAccountTaskMeta, useAccountTaskStatusMap } from '../../lib/account-task-status'
 import { formatAccountStatus } from '../../lib/ui-text'
@@ -32,23 +32,11 @@ function readStatusLabel(status: ReauthorizeOperationResultItem['status']) {
   return '重新授权失败'
 }
 
-function readLogCellTone(level: 'info' | 'success' | 'warning' | 'error') {
-  if (level === 'success') return 'text-emerald-300'
-  if (level === 'warning') return 'text-amber-200'
-  if (level === 'error') return 'text-rose-300'
-  return 'text-slate-200'
-}
-
-function readLogProgressText(level: 'info' | 'success' | 'warning' | 'error', message: string) {
-  return level === 'info' ? message : '--'
-}
-
-function readLogSuccessText(level: 'info' | 'success' | 'warning' | 'error', message: string) {
-  return level === 'success' ? message : '--'
-}
-
-function readLogFailureText(level: 'info' | 'success' | 'warning' | 'error', message: string) {
-  return level === 'warning' || level === 'error' ? message : '--'
+function readStatusIcon(status: ReauthorizeOperationResultItem['status']) {
+  if (status === 'success') return <CheckCircle2 size={14} />
+  if (status === 'password_mismatch') return <KeyRound size={14} />
+  if (status === 'session_expired') return <ShieldAlert size={14} />
+  return <RefreshCcw size={14} />
 }
 
 function formatLogTime(createdAt?: string | null) {
@@ -126,6 +114,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
   const [progressState, setProgressState] = useState<ReauthorizeProgressState | null>(null)
   const [activeTab, setActiveTab] = useState<'settings' | 'logs'>('settings')
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [resultDialogOpen, setResultDialogOpen] = useState(false)
   const [draftIds, setDraftIds] = useState<number[]>(selectedIds)
   const [keyword, setKeyword] = useState('')
   const [rangeStart, setRangeStart] = useState('1')
@@ -158,6 +147,12 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
     setRangeStart('1')
     setRangeEnd(String(Math.min(10, Math.max(accounts.length, 1))))
   }, [pickerOpen, accounts.length])
+
+  useEffect(() => {
+    if (result) {
+      setResultDialogOpen(true)
+    }
+  }, [result])
 
   const sortedAccounts = useMemo(() => sortAccounts(accounts, selectedIds), [accounts, selectedIds])
   const filteredAccounts = useMemo(() => {
@@ -213,6 +208,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
     setActiveTab('logs')
     setSubmitting(true)
     setResult(null)
+    setResultDialogOpen(false)
     try {
       const nextResult = await api.reauthorize({
         accountIds: selectedIds,
@@ -334,55 +330,43 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
           </div>
         ) : null}
 
-        {result?.message ? (
-          <div className={`px-4 py-3 text-sm text-slate-200 ${SOFT_NOTICE_CLASS}`}>{result.message}</div>
-        ) : null}
-
         {result ? (
-          <div className="space-y-2">
-            {result.results.map((item) => (
-              <div key={`${item.accountId}-${item.status}`} className="flex flex-col gap-3 rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-3 md:flex-row md:items-center md:justify-between">
-                <div className="min-w-0">
-                  <div className="text-sm text-white">{item.phone || `账号#${item.accountId}`}</div>
-                  <div className="mt-1 text-xs text-textMuted">{item.message}</div>
-                </div>
-                <div className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-xs ${readStatusBadgeClass(item.status)}`}>
-                  {item.status === 'success' ? <CheckCircle2 size={14} /> : item.status === 'password_mismatch' ? <KeyRound size={14} /> : item.status === 'session_expired' ? <ShieldAlert size={14} /> : <RefreshCcw size={14} />}
-                  <span>{readStatusLabel(item.status)}</span>
-                </div>
-              </div>
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-3">
+            <div className="text-sm text-slate-200">执行已经结束，结果汇总已放进弹窗里。</div>
+            <button
+              type="button"
+              onClick={() => setResultDialogOpen(true)}
+              className="rounded-[12px] bg-violet-400 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-violet-300"
+            >
+              查看结果汇总
+            </button>
           </div>
         ) : null}
 
         <div className="overflow-hidden rounded-[16px] border border-white/[0.06] bg-black/[0.08]">
           <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-4 py-3">
             <div>
-              <div className="text-sm font-medium text-white">详细步骤日志</div>
-              <div className="mt-1 text-xs text-textMuted">按你要的格式显示：时间 / 手机号 / 当前进度 / 成功 / 失败原因。</div>
+              <div className="text-sm font-medium text-white">执行日志</div>
+              <div className="mt-1 text-xs text-textMuted">按你要的格式显示：时间戳 / 手机号 / 当前进度。</div>
             </div>
             <div className="text-xs text-textMuted">最新 {displayedLogs.length} 条</div>
           </div>
 
           <div className="max-h-[560px] overflow-auto">
             {displayedLogs.length > 0 ? (
-              <div className="min-w-[980px]">
-                <div className="grid grid-cols-[110px_180px_minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(220px,1fr)] border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.14em] text-textMuted">
-                  <div>时间</div>
+              <div className="min-w-[760px]">
+                <div className="grid grid-cols-[120px_200px_minmax(320px,1fr)] border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.14em] text-textMuted">
+                  <div>时间戳</div>
                   <div>手机号</div>
                   <div>当前进度</div>
-                  <div>成功</div>
-                  <div>失败原因</div>
                 </div>
                 {displayedLogs.map((log) => {
                   const phoneText = log.phone || (log.accountId ? `账号#${log.accountId}` : '任务总览')
                   return (
-                    <div key={log.id} className="grid grid-cols-[110px_180px_minmax(260px,1.4fr)_minmax(220px,1fr)_minmax(220px,1fr)] border-b border-white/[0.06] px-4 py-3 text-sm text-slate-200 transition hover:bg-white/[0.03]">
+                    <div key={log.id} className="grid grid-cols-[120px_200px_minmax(320px,1fr)] border-b border-white/[0.06] px-4 py-3 text-sm text-slate-200 transition hover:bg-white/[0.03]">
                       <div className="pr-3 text-textMuted">{formatLogTime(log.createdAt)}</div>
                       <div className="pr-3 text-white">{phoneText}</div>
-                      <div className={`pr-3 ${log.level === 'info' ? 'text-slate-200' : 'text-textMuted'}`}>{readLogProgressText(log.level, log.message)}</div>
-                      <div className={`pr-3 ${log.level === 'success' ? 'text-emerald-300' : 'text-textMuted'}`}>{readLogSuccessText(log.level, log.message)}</div>
-                      <div className={`pr-3 ${readLogCellTone(log.level)}`}>{readLogFailureText(log.level, log.message)}</div>
+                      <div className={log.level === 'success' ? 'pr-3 text-emerald-300' : log.level === 'warning' ? 'pr-3 text-amber-200' : log.level === 'error' ? 'pr-3 text-rose-300' : 'pr-3 text-slate-200'}>{log.message}</div>
                     </div>
                   )
                 })}
@@ -399,142 +383,184 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
   }
 
   return (
-    <div className="space-y-5">
-      <GlassPanel>
-        <div className="space-y-5">
-          <div className={`px-4 py-3 text-sm text-slate-200 ${SOFT_NOTICE_CLASS}`}>
-            这里只做 <span className="text-white">合法账号持有人的重新授权</span>。会把所选账号重新切到 <span className="text-white">桌面版（固定）</span> 模式，并在成功后只保留当前新设备。
+    <>
+      <div className="space-y-5">
+        <GlassPanel>
+          <div className="space-y-5">
+            <div className={`px-4 py-3 text-sm text-slate-200 ${SOFT_NOTICE_CLASS}`}>
+              这里只做 <span className="text-white">合法账号持有人的重新授权</span>。会把所选账号重新切到 <span className="text-white">桌面版（固定）</span> 模式，并在成功后只保留当前新设备。
+            </div>
+
+            {taskBusy ? (
+              <div className="rounded-[14px] border border-amber-300/18 bg-amber-300/10 px-4 py-3 text-sm text-amber-200">
+                当前还有别的账号任务在运行，先等它完成，再执行重新授权会更稳。
+              </div>
+            ) : null}
+
+            <div className="inline-flex rounded-[14px] border border-white/[0.06] bg-black/[0.06] p-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab('settings')}
+                className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'settings' ? 'border-violet-300 bg-violet-400 text-slate-950 shadow-[0_8px_24px_rgba(167,139,250,0.28)]' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+              >
+                <Settings2 size={16} />
+                <span>重新授权设置</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('logs')}
+                className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'logs' ? 'border-violet-300 bg-violet-400 text-slate-950 shadow-[0_8px_24px_rgba(167,139,250,0.28)]' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+              >
+                <ScrollText size={16} />
+                <span>执行日志</span>
+              </button>
+            </div>
+
+            {activeTab === 'settings' ? renderSettingsTab() : renderLogsTab()}
+
+            {error ? (
+              <div className="rounded-[14px] border border-rose-400/18 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+                {error}
+              </div>
+            ) : null}
           </div>
+        </GlassPanel>
 
-          {taskBusy ? (
-            <div className="rounded-[14px] border border-amber-300/18 bg-amber-300/10 px-4 py-3 text-sm text-amber-200">
-              当前还有别的账号任务在运行，先等它完成，再执行重新授权会更稳。
-            </div>
-          ) : null}
+        {pickerOpen ? (
+          <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setPickerOpen(false)}>
+            <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.06] bg-card px-5 py-4">
+                <div className="text-lg font-semibold text-white">账号列表</div>
+                <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setPickerOpen(false)}><X size={16} /></button>
+              </div>
 
-          <div className="inline-flex rounded-[14px] border border-white/[0.06] bg-black/[0.06] p-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('settings')}
-              className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'settings' ? 'bg-white text-slate-950 border-white' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
-            >
-              <Settings2 size={16} />
-              <span>重新授权设置</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('logs')}
-              className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'logs' ? 'bg-white text-slate-950 border-white' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
-            >
-              <ScrollText size={16} />
-              <span>执行日志</span>
-            </button>
-          </div>
-
-          {activeTab === 'settings' ? renderSettingsTab() : renderLogsTab()}
-
-          {error ? (
-            <div className="rounded-[14px] border border-rose-400/18 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
-              {error}
-            </div>
-          ) : null}
-        </div>
-      </GlassPanel>
-
-      {pickerOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/70 px-4 py-6" onClick={() => setPickerOpen(false)}>
-          <div className="mt-2 flex max-h-[calc(100vh-48px)] w-full max-w-[980px] flex-col rounded-[22px] border border-white/10 bg-card shadow-[0_18px_64px_rgba(0,0,0,0.48)]" onClick={(event) => event.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.06] bg-card px-5 py-4">
-              <div className="text-lg font-semibold text-white">账号列表</div>
-              <button type="button" className="rounded-[10px] p-2 text-textMuted transition hover:bg-white/5 hover:text-white" onClick={() => setPickerOpen(false)}><X size={16} /></button>
-            </div>
-
-            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative w-full lg:max-w-[360px]">
-                  <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
-                  <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索手机号 / 用户名" className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-white/[0.12]" />
+              <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="relative w-full lg:max-w-[360px]">
+                    <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-textMuted" />
+                    <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索手机号 / 用户名" className="h-11 w-full rounded-[12px] border border-white/[0.06] bg-panel pl-11 pr-4 text-sm text-white outline-none focus:border-white/[0.12]" />
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <button type="button" onClick={() => setDraftIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">选中筛选结果</button>
+                    <button type="button" onClick={() => setDraftIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-3">
-                  <button type="button" onClick={() => setDraftIds(selectableFilteredAccounts.map((item) => item.id))} className="rounded-[12px] bg-violet-400/12 px-4 py-2.5 text-sm text-violet-300 transition hover:bg-violet-400/18">选中筛选结果</button>
-                  <button type="button" onClick={() => setDraftIds([])} className="rounded-[12px] bg-white/[0.05] px-4 py-2.5 text-sm text-white transition hover:bg-white/[0.1]">清空</button>
+
+                {filteredAccounts.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm text-textMuted">范围</div>
+                    <input
+                      inputMode="numeric"
+                      value={rangeStart}
+                      onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
+                      placeholder="开始"
+                      className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
+                    />
+                    <span className="text-textMuted">-</span>
+                    <input
+                      inputMode="numeric"
+                      value={rangeEnd}
+                      onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
+                      placeholder="结束"
+                      className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const rangeIds = readCustomRangeIds(selectableFilteredAccounts, rangeStart, rangeEnd)
+                        if (rangeIds.length === 0) return
+                        setDraftIds((current) => toggleAccountRange(current, rangeIds))
+                      }}
+                      className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18"
+                    >
+                      应用范围
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="overflow-hidden rounded-[16px] border border-white/[0.06] bg-panel/80">
+                  <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.18em] text-textMuted">
+                    <div className="text-center">选择</div>
+                    <div>手机号</div>
+                    <div>账号</div>
+                    <div>状态</div>
+                  </div>
+
+                  <div className="max-h-[420px] overflow-y-auto">
+                    {filteredAccounts.length === 0 ? (
+                      <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号</div>
+                    ) : filteredAccounts.map((account) => {
+                      const checked = draftIds.includes(account.id)
+                      const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
+                      return (
+                        <label key={account.id} className={`grid grid-cols-[64px_220px_1.4fr_160px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${taskMeta.occupied ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${checked ? 'bg-violet-400/10' : taskMeta.occupied ? '' : 'hover:bg-white/[0.04]'}`}>
+                          <div className="flex items-center justify-center"><input type="checkbox" checked={checked} disabled={taskMeta.occupied} onChange={(event) => setDraftIds((current) => event.target.checked ? [...current, account.id] : current.filter((item) => item !== account.id))} /></div>
+                          <div className="truncate text-white">{account.phone || '-'}</div>
+                          <div className="min-w-0">
+                            <div className="truncate text-white">{readAccountLabel(account)}</div>
+                            <div className="mt-1 truncate text-xs text-textMuted">{account.username ? `@${account.username}` : account.userId || `账号#${account.id}`}</div>
+                            {taskMeta.occupied ? <div className="mt-1 text-xs text-textMuted">占用中：{taskMeta.label}</div> : null}
+                          </div>
+                          <div>
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>
+                              {formatAccountStatus(account.status)}
+                            </span>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
 
-              {filteredAccounts.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-sm text-textMuted">范围</div>
-                  <input
-                    inputMode="numeric"
-                    value={rangeStart}
-                    onChange={(event) => setRangeStart(event.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="开始"
-                    className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
-                  />
-                  <span className="text-textMuted">-</span>
-                  <input
-                    inputMode="numeric"
-                    value={rangeEnd}
-                    onChange={(event) => setRangeEnd(event.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="结束"
-                    className="h-10 w-20 rounded-[12px] border border-white/[0.06] bg-panel px-3 text-sm text-white outline-none focus:border-white/[0.12]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const rangeIds = readCustomRangeIds(selectableFilteredAccounts, rangeStart, rangeEnd)
-                      if (rangeIds.length === 0) return
-                      setDraftIds((current) => toggleAccountRange(current, rangeIds))
-                    }}
-                    className="rounded-[12px] bg-violet-400/12 px-4 py-2 text-sm text-violet-300 transition hover:bg-violet-400/18"
-                  >
-                    应用范围
-                  </button>
-                </div>
-              ) : null}
-
-              <div className="overflow-hidden rounded-[16px] border border-white/[0.06] bg-panel/80">
-                <div className="grid grid-cols-[64px_220px_1.4fr_160px] border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.18em] text-textMuted">
-                  <div className="text-center">选择</div>
-                  <div>手机号</div>
-                  <div>账号</div>
-                  <div>状态</div>
-                </div>
-
-                <div className="max-h-[420px] overflow-y-auto">
-                  {filteredAccounts.length === 0 ? (
-                    <div className="px-4 py-12 text-center text-sm text-textMuted">没有匹配到账号</div>
-                  ) : filteredAccounts.map((account) => {
-                    const checked = draftIds.includes(account.id)
-                    const taskMeta = getAccountTaskMeta(accountTaskStatusMap, account.id)
-                    return (
-                      <label key={account.id} className={`grid grid-cols-[64px_220px_1.4fr_160px] items-center border-b border-white/6 px-4 py-3 text-sm transition ${taskMeta.occupied ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'} ${checked ? 'bg-violet-400/10' : taskMeta.occupied ? '' : 'hover:bg-white/[0.04]'}`}>
-                        <div className="flex items-center justify-center"><input type="checkbox" checked={checked} disabled={taskMeta.occupied} onChange={(event) => setDraftIds((current) => event.target.checked ? [...current, account.id] : current.filter((item) => item !== account.id))} /></div>
-                        <div className="truncate text-white">{account.phone || '-'}</div>
-                        <div className="min-w-0">
-                          <div className="truncate text-white">{readAccountLabel(account)}</div>
-                          <div className="mt-1 truncate text-xs text-textMuted">{account.username ? `@${account.username}` : account.userId || `账号#${account.id}`}</div>
-                          {taskMeta.occupied ? <div className="mt-1 text-xs text-textMuted">占用中：{taskMeta.label}</div> : null}
-                        </div>
-                        <div>
-                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${getAccountStatusTone(account.status)}`}>
-                            {formatAccountStatus(account.status)}
-                          </span>
-                        </div>
-                      </label>
-                    )
-                  })}
-                </div>
+              <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/[0.06] bg-card px-5 py-4">
+                <button type="button" onClick={() => setPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
+                <button type="button" onClick={applyPicker} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">确认选择</button>
               </div>
             </div>
+          </div>
+        ) : null}
+      </div>
 
-            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-white/[0.06] bg-card px-5 py-4">
-              <button type="button" onClick={() => setPickerOpen(false)} className="rounded-[12px] bg-white/[0.05] px-4 py-3 text-sm text-white transition hover:bg-white/[0.1]">取消</button>
-              <button type="button" onClick={applyPicker} className="rounded-[12px] bg-violet-400 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-violet-300">确认选择</button>
+      <ResultDialogShell
+        open={resultDialogOpen && Boolean(result)}
+        onClose={() => setResultDialogOpen(false)}
+        title="重新授权结果汇总"
+        subtitle="这里专门看最终结果，执行日志只保留过程。"
+        icon={<CheckCircle2 size={18} />}
+        tone="violet"
+        maxWidth="max-w-[760px]"
+      >
+        {result ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 text-center text-sm md:grid-cols-4">
+              <ResultStatCard label="总账号" value={result.total} tone="neutral" />
+              <ResultStatCard label="成功" value={result.successCount} tone="success" />
+              <ResultStatCard label="失败" value={result.failedCount} tone={result.failedCount > 0 ? 'danger' : 'info'} />
+              <ResultStatCard label="成功率" value={result.total > 0 ? `${Math.round((result.successCount / result.total) * 100)}%` : '0%'} tone="violet" />
+            </div>
+
+            {result.message ? (
+              <div className={`px-4 py-3 text-sm text-slate-200 ${SOFT_NOTICE_CLASS}`}>{result.message}</div>
+            ) : null}
+
+            <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+              {result.results.map((item) => (
+                <div key={`${item.accountId}-${item.status}`} className="flex flex-col gap-3 rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-3 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-sm text-white">{item.phone || `账号#${item.accountId}`}</div>
+                    <div className="mt-1 text-xs text-textMuted break-all">{item.message}</div>
+                  </div>
+                  <div className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-xs ${readStatusBadgeClass(item.status)}`}>
+                    {readStatusIcon(item.status)}
+                    <span>{readStatusLabel(item.status)}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      ) : null}
-    </div>
+        ) : null}
+      </ResultDialogShell>
+    </>
   )
 })
