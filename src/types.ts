@@ -480,8 +480,8 @@ export interface DesktopAccountsApi {
   pickImportFolder: () => Promise<ImportAccountsResult | null>
   scanFolder: (folderPath: string) => Promise<ScanResult>
   importDroppedPaths: (paths: string[]) => Promise<ImportAccountsResult>
-  deleteByIds: (ids: number[]) => Promise<AccountRecord[]>
-  deleteAll: () => Promise<AccountRecord[]>
+  deleteByIds: (ids: number[]) => Promise<DeleteAccountsResult>
+  deleteAll: () => Promise<DeleteAccountsResult>
   markChecking: (ids: number[]) => Promise<StatusUpdateResult>
   applySpamBotReply: (payload: { ids: number[]; replyText: string }) => Promise<StatusUpdateResult>
   applyCheckResults: (items: CheckResultInput[]) => Promise<StatusUpdateResult>
@@ -513,6 +513,11 @@ export interface DesktopAccountsApi {
   getProfileOperationState: () => Promise<ProfileOperationProgressState>
   clearProfileOperationLogs: () => Promise<ProfileOperationProgressState>
   onProfileOperationProgress: (callback: (state: ProfileOperationProgressState) => void) => () => void
+}
+
+export interface DeleteAccountsResult {
+  deletedIds: number[]
+  deletedCount: number
 }
 
 export interface DesktopAppSettings {

@@ -569,20 +569,30 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
   ipcMain.handle('accounts:delete', async (_event, ids: number[]) => {
     const accounts = accountRepository.getByIds(ids)
+    const deletedIds = accounts.map((account) => account.id)
     const emitDeleteProgress = (payload: ImportProgressPayload) => {
       emitImportProgress({ ...payload, mode: 'delete' })
     }
     await accountImportService.deleteManagedAccounts(accounts, emitDeleteProgress)
-    return serializeAccountsForRenderer(accountRepository.deleteByIds(ids))
+    accountRepository.deleteByIds(deletedIds)
+    return {
+      deletedIds,
+      deletedCount: deletedIds.length
+    }
   })
 
   ipcMain.handle('accounts:delete-all', async () => {
     const accounts = accountRepository.list()
+    const deletedIds = accounts.map((account) => account.id)
     const emitDeleteProgress = (payload: ImportProgressPayload) => {
       emitImportProgress({ ...payload, mode: 'delete' })
     }
     await accountImportService.deleteManagedAccounts(accounts, emitDeleteProgress)
-    return serializeAccountsForRenderer(accountRepository.deleteAll())
+    accountRepository.deleteAll()
+    return {
+      deletedIds,
+      deletedCount: deletedIds.length
+    }
   })
 
   ipcMain.handle('accounts:mark-checking', (_event, ids: number[]) => {

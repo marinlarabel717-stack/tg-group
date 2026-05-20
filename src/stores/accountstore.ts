@@ -618,27 +618,29 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           message: ids.length > 0 ? `正在准备删除账号 0 / ${ids.length}` : '正在准备删除账号...'
         })
       })
-      let accounts = null
+      let result = null
       try {
-        accounts = await getDesktopAccountsApi()?.deleteByIds(ids)
+        result = await getDesktopAccountsApi()?.deleteByIds(ids)
       } finally {
-        if (!accounts) {
+        if (!result) {
           set({ importProgress: null })
         }
       }
-      if (!accounts) {
+      if (!result) {
         return
       }
-      applyAccountSnapshot(accounts, set, get)
+      const deletedIdSet = new Set(result.deletedIds)
+      const remainingAccounts = get().accounts.filter((account) => !deletedIdSet.has(account.id))
+      applyAccountSnapshot(remainingAccounts, set, get)
       set({
         importProgress: null,
         selectedIds: [],
         deleteResultDialog: {
           open: true,
-          deletedCount: ids.length,
+          deletedCount: result.deletedCount,
           mode: 'selected'
         },
-        lastActionMessage: `已删除 ${ids.length} 个账号。`
+        lastActionMessage: `已删除 ${result.deletedCount} 个账号。`
       })
     })
   },
@@ -651,24 +653,24 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           message: deletedCount > 0 ? `正在准备删除账号 0 / ${deletedCount}` : '正在准备删除账号...'
         })
       })
-      let accounts = null
+      let result = null
       try {
-        accounts = await getDesktopAccountsApi()?.deleteAll()
+        result = await getDesktopAccountsApi()?.deleteAll()
       } finally {
-        if (!accounts) {
+        if (!result) {
           set({ importProgress: null })
         }
       }
-      if (!accounts) {
+      if (!result) {
         return
       }
-      applyAccountSnapshot(accounts, set, get)
+      applyAccountSnapshot([], set, get)
       set({
         importProgress: null,
         selectedIds: [],
         deleteResultDialog: {
           open: true,
-          deletedCount,
+          deletedCount: result.deletedCount || deletedCount,
           mode: 'all'
         },
         lastActionMessage: '账号数据已全部清空。'
@@ -693,27 +695,29 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           message: ids.length > 0 ? `正在准备删除账号 0 / ${ids.length}` : '正在准备删除账号...'
         })
       })
-      let accounts = null
+      let result = null
       try {
-        accounts = await getDesktopAccountsApi()?.deleteByIds(ids)
+        result = await getDesktopAccountsApi()?.deleteByIds(ids)
       } finally {
-        if (!accounts) {
+        if (!result) {
           set({ importProgress: null })
         }
       }
-      if (!accounts) {
+      if (!result) {
         return
       }
-      applyAccountSnapshot(accounts, set, get)
+      const deletedIdSet = new Set(result.deletedIds)
+      const remainingAccounts = get().accounts.filter((account) => !deletedIdSet.has(account.id))
+      applyAccountSnapshot(remainingAccounts, set, get)
       set({
         importProgress: null,
-        selectedIds: get().selectedIds.filter((id) => !ids.includes(id)),
+        selectedIds: get().selectedIds.filter((id) => !deletedIdSet.has(id)),
         deleteResultDialog: {
           open: true,
-          deletedCount: ids.length,
+          deletedCount: result.deletedCount,
           mode: group
         },
-        lastActionMessage: `已删除 ${ids.length} 个${DELETE_GROUP_LABELS[group]}账号。`
+        lastActionMessage: `已删除 ${result.deletedCount} 个${DELETE_GROUP_LABELS[group]}账号。`
       })
     })
   },
