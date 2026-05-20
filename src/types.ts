@@ -269,6 +269,7 @@ export type ReauthorizeOperationStatus = 'success' | 'password_mismatch' | 'sess
 export interface ReauthorizeOperationPayload {
   accountIds: number[]
   oldPasswords: string
+  newPassword?: string
   deleteOfficialMessages: boolean
   cleanupExpiredRecovery: boolean
 }

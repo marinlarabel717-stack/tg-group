@@ -724,6 +724,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     const results: ReauthorizeOperationResultItem[] = []
     const profileUpdates: CheckResultInput[] = []
     const startedAt = new Date().toISOString()
+    const nextReauthorizePassword = typeof payload.newPassword === 'string' && payload.newPassword.trim()
+      ? payload.newPassword.trim()
+      : ''
 
     try {
       for (const account of orderedAccounts) {
@@ -773,7 +776,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
           lastOnlineTime: account.lastOnlineTime,
           profile: {
             ...account.profile,
-            twoFA: item.matchedPassword ?? (typeof account.profile?.twoFA === 'string' ? account.profile.twoFA : null),
+            twoFA: nextReauthorizePassword || item.matchedPassword || (typeof account.profile?.twoFA === 'string' ? account.profile.twoFA : null),
             last_connect_date: startedAt,
             reauthorize_mode: 'official-code',
             reauthorize_at: startedAt,

@@ -235,6 +235,7 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
     timeout_seconds = max(30, int(payload.get('timeoutSeconds') or DEFAULT_TIMEOUT_SECONDS))
     raw_candidates = payload.get('passwordCandidates') or []
     password_candidates = [str(item).strip() for item in raw_candidates if str(item).strip()]
+    new_password = str(payload.get('newPassword') or '').strip()
     proxy = _build_proxy_config(payload.get('proxy'))
     device_model = str(payload.get('deviceModel') or '').strip() or 'Desktop'
     system_version = str(payload.get('systemVersion') or '').strip() or 'Desktop OS'
@@ -261,6 +262,7 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
     cancelled_recovery_email = False
     declined_recovery_reset = False
+    new_password_applied = False
 
     try:
         _emit_progress('info', '步骤 0：正在连接旧设备会话。')
@@ -316,6 +318,24 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
         await asyncio.wait_for(new_client.get_me(), timeout=timeout_seconds)
         _emit_progress('success', '步骤 6：新设备账号校验通过。')
 
+        if new_password:
+            _emit_progress('info', '步骤 6：正在把账号 2FA 更新为你填写的新密码。')
+            try:
+                await asyncio.wait_for(
+                    new_client.edit_2fa(
+                        current_password=matched_password or None,
+                        new_password=new_password,
+                        hint=''
+                    ),
+                    timeout=timeout_seconds
+                )
+                matched_password = new_password
+                new_password_applied = True
+                _emit_progress('success', '步骤 6 完成：新密码已设置成功。')
+            except Exception as exc:
+                _emit_progress('warning', f'步骤 6 失败：新密码设置没有成功。{_format_error_reason(exc)}')
+                raise RuntimeError(f'REAUTHORIZE_SET_NEW_PASSWORD_FAILED | {_format_error_reason(exc)}')
+
         recovery_state = await _read_recovery_state(new_client, timeout_seconds)
         if recovery_state.get('has_password'):
             _emit_progress('success', '已确认当前账号仍保留 2FA 密码。')
@@ -367,6 +387,8 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
         _emit_progress('success', '步骤 8 完成：新 session 已写回本地。')
 
         success_message = '重新授权成功：已先清理其它旧设备，再用官方验证码完成新设备登录，最后让旧设备退出。'
+        if new_password_applied:
+            success_message += ' 新设备 2FA 也已切换成你填写的新密码。'
         if cleanup_expired_recovery:
             if cancelled_recovery_email or declined_recovery_reset:
                 success_message += ' 已顺带清理旧的恢复痕迹。'
@@ -377,6 +399,7 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
             'ok': True,
             'message': success_message,
             'matched_password': matched_password,
+            'new_password_applied': new_password_applied,
             'official_messages_cleared': official_messages_cleared,
             'terminated_authorizations_count': reset_count,
             'terminated_web_authorizations_count': reset_web_count,
@@ -397,6 +420,7 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
             'ok': False,
             'reason': _format_error_reason(exc),
             'matched_password': matched_password,
+            'new_password_applied': new_password_applied,
             'official_messages_cleared': official_messages_cleared,
             'terminated_authorizations_count': reset_count,
             'terminated_web_authorizations_count': reset_web_count,

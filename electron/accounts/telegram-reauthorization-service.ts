@@ -15,6 +15,7 @@ interface TelethonReauthorizeRawResult {
   message?: string | null
   reason?: string | null
   matched_password?: string | null
+  new_password_applied?: boolean
   official_messages_cleared?: boolean
   terminated_authorizations_count?: number
   terminated_web_authorizations_count?: number
@@ -177,6 +178,12 @@ function formatReauthorizeError(error: string) {
   }
   if (upper.includes('PASSWORDHASHINVALIDERROR') || upper.includes('PASSWORD_HASH_INVALID')) {
     return '旧密码不匹配。'
+  }
+  if (upper.includes('NEW_PASSWORD_INVALID') || upper.includes('NEW_PASSWORD_EMPTY')) {
+    return '新密码格式不正确，请换一个再试。'
+  }
+  if (upper.includes('REAUTHORIZE_SET_NEW_PASSWORD_FAILED')) {
+    return '新密码设置失败，请检查旧密码或稍后重试。'
   }
   if (upper.includes('PASSWORD_MISSING') || upper.includes('SESSIONPASSWORDNEEDEDERROR') || upper.includes('SESSION_PASSWORD_NEEDED')) {
     return '这个账号当前需要正确的旧密码才能继续。'
@@ -427,6 +434,7 @@ export class TelegramReauthorizationService {
     }
 
     const passwordCandidates = splitPasswordCandidates(payload.oldPasswords)
+    const nextPassword = readTrimmedString(payload.newPassword)
     const storedPassword = typeof account.profile?.twoFA === 'string' ? account.profile.twoFA.trim() : ''
     if (storedPassword && !passwordCandidates.includes(storedPassword)) {
       passwordCandidates.push(storedPassword)
@@ -442,6 +450,7 @@ export class TelegramReauthorizationService {
         deleteOfficialMessages: payload.deleteOfficialMessages,
         cleanupExpiredRecovery: payload.cleanupExpiredRecovery,
         passwordCandidates,
+        newPassword: nextPassword,
         timeoutSeconds: 180,
         proxy: proxyPayload ? JSON.parse(proxyPayload) : null,
         deviceModel: clientProfile.deviceModel,

@@ -106,6 +106,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
   const accountTaskStatusMap = useAccountTaskStatusMap()
 
   const [oldPasswords, setOldPasswords] = useState('')
+  const [newPassword, setNewPassword] = useState('')
   const [deleteOfficialMessages, setDeleteOfficialMessages] = useState(false)
   const [cleanupExpiredRecovery, setCleanupExpiredRecovery] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -213,6 +214,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
       const nextResult = await api.reauthorize({
         accountIds: selectedIds,
         oldPasswords,
+        newPassword,
         deleteOfficialMessages,
         cleanupExpiredRecovery
       })
@@ -265,6 +267,18 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
             className={`h-11 w-full rounded-[12px] px-4 text-sm ${SOFT_INPUT_CLASS}`}
           />
           <div className="text-xs text-textMuted">如果账号本地已存旧密码，执行时也会自动一起兜底尝试。</div>
+        </div>
+      </ConfigRow>
+
+      <ConfigRow label="新密码" wide>
+        <div className="space-y-2">
+          <input
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            placeholder="可选：填写后，重新授权成功后会改成这个新密码"
+            className={`h-11 w-full rounded-[12px] px-4 text-sm ${SOFT_INPUT_CLASS}`}
+          />
+          <div className="text-xs text-textMuted">留空则保持当前 2FA 密码不变；填写后，会在新设备登录成功后切换为这个新密码。</div>
         </div>
       </ConfigRow>
 
