@@ -888,7 +888,7 @@ function SniperWorkbench() {
 
         <div className="space-y-5">
           <GlassPanel className="bg-card">
-            <FoldSection title="运行" hint="点一次就直接进入监听。默认每 5 秒检查一次，每个来源每轮只看最近 2 条；首次启动先对齐旧帖，后面只盯新帖。">
+            <FoldSection title="运行" hint="点一次就直接进入监听。默认每 5 秒检查一次，每个来源每轮都会复查最近 2 条；首次启动先对齐旧帖，后面持续复查最近窗口。">
               <div className="space-y-3 px-3 py-3 text-sm">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <button

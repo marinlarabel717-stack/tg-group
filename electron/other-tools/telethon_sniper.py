@@ -620,20 +620,19 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
         for message in messages:
             message_id = getattr(message, 'id', None)
             key = f"{source['ref']}:{message_id}" if message_id is not None else ''
-            if key and key in seen_message_keys:
-                continue
             if key and bootstrap_existing_messages:
                 seen_message_keys.add(key)
                 continue
             if key:
-                seen_message_keys.add(key)
-                new_seen_message_keys.append(key)
-                logs.append({
-                    'level': 'info',
-                    'message': f"{source_prefix} 扫到新消息 #{message_id}",
-                    'sourceRef': source['ref'],
-                    'sourceTitle': source['title']
-                })
+                if key not in seen_message_keys:
+                    seen_message_keys.add(key)
+                    new_seen_message_keys.append(key)
+                    logs.append({
+                        'level': 'info',
+                        'message': f"{source_prefix} 扫到新消息 #{message_id}",
+                        'sourceRef': source['ref'],
+                        'sourceTitle': source['title']
+                    })
 
             blob = _read_source_blob(message)
             if not blob or not _matches_keywords(blob, include_keywords, exclude_keywords):
@@ -648,7 +647,7 @@ async def _scan_sources(client: Any, command: Dict[str, Any]) -> Dict[str, Any]:
                 candidate_key = candidate_value.lower()
                 if not normalized.get('candidate') or not candidate_key:
                     continue
-                if candidate_key in handled_candidate_keys or candidate_key in handled_in_pass:
+                if candidate_key in handled_in_pass:
                     continue
 
                 logs.append({

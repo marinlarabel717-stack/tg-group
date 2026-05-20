@@ -1572,7 +1572,7 @@ export class OtherToolsService {
         })
         this.pushSniperListenerLog(task, {
           level: 'info',
-          message: `首次启动只对齐每个来源最近 ${sourceLimit} 条，后面只盯新帖里的用户名。`,
+          message: `首次启动会先对齐每个来源最近 ${sourceLimit} 条；从下一轮开始，每轮都会复查最近 ${sourceLimit} 条里的用户名。`,
           accountId: scanAccount.id,
           accountLabel: readCheckResultTitle(scanAccount)
         })
@@ -1594,7 +1594,7 @@ export class OtherToolsService {
 
           this.pushSniperListenerLog(task, {
             level: 'info',
-            message: `第 ${task.tickCount} 轮监听开始：每 ${pollIntervalSeconds} 秒检查一次，每个来源只看最近 ${sourceLimit} 条新帖。`,
+            message: `第 ${task.tickCount} 轮监听开始：每 ${pollIntervalSeconds} 秒检查一次，每个来源复查最近 ${sourceLimit} 条消息。`,
             accountId: scanAccount.id,
             accountLabel: readCheckResultTitle(scanAccount)
           })
@@ -1676,7 +1676,7 @@ export class OtherToolsService {
           const forbiddenCount = scanResult.items.filter((item) => item.category === 'forbidden').length
           this.pushSniperListenerLog(task, {
             level: scanResult.items.length > 0 ? 'success' : 'info',
-            message: `第 ${task.tickCount} 轮监听结果：实际检查 ${scanResult.expandedSourceCount} 个来源，拉取到 ${scanResult.newSeenMessageKeys.length} 条新消息，命中过滤后检查 ${scanResult.checkedMessageCount} 条，发现 ${scanResult.candidateCount} 个候选（可抢 ${occupiableCount} / 已占用 ${occupiedCount} / 不可用 ${forbiddenCount}）。`,
+            message: `第 ${task.tickCount} 轮监听结果：实际检查 ${scanResult.expandedSourceCount} 个来源，本轮新增 ${scanResult.newSeenMessageKeys.length} 条新消息，命中过滤后复查 ${scanResult.checkedMessageCount} 条，发现 ${scanResult.candidateCount} 个候选（可抢 ${occupiableCount} / 已占用 ${occupiedCount} / 不可用 ${forbiddenCount}）。`,
             accountId: scanAccount.id,
             accountLabel: readCheckResultTitle(scanAccount)
           })
@@ -1704,10 +1704,10 @@ export class OtherToolsService {
           for (const detected of scanResult.items) {
             if (task.cancelled) break
             const candidateKey = detected.normalized.toLowerCase()
+            if (detected.category !== 'occupiable') continue
+
             if (task.handledCandidateKeys.has(candidateKey)) continue
             task.handledCandidateKeys.add(candidateKey)
-
-            if (detected.category !== 'occupiable') continue
 
             const item = buildCandidateItem({
               raw: detected.raw,
