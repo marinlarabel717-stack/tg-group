@@ -89,7 +89,6 @@ async def _ensure_authorized(client: TelegramClient, timeout_seconds: int):
 
 
 async def _clear_other_authorizations(old_client: TelegramClient, timeout_seconds: int):
-    _emit_progress('info', '步骤 1：旧设备正在读取授权列表。')
     session_state = await asyncio.wait_for(old_client(functions.account.GetAuthorizationsRequest()), timeout=timeout_seconds)
     authorizations = list(getattr(session_state, 'authorizations', []) or [])
     other_authorizations = [item for item in authorizations if not getattr(item, 'current', False)]
@@ -122,7 +121,6 @@ async def _clear_other_authorizations(old_client: TelegramClient, timeout_second
 
 
 async def _wait_for_verification_code(old_client: TelegramClient, service_entity: Any, baseline_ids: List[int], timeout_seconds: int) -> str:
-    _emit_progress('info', '步骤 3：旧设备正在读取 777000 官方验证码消息。')
     deadline = asyncio.get_running_loop().time() + min(timeout_seconds, 45)
     seen = set(baseline_ids)
     while asyncio.get_running_loop().time() < deadline:
@@ -150,12 +148,10 @@ async def _try_sign_in_with_passwords(new_client: TelegramClient, password_candi
     _emit_progress('warning', f'步骤 5：新设备登录需要 2FA，开始尝试 {len(password_candidates)} 个旧密码候选。')
     for index, candidate in enumerate(password_candidates):
         try:
-            _emit_progress('info', f'正在尝试第 {index + 1} 个旧密码候选。')
             await asyncio.wait_for(new_client.sign_in(password=candidate), timeout=timeout_seconds)
             _emit_progress('success', f'步骤 5 完成：第 {index + 1} 个旧密码候选校验通过。')
             return candidate
         except PasswordHashInvalidError:
-            _emit_progress('warning', f'第 {index + 1} 个旧密码候选不匹配。')
             continue
     raise RuntimeError('PASSWORD_HASH_INVALID')
 
@@ -265,9 +261,7 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
     new_password_applied = False
 
     try:
-        _emit_progress('info', '步骤 0：正在连接旧设备会话。')
         await _ensure_authorized(old_client, timeout_seconds)
-        _emit_progress('success', '步骤 0 完成：旧设备登录状态正常。')
 
         reset_count, reset_web_count = await _clear_other_authorizations(old_client, timeout_seconds)
 
@@ -295,8 +289,6 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
             lang_code=lang_code,
             system_lang_code=system_lang_code
         )
-        _emit_progress('info', f'步骤 2：本次新会话使用稳定桌面参数 {device_model} / {system_version} / {app_version}。')
-
         _emit_progress('info', '步骤 2：正在建立新设备会话并请求官方验证码。')
         await asyncio.wait_for(new_client.connect(), timeout=timeout_seconds)
         sent_code = await asyncio.wait_for(new_client(functions.auth.SendCodeRequest(phone_with_prefix, API_ID, API_HASH, types.CodeSettings())), timeout=timeout_seconds)
@@ -337,17 +329,8 @@ async def _run(payload: Dict[str, Any]) -> Dict[str, Any]:
                 raise RuntimeError(f'REAUTHORIZE_SET_NEW_PASSWORD_FAILED | {_format_error_reason(exc)}')
 
         recovery_state = await _read_recovery_state(new_client, timeout_seconds)
-        if recovery_state.get('has_password'):
-            _emit_progress('success', '已确认当前账号仍保留 2FA 密码。')
-        else:
+        if not recovery_state.get('has_password'):
             _emit_progress('warning', '当前账号没有检测到 2FA 密码。')
-
-        if recovery_state.get('recovery_email_pattern'):
-            _emit_progress('info', f"当前仍保留有效恢复邮箱：{recovery_state['recovery_email_pattern']}。")
-        if recovery_state.get('unconfirmed_recovery_email_pattern'):
-            _emit_progress('warning', f"检测到待确认的旧恢复邮箱：{recovery_state['unconfirmed_recovery_email_pattern']}。")
-        if recovery_state.get('pending_recovery_reset_at'):
-            _emit_progress('warning', f"检测到旧的密码重置等待期：{recovery_state['pending_recovery_reset_at']}。")
 
         if cleanup_expired_recovery:
             cleanup_state = await _cleanup_expired_recovery_state(new_client, recovery_state, timeout_seconds)

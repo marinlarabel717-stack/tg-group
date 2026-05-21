@@ -1498,13 +1498,44 @@ export interface DesktopGroupInviteApi {
   onProgress: (callback: (payload: GroupInviteProgressState) => void) => () => void
 }
 
-export type SessionManagerActionKind = 'delete-messages' | 'delete-dialog' | 'clear-history' | 'delete-contact' | 'leave-chat'
+export type SessionManagerActionKind =
+  | 'delete-messages'
+  | 'delete-dialog'
+  | 'clear-history'
+  | 'delete-contact'
+  | 'leave-chat'
+  | 'wipe-all-dialogs'
+  | 'wipe-all-groups'
+  | 'wipe-all-contacts'
+  | 'wipe-all-everything'
 
 export interface SessionManagerActionPayload {
   action: SessionManagerActionKind
   accountIds: number[]
-  targetRefs: string[]
+  targetRefs?: string[]
   messageIds?: number[]
+}
+
+export interface SessionManagerLogEntry {
+  id: string
+  accountId: number | null
+  accountPhone: string
+  level: CheckLogLevel
+  message: string
+  createdAt: string
+}
+
+export interface SessionManagerProgressState {
+  running: boolean
+  action: SessionManagerActionKind | null
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  currentAccountId: number | null
+  currentPhone: string | null
+  logs: SessionManagerLogEntry[]
+  lastUpdatedAt: string | null
 }
 
 export interface SessionManagerActionResultItem {
@@ -1526,6 +1557,9 @@ export interface SessionManagerActionResult {
 
 export interface DesktopSessionManagerApi {
   runAction: (payload: SessionManagerActionPayload) => Promise<SessionManagerActionResult>
+  getState: () => Promise<SessionManagerProgressState>
+  clearLogs: () => Promise<SessionManagerProgressState>
+  onProgress: (callback: (payload: SessionManagerProgressState) => void) => () => void
 }
 
 export interface DesktopBatchCreateApi {

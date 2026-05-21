@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { ModuleKey } from '../types'
 
-export type LogsContext = 'accounts' | 'proxy-pool' | 'accounts-two-factor' | 'accounts-profile' | 'batch-create' | 'other-tools-sniper'
+export type LogsContext = 'accounts' | 'proxy-pool' | 'accounts-two-factor' | 'accounts-profile' | 'accounts-cleanup' | 'batch-create' | 'other-tools-sniper'
 export type ReauthorizeTab = 'settings' | 'logs'
 
 interface UIState {

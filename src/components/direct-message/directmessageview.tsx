@@ -415,7 +415,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const latestRun = runs[0] ?? null
   const [accountStatsExpanded, setAccountStatsExpanded] = useState(false)
   const detailedItems = useMemo(
-    () => runs.flatMap((run) => [...run.items].reverse().map((item) => ({ ...item, fallbackAt: run.createdAt }))),
+    () => runs.flatMap((run) => run.items.map((item) => ({ ...item, fallbackAt: run.createdAt }))),
     [runs]
   )
   const summaryItems = useMemo(() => {
@@ -429,7 +429,7 @@ const LogsWorkbench = memo(function LogsWorkbench() {
           fallbackAt: new Date().toISOString()
         }))
     }
-    return latestRun ? [...latestRun.items].reverse().map((item) => ({ ...item, fallbackAt: latestRun.createdAt })) : []
+    return latestRun ? latestRun.items.map((item) => ({ ...item, fallbackAt: latestRun.createdAt })) : []
   }, [latestRun, previewItems, sending])
   const latestAccountStats = useMemo(() => {
     if (summaryItems.length === 0) return [] as Array<{ phone: string; total: number; sent: number; failed: number }>
@@ -456,7 +456,6 @@ const LogsWorkbench = memo(function LogsWorkbench() {
   const liveItems = useMemo(
     () => [...previewItems
       .filter((item) => item.status === 'sent' || item.status === 'failed')]
-      .reverse()
       .map((item, index) => ({
       id: item.id,
       sentAt: item.sentAt,

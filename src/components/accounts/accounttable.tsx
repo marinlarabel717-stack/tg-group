@@ -20,9 +20,9 @@ import {
   useReactTable
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, CircleAlert, HeartPulse, KeyRound, Loader2, LockKeyhole, Settings2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
+import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, CircleAlert, HeartPulse, KeyRound, Loader2, LockKeyhole, Settings2, Shuffle, Sparkles, Star, Trash2, UserRoundPen, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
-import type { AccountListPageResult, AccountListReauthorizeFilter, AccountRecord, AccountStatus, CheckAction, ProfileOperationAction, ProfileOperationPayload, TwoFactorAction, TwoFactorOperationPayload } from '../../types'
+import type { AccountListPageResult, AccountListReauthorizeFilter, AccountRecord, AccountStatus, CheckAction, ProfileOperationAction, ProfileOperationPayload, SessionManagerActionKind, TwoFactorAction, TwoFactorOperationPayload } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
 import { AccountSummaryCards } from './accountsummarycards'
@@ -67,7 +67,7 @@ function profileActionNeedsDialog(action: ProfileOperationAction) {
   return action === 'custom-avatar' || action === 'custom-nickname' || action === 'custom-username' || action === 'custom-bio'
 }
 
-type BulkOperationSubmenu = 'two-fa' | 'profile' | null
+type BulkOperationSubmenu = 'two-fa' | 'profile' | 'cleanup' | null
 type PremiumFilter = 'all' | 'premium' | 'non-premium'
 type PresenceFilter = 'all' | 'has' | 'none'
 
@@ -106,6 +106,29 @@ const profileMenuItems = [
   { id: 'remove-username', label: '删除用户名' },
   { id: 'remove-bio', label: '删除简介' },
   { id: 'clear-all-profile', label: '一键删除（用户名 + 简介 + 头像）' }
+] as const
+
+const cleanupMenuItems: Array<{ id: SessionManagerActionKind; label: string; hint: string }> = [
+  {
+    id: 'wipe-all-dialogs',
+    label: '删除所有聊天对话',
+    hint: '清理账号上的所有对话。'
+  },
+  {
+    id: 'wipe-all-groups',
+    label: '删除所有群组频道',
+    hint: '清理账号所有的群跟频道，包括归档的。'
+  },
+  {
+    id: 'wipe-all-contacts',
+    label: '删除所有联系人',
+    hint: '删除所有的联系人。'
+  },
+  {
+    id: 'wipe-all-everything',
+    label: '一键删除所有聊天-群组-频道-联系人',
+    hint: '聊天、群组频道、联系人会一起清理。'
+  }
 ] as const
 
 function createDefaultSorting() {
@@ -1514,6 +1537,35 @@ export const AccountTable = memo(function AccountTable() {
     }
   }, [setActiveModule, setLogsContext])
 
+  const handleSubmitCleanupOperation = useCallback(async (action: SessionManagerActionKind) => {
+    if (!window.desktopSessionManager?.runAction) {
+      setBulkActionHint('当前环境没有注入账号清理能力。')
+      return
+    }
+    if (selectedIds.length === 0) {
+      setBulkActionHint('请先选择要处理的账号。')
+      return
+    }
+
+    setBulkMenuOpen(false)
+    setBulkSubmenu(null)
+    setBulkActionHint('')
+    setLogsContext('accounts-cleanup')
+    setActiveModule('logs')
+
+    try {
+      await window.desktopSessionManager.clearLogs?.().catch(() => undefined)
+      await window.desktopSessionManager.runAction({
+        action,
+        accountIds: [...selectedIds],
+        targetRefs: [],
+        messageIds: []
+      })
+    } catch (error) {
+      setBulkActionHint(error instanceof Error ? error.message : '账号清理失败，请稍后再试。')
+    }
+  }, [selectedIds, setActiveModule, setLogsContext])
+
   const handleOpenProfileDialog = useCallback((action: ProfileOperationAction) => {
     if (selectedIds.length === 0) {
       setBulkActionHint('请先选择要处理的账号。')
@@ -1921,6 +1973,10 @@ export const AccountTable = memo(function AccountTable() {
                               <span className="flex items-center gap-3"><Shuffle size={16} className="text-neonSoft" />随机更换个人资料</span>
                               <ChevronRight size={15} className="text-textMuted" />
                             </button>
+                            <button type="button" onClick={() => setBulkSubmenu('cleanup')} className="flex w-full items-center justify-between gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                              <span className="flex items-center gap-3"><Trash2 size={16} className="text-neonSoft" />账号清理</span>
+                              <ChevronRight size={15} className="text-textMuted" />
+                            </button>
                           </div>
                         </div>
 
@@ -1952,6 +2008,26 @@ export const AccountTable = memo(function AccountTable() {
                                 <button key={item.id} type="button" onClick={() => handleOpenProfileDialog(item.id)} className="flex w-full items-center gap-3 rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
                                   <UserRoundPen size={15} className="text-neonSoft" />
                                   <span>{item.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {bulkSubmenu === 'cleanup' ? (
+                          <div className="absolute bottom-[calc(100%+12px)] left-[calc(100%+12px)] z-40 w-[340px] rounded-[16px] border border-white/8 bg-card p-3 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+                            <div className="mb-2 flex items-center justify-between px-2">
+                              <div className="text-xs tracking-[0.2em] text-textMuted">账号清理</div>
+                              <button type="button" onClick={() => setBulkSubmenu(null)} className="text-xs text-textMuted transition hover:text-white">关闭</button>
+                            </div>
+                            <div className="space-y-2">
+                              {cleanupMenuItems.map((item) => (
+                                <button key={item.id} type="button" onClick={() => void handleSubmitCleanupOperation(item.id)} className="w-full rounded-[12px] bg-panel px-3 py-3 text-left text-sm text-white transition hover:bg-hover">
+                                  <div className="flex items-center gap-3">
+                                    <Trash2 size={15} className="text-neonSoft" />
+                                    <span>{item.label}</span>
+                                  </div>
+                                  <div className="mt-2 pl-7 text-xs leading-5 text-textMuted">{item.hint}</div>
                                 </button>
                               ))}
                             </div>

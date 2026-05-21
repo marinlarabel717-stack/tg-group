@@ -339,11 +339,11 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
               </div>
             ) : null}
 
-            <div className="inline-flex rounded-[14px] border border-violet-300/16 bg-violet-500/8 p-1">
+            <div className="inline-flex gap-2 rounded-[14px] border border-white/[0.06] bg-card/70 p-1.5">
               <button
                 type="button"
                 onClick={() => setActiveTab('settings')}
-                className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'settings' ? 'border-violet-300 bg-violet-400 text-slate-950 shadow-[0_8px_24px_rgba(167,139,250,0.28)]' : 'border-violet-300/10 bg-violet-400/10 text-violet-100 hover:bg-violet-400/16'}`}
+                className={`inline-flex h-10 items-center gap-2 rounded-[12px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'settings' ? 'border-white/[0.12] bg-violet-400/12 text-violet-200 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]' : 'border-white/[0.06] bg-white/[0.02] text-textMuted hover:border-white/[0.09] hover:bg-white/[0.05] hover:text-white'}`}
               >
                 <Settings2 size={16} />
                 <span>重新授权设置</span>
@@ -351,7 +351,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
               <button
                 type="button"
                 onClick={() => setActiveTab('logs')}
-                className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'logs' ? 'border-violet-300 bg-violet-400 text-slate-950 shadow-[0_8px_24px_rgba(167,139,250,0.28)]' : 'border-violet-300/10 bg-violet-400/10 text-violet-100 hover:bg-violet-400/16'}`}
+                className={`inline-flex h-10 items-center gap-2 rounded-[12px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'logs' ? 'border-white/[0.12] bg-violet-400/12 text-violet-200 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]' : 'border-white/[0.06] bg-white/[0.02] text-textMuted hover:border-white/[0.09] hover:bg-white/[0.05] hover:text-white'}`}
               >
                 <ScrollText size={16} />
                 <span>执行日志</span>

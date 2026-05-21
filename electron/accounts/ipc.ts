@@ -416,7 +416,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     if (reauthorizeProgressEmitTimer) return
     reauthorizeProgressEmitTimer = setTimeout(() => {
       flushReauthorizeProgress()
-    }, 120)
+    }, 320)
   }
 
   const emitProfileOperationProgress = () => {
@@ -476,7 +476,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   }
 
   const pushReauthorizeLog = (entry: Omit<ReauthorizeLogEntry, 'id' | 'createdAt'>) => {
-    const nextLogs = trimOperationLogs([...reauthorizeState.logs, createReauthorizeLogEntry(entry)])
+    const nextLogs = trimOperationLogs([...reauthorizeState.logs, createReauthorizeLogEntry(entry)], 180)
     reauthorizeState = {
       ...reauthorizeState,
       logs: nextLogs,

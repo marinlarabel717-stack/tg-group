@@ -157,7 +157,6 @@ async def _upload_emoji_profile_photo(client: TelegramClient, emoji_id: int, bac
     for candidate_colors in _build_background_variants(background_colors):
         try:
             await client(functions.photos.UploadProfilePhotoRequest(
-                fallback=True,
                 video_emoji_markup=types.VideoSizeEmojiMarkup(
                     emoji_id=emoji_id,
                     background_colors=candidate_colors,
@@ -168,6 +167,37 @@ async def _upload_emoji_profile_photo(client: TelegramClient, emoji_id: int, bac
             last_error = error
             if not _is_emoji_markup_invalid_error(error):
                 raise
+
+    try:
+        documents = await client(functions.messages.GetCustomEmojiDocumentsRequest(document_id=[emoji_id]))
+    except Exception:
+        documents = []
+
+    sticker_set = None
+    for document in documents or []:
+        for attribute in getattr(document, 'attributes', []) or []:
+            if isinstance(attribute, types.DocumentAttributeSticker):
+                sticker_set = getattr(attribute, 'stickerset', None)
+                if sticker_set:
+                    break
+        if sticker_set:
+            break
+
+    if sticker_set is not None:
+        for candidate_colors in _build_background_variants(background_colors):
+            try:
+                await client(functions.photos.UploadProfilePhotoRequest(
+                    video_emoji_markup=types.VideoSizeStickerMarkup(
+                        stickerset=sticker_set,
+                        sticker_id=emoji_id,
+                        background_colors=candidate_colors,
+                    )
+                ))
+                return
+            except Exception as error:
+                last_error = error
+                if not _is_emoji_markup_invalid_error(error):
+                    raise
 
     if last_error:
         raise last_error

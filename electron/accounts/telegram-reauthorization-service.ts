@@ -57,6 +57,58 @@ interface ProgressEventPayload {
 
 const PROGRESS_PREFIX = '__PROGRESS__'
 
+function normalizeProgressLog(level: ReauthorizeLogLevel, message: string): { level: ReauthorizeLogLevel; message: string } | null {
+  const text = message.trim()
+  if (!text) return null
+
+  const rules: Array<{ pattern: RegExp; value: string | null; level?: ReauthorizeLogLevel }> = [
+    { pattern: /^步骤 0[:：]/, value: null },
+    { pattern: /^步骤 1：旧设备正在读取授权列表。$/, value: null },
+    { pattern: /^步骤 1 完成：已清理其它 .* 台设备，只保留当前旧设备。$/, value: '旧设备清场完成。', level: 'success' },
+    { pattern: /^步骤 1 完成：当前本来就只有旧设备自己。$/, value: '旧设备无需清场。', level: 'success' },
+    { pattern: /^已额外清理 .* 个 Web 授权。$/, value: null },
+    { pattern: /^步骤 2：本次新会话使用稳定桌面参数 .*$/, value: null },
+    { pattern: /^步骤 2：正在建立新设备会话并请求官方验证码。$/, value: '正在请求官方验证码。', level: 'info' },
+    { pattern: /^步骤 2 完成：官方验证码已发送。$/, value: '官方验证码已发送。', level: 'success' },
+    { pattern: /^步骤 3：旧设备正在读取 777000 官方验证码消息。$/, value: '正在读取 777000 官方验证码。', level: 'info' },
+    { pattern: /^步骤 3 完成：已从旧设备读取到官方验证码 .*。$/, value: '已读取官方验证码。', level: 'success' },
+    { pattern: /^步骤 4：新设备正在使用官方验证码登录。$/, value: '正在用官方验证码登录新设备。', level: 'info' },
+    { pattern: /^步骤 4 完成：新设备验证码登录成功。$/, value: '新设备验证码登录成功。', level: 'success' },
+    { pattern: /^步骤 5：新设备登录需要 2FA，开始尝试 .* 个旧密码候选。$/, value: '需要 2FA，开始校验旧密码。', level: 'warning' },
+    { pattern: /^正在尝试第 .* 个旧密码候选。$/, value: null },
+    { pattern: /^第 .* 个旧密码候选不匹配。$/, value: null },
+    { pattern: /^步骤 5 完成：第 .* 个旧密码候选校验通过。$/, value: '旧密码校验通过。', level: 'success' },
+    { pattern: /^步骤 6：新设备账号校验通过。$/, value: '新设备登录校验通过。', level: 'success' },
+    { pattern: /^步骤 6：正在把账号 2FA 更新为你填写的新密码。$/, value: '正在设置新密码。', level: 'info' },
+    { pattern: /^步骤 6 完成：新密码已设置成功。$/, value: '新密码已设置成功。', level: 'success' },
+    { pattern: /^已确认当前账号仍保留 2FA 密码。$/, value: null },
+    { pattern: /^当前账号没有检测到 2FA 密码。$/, value: '当前账号没有检测到 2FA 密码。', level: 'warning' },
+    { pattern: /^当前仍保留有效恢复邮箱：.*$/, value: null },
+    { pattern: /^检测到待确认的旧恢复邮箱：.*$/, value: '检测到待确认的旧恢复邮箱。', level: 'warning' },
+    { pattern: /^检测到旧的密码重置等待期：.*$/, value: '检测到旧的密码重置等待期。', level: 'warning' },
+    { pattern: /^检测到当前账号没有 2FA 密码.*$/, value: '账号没有 2FA，已跳过恢复方式清理。', level: 'warning' },
+    { pattern: /^检测到待确认的恢复邮箱，正在取消这条旧恢复设置。$/, value: '正在取消待确认的恢复邮箱。', level: 'info' },
+    { pattern: /^已取消待确认的旧恢复邮箱。$/, value: '待确认恢复邮箱已取消。', level: 'success' },
+    { pattern: /^检测到旧的密码重置等待期，正在撤销这条恢复请求。$/, value: '正在撤销旧的密码重置等待期。', level: 'info' },
+    { pattern: /^已撤销旧的密码重置等待期。$/, value: '旧的密码重置等待期已撤销。', level: 'success' },
+    { pattern: /^没有检测到需要清理的过期恢复方式。$/, value: null },
+    { pattern: /^正在清理 Telegram 官方系统消息。$/, value: '正在清理 Telegram 官方系统消息。', level: 'info' },
+    { pattern: /^官方系统消息已清理。$/, value: '官方系统消息已清理。', level: 'success' },
+    { pattern: /^步骤 7：新设备已确认可用，旧设备准备退出登录。$/, value: '新设备可用，准备让旧设备退出。', level: 'info' },
+    { pattern: /^步骤 7 完成：旧设备已退出登录。$/, value: '旧设备已退出登录。', level: 'success' },
+    { pattern: /^已备份原 session 文件。$/, value: null },
+    { pattern: /^步骤 8 完成：新 session 已写回本地。$/, value: '新 session 已写回本地。', level: 'success' }
+  ]
+
+  for (const rule of rules) {
+    if (!rule.pattern.test(text)) continue
+    if (rule.value === null) return null
+    return { level: rule.level ?? level, message: rule.value }
+  }
+
+  return { level, message: text }
+}
+
 function resolveScriptPath() {
   return resolveRuntimeAssetPath('accounts', 'telethon_reauthorize.py')
 }
@@ -321,8 +373,9 @@ export class TelegramReauthorizationService {
             const event = JSON.parse(rawJson) as ProgressEventPayload
             const level = event.level ?? 'info'
             const message = typeof event.message === 'string' ? event.message.trim() : ''
-            if (message) {
-              logger?.log(level, message)
+            const normalized = normalizeProgressLog(level, message)
+            if (normalized) {
+              logger?.log(normalized.level, normalized.message)
             }
           } catch {
             // ignore invalid progress lines
@@ -430,9 +483,7 @@ export class TelegramReauthorizationService {
     }
 
     try {
-      logger?.log('info', '已切换到 Telethon 官方验证码重新授权链路。')
       const clientProfile = buildStableDesktopClientProfile(account)
-      logger?.log('info', `本次使用稳定桌面参数：${clientProfile.deviceModel} / ${clientProfile.systemVersion} / ${clientProfile.appVersion}`)
       const proxyPayload = serializeTelethonProxy(proxy)
       const raw = await this.runScript(account.id, {
         sessionPath: account.sessionPath,

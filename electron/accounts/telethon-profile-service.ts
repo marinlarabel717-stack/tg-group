@@ -392,13 +392,13 @@ function formatProfileError(error: string) {
     return '头像图片格式不对或 Telegram 无法处理这张图片。'
   }
   if (upper.includes('PROFILE_PHOTO_NOT_APPLIED')) {
-    return 'Telegram 返回成功了，但头像没有真正生效，系统已自动改走兼容头像。'
+    return 'Telegram 返回成功了，但官方 emoji 头像没有真正生效，请稍后重试。'
   }
   if (upper.includes('DEFAULT_PROFILE_PHOTO_EMOJIS_EMPTY')) {
     return 'Telegram 当前没有返回可用的官方 emoji 头像列表，请稍后再试。'
   }
   if (upper.includes('EMOJI_MARKUP_INVALID') || upper.includes('VIDEO_EMOJI_MARKUP_INVALID')) {
-    return '这个账号当前不接受官方 emoji 头像参数，已尝试兼容方案；如果还是失败，请再试一次。'
+    return '这个账号当前没有成功应用 Telegram 官方 emoji 头像，请稍后再试。'
   }
   if (upper.includes('RANDOM_AVATAR_RENDER_FAILED')) {
     return '随机头像生成失败了，请稍后再试；如果还是不行，先用自定义头像。'
@@ -656,12 +656,10 @@ export class TelethonProfileService {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       let prepared: PreparedProfileOperationInput | null = null
-      let fallbackAvatarPath: string | null = null
       try {
         const result = await this.executeOnce(account, payload, proxy)
         prepared = result.prepared
-        let raw = result.raw
-        let successMessage: string | null = null
+        const raw = result.raw
         const missingAvatarAfterSuccess =
           raw?.ok
           && (payload.action === 'random-avatar' || payload.action === 'random-profile')
@@ -673,30 +671,14 @@ export class TelethonProfileService {
             lastReason = 'PROFILE_PHOTO_NOT_APPLIED'
           }
 
-          if ((payload.action === 'random-avatar' || payload.action === 'random-profile') && (isOfficialEmojiMarkupError(lastReason) || /PROFILE_PHOTO_NOT_APPLIED/i.test(lastReason))) {
-            const fallbackResult = await this.executeEmojiAvatarFallback(account, payload, proxy)
-            fallbackAvatarPath = fallbackResult.avatarPath
-            raw = fallbackResult.raw
-            if (!raw?.ok) {
-              lastReason = typeof raw?.reason === 'string' ? raw.reason : lastReason
-              return {
-                accountId: account.id,
-                phone: account.phone,
-                success: false,
-                message: formatProfileError(lastReason)
-              }
-            }
-            successMessage = fallbackResult.message
-          } else {
-            if (payload.action === 'random-username' && attempt < maxAttempts && isRetryableRandomUsernameError(lastReason)) {
-              continue
-            }
-            return {
-              accountId: account.id,
-              phone: account.phone,
-              success: false,
-              message: formatProfileError(lastReason)
-            }
+          if (payload.action === 'random-username' && attempt < maxAttempts && isRetryableRandomUsernameError(lastReason)) {
+            continue
+          }
+          return {
+            accountId: account.id,
+            phone: account.phone,
+            success: false,
+            message: formatProfileError(lastReason)
           }
         }
 
@@ -706,7 +688,7 @@ export class TelethonProfileService {
         if (payload.action === 'custom-avatar' || payload.action === 'random-avatar' || payload.action === 'random-profile') {
           avatar = typeof raw.avatar_data_url === 'string' && raw.avatar_data_url.trim()
             ? raw.avatar_data_url.trim()
-            : ((fallbackAvatarPath || prepared.avatarPath) ? await toAvatarDataUrl(fallbackAvatarPath || prepared.avatarPath) : avatar)
+            : (prepared.avatarPath ? await toAvatarDataUrl(prepared.avatarPath) : avatar)
           hasProfilePhoto = true
         } else if (payload.action === 'clear-all-profile') {
           avatar = null
@@ -717,7 +699,7 @@ export class TelethonProfileService {
           accountId: account.id,
           phone: account.phone,
           success: true,
-          message: successMessage || (typeof raw.message === 'string' && raw.message.trim() ? raw.message.trim() : '个人资料已更新。'),
+          message: typeof raw.message === 'string' && raw.message.trim() ? raw.message.trim() : '个人资料已更新。',
           firstName: typeof raw.first_name === 'string' ? raw.first_name : null,
           lastName: typeof raw.last_name === 'string' ? raw.last_name : null,
           username: typeof raw.username === 'string' ? raw.username : null,
@@ -738,8 +720,7 @@ export class TelethonProfileService {
         }
       } finally {
         const cleanupPaths = [
-          ...(prepared?.cleanupPaths ?? []),
-          ...(fallbackAvatarPath ? [fallbackAvatarPath] : [])
+          ...(prepared?.cleanupPaths ?? [])
         ]
         if (cleanupPaths.length) {
           await Promise.allSettled(cleanupPaths.map((targetPath) => fs.promises.rm(targetPath, { force: true })))

@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { FileClock, KeyRound, ShieldCheck, ShieldX, SquareTerminal, UserRoundPen } from 'lucide-react'
+import { FileClock, KeyRound, ShieldCheck, ShieldX, SquareTerminal, Trash2, UserRoundPen } from 'lucide-react'
 import { GlassPanel } from '../common/glasspanel'
 import { CheckResultDialog } from '../accounts/checkresultdialog'
 import { useAccountStore } from '../../stores/accountstore'
@@ -7,7 +7,7 @@ import { useProxyPoolStore } from '../../stores/proxypoolstore'
 import { useUIStore } from '../../stores/uistore'
 import { useBatchCreateStore } from '../../stores/batchcreatestore'
 import { useOtherToolsStore } from '../../stores/othertoolsstore'
-import type { CheckLogEntry, CheckLogLevel, OtherToolsSniperListenerLogEntry, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationProgressState, ProxyCheckLogEntry, TwoFactorAction, TwoFactorLogEntry, TwoFactorProgressState } from '../../types'
+import type { CheckLogEntry, CheckLogLevel, OtherToolsSniperListenerLogEntry, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationProgressState, ProxyCheckLogEntry, SessionManagerLogEntry, SessionManagerProgressState, TwoFactorAction, TwoFactorLogEntry, TwoFactorProgressState } from '../../types'
 import { isGeoRestrictedError } from '../../lib/ui-text'
 
 function formatLogTimestamp(value: string) {
@@ -61,6 +61,10 @@ function getProxyLogLineClass(log: ProxyCheckLogEntry) {
 }
 
 function getSniperLogLineClass(log: OtherToolsSniperListenerLogEntry) {
+  return getLevelClass(log.level)
+}
+
+function getSessionCleanupLineClass(log: SessionManagerLogEntry) {
   return getLevelClass(log.level)
 }
 
@@ -391,6 +395,91 @@ function ProfileSummary({ state, scrollContainerRef, onScroll }: { state: Profil
   )
 }
 
+function CleanupSummary({ scrollContainerRef, onScroll }: { scrollContainerRef: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
+  const [state, setState] = useState<SessionManagerProgressState>({
+    running: false,
+    action: null,
+    total: 0,
+    completed: 0,
+    successCount: 0,
+    failedCount: 0,
+    currentAccountId: null,
+    currentPhone: null,
+    logs: [],
+    lastUpdatedAt: null
+  })
+
+  useEffect(() => {
+    if (!window.desktopSessionManager?.getState || !window.desktopSessionManager?.onProgress) return
+
+    void window.desktopSessionManager.getState().then(setState).catch(() => undefined)
+    return window.desktopSessionManager.onProgress((nextState) => {
+      setState(nextState)
+    })
+  }, [])
+
+  return (
+    <GlassPanel className="min-h-[520px] bg-card p-0">
+      <div className="border-b border-white/5 px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-medium text-white"><Trash2 size={16} className="text-violet-300" /><span>账号清理日志</span></div>
+            <div className="mt-1 text-xs text-textMuted">从账号管理操作菜单启动后，会自动跳到这里显示删除过程。</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void window.desktopSessionManager?.clearLogs?.().then(setState).catch(() => undefined)}
+            className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]"
+          >
+            清空日志
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 border-b border-white/5 px-5 py-4 md:grid-cols-4">
+        <div className="rounded-[14px] bg-panel px-4 py-4">
+          <div className="text-xs tracking-[0.16em] text-textMuted">当前进度</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{state.completed} / {state.total}</div>
+        </div>
+        <div className="rounded-[14px] bg-panel px-4 py-4">
+          <div className="text-xs tracking-[0.16em] text-emerald-300">成功</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{state.successCount}</div>
+        </div>
+        <div className="rounded-[14px] bg-panel px-4 py-4">
+          <div className="text-xs tracking-[0.16em] text-rose-300">失败</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{state.failedCount}</div>
+        </div>
+        <div className="rounded-[14px] bg-panel px-4 py-4">
+          <div className="text-xs tracking-[0.16em] text-violet-300">状态</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{state.running ? '执行中' : '已结束'}</div>
+        </div>
+      </div>
+
+      <div className="border-b border-white/5 px-5 py-4">
+        <div className="rounded-[14px] bg-panel px-4 py-4 text-sm text-textMuted">
+          <div className="flex flex-wrap items-center gap-3">
+            <span>当前账号：<span className="text-white">{state.currentPhone || '等待中'}</span></span>
+          </div>
+          <div className="mt-3 rounded-[12px] bg-white/[0.03] px-3 py-3">
+            清理过程会按账号逐个记录，聊天、群组频道、联系人分开统计。
+          </div>
+        </div>
+      </div>
+
+      <div ref={scrollContainerRef as RefObject<HTMLDivElement>} onScroll={onScroll} className="max-h-[560px] overflow-y-auto px-5 py-4 select-text">
+        {state.logs.length === 0 ? (
+          <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center text-textMuted">
+            <Trash2 size={24} className="text-violet-300" />
+            <div className="text-base font-medium text-white">暂无账号清理日志</div>
+          </div>
+        ) : (
+          <IncrementalLogLines logs={state.logs} lineClassResolver={getSessionCleanupLineClass} />
+        )}
+      </div>
+    </GlassPanel>
+  )
+}
+
 function BatchCreateSummary({ scrollContainerRef, onScroll }: { scrollContainerRef: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
   const running = useBatchCreateStore((state) => state.running)
   const stopping = useBatchCreateStore((state) => state.stopping)
@@ -637,15 +726,26 @@ export default memo(function LogsView() {
 
   const otherToolsSummaryLogs = useOtherToolsStore((state) => state.sniperSummary?.logs.length ?? 0)
   const otherToolsListenerLogs = useOtherToolsStore((state) => state.listenerState?.logs.length ?? 0)
+  const [cleanupLogCount, setCleanupLogCount] = useState(0)
+
+  useEffect(() => {
+    if (logsContext !== 'accounts-cleanup' || !window.desktopSessionManager?.getState || !window.desktopSessionManager?.onProgress) return
+
+    void window.desktopSessionManager.getState().then((state) => setCleanupLogCount(state.logs.length)).catch(() => undefined)
+    return window.desktopSessionManager.onProgress((state) => {
+      setCleanupLogCount(state.logs.length)
+    })
+  }, [logsContext])
 
   const activeLogCount = useMemo(() => {
     if (logsContext === 'accounts') return checkLogs.length
     if (logsContext === 'accounts-two-factor') return twoFactorState.logs.length
     if (logsContext === 'accounts-profile') return profileOperationState.logs.length
+    if (logsContext === 'accounts-cleanup') return cleanupLogCount
     if (logsContext === 'batch-create') return batchCreateLogs.length
     if (logsContext === 'other-tools-sniper') return otherToolsSummaryLogs + otherToolsListenerLogs
     return 0
-  }, [batchCreateLogs.length, checkLogs.length, logsContext, otherToolsListenerLogs, otherToolsSummaryLogs, profileOperationState.logs.length, twoFactorState.logs.length])
+  }, [batchCreateLogs.length, checkLogs.length, cleanupLogCount, logsContext, otherToolsListenerLogs, otherToolsSummaryLogs, profileOperationState.logs.length, twoFactorState.logs.length])
 
   useEffect(() => {
     const element = scrollContainerRef.current
@@ -671,6 +771,10 @@ export default memo(function LogsView() {
 
   if (logsContext === 'accounts-profile') {
     return <ProfileSummary state={profileOperationState} scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
+  }
+
+  if (logsContext === 'accounts-cleanup') {
+    return <CleanupSummary scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
   }
 
   if (logsContext === 'batch-create') {

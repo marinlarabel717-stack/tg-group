@@ -33,6 +33,13 @@ function readAccountLabel(account: AccountRecord) {
   return `账号#${account.id}`
 }
 
+function formatLogTime(value?: string | null) {
+  if (!value) return '--:--:--'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '--:--:--'
+  return date.toLocaleTimeString('zh-CN', { hour12: false })
+}
+
 function checkboxClass() {
   return 'h-4 w-4 rounded border-none bg-slate-950/50 accent-blue-500'
 }
@@ -653,17 +660,27 @@ const LogsWorkbench = memo(function LogsWorkbench() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          {logs.length > 0 ? logs.map((log) => {
-            const tone = log.level === 'error' ? 'text-rose-300' : log.level === 'warning' ? 'text-amber-200' : log.level === 'success' ? 'text-emerald-300' : 'text-slate-200'
-            return (
-              <div key={log.id} className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-3">
-                <div className="text-xs text-slate-400">[{formatDateTime(log.createdAt)}] [{log.accountPhone || '--'}]</div>
-                <div className={`mt-2 text-sm leading-6 ${tone}`}>{log.message}</div>
+        <div className="overflow-hidden rounded-[16px] border border-white/[0.06] bg-black/[0.08]">
+          {logs.length > 0 ? (
+            <div className="min-w-[760px]">
+              <div className="grid grid-cols-[120px_200px_minmax(320px,1fr)] border-b border-white/[0.06] bg-white/[0.03] px-4 py-3 text-xs uppercase tracking-[0.14em] text-textMuted">
+                <div>时间戳</div>
+                <div>手机号</div>
+                <div>当前进度</div>
               </div>
-            )
-          }) : (
-            <div className="rounded-[14px] border border-white/[0.06] bg-black/[0.08] px-4 py-8 text-center text-sm text-textMuted">
+              {logs.map((log) => {
+                const tone = log.level === 'error' ? 'pr-3 text-rose-300' : log.level === 'warning' ? 'pr-3 text-amber-200' : log.level === 'success' ? 'pr-3 text-emerald-300' : 'pr-3 text-slate-200'
+                return (
+                  <div key={log.id} className="grid grid-cols-[120px_200px_minmax(320px,1fr)] border-b border-white/[0.06] px-4 py-3 text-sm text-slate-200 transition hover:bg-white/[0.03]">
+                    <div className="pr-3 text-textMuted">{formatLogTime(log.createdAt)}</div>
+                    <div className="pr-3 text-white">{log.accountPhone || '--'}</div>
+                    <div className={tone}>{log.message}</div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="px-4 py-12 text-center text-sm text-textMuted">
               还没有执行日志。
             </div>
           )}
