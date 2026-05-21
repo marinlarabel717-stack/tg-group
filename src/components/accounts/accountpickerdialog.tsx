@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
-import type { AccountRecord, AccountStatus } from '../../types'
+import type { AccountListReauthorizeFilter, AccountRecord, AccountStatus } from '../../types'
 import type { AccountStatusFilter } from '../../stores/accountstore'
 import { AccountSummaryCards } from './accountsummarycards'
 import { StatusBadge } from './statusbadge'
@@ -158,6 +158,21 @@ function matchesPresenceFilter(hasValue: boolean, filter: AccountPickerPresenceF
   return true
 }
 
+function matchesReauthorizeFilter(account: AccountRecord, filter: AccountListReauthorizeFilter) {
+  if (filter === 'all') return true
+
+  const lastStatus = typeof account.profile?.reauthorize_last_status === 'string'
+    ? account.profile.reauthorize_last_status.trim()
+    : ''
+  const hasHistoricalSuccess = Boolean(account.profile?.reauthorize_at)
+
+  if (filter === 'success') {
+    return lastStatus === 'success' || (hasHistoricalSuccess && !lastStatus)
+  }
+
+  return ['password_mismatch', 'session_expired', 'failed'].includes(lastStatus)
+}
+
 export const AccountPickerDialog = memo(function AccountPickerDialog({
   open,
   onClose,
@@ -182,6 +197,7 @@ export const AccountPickerDialog = memo(function AccountPickerDialog({
   const [accountAvatarFilter, setAccountAvatarFilter] = useState<AccountPickerPresenceFilter>('all')
   const [accountTaskFilter, setAccountTaskFilter] = useState<AccountPickerPresenceFilter>('all')
   const [accountUsernameFilter, setAccountUsernameFilter] = useState<AccountPickerPresenceFilter>('all')
+  const [accountReauthorizeFilter, setAccountReauthorizeFilter] = useState<AccountListReauthorizeFilter>('all')
   const [rangeMenuOpen, setRangeMenuOpen] = useState(false)
   const [rangeStart, setRangeStart] = useState('1')
   const [rangeEnd, setRangeEnd] = useState('20')
@@ -197,6 +213,7 @@ export const AccountPickerDialog = memo(function AccountPickerDialog({
       setAccountAvatarFilter('all')
       setAccountTaskFilter('all')
       setAccountUsernameFilter('all')
+      setAccountReauthorizeFilter('all')
       setRangeMenuOpen(false)
       setRangeStart('1')
       setRangeEnd('20')
@@ -231,9 +248,10 @@ export const AccountPickerDialog = memo(function AccountPickerDialog({
       if (!matchesPresenceFilter(hasAvatar(account), accountAvatarFilter)) return false
       if (!matchesPresenceFilter(busyMeta.busy, accountTaskFilter)) return false
       if (!matchesPresenceFilter(hasUsername(account), accountUsernameFilter)) return false
+      if (!matchesReauthorizeFilter(account, accountReauthorizeFilter)) return false
       return true
     }),
-    [accountAvatarFilter, accountProxyFilter, accountTaskFilter, accountTwoFactorFilter, accountUsernameFilter, basePickerAccounts, busyMetaById]
+    [accountAvatarFilter, accountProxyFilter, accountReauthorizeFilter, accountTaskFilter, accountTwoFactorFilter, accountUsernameFilter, basePickerAccounts, busyMetaById]
   )
 
   const filteredAccounts = useMemo(
@@ -327,6 +345,13 @@ export const AccountPickerDialog = memo(function AccountPickerDialog({
     () => [
       { label: '有', value: 'has' },
       { label: '无', value: 'none' }
+    ],
+    []
+  )
+  const pickerReauthorizeOptions = useMemo(
+    () => [
+      { label: '成功', value: 'success' },
+      { label: '失败', value: 'failed' }
     ],
     []
   )
@@ -424,10 +449,12 @@ export const AccountPickerDialog = memo(function AccountPickerDialog({
               avatarFilter={accountAvatarFilter}
               taskFilter={accountTaskFilter}
               usernameFilter={accountUsernameFilter}
+              reauthorizeFilter={accountReauthorizeFilter}
               countries={pickerCountries}
               statuses={pickerStatuses}
               proxies={pickerProxies}
               presences={pickerPresenceOptions}
+              reauthorizeOptions={pickerReauthorizeOptions}
               onSearchChange={setAccountKeyword}
               onCountryChange={setAccountCountryFilter}
               onStatusChange={(value) => setAccountStatusFilter((value || 'all') as AccountPickerStatusFilter)}
@@ -436,6 +463,7 @@ export const AccountPickerDialog = memo(function AccountPickerDialog({
               onAvatarChange={(value) => setAccountAvatarFilter((value || 'all') as AccountPickerPresenceFilter)}
               onTaskChange={(value) => setAccountTaskFilter((value || 'all') as AccountPickerPresenceFilter)}
               onUsernameChange={(value) => setAccountUsernameFilter((value || 'all') as AccountPickerPresenceFilter)}
+              onReauthorizeChange={(value) => setAccountReauthorizeFilter((value || 'all') as AccountListReauthorizeFilter)}
               onRefresh={() => {
                 setAccountKeyword('')
                 setAccountCountryFilter('')
@@ -445,6 +473,7 @@ export const AccountPickerDialog = memo(function AccountPickerDialog({
                 setAccountAvatarFilter('all')
                 setAccountTaskFilter('all')
                 setAccountUsernameFilter('all')
+                setAccountReauthorizeFilter('all')
               }}
             />
           </div>

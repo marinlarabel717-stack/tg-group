@@ -4,6 +4,7 @@ import { GlassPanel } from '../components/common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_TAB_CLASS } from '../components/common/settings-ui'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from '../components/accounts/resultdialog'
 import { AccountPickerDialog } from '../components/accounts/accountpickerdialog'
+import { SessionManagerView } from '../components/session-manager/sessionmanagerview'
 import { formatAccountStatus } from '../lib/ui-text'
 import { useAccountStore } from '../stores/accountstore'
 import { useDirectMessageStore } from '../stores/directmessagestore'
@@ -20,7 +21,7 @@ import type {
   GroupCollectorTaskStatus
 } from '../types'
 
-type CollectorTabKey = 'groups' | 'channels' | 'keywords' | 'logs'
+type CollectorTabKey = 'groups' | 'channels' | 'keywords' | 'sessions' | 'logs'
 type CollectorSourceType = 'group' | 'channel'
 
 type GroupSourceKind = 'username' | 'invite'
@@ -83,6 +84,7 @@ const tabs: Array<{ key: CollectorTabKey; label: string; icon: typeof FolderSear
   { key: 'groups', label: '采集群组', icon: FolderSearch2 },
   { key: 'channels', label: '采集频道', icon: RadioTower },
   { key: 'keywords', label: '采集关键词', icon: Hash },
+  { key: 'sessions', label: '会话管理', icon: Search },
   { key: 'logs', label: '采集日志', icon: Clock3 }
 ]
 
@@ -1060,6 +1062,7 @@ export default function SessionManagerModule() {
     if (activeTab === 'groups') return groupTabContent
     if (activeTab === 'channels') return channelTabContent
     if (activeTab === 'keywords') return <PlaceholderTab title="采集关键词" description="关键词采集下一轮再接，后面按指定来源 + 关键词命中消息发送者来做。" />
+    if (activeTab === 'sessions') return <SessionManagerView />
     return logsTabContent
   }, [activeTab, channelTabContent, groupTabContent, logsTabContent])
 

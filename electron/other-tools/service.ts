@@ -220,6 +220,7 @@ interface ActiveSniperListenerTask {
   seenMessageKeys: Set<string>
   handledCandidateKeys: Set<string>
   recheckCandidateKeys: Set<string>
+  abortControllers: Set<AbortController>
 }
 
 function normalizeCandidate(raw: string): NormalizedCandidate {
@@ -810,16 +811,17 @@ async function sendInitialPostToChannel(client: TelegramClient, entity: unknown,
 
 function readRequiredWaitSeconds(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
-  const explicitWait = message.match(/A wait of (\d+) seconds is required/i)
-  if (explicitWait?.[1]) {
-    const seconds = Number(explicitWait[1])
-    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
-  }
-
-  const floodWait = message.match(/FLOOD_WAIT_(\d+)/i)
-  if (floodWait?.[1]) {
-    const seconds = Number(floodWait[1])
-    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  for (const pattern of [
+    /A wait of (\d+) seconds is required/i,
+    /FLOOD_WAIT_?(\d+)/i,
+    /SLOWMODE_WAIT_?(\d+)/i,
+    /FloodWait(?:Error)?:?[^\d]*(\d+)s?/i,
+    /retry after[^\d]*(\d+)\s*seconds?/i
+  ]) {
+    const matched = message.match(pattern)
+    if (!matched?.[1]) continue
+    const seconds = Number(matched[1])
+    if (Number.isFinite(seconds) && seconds > 0) return seconds
   }
 
   return null
@@ -843,6 +845,7 @@ function formatSniperRuntimeError(error: unknown) {
     return `这个账号被 Telegram 限流了，请 ${waitText} 后再试。`
   }
   if (/AUTH_KEY_DUPLICATED/i.test(message)) return '这个账号掉线了：同一个登录在别处占用了连接，当前这里不能继续用。'
+  if (/TELETHON_SNIPER_ABORTED/i.test(message)) return '当前抢注链路已被强制停止。'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(message)) return '这个账号登录已经失效了，需要重新登录。'
   if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN/i.test(message)) return '这个账号已经被封了，不能继续用。'
   if (/FROZEN|USER_DEACTIVATED|INPUT_FETCH_ERROR/i.test(message)) return '这个账号已经冻结了，不能继续用。'
@@ -1243,6 +1246,10 @@ export class OtherToolsService {
 
   private async destroySniperListenerTask(task: ActiveSniperListenerTask | null) {
     if (!task) return
+    for (const controller of Array.from(task.abortControllers)) {
+      controller.abort()
+    }
+    task.abortControllers.clear()
     const scanClient = task.scanClient
     const claimClient = task.claimClient
     const createCarrierClient = task.createCarrierClient
@@ -1433,7 +1440,8 @@ export class OtherToolsService {
       subscribeClients: new Map(),
       seenMessageKeys: new Set(),
       handledCandidateKeys: new Set(),
-      recheckCandidateKeys: new Set()
+      recheckCandidateKeys: new Set(),
+      abortControllers: new Set()
     }
     this.sniperListenerTask = task
     this.emitSniperListenerState(task)
@@ -1448,15 +1456,26 @@ export class OtherToolsService {
           throw new Error('TELETHON_SNIPER_SERVICE_UNAVAILABLE')
         }
 
+        const runAbortable = async <T>(runner: (signal: AbortSignal) => Promise<T>) => {
+          const controller = new AbortController()
+          task.abortControllers.add(controller)
+          try {
+            return await runner(controller.signal)
+          } finally {
+            task.abortControllers.delete(controller)
+          }
+        }
+
         const ensureListenerSourceReady = async (account: AccountRecord, context: 'start' | 'switch') => {
           if (!payload.autoSubscribeSources) return
           let subscribeItems: OtherToolsSourceSubscribeItem[] = []
           try {
-            const result = await this.telethonSniperService.subscribeSources({
+            const result = await runAbortable((signal) => this.telethonSniperService.subscribeSources({
               sessionPath: account.sessionPath,
               sourceRefs,
-              proxy: readCurrentProxyOrThrow(this.proxyPoolService)
-            })
+              proxy: readCurrentProxyOrThrow(this.proxyPoolService),
+              signal
+            }))
             subscribeItems = result.items.map((item) => ({
               id: createId('subscribe-item'),
               accountId: account.id,
@@ -1603,7 +1622,7 @@ export class OtherToolsService {
 
           let scanResult: Awaited<ReturnType<TelethonSniperService['scanSources']>> | null = null
           try {
-            scanResult = await this.telethonSniperService.scanSources({
+            scanResult = await runAbortable((signal) => this.telethonSniperService.scanSources({
               sessionPath: scanAccount.sessionPath,
               sourceRefs,
               sourceMessageLimit: sourceLimit,
@@ -1614,13 +1633,18 @@ export class OtherToolsService {
               recheckCandidateKeys: Array.from(task.recheckCandidateKeys),
               joinChatlists: joinChatlistsOnFirstTick,
               bootstrapExistingMessages: task.tickCount === 1,
-              proxy: readCurrentProxyOrThrow(this.proxyPoolService)
-            })
+              proxy: readCurrentProxyOrThrow(this.proxyPoolService),
+              signal
+            }))
             if (!scanResult) {
               throw new Error('监听扫描这轮没拿到结果。')
             }
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
+            if (/TELETHON_SNIPER_ABORTED/i.test(message)) {
+              task.state.message = '监听任务已强制停止。'
+              break
+            }
             if (/TIMEOUT/i.test(message)) {
               task.state.message = '监听扫描超时，正在自动重连…'
               this.pushSniperListenerLog(task, {
@@ -1744,15 +1768,17 @@ export class OtherToolsService {
                 const proxy = readCurrentProxyOrThrow(this.proxyPoolService)
 
                 if (carrierIndex < poolRefs.length && claimAccount) {
+                  const activeClaimAccount = claimAccount
                   attemptedRole = 'claim'
-                  attemptedAccount = claimAccount
+                  attemptedAccount = activeClaimAccount
                   try {
-                    const poolClaimed = await this.telethonSniperService.claimWithPool({
-                      sessionPath: claimAccount.sessionPath,
+                    const poolClaimed = await runAbortable((signal) => this.telethonSniperService.claimWithPool({
+                      sessionPath: activeClaimAccount.sessionPath,
                       carrierRef: poolRefs[carrierIndex],
                       normalizedCandidate: item.normalized,
-                      proxy
-                    })
+                      proxy,
+                      signal
+                    }))
                     claimed = {
                       ...poolClaimed,
                       createdCarrier: false
@@ -1763,12 +1789,12 @@ export class OtherToolsService {
                     if (isPublicLinkLimitError(error)) {
                       this.pushSniperListenerLog(task, {
                         level: 'warning',
-                        message: `抢注账号 ${readCheckResultTitle(claimAccount)} 的公开链接槽位已经满了，正在切下一个号继续。`,
+                        message: `抢注账号 ${readCheckResultTitle(activeClaimAccount)} 的公开链接槽位已经满了，正在切下一个号继续。`,
                         candidate: item.normalized,
                         sourceRef: item.sourceRef,
                         sourceTitle: item.sourceTitle,
-                        accountId: claimAccount.id,
-                        accountLabel: readCheckResultTitle(claimAccount)
+                        accountId: activeClaimAccount.id,
+                        accountLabel: readCheckResultTitle(activeClaimAccount)
                       })
                       const switched = await switchRoleAccount('claim', '公开链接槽位已满')
                       if (!switched) {
@@ -1779,16 +1805,17 @@ export class OtherToolsService {
                     throw error
                   }
                 } else if (payload.autoCreateCarrier && createCarrierAccount) {
-                  const usedCount = createCarrierSuccessCountByAccount.get(createCarrierAccount.id) ?? 0
+                  const activeCreateCarrierAccount = createCarrierAccount
+                  const usedCount = createCarrierSuccessCountByAccount.get(activeCreateCarrierAccount.id) ?? 0
                   if (usedCount >= MAX_PUBLIC_LINKS_PER_ACCOUNT) {
                     this.pushSniperListenerLog(task, {
                       level: 'warning',
-                      message: `建频道账号 ${readCheckResultTitle(createCarrierAccount)} 在本次任务里已经创建了 ${MAX_PUBLIC_LINKS_PER_ACCOUNT} 个公开链接，正在切下一个号继续。`,
+                      message: `建频道账号 ${readCheckResultTitle(activeCreateCarrierAccount)} 在本次任务里已经创建了 ${MAX_PUBLIC_LINKS_PER_ACCOUNT} 个公开链接，正在切下一个号继续。`,
                       candidate: item.normalized,
                       sourceRef: item.sourceRef,
                       sourceTitle: item.sourceTitle,
-                      accountId: createCarrierAccount.id,
-                      accountLabel: readCheckResultTitle(createCarrierAccount)
+                      accountId: activeCreateCarrierAccount.id,
+                      accountLabel: readCheckResultTitle(activeCreateCarrierAccount)
                     })
                     const switched = await switchRoleAccount('createCarrier', `本次任务已创建满 ${MAX_PUBLIC_LINKS_PER_ACCOUNT} 个公开链接`)
                     if (!switched) {
@@ -1798,39 +1825,40 @@ export class OtherToolsService {
                   }
 
                   attemptedRole = 'createCarrier'
-                  attemptedAccount = createCarrierAccount
+                  attemptedAccount = activeCreateCarrierAccount
                   try {
-                    const createdClaim = await this.telethonSniperService.createCarrierAndClaim({
-                      sessionPath: createCarrierAccount.sessionPath,
+                    const createdClaim = await runAbortable((signal) => this.telethonSniperService.createCarrierAndClaim({
+                      sessionPath: activeCreateCarrierAccount.sessionPath,
                       normalizedCandidate: item.normalized,
-                      accountId: createCarrierAccount.id,
+                      accountId: activeCreateCarrierAccount.id,
                       createdIndex: createdCarrierIndex,
                       createCarrierTitleTemplate: payload.createCarrierTitleTemplate,
                       createCarrierAboutTemplate: payload.createCarrierAboutTemplate,
                       postType: payload.postType,
                       postText: payload.postText,
                       postImageData: payload.postImageData,
-                      proxy
-                    })
+                      proxy,
+                      signal
+                    }))
                     claimed = {
                       ...createdClaim,
                       createdCarrier: true
                     }
                     createdCarrierIndex += 1
-                    claimByAccount = createCarrierAccount
+                    claimByAccount = activeCreateCarrierAccount
                     task.state.createdCarrierCount += 1
-                    createCarrierSuccessCountByAccount.set(createCarrierAccount.id, usedCount + 1)
+                    createCarrierSuccessCountByAccount.set(activeCreateCarrierAccount.id, usedCount + 1)
                     break
                   } catch (error) {
                     if (isPublicLinkLimitError(error)) {
                       this.pushSniperListenerLog(task, {
                         level: 'warning',
-                        message: `建频道账号 ${readCheckResultTitle(createCarrierAccount)} 的公开链接槽位已经满了，正在切下一个号继续。`,
+                        message: `建频道账号 ${readCheckResultTitle(activeCreateCarrierAccount)} 的公开链接槽位已经满了，正在切下一个号继续。`,
                         candidate: item.normalized,
                         sourceRef: item.sourceRef,
                         sourceTitle: item.sourceTitle,
-                        accountId: createCarrierAccount.id,
-                        accountLabel: readCheckResultTitle(createCarrierAccount)
+                        accountId: activeCreateCarrierAccount.id,
+                        accountLabel: readCheckResultTitle(activeCreateCarrierAccount)
                       })
                       const switched = await switchRoleAccount('createCarrier', '公开链接槽位已满')
                       if (!switched) {
@@ -1926,6 +1954,11 @@ export class OtherToolsService {
                 })
               }
             } catch (error) {
+              if (/TELETHON_SNIPER_ABORTED/i.test(error instanceof Error ? error.message : String(error))) {
+                task.cancelled = true
+                task.state.message = '监听任务已强制停止。'
+                break
+              }
               const fatal = isFatalAccountError(error)
               if (fatal) {
                 const fatalAccountId = attemptedAccount?.id ?? null

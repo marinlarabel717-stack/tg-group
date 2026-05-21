@@ -391,6 +391,9 @@ function formatProfileError(error: string) {
   if (upper.includes('PHOTO_INVALID') || upper.includes('IMAGE_PROCESS_FAILED')) {
     return '头像图片格式不对或 Telegram 无法处理这张图片。'
   }
+  if (upper.includes('PROFILE_PHOTO_NOT_APPLIED')) {
+    return 'Telegram 返回成功了，但头像没有真正生效，系统已自动改走兼容头像。'
+  }
   if (upper.includes('DEFAULT_PROFILE_PHOTO_EMOJIS_EMPTY')) {
     return 'Telegram 当前没有返回可用的官方 emoji 头像列表，请稍后再试。'
   }
@@ -659,11 +662,18 @@ export class TelethonProfileService {
         prepared = result.prepared
         let raw = result.raw
         let successMessage: string | null = null
+        const missingAvatarAfterSuccess =
+          raw?.ok
+          && (payload.action === 'random-avatar' || payload.action === 'random-profile')
+          && raw.has_profile_photo === false
 
-        if (!raw?.ok) {
+        if (!raw?.ok || missingAvatarAfterSuccess) {
           lastReason = typeof raw?.reason === 'string' ? raw.reason : ''
+          if (missingAvatarAfterSuccess && !lastReason) {
+            lastReason = 'PROFILE_PHOTO_NOT_APPLIED'
+          }
 
-          if ((payload.action === 'random-avatar' || payload.action === 'random-profile') && isOfficialEmojiMarkupError(lastReason)) {
+          if ((payload.action === 'random-avatar' || payload.action === 'random-profile') && (isOfficialEmojiMarkupError(lastReason) || /PROFILE_PHOTO_NOT_APPLIED/i.test(lastReason))) {
             const fallbackResult = await this.executeEmojiAvatarFallback(account, payload, proxy)
             fallbackAvatarPath = fallbackResult.avatarPath
             raw = fallbackResult.raw

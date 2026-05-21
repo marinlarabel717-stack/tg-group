@@ -7,6 +7,7 @@ interface QueueTask {
   accountId: number
   attempt: number
   mode: 'account-status' | 'account-survival'
+  readyAt?: number
 }
 
 const STATUS_LABELS: Record<AccountCheckResult['status'], string> = {
@@ -147,6 +148,7 @@ export class CheckQueue extends EventEmitter {
   private logSerial = 0
   private currentRunMode: 'account-status' | 'account-survival' = 'account-status'
   private stopRequested = false
+  private wakeTimer: NodeJS.Timeout | null = null
 
   constructor(private readonly engine: AccountCheckEngine, options: CheckQueueOptions = {}) {
     super()
@@ -287,6 +289,10 @@ export class CheckQueue extends EventEmitter {
     this.stopRequested = true
     const removedCount = this.pending.length
     this.pending.length = 0
+    if (this.wakeTimer) {
+      clearTimeout(this.wakeTimer)
+      this.wakeTimer = null
+    }
 
     if (this.active.size > 0) {
       this.appendLog('warning', null, removedCount > 0
@@ -303,17 +309,68 @@ export class CheckQueue extends EventEmitter {
     return this.getState()
   }
 
+  private scheduleWakeForDelayedTasks() {
+    if (this.wakeTimer) {
+      clearTimeout(this.wakeTimer)
+      this.wakeTimer = null
+    }
+
+    const nextReadyAt = this.pending
+      .map((task) => task.readyAt)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+      .sort((left, right) => left - right)[0]
+
+    if (!nextReadyAt) return
+
+    const delayMs = Math.max(0, nextReadyAt - Date.now())
+    this.wakeTimer = setTimeout(() => {
+      this.wakeTimer = null
+      void this.drain()
+    }, delayMs)
+  }
+
+  private readRetryDelayMs(result: AccountCheckResult) {
+    const message = (result.errorMessage || '').trim()
+    if (!message) return 0
+
+    for (const pattern of [
+      /A wait of (\d+) seconds is required/i,
+      /FLOOD_WAIT_?(\d+)/i,
+      /SLOWMODE_WAIT_?(\d+)/i,
+      /FloodWait(?:Error)?:?[^\d]*(\d+)s?/i,
+      /retry after[^\d]*(\d+)\s*seconds?/i
+    ]) {
+      const matched = message.match(pattern)
+      if (!matched?.[1]) continue
+      const seconds = Number(matched[1])
+      if (Number.isFinite(seconds) && seconds > 0) {
+        return Math.min(seconds, 60) * 1000
+      }
+    }
+
+    if (/too many requests|请求过于频繁/i.test(message)) {
+      return 15_000
+    }
+
+    return 0
+  }
+
   private async drain() {
     let activated = false
 
     while (this.active.size < this.options.concurrency && this.pending.length > 0) {
-      const task = this.pending.shift()
+      const nextIndex = this.pending.findIndex((task) => !task.readyAt || task.readyAt <= Date.now())
+      if (nextIndex < 0) break
+
+      const [task] = this.pending.splice(nextIndex, 1)
       if (!task) break
 
       this.active.set(task.accountId, task)
       activated = true
       void this.runTask(task)
     }
+
+    this.scheduleWakeForDelayedTasks()
 
     if (activated || this.state.pendingCount !== this.pending.length || this.state.activeCount !== this.active.size || this.state.running !== (this.pending.length > 0 || this.active.size > 0)) {
       this.syncCounters()
@@ -433,9 +490,23 @@ export class CheckQueue extends EventEmitter {
 
   private handleResult(task: QueueTask, result: AccountCheckResult) {
     if (result.retryable && task.attempt + 1 <= this.options.retryLimit) {
-        const retryTask = { accountId: task.accountId, attempt: task.attempt + 1, mode: task.mode }
+      const retryDelayMs = this.readRetryDelayMs(result)
+      const retryTask = {
+        accountId: task.accountId,
+        attempt: task.attempt + 1,
+        mode: task.mode,
+        ...(retryDelayMs > 0 ? { readyAt: Date.now() + retryDelayMs } : {})
+      }
       this.pending.push(retryTask)
+      if (retryDelayMs > 0) {
+        const phoneLabel = result.phone || `账号#${task.accountId}`
+        this.appendLog('warning', task.accountId, `[${phoneLabel}] 命中限流/等待，已先跳过并延后 ${Math.ceil(retryDelayMs / 1000)} 秒自动重试。`, task.attempt + 1, {
+          phone: result.phone,
+          status: result.status
+        })
+      }
       this.syncCounters()
+      void this.drain()
       return
     }
 

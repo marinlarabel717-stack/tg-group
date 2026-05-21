@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { formatCountryDisplay } from '../lib/ui-text'
-import type { AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload, ProfileOperationProgressState, TwoFactorProgressState } from '../types'
+import type { AccountListReauthorizeFilter, AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload, ProfileOperationProgressState, TwoFactorProgressState } from '../types'
 
 export type AccountStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
 
@@ -865,6 +865,7 @@ export function filterAccounts(accounts: AccountRecord[], filters: {
   search: string
   statusFilter: AccountStatusFilter
   countryFilter: string
+  reauthorizeFilter?: AccountListReauthorizeFilter
 }) {
   const keyword = filters.search.trim().toLowerCase()
 
@@ -885,6 +886,23 @@ export function filterAccounts(accounts: AccountRecord[], filters: {
 
     if (filters.countryFilter && formatCountryDisplay(account.country, account.phone) !== filters.countryFilter) {
       return false
+    }
+
+    const reauthorizeLastStatus = typeof account.profile?.reauthorize_last_status === 'string'
+      ? account.profile.reauthorize_last_status.trim()
+      : ''
+    const hasHistoricalReauthorizeSuccess = Boolean(account.profile?.reauthorize_at)
+
+    if ((filters.reauthorizeFilter ?? 'all') === 'success') {
+      if (reauthorizeLastStatus !== 'success' && !(hasHistoricalReauthorizeSuccess && !reauthorizeLastStatus)) {
+        return false
+      }
+    }
+
+    if ((filters.reauthorizeFilter ?? 'all') === 'failed') {
+      if (!['password_mismatch', 'session_expired', 'failed'].includes(reauthorizeLastStatus)) {
+        return false
+      }
     }
 
     if (!keyword) return true

@@ -399,7 +399,7 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 rows={12}
                 value={linkInput}
                 onChange={(event) => setLinkInput(event.target.value)}
-                placeholder="一行一个，支持 @username / t.me/xxx / t.me/+invite"
+                placeholder="一行一个，支持 @username / t.me/xxx / t.me/+invite / t.me/addlist/xxx"
                 className={`w-full rounded-[16px] px-4 py-4 ${SOFT_PANEL_INPUT_CLASS}`}
               />
               <div className="mt-3 flex flex-wrap gap-2 text-sm text-textMuted">

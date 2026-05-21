@@ -96,15 +96,17 @@ async function ensureAuthorizedClient(
 
 function readRequiredWaitSeconds(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
-  const waitMatched = message.match(/A wait of (\d+) seconds is required/i)
-  if (waitMatched?.[1]) {
-    const seconds = Number(waitMatched[1])
-    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
-  }
-  const floodMatched = message.match(/FLOOD_WAIT_(\d+)/i)
-  if (floodMatched?.[1]) {
-    const seconds = Number(floodMatched[1])
-    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  for (const pattern of [
+    /A wait of (\d+) seconds is required/i,
+    /FLOOD_WAIT_?(\d+)/i,
+    /SLOWMODE_WAIT_?(\d+)/i,
+    /FloodWait(?:Error)?:?[^\d]*(\d+)s?/i,
+    /retry after[^\d]*(\d+)\s*seconds?/i
+  ]) {
+    const matched = message.match(pattern)
+    if (!matched?.[1]) continue
+    const seconds = Number(matched[1])
+    if (Number.isFinite(seconds) && seconds > 0) return seconds
   }
   return null
 }
@@ -146,6 +148,7 @@ function formatInviteError(error: unknown) {
   if (/CHANNEL_PRIVATE/i.test(normalized)) return '无法访问目标群，请确认链接或账号权限'
   if (/CHANNELS_TOO_MUCH/i.test(normalized)) return '当前账号加入的群组太多了'
   if (/INVITE_REQUEST_SENT/i.test(normalized)) return '已提交加群申请，需管理员通过后才能继续邀请'
+  if (/INVITE_NOT_CONFIRMED/i.test(normalized)) return 'Telegram 返回成功了，但目标用户没真正进群，已改成校验失败。建议换双向联系人/管理员账号后重试'
   if (/USERNAME_INVALID/i.test(normalized)) return '用户名格式不正确'
   if (/USERNAME_NOT_OCCUPIED/i.test(normalized)) return '用户名不存在'
   if (/PHONE_NUMBER_INVALID/i.test(normalized)) return '手机号格式不正确'
@@ -218,7 +221,14 @@ async function ensureJoinedGroupEntity(client: TelegramClient, groupRef: ReturnT
       }
     }
 
-    await client.invoke(new Api.messages.ImportChatInvite({ hash: groupRef.value }))
+    try {
+      await client.invoke(new Api.messages.ImportChatInvite({ hash: groupRef.value }))
+    } catch (error) {
+      if (isInviteRequestSentError(error)) {
+        throw error
+      }
+      throw error
+    }
     const joinedInvite = await client.invoke(new Api.messages.CheckChatInvite({ hash: groupRef.value }))
     if ((joinedInvite as { className?: string }).className === 'ChatInviteAlready') {
       return {
@@ -307,6 +317,18 @@ async function inviteToGroup(client: TelegramClient, groupEntity: unknown, item:
         channel: inputChannel,
         users: [resolved.inputUser]
       }))
+      try {
+        await client.invoke(new Api.channels.GetParticipant({
+          channel: inputChannel,
+          participant: resolved.inputUser as never
+        }))
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (/USER_NOT_PARTICIPANT|PARTICIPANT_ID_INVALID|not a member of the specified megagroup or channel|target user is not a member/i.test(message)) {
+          throw new Error('INVITE_NOT_CONFIRMED')
+        }
+        throw error
+      }
       return
     }
 

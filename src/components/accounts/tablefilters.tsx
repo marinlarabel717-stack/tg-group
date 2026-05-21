@@ -16,10 +16,12 @@ interface TableFiltersProps {
   avatarFilter: string
   taskFilter: string
   usernameFilter: string
+  reauthorizeFilter: string
   countries: FilterOption[]
   statuses: FilterOption[]
   proxies: FilterOption[]
   presences: FilterOption[]
+  reauthorizeOptions: FilterOption[]
   onSearchChange: (value: string) => void
   onCountryChange: (value: string) => void
   onStatusChange: (value: string) => void
@@ -28,6 +30,7 @@ interface TableFiltersProps {
   onAvatarChange: (value: string) => void
   onTaskChange: (value: string) => void
   onUsernameChange: (value: string) => void
+  onReauthorizeChange: (value: string) => void
   onRefresh: () => void
 }
 
@@ -64,6 +67,12 @@ function readPresenceSummary(label: string, value: string) {
   return ''
 }
 
+function readReauthorizeSummary(value: string) {
+  if (value === 'success') return '重新授权成功'
+  if (value === 'failed') return '重新授权失败'
+  return ''
+}
+
 export const TableFilters = memo(function TableFilters(props: TableFiltersProps) {
   const [otherFiltersOpen, setOtherFiltersOpen] = useState(false)
   const otherFiltersRef = useRef<HTMLDivElement | null>(null)
@@ -86,9 +95,10 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
       readPresenceSummary('2FA', props.twoFactorFilter),
       readPresenceSummary('头像', props.avatarFilter),
       readPresenceSummary('任务中', props.taskFilter),
-      readPresenceSummary('用户名', props.usernameFilter)
+      readPresenceSummary('用户名', props.usernameFilter),
+      readReauthorizeSummary(props.reauthorizeFilter)
     ].filter(Boolean),
-    [props.avatarFilter, props.taskFilter, props.twoFactorFilter, props.usernameFilter]
+    [props.avatarFilter, props.reauthorizeFilter, props.taskFilter, props.twoFactorFilter, props.usernameFilter]
   )
 
   const presenceRows = [
@@ -115,6 +125,13 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
       label: '用户名',
       value: props.usernameFilter,
       onChange: props.onUsernameChange
+    },
+    {
+      key: 'reauthorize',
+      label: '重新授权',
+      value: props.reauthorizeFilter,
+      onChange: props.onReauthorizeChange,
+      options: props.reauthorizeOptions
     }
   ]
 
@@ -169,6 +186,7 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
                     props.onAvatarChange('all')
                     props.onTaskChange('all')
                     props.onUsernameChange('all')
+                    props.onReauthorizeChange('all')
                   }}
                   className="rounded-[8px] px-2.5 py-1 text-xs text-textMuted transition hover:bg-white/8 hover:text-white"
                 >
@@ -181,29 +199,51 @@ export const TableFilters = memo(function TableFilters(props: TableFiltersProps)
               {presenceRows.map((row) => (
                 <div key={row.key} className="rounded-[12px] bg-panel/70 px-3 py-3">
                   <div className="mb-2 text-sm font-medium text-white">{row.label}</div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => row.onChange('all')}
-                      className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === 'all' ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
-                    >
-                      全部
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => row.onChange('has')}
-                      className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === 'has' ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
-                    >
-                      有
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => row.onChange('none')}
-                      className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === 'none' ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
-                    >
-                      无
-                    </button>
-                  </div>
+                  {'options' in row ? (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => row.onChange('all')}
+                        className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === 'all' ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+                      >
+                        全部
+                      </button>
+                      {(row.options ?? []).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => row.onChange(option.value)}
+                          className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === option.value ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => row.onChange('all')}
+                        className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === 'all' ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+                      >
+                        全部
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => row.onChange('has')}
+                        className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === 'has' ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+                      >
+                        有
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => row.onChange('none')}
+                        className={`rounded-[10px] px-3 py-1.5 text-sm transition ${row.value === 'none' ? 'bg-white text-slate-950' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+                      >
+                        无
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

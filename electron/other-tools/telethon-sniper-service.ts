@@ -70,6 +70,7 @@ interface TelethonSniperScanPayload {
   bootstrapExistingMessages?: boolean
   timeoutSeconds?: number
   proxy?: AccountCheckProxy | null
+  signal?: AbortSignal
 }
 
 export interface TelethonSniperClaimResult {
@@ -93,6 +94,7 @@ interface TelethonSniperSubscribePayload {
   sourceRefs: string[]
   proxy?: AccountCheckProxy | null
   timeoutSeconds?: number
+  signal?: AbortSignal
 }
 
 interface TelethonSniperSubscribeResult {
@@ -105,6 +107,7 @@ interface TelethonSniperClaimWithPoolPayload {
   normalizedCandidate: string
   timeoutSeconds?: number
   proxy?: AccountCheckProxy | null
+  signal?: AbortSignal
 }
 
 interface TelethonSniperCreateCarrierPayload {
@@ -119,6 +122,7 @@ interface TelethonSniperCreateCarrierPayload {
   postImageData: string
   timeoutSeconds?: number
   proxy?: AccountCheckProxy | null
+  signal?: AbortSignal
 }
 
 function resolveScriptPath() {
@@ -162,6 +166,7 @@ function extractUsefulPythonErrorText(text: string) {
 
 function formatTelethonProcessFailure(action: 'scan_sources' | 'claim_with_pool' | 'create_carrier_and_claim' | 'subscribe_sources', error: unknown) {
   const failure = error as ExecFileFailure
+  if ((failure as { name?: unknown })?.name === 'AbortError') return 'TELETHON_SNIPER_ABORTED'
   const stdoutText = readExecText(failure?.stdout)
   const stderrText = readExecText(failure?.stderr)
   const errorMessage = typeof failure?.message === 'string' ? failure.message.trim() : ''
@@ -204,28 +209,28 @@ export class TelethonSniperService {
   async scanSources(payload: TelethonSniperScanPayload) {
     const dynamicTimeout = payload.timeoutSeconds
       ?? Math.min(180, Math.max(35, 20 + (payload.sourceRefs?.length ?? 0) * 4 + Math.ceil((payload.sourceMessageLimit ?? 2) / 5) * 5))
-    return await this.runAction<TelethonSniperScanResult>('scan_sources', payload, Math.max(20, dynamicTimeout))
+    return await this.runAction<TelethonSniperScanResult>('scan_sources', payload, Math.max(20, dynamicTimeout), payload.signal)
   }
 
   async claimWithPool(payload: TelethonSniperClaimWithPoolPayload) {
-    return await this.runAction<TelethonSniperClaimResult>('claim_with_pool', payload, Math.max(20, payload.timeoutSeconds ?? 30))
+    return await this.runAction<TelethonSniperClaimResult>('claim_with_pool', payload, Math.max(20, payload.timeoutSeconds ?? 30), payload.signal)
   }
 
   async createCarrierAndClaim(payload: TelethonSniperCreateCarrierPayload) {
-    return await this.runAction<TelethonSniperClaimResult>('create_carrier_and_claim', payload, Math.max(45, payload.timeoutSeconds ?? 90))
+    return await this.runAction<TelethonSniperClaimResult>('create_carrier_and_claim', payload, Math.max(45, payload.timeoutSeconds ?? 90), payload.signal)
   }
 
   async subscribeSources(payload: TelethonSniperSubscribePayload) {
-    return await this.runAction<TelethonSniperSubscribeResult>('subscribe_sources', payload, Math.max(20, payload.timeoutSeconds ?? 60))
+    return await this.runAction<TelethonSniperSubscribeResult>('subscribe_sources', payload, Math.max(20, payload.timeoutSeconds ?? 60), payload.signal)
   }
 
-  private async runAction<T>(action: 'scan_sources' | 'claim_with_pool' | 'create_carrier_and_claim' | 'subscribe_sources', payload: object, timeoutSeconds: number): Promise<T> {
+  private async runAction<T>(action: 'scan_sources' | 'claim_with_pool' | 'create_carrier_and_claim' | 'subscribe_sources', payload: object, timeoutSeconds: number, signal?: AbortSignal): Promise<T> {
     if (!this.isAvailable()) {
       throw new Error('TELETHON_SNIPER_SERVICE_UNAVAILABLE')
     }
 
     let stdout = ''
-    const payloadFile = await writePayloadFile({ action, ...payload, timeoutSeconds })
+    const payloadFile = await writePayloadFile({ action, ...payload, timeoutSeconds, signal: undefined })
     try {
       const result = await execFileAsync(this.pythonExecutable, [
         this.scriptPath,
@@ -235,10 +240,14 @@ export class TelethonSniperService {
         windowsHide: true,
         timeout: Math.max(timeoutSeconds + 5, 20) * 1000,
         encoding: 'utf8',
-        env: buildTelethonPythonEnv()
+        env: buildTelethonPythonEnv(),
+        signal
       })
       stdout = result.stdout
     } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw new Error('TELETHON_SNIPER_ABORTED')
+      }
       throw new Error(formatTelethonProcessFailure(action, error))
     } finally {
       await fs.promises.unlink(payloadFile).catch(() => undefined)

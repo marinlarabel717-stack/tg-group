@@ -148,6 +148,8 @@ const SendWorkbench = memo(function SendWorkbench() {
   const setWelcomeDelaySeconds = useDirectMessageStore((state) => state.setWelcomeDelaySeconds)
   const randomEmojiEnabled = useDirectMessageStore((state) => state.randomEmojiEnabled)
   const setRandomEmojiEnabled = useDirectMessageStore((state) => state.setRandomEmojiEnabled)
+  const tooManyRequestsStopThreshold = useDirectMessageStore((state) => state.tooManyRequestsStopThreshold)
+  const setTooManyRequestsStopThreshold = useDirectMessageStore((state) => state.setTooManyRequestsStopThreshold)
   const groupConcurrency = useDirectMessageStore((state) => state.groupConcurrency)
   const setGroupConcurrency = useDirectMessageStore((state) => state.setGroupConcurrency)
   const intervalSeconds = useDirectMessageStore((state) => state.intervalSeconds)
@@ -156,6 +158,7 @@ const SendWorkbench = memo(function SendWorkbench() {
   const stopSend = useDirectMessageStore((state) => state.stopSend)
   const sending = useDirectMessageStore((state) => state.sending)
   const stopping = useDirectMessageStore((state) => state.stopping)
+  const previewItems = useDirectMessageStore((state) => state.previewItems)
   const lastActionMessage = useDirectMessageStore((state) => state.lastActionMessage)
 
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
@@ -176,9 +179,15 @@ const SendWorkbench = memo(function SendWorkbench() {
   const invalidTargets = targetSummary.invalid
   const duplicateTargets = targetSummary.duplicate
   const effectiveTargets = targets
+  const exportTargetValues = useMemo(() => {
+    if (previewItems.length > 0) {
+      return Array.from(new Set(previewItems.filter((item) => item.status !== 'sent').map((item) => item.targetValue.trim()).filter(Boolean)))
+    }
+    return effectiveTargets.map((item) => item.value)
+  }, [effectiveTargets, previewItems])
 
   const exportTargetsAsTxt = () => {
-    const content = effectiveTargets.map((item) => item.value).join('\n')
+    const content = exportTargetValues.join('\n')
     if (!content) return
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -190,7 +199,7 @@ const SendWorkbench = memo(function SendWorkbench() {
   }
 
   const copyTargets = async () => {
-    const content = effectiveTargets.map((item) => item.value).join('\n')
+    const content = exportTargetValues.join('\n')
     if (!content) return
     await navigator.clipboard.writeText(content)
   }
@@ -225,6 +234,10 @@ const SendWorkbench = memo(function SendWorkbench() {
                   <input type="number" min={5} max={600} value={intervalSeconds} onChange={(event) => setIntervalSeconds(Number(event.target.value) || 5)} className={COMPACT_INPUT_CLASS} />
                 </ConfigRow>
 
+                <ConfigRow label="请求频繁停号阈值" hint="单个账号在本轮任务里累计触发多少次“请求频繁 / Too Many Requests”后自动停号。">
+                  <input type="number" min={1} max={999} value={tooManyRequestsStopThreshold} onChange={(event) => setTooManyRequestsStopThreshold(Number(event.target.value) || 1)} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+
                 <ConfigRow label="并发线程" hint="默认少一点，稳定优先。">
                   <input type="number" min={1} max={20} value={groupConcurrency} onChange={(event) => setGroupConcurrency(Number(event.target.value) || 1)} className={COMPACT_INPUT_CLASS} />
                 </ConfigRow>
@@ -256,7 +269,7 @@ const SendWorkbench = memo(function SendWorkbench() {
                   </ConfigRow>
                 ) : null}
 
-                <ConfigRow label="自动置顶" hint="发送后把广告消息在当前账号侧置顶。" wide>
+                <ConfigRow label="自动置顶" hint="发送后把当前私聊会话在当前账号侧置顶。" wide>
                   <div className="space-y-3">
                     <label className="inline-flex items-center gap-2 text-sm text-white">
                       <input type="checkbox" checked={pinAfterSendEnabled} onChange={(event) => setPinAfterSendEnabled(event.target.checked)} />

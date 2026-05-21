@@ -71,6 +71,7 @@ function createEmptyProfileOperationState(): ProfileOperationProgressState {
 function createEmptyReauthorizeState(): ReauthorizeProgressState {
   return {
     running: false,
+    concurrency: 1,
     total: 0,
     completed: 0,
     successCount: 0,
@@ -259,6 +260,52 @@ function buildProfileUpdateItemFromOperation(account: ReturnType<AccountReposito
   }
 }
 
+function buildReauthorizeProfileUpdateItem(
+  account: ReturnType<AccountRepository['getByIds']>[number],
+  result: ReauthorizeOperationResultItem,
+  startedAt: string,
+  nextReauthorizePassword: string
+): CheckResultInput {
+  const finishedAt = new Date().toISOString()
+
+  return {
+    id: account.id,
+    status: account.status,
+    phone: account.phone,
+    username: account.username,
+    userId: account.userId,
+    country: account.country,
+    proxyDisplay: account.proxyDisplay ?? null,
+    lastCheckTime: account.lastCheckTime,
+    lastOnlineTime: account.lastOnlineTime,
+    profile: {
+      ...account.profile,
+      twoFA: result.success
+        ? (nextReauthorizePassword || result.matchedPassword || (typeof account.profile?.twoFA === 'string' ? account.profile.twoFA : null))
+        : account.profile?.twoFA ?? null,
+      ...(result.success ? {
+        last_connect_date: startedAt,
+        reauthorize_mode: 'official-code',
+        reauthorize_at: startedAt,
+        reauthorize_deleted_system_messages: Boolean(result.officialMessagesCleared),
+        reauthorize_recovery_email_pattern: result.recoveryEmailPattern ?? null,
+        reauthorize_unconfirmed_recovery_email_pattern: result.unconfirmedRecoveryEmailPattern ?? null,
+        reauthorize_pending_recovery_reset_at: result.pendingRecoveryResetAt ?? null,
+        reauthorize_cancelled_recovery_email: Boolean(result.cancelledRecoveryEmail),
+        reauthorize_declined_recovery_reset: Boolean(result.declinedRecoveryReset),
+        reauthorize_device_model: result.deviceModel ?? null,
+        reauthorize_system_version: result.systemVersion ?? null,
+        reauthorize_app_version: result.appVersion ?? null,
+        reauthorize_lang_code: result.langCode ?? null,
+        reauthorize_system_lang_code: result.systemLangCode ?? null
+      } : {}),
+      reauthorize_last_status: result.status,
+      reauthorize_last_message: result.message,
+      reauthorize_last_finished_at: finishedAt
+    }
+  }
+}
+
 export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   const { getMainWindow, accountRepository, accountImportService, accountStatusService, checkQueue, appSettingsStore, proxyPoolService, telegramWebService, telegramDesktopPremiumService, telegramReauthorizationService, telegramTwoFactorService, telegramProfileService, emitAccountsUpdated, withManagedSessionsWatcherSuspended } = options
   let twoFactorState = createEmptyTwoFactorState()
@@ -268,6 +315,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   let profileOperationStopRequested = false
   let checkStateEmitTimer: NodeJS.Timeout | null = null
   let checkLogsEmitTimer: NodeJS.Timeout | null = null
+  let reauthorizeProgressEmitTimer: NodeJS.Timeout | null = null
   let checkLaunchToken = 0
 
   const flushCheckState = () => {
@@ -295,6 +343,17 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
     const mainWindow = getMainWindow()
     return mainWindow ? dialog.showOpenDialog(mainWindow, dialogOptions) : dialog.showOpenDialog(dialogOptions)
+  }
+
+  const flushReauthorizeProgress = () => {
+    if (reauthorizeProgressEmitTimer) {
+      clearTimeout(reauthorizeProgressEmitTimer)
+      reauthorizeProgressEmitTimer = null
+    }
+
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('accounts:reauthorize-progress', reauthorizeState)
   }
 
   const emitCheckState = (force = false) => {
@@ -343,10 +402,21 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     mainWindow.webContents.send('accounts:two-factor-progress', twoFactorState)
   }
 
-  const emitReauthorizeProgress = () => {
-    const mainWindow = getMainWindow()
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('accounts:reauthorize-progress', reauthorizeState)
+  const emitReauthorizeProgress = (force = false) => {
+    if (force) {
+      flushReauthorizeProgress()
+      return
+    }
+
+    if (!reauthorizeState.running) {
+      flushReauthorizeProgress()
+      return
+    }
+
+    if (reauthorizeProgressEmitTimer) return
+    reauthorizeProgressEmitTimer = setTimeout(() => {
+      flushReauthorizeProgress()
+    }, 120)
   }
 
   const emitProfileOperationProgress = () => {
@@ -458,7 +528,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       total: result.total
     }
   })
-  ipcMain.handle('accounts:list-ids', async (_event, query: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter' | 'sourceFilter' | 'proxyFilter' | 'premiumFilter' | 'twoFactorFilter' | 'avatarFilter' | 'usernameFilter'>) => accountRepository.listIds(query))
+  ipcMain.handle('accounts:list-ids', async (_event, query: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter' | 'sourceFilter' | 'proxyFilter' | 'premiumFilter' | 'twoFactorFilter' | 'avatarFilter' | 'usernameFilter' | 'reauthorizeFilter'>) => accountRepository.listIds(query))
   ipcMain.handle('accounts:get-check-state', () => serializeCheckStateForRenderer(checkQueue.getSummaryState()))
   ipcMain.handle('accounts:get-check-logs', () => checkQueue.getLogs())
   ipcMain.handle('app-settings:get', () => appSettingsStore.get())
@@ -711,8 +781,23 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       throw new Error('没有找到可执行的账号。')
     }
 
+    if (reauthorizeState.running) {
+      throw new Error('当前已经有一个重新授权任务正在执行，请等它完成后再试。')
+    }
+
+    const runtimeConcurrency = Math.max(1, appSettingsStore.get().checkConcurrency)
+    const startedAt = new Date().toISOString()
+    const nextReauthorizePassword = typeof payload.newPassword === 'string' && payload.newPassword.trim()
+      ? payload.newPassword.trim()
+      : ''
+    const results: Array<ReauthorizeOperationResultItem | null> = Array.from({ length: orderedAccounts.length }, () => null)
+    const profileUpdates: CheckResultInput[] = []
+    const queue = orderedAccounts.map((account, index) => ({ account, index }))
+    const workerCount = Math.min(runtimeConcurrency, Math.max(1, queue.length))
+
     reauthorizeState = {
       running: true,
+      concurrency: workerCount,
       total: orderedAccounts.length,
       completed: 0,
       successCount: 0,
@@ -722,24 +807,17 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       logs: [],
       lastUpdatedAt: new Date().toISOString()
     }
-    emitReauthorizeProgress()
+    emitReauthorizeProgress(true)
 
     pushReauthorizeLog({
       accountId: null,
       phone: '',
       level: 'info',
-      message: `已开始执行 ${orderedAccounts.length} 个账号的重新授权任务。`
+      message: `已开始执行 ${orderedAccounts.length} 个账号的重新授权任务，当前按 ${reauthorizeState.concurrency} 个并发执行。`
     })
 
-    const results: ReauthorizeOperationResultItem[] = []
-    const profileUpdates: CheckResultInput[] = []
-    const startedAt = new Date().toISOString()
-    const nextReauthorizePassword = typeof payload.newPassword === 'string' && payload.newPassword.trim()
-      ? payload.newPassword.trim()
-      : ''
-
     try {
-      for (const account of orderedAccounts) {
+      const runAccount = async (account: typeof orderedAccounts[number], index: number) => {
         updateReauthorizeState({
           currentAccountId: account.id,
           currentPhone: account.phone || account.username || `账号#${account.id}`
@@ -761,7 +839,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
             })
           }
         })
-        results.push(item)
+
+        results[index] = item
+        profileUpdates.push(buildReauthorizeProfileUpdateItem(account, item, startedAt, nextReauthorizePassword))
         bumpReauthorizeCounters(item.success ? 'success' : 'failed')
 
         if (!item.success) {
@@ -771,38 +851,8 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
             level: item.status === 'password_mismatch' || item.status === 'session_expired' ? 'warning' : 'error',
             message: `账号处理结束：${item.message}`
           })
-          continue
+          return
         }
-
-        profileUpdates.push({
-          id: account.id,
-          status: account.status,
-          phone: account.phone,
-          username: account.username,
-          userId: account.userId,
-          country: account.country,
-          proxyDisplay: account.proxyDisplay ?? null,
-          lastCheckTime: account.lastCheckTime,
-          lastOnlineTime: account.lastOnlineTime,
-          profile: {
-            ...account.profile,
-            twoFA: nextReauthorizePassword || item.matchedPassword || (typeof account.profile?.twoFA === 'string' ? account.profile.twoFA : null),
-            last_connect_date: startedAt,
-            reauthorize_mode: 'official-code',
-            reauthorize_at: startedAt,
-            reauthorize_deleted_system_messages: Boolean(item.officialMessagesCleared),
-            reauthorize_recovery_email_pattern: item.recoveryEmailPattern ?? null,
-            reauthorize_unconfirmed_recovery_email_pattern: item.unconfirmedRecoveryEmailPattern ?? null,
-            reauthorize_pending_recovery_reset_at: item.pendingRecoveryResetAt ?? null,
-            reauthorize_cancelled_recovery_email: Boolean(item.cancelledRecoveryEmail),
-            reauthorize_declined_recovery_reset: Boolean(item.declinedRecoveryReset),
-            reauthorize_device_model: item.deviceModel ?? null,
-            reauthorize_system_version: item.systemVersion ?? null,
-            reauthorize_app_version: item.appVersion ?? null,
-            reauthorize_lang_code: item.langCode ?? null,
-            reauthorize_system_lang_code: item.systemLangCode ?? null
-          }
-        })
 
         pushReauthorizeLog({
           accountId: account.id,
@@ -812,29 +862,42 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
         })
       }
 
+      const workers = Array.from({ length: workerCount }, () => (async () => {
+        while (true) {
+          const next = queue.shift()
+          if (!next) {
+            return
+          }
+          await runAccount(next.account, next.index)
+        }
+      })())
+
+      await Promise.all(workers)
+
       if (profileUpdates.length > 0) {
         emitAccountsUpdated(accountRepository.applyCheckResults(profileUpdates))
       }
 
-      const successCount = results.filter((item) => item.success).length
-      const failedCount = results.length - successCount
+      const settledResults = results.filter((item): item is ReauthorizeOperationResultItem => Boolean(item))
+      const successCount = settledResults.filter((item) => item.success).length
+      const failedCount = settledResults.length - successCount
 
       pushReauthorizeLog({
         accountId: null,
         phone: '',
         level: successCount > 0 ? 'success' : 'warning',
         message: successCount > 0
-          ? `重新授权任务完成：共 ${results.length} 个账号，成功 ${successCount} 个，失败 ${failedCount} 个。`
-          : `重新授权任务完成：共 ${results.length} 个账号，全部执行失败。`
+          ? `重新授权任务完成：共 ${settledResults.length} 个账号，成功 ${successCount} 个，失败 ${failedCount} 个。`
+          : `重新授权任务完成：共 ${settledResults.length} 个账号，全部执行失败。`
       })
 
       return {
-        total: results.length,
+        total: settledResults.length,
         successCount,
         failedCount,
-        results,
+        results: settledResults,
         message: successCount > 0
-          ? `本次已完成 ${results.length} 个账号的重新授权，其中成功 ${successCount} 个。`
+          ? `本次已完成 ${settledResults.length} 个账号的重新授权，其中成功 ${successCount} 个。`
           : '本次没有账号重新授权成功。'
       }
     } finally {
@@ -843,6 +906,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
         currentAccountId: null,
         currentPhone: null
       })
+      emitReauthorizeProgress(true)
     }
   }))
 

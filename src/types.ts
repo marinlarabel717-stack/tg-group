@@ -171,6 +171,7 @@ export interface StatusUpdateResult {
 export type AccountListStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
 export type AccountListPremiumFilter = 'all' | 'premium' | 'non-premium'
 export type AccountListPresenceFilter = 'all' | 'has' | 'none'
+export type AccountListReauthorizeFilter = 'all' | 'success' | 'failed'
 
 export interface AccountListQuery {
   search: string
@@ -182,6 +183,7 @@ export interface AccountListQuery {
   twoFactorFilter: AccountListPresenceFilter
   avatarFilter: AccountListPresenceFilter
   usernameFilter: AccountListPresenceFilter
+  reauthorizeFilter: AccountListReauthorizeFilter
   pageIndex: number
   pageSize: number
 }
@@ -316,6 +318,7 @@ export interface ReauthorizeLogEntry {
 
 export interface ReauthorizeProgressState {
   running: boolean
+  concurrency: number
   total: number
   completed: number
   successCount: number
@@ -854,6 +857,7 @@ export interface DirectMessageSendPayload {
   welcomeDelaySeconds?: number
   randomEmojiEnabled?: boolean
   concurrency?: number
+  tooManyRequestsStopThreshold?: number
 }
 
 export interface DirectMessageSendResultItem {
@@ -1064,7 +1068,7 @@ export interface AutoJoinPayloadItem {
   id: string
   raw: string
   normalized: string
-  kind: 'invite' | 'username'
+  kind: 'invite' | 'username' | 'chatlist'
 }
 
 export interface AutoJoinPayload {
@@ -1494,6 +1498,36 @@ export interface DesktopGroupInviteApi {
   onProgress: (callback: (payload: GroupInviteProgressState) => void) => () => void
 }
 
+export type SessionManagerActionKind = 'delete-messages' | 'delete-dialog' | 'clear-history' | 'delete-contact' | 'leave-chat'
+
+export interface SessionManagerActionPayload {
+  action: SessionManagerActionKind
+  accountIds: number[]
+  targetRefs: string[]
+  messageIds?: number[]
+}
+
+export interface SessionManagerActionResultItem {
+  accountId: number
+  accountLabel: string
+  targetRef: string
+  success: boolean
+  message: string
+}
+
+export interface SessionManagerActionResult {
+  action: SessionManagerActionKind
+  total: number
+  successCount: number
+  failedCount: number
+  items: SessionManagerActionResultItem[]
+  message: string
+}
+
+export interface DesktopSessionManagerApi {
+  runAction: (payload: SessionManagerActionPayload) => Promise<SessionManagerActionResult>
+}
+
 export interface DesktopBatchCreateApi {
   start: (payload: BatchCreatePayload) => Promise<BatchCreateTaskResult>
   stop: () => Promise<BatchCreateStopResult>
@@ -1551,6 +1585,7 @@ declare global {
     desktopDirectMessage?: DesktopDirectMessageApi
     desktopAutoJoin?: DesktopAutoJoinApi
     desktopGroupInvite?: DesktopGroupInviteApi
+    desktopSessionManager?: DesktopSessionManagerApi
     desktopBatchCreate?: DesktopBatchCreateApi
     desktopOtherTools?: DesktopOtherToolsApi
     desktopUpdater?: DesktopUpdaterApi

@@ -738,7 +738,7 @@ const ResultDialog = memo(function ResultDialog() {
       open={Boolean(snapshot)}
       onClose={closeCompletionDialog}
       title={snapshot.stopped ? '邀请任务已停止' : '邀请任务已完成'}
-      subtitle={snapshot.groupTitle || '群组成员邀请管理'}
+      subtitle={snapshot.groupTitle || '群组邀请'}
       icon={<CheckCircle2 size={18} />}
       tone={tone}
       maxWidth="max-w-[920px]"

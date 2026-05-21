@@ -213,9 +213,22 @@ function normalizeInviteHash(input: string) {
   return matched?.[1]?.trim() || ''
 }
 
+function normalizeChatlistSlug(input: string) {
+  const matched = input.match(/(?:https?:\/\/)?(?:www\.)?t\.me\/addlist\/([A-Za-z0-9_-]+)/i)
+  return matched?.[1]?.trim() || ''
+}
+
 function normalizeAutoJoinTarget(input: string) {
   const raw = input.trim()
   if (!raw) return null
+
+  const chatlistSlug = normalizeChatlistSlug(raw)
+  if (chatlistSlug) {
+    return {
+      kind: 'chatlist' as const,
+      normalized: `https://t.me/addlist/${chatlistSlug}`
+    }
+  }
 
   const inviteHash = normalizeInviteHash(raw)
   if (inviteHash) {
@@ -228,7 +241,7 @@ function normalizeAutoJoinTarget(input: string) {
   const linkMatched = raw.match(/(?:https?:\/\/)?t\.me\/([^/?#]+)/i)
   const candidate = (linkMatched?.[1] ?? raw).trim()
   if (!candidate) return null
-  if (/^(joinchat|addlist)$/i.test(candidate)) return null
+  if (/^joinchat$/i.test(candidate)) return null
   if (!/^@?[A-Za-z0-9_]{3,}$/.test(candidate)) return null
   return {
     kind: 'username' as const,

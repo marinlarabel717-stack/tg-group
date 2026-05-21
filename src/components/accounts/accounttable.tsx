@@ -22,7 +22,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Activity, ArrowUpDown, ChevronLeft, ChevronRight, CircleAlert, HeartPulse, KeyRound, Loader2, LockKeyhole, Settings2, Shuffle, Sparkles, Star, UserRoundPen, X } from 'lucide-react'
 import * as FlagIcons from 'country-flag-icons/react/3x2'
-import type { AccountListPageResult, AccountRecord, AccountStatus, CheckAction, ProfileOperationAction, ProfileOperationPayload, TwoFactorAction, TwoFactorOperationPayload } from '../../types'
+import type { AccountListPageResult, AccountListReauthorizeFilter, AccountRecord, AccountStatus, CheckAction, ProfileOperationAction, ProfileOperationPayload, TwoFactorAction, TwoFactorOperationPayload } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { StatusBadge } from './statusbadge'
 import { AccountSummaryCards } from './accountsummarycards'
@@ -82,6 +82,7 @@ interface AccountFilterShortcut {
   avatarFilter: PresenceFilter
   taskFilter: PresenceFilter
   usernameFilter: PresenceFilter
+  reauthorizeFilter: AccountListReauthorizeFilter
 }
 
 const ACCOUNT_FILTER_SHORTCUT_STORAGE_KEY = 'tg-group-account-filter-shortcuts-v1'
@@ -142,7 +143,8 @@ function loadAccountFilterShortcuts(): AccountFilterShortcut[] {
         twoFactorFilter: item?.twoFactorFilter === 'has' || item?.twoFactorFilter === 'none' ? item.twoFactorFilter : 'all',
         avatarFilter: item?.avatarFilter === 'has' || item?.avatarFilter === 'none' ? item.avatarFilter : 'all',
         taskFilter: item?.taskFilter === 'has' || item?.taskFilter === 'none' ? item.taskFilter : 'all',
-        usernameFilter: item?.usernameFilter === 'has' || item?.usernameFilter === 'none' ? item.usernameFilter : 'all'
+        usernameFilter: item?.usernameFilter === 'has' || item?.usernameFilter === 'none' ? item.usernameFilter : 'all',
+        reauthorizeFilter: item?.reauthorizeFilter === 'success' || item?.reauthorizeFilter === 'failed' ? item.reauthorizeFilter : 'all'
       }))
       .filter((item) => item.id && item.name)
   } catch {
@@ -434,6 +436,8 @@ function readShortcutSummary(shortcut: AccountFilterShortcut) {
   if (shortcut.avatarFilter !== 'all') parts.push(readPresenceFilterLabel('头像', shortcut.avatarFilter))
   if (shortcut.taskFilter !== 'all') parts.push(readPresenceFilterLabel('任务', shortcut.taskFilter))
   if (shortcut.usernameFilter !== 'all') parts.push(readPresenceFilterLabel('用户名', shortcut.usernameFilter))
+  if (shortcut.reauthorizeFilter === 'success') parts.push('重新授权成功')
+  if (shortcut.reauthorizeFilter === 'failed') parts.push('重新授权失败')
   return parts.length > 0 ? parts.join(' + ') : '全部账号'
 }
 
@@ -660,6 +664,7 @@ export const AccountTable = memo(function AccountTable() {
   const [avatarFilter, setAvatarFilter] = useState<PresenceFilter>('all')
   const [taskFilter, setTaskFilter] = useState<PresenceFilter>('all')
   const [usernameFilter, setUsernameFilter] = useState<PresenceFilter>('all')
+  const [reauthorizeFilter, setReauthorizeFilter] = useState<AccountListReauthorizeFilter>('all')
   const [savedShortcuts, setSavedShortcuts] = useState<AccountFilterShortcut[]>(loadAccountFilterShortcuts)
   const [activeShortcutId, setActiveShortcutId] = useState<string | null>(null)
   const [shortcutDialogOpen, setShortcutDialogOpen] = useState(false)
@@ -672,6 +677,7 @@ export const AccountTable = memo(function AccountTable() {
   const [shortcutAvatarFilter, setShortcutAvatarFilter] = useState<PresenceFilter>('all')
   const [shortcutTaskFilter, setShortcutTaskFilter] = useState<PresenceFilter>('all')
   const [shortcutUsernameFilter, setShortcutUsernameFilter] = useState<PresenceFilter>('all')
+  const [shortcutReauthorizeFilter, setShortcutReauthorizeFilter] = useState<AccountListReauthorizeFilter>('all')
   const [sorting, setSorting] = useState(createDefaultSorting)
   const [pagination, setPagination] = useState(createDefaultPagination)
   const [tableLoading, setTableLoading] = useState(true)
@@ -700,7 +706,7 @@ export const AccountTable = memo(function AccountTable() {
     && taskFilter === 'all'
 
   const baseData = useMemo(
-    () => filterAccounts(accounts, { search: deferredSearch, statusFilter: 'all', countryFilter }),
+    () => filterAccounts(accounts, { search: deferredSearch, statusFilter: 'all', countryFilter, reauthorizeFilter: 'all' }),
     [accounts, deferredSearch, countryFilter]
   )
   const summaryScopedData = useMemo(
@@ -721,8 +727,8 @@ export const AccountTable = memo(function AccountTable() {
     [premiumFilter, summaryScopedData]
   )
   const data = useMemo(
-    () => filterAccounts(scopedData, { search: '', statusFilter, countryFilter: '' }),
-    [scopedData, statusFilter]
+    () => filterAccounts(scopedData, { search: '', statusFilter, countryFilter: '', reauthorizeFilter }),
+    [reauthorizeFilter, scopedData, statusFilter]
   )
 
   useEffect(() => {
@@ -746,6 +752,7 @@ export const AccountTable = memo(function AccountTable() {
       twoFactorFilter,
       avatarFilter,
       usernameFilter,
+      reauthorizeFilter,
       pageIndex: pagination.pageIndex,
       pageSize: pagination.pageSize
     }).then((result) => {
@@ -759,7 +766,7 @@ export const AccountTable = memo(function AccountTable() {
         setServerPageLoading(false)
       }
     })
-  }, [avatarFilter, canUseServerPage, countryFilter, deferredSearch, pagination.pageIndex, pagination.pageSize, premiumFilter, proxyFilter, sourceFilter, statusFilter, twoFactorFilter, usernameFilter])
+  }, [avatarFilter, canUseServerPage, countryFilter, deferredSearch, pagination.pageIndex, pagination.pageSize, premiumFilter, proxyFilter, reauthorizeFilter, sourceFilter, statusFilter, twoFactorFilter, usernameFilter])
 
   const tableData = canUseServerPage ? serverPage.accounts : data
   const visibleTotalCount = canUseServerPage ? serverPage.total : data.length
@@ -779,7 +786,7 @@ export const AccountTable = memo(function AccountTable() {
 
   useEffect(() => {
     setPagination((previous) => ({ ...previous, pageIndex: 0 }))
-  }, [deferredSearch, statusFilter, countryFilter, sourceFilter, proxyFilter, premiumFilter, twoFactorFilter, avatarFilter, taskFilter, usernameFilter])
+  }, [avatarFilter, countryFilter, deferredSearch, premiumFilter, proxyFilter, reauthorizeFilter, sourceFilter, statusFilter, taskFilter, twoFactorFilter, usernameFilter])
 
   useEffect(() => {
     saveAccountFilterShortcuts(savedShortcuts)
@@ -801,11 +808,12 @@ export const AccountTable = memo(function AccountTable() {
       && activeShortcut.avatarFilter === avatarFilter
       && activeShortcut.taskFilter === taskFilter
       && activeShortcut.usernameFilter === usernameFilter
+      && activeShortcut.reauthorizeFilter === reauthorizeFilter
 
     if (!matched) {
       setActiveShortcutId(null)
     }
-  }, [activeShortcutId, avatarFilter, countryFilter, premiumFilter, proxyFilter, savedShortcuts, statusFilter, taskFilter, twoFactorFilter, usernameFilter])
+  }, [activeShortcutId, avatarFilter, countryFilter, premiumFilter, proxyFilter, reauthorizeFilter, savedShortcuts, statusFilter, taskFilter, twoFactorFilter, usernameFilter])
 
   useEffect(() => {
     setTableLoading(true)
@@ -1185,6 +1193,13 @@ export const AccountTable = memo(function AccountTable() {
     ],
     []
   )
+  const reauthorizeOptions = useMemo(
+    () => [
+      { label: '成功', value: 'success' },
+      { label: '失败', value: 'failed' }
+    ],
+    []
+  )
 
   const selectedCount = selectedIds.length
   const totalCount = visibleTotalCount
@@ -1305,12 +1320,13 @@ export const AccountTable = memo(function AccountTable() {
         premiumFilter,
         twoFactorFilter,
         avatarFilter,
-        usernameFilter
+        usernameFilter,
+        reauthorizeFilter
       })
     }
 
     return table.getSortedRowModel().rows.map((row) => row.original.id)
-  }, [avatarFilter, canUseServerPage, countryFilter, deferredSearch, premiumFilter, proxyFilter, sourceFilter, statusFilter, table, twoFactorFilter, usernameFilter])
+  }, [avatarFilter, canUseServerPage, countryFilter, deferredSearch, premiumFilter, proxyFilter, reauthorizeFilter, sourceFilter, statusFilter, table, twoFactorFilter, usernameFilter])
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)
@@ -1326,8 +1342,9 @@ export const AccountTable = memo(function AccountTable() {
     setShortcutAvatarFilter(avatarFilter)
     setShortcutTaskFilter(taskFilter)
     setShortcutUsernameFilter(usernameFilter)
+    setShortcutReauthorizeFilter(reauthorizeFilter)
     setShortcutDialogOpen(true)
-  }, [avatarFilter, countryFilter, premiumFilter, proxyFilter, statusFilter, taskFilter, twoFactorFilter, usernameFilter])
+  }, [avatarFilter, countryFilter, premiumFilter, proxyFilter, reauthorizeFilter, statusFilter, taskFilter, twoFactorFilter, usernameFilter])
 
   const handleSaveShortcut = useCallback(() => {
     const name = shortcutName.trim()
@@ -1346,7 +1363,8 @@ export const AccountTable = memo(function AccountTable() {
       twoFactorFilter: shortcutTwoFactorFilter,
       avatarFilter: shortcutAvatarFilter,
       taskFilter: shortcutTaskFilter,
-      usernameFilter: shortcutUsernameFilter
+      usernameFilter: shortcutUsernameFilter,
+      reauthorizeFilter: shortcutReauthorizeFilter
     }
 
     setSavedShortcuts((previous) => [...previous, nextShortcut])
@@ -1360,9 +1378,10 @@ export const AccountTable = memo(function AccountTable() {
     setAvatarFilter(nextShortcut.avatarFilter)
     setTaskFilter(nextShortcut.taskFilter)
     setUsernameFilter(nextShortcut.usernameFilter)
+    setReauthorizeFilter(nextShortcut.reauthorizeFilter)
     setShortcutDialogOpen(false)
     setBulkActionHint(`已把“${name}”固定到顶部。`)
-  }, [setCountryFilter, setSearch, setStatusFilter, shortcutAvatarFilter, shortcutCountryFilter, shortcutName, shortcutPremiumFilter, shortcutProxyFilter, shortcutStatusFilter, shortcutTaskFilter, shortcutTwoFactorFilter, shortcutUsernameFilter])
+  }, [setCountryFilter, setSearch, setStatusFilter, shortcutAvatarFilter, shortcutCountryFilter, shortcutName, shortcutPremiumFilter, shortcutProxyFilter, shortcutReauthorizeFilter, shortcutStatusFilter, shortcutTaskFilter, shortcutTwoFactorFilter, shortcutUsernameFilter])
 
   const handleApplyShortcut = useCallback((shortcut: AccountFilterShortcut) => {
     setActiveShortcutId(shortcut.id)
@@ -1375,6 +1394,7 @@ export const AccountTable = memo(function AccountTable() {
     setAvatarFilter(shortcut.avatarFilter)
     setTaskFilter(shortcut.taskFilter)
     setUsernameFilter(shortcut.usernameFilter)
+    setReauthorizeFilter(shortcut.reauthorizeFilter)
     setPagination(createDefaultPagination())
     setSelectedIds([])
   }, [setCountryFilter, setSearch, setSelectedIds, setStatusFilter])
@@ -1721,10 +1741,12 @@ export const AccountTable = memo(function AccountTable() {
         avatarFilter={avatarFilter}
         taskFilter={taskFilter}
         usernameFilter={usernameFilter}
+        reauthorizeFilter={reauthorizeFilter}
         countries={countries}
         statuses={statuses}
         proxies={proxies}
         presences={presenceOptions}
+        reauthorizeOptions={reauthorizeOptions}
         onSearchChange={handleSearchChange}
         onCountryChange={setCountryFilter}
         onStatusChange={(value) => setStatusFilter((value || 'all') as AccountStatusFilter)}
@@ -1733,6 +1755,7 @@ export const AccountTable = memo(function AccountTable() {
         onAvatarChange={(value) => setAvatarFilter((value || 'all') as PresenceFilter)}
         onTaskChange={(value) => setTaskFilter((value || 'all') as PresenceFilter)}
         onUsernameChange={(value) => setUsernameFilter((value || 'all') as PresenceFilter)}
+        onReauthorizeChange={(value) => setReauthorizeFilter((value || 'all') as AccountListReauthorizeFilter)}
         onRefresh={handleRefresh}
       />
 
@@ -2045,10 +2068,15 @@ export const AccountTable = memo(function AccountTable() {
                   <option value="all">用户名（不限）</option>
                   {presenceOptions.map((option) => <option key={`shortcut-username-${option.value}`} value={option.value}>{option.label}</option>)}
                 </select>
+
+                <select value={shortcutReauthorizeFilter} onChange={(event) => setShortcutReauthorizeFilter(event.target.value as AccountListReauthorizeFilter)} className="h-11 rounded-[12px] border border-white/[0.06] bg-panel px-4 text-sm text-textMain outline-none transition focus:border-white/[0.12] focus:bg-hover">
+                  <option value="all">重新授权（不限）</option>
+                  {reauthorizeOptions.map((option) => <option key={`shortcut-reauthorize-${option.value}`} value={option.value}>{option.label}</option>)}
+                </select>
               </div>
 
               <div className="rounded-[12px] bg-panel px-4 py-3 text-sm text-textMuted">
-                保存后会固定在顶部：<span className="text-white">{readShortcutSummary({ id: '', name: shortcutName, countryFilter: shortcutCountryFilter, statusFilter: shortcutStatusFilter, proxyFilter: shortcutProxyFilter, premiumFilter: shortcutPremiumFilter, twoFactorFilter: shortcutTwoFactorFilter, avatarFilter: shortcutAvatarFilter, taskFilter: shortcutTaskFilter, usernameFilter: shortcutUsernameFilter })}</span>
+                保存后会固定在顶部：<span className="text-white">{readShortcutSummary({ id: '', name: shortcutName, countryFilter: shortcutCountryFilter, statusFilter: shortcutStatusFilter, proxyFilter: shortcutProxyFilter, premiumFilter: shortcutPremiumFilter, twoFactorFilter: shortcutTwoFactorFilter, avatarFilter: shortcutAvatarFilter, taskFilter: shortcutTaskFilter, usernameFilter: shortcutUsernameFilter, reauthorizeFilter: shortcutReauthorizeFilter })}</span>
               </div>
             </div>
 

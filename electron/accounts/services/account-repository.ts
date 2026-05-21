@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type Database from 'better-sqlite3'
-import type { AccountJsonProfile, AccountListPageResult, AccountListPresenceFilter, AccountListPremiumFilter, AccountListQuery, AccountListStatusFilter, AccountRecord, AccountStatus, CheckResultInput, UpsertAccountInput } from '../types'
+import type { AccountJsonProfile, AccountListPageResult, AccountListPresenceFilter, AccountListPremiumFilter, AccountListQuery, AccountListReauthorizeFilter, AccountListStatusFilter, AccountRecord, AccountStatus, CheckResultInput, UpsertAccountInput } from '../types'
 
 interface AccountRow {
   id: number
@@ -52,7 +52,7 @@ function mapRow(row: AccountRow): AccountRecord {
   }
 }
 
-function buildAccountListWhereClause(filters: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter' | 'sourceFilter' | 'proxyFilter' | 'premiumFilter' | 'twoFactorFilter' | 'avatarFilter' | 'usernameFilter'>) {
+function buildAccountListWhereClause(filters: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter' | 'sourceFilter' | 'proxyFilter' | 'premiumFilter' | 'twoFactorFilter' | 'avatarFilter' | 'usernameFilter' | 'reauthorizeFilter'>) {
   const clauses: string[] = []
   const params: Record<string, unknown> = {}
 
@@ -80,6 +80,7 @@ function buildAccountListWhereClause(filters: Pick<AccountListQuery, 'search' | 
   applyPresenceFilterClause(`json_extract(profile_json, '$.twoFA')`, filters.twoFactorFilter, clauses)
   applyPresenceFilterClause(`json_extract(profile_json, '$.has_profile_pic')`, filters.avatarFilter, clauses, { treatBoolean: true })
   applyPresenceFilterClause('username', filters.usernameFilter, clauses)
+  applyReauthorizeFilterClause(filters.reauthorizeFilter, clauses)
 
   const keyword = filters.search.trim().toLowerCase()
   if (keyword) {
@@ -108,6 +109,20 @@ function buildAccountListWhereClause(filters: Pick<AccountListQuery, 'search' | 
     whereSql: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '',
     params
   }
+}
+
+function applyReauthorizeFilterClause(reauthorizeFilter: AccountListReauthorizeFilter, clauses: string[]) {
+  if (reauthorizeFilter === 'all') return
+
+  const lastStatus = `COALESCE(json_extract(profile_json, '$.reauthorize_last_status'), '')`
+  const lastSuccessAt = `json_extract(profile_json, '$.reauthorize_at')`
+
+  if (reauthorizeFilter === 'success') {
+    clauses.push(`(${lastStatus} = 'success' OR (${lastStatus} = '' AND ${lastSuccessAt} IS NOT NULL))`)
+    return
+  }
+
+  clauses.push(`${lastStatus} IN ('password_mismatch', 'session_expired', 'failed')`)
 }
 
 function applyPremiumFilterClause(premiumFilter: AccountListPremiumFilter, clauses: string[]) {
@@ -254,7 +269,7 @@ export class AccountRepository {
     }
   }
 
-  listIds(query: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter' | 'sourceFilter' | 'proxyFilter' | 'premiumFilter' | 'twoFactorFilter' | 'avatarFilter' | 'usernameFilter'>) {
+  listIds(query: Pick<AccountListQuery, 'search' | 'statusFilter' | 'countryFilter' | 'sourceFilter' | 'proxyFilter' | 'premiumFilter' | 'twoFactorFilter' | 'avatarFilter' | 'usernameFilter' | 'reauthorizeFilter'>) {
     const { whereSql, params } = buildAccountListWhereClause(query)
     const statement = this.database.prepare(`
       SELECT id

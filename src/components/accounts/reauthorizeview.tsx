@@ -237,6 +237,12 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
         </div>
       </ConfigRow>
 
+      <ConfigRow label="执行线程" hint="自动跟随“设置”里的全局检测并发，无需单独再配。">
+        <div className="flex h-11 items-center rounded-[12px] border border-violet-300/18 bg-violet-400/10 px-4 text-sm text-violet-100">
+          自动同步全局线程配置
+        </div>
+      </ConfigRow>
+
       <ConfigRow label="开始重新授权">
         <button
           type="button"
@@ -255,11 +261,12 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
 
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-3 text-center text-sm md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 text-center text-sm md:grid-cols-5">
           <ResultStatCard label="执行进度" value={currentProgress} tone="neutral" />
+          <ResultStatCard label="并发线程" value={progressState?.concurrency ?? 1} tone="info" />
           <ResultStatCard label="成功" value={result?.successCount ?? progressState?.successCount ?? 0} tone="success" />
           <ResultStatCard label="失败" value={result?.failedCount ?? progressState?.failedCount ?? 0} tone={(result?.failedCount ?? progressState?.failedCount ?? 0) > 0 ? 'danger' : 'info'} />
-          <ResultStatCard label="当前账号" value={progressState?.currentPhone || '等待中'} tone="info" />
+          <ResultStatCard label="最近账号" value={progressState?.currentPhone || '等待中'} tone="info" />
         </div>
 
         {progressState?.running ? (
@@ -332,11 +339,11 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
               </div>
             ) : null}
 
-            <div className="inline-flex rounded-[14px] border border-white/[0.06] bg-black/[0.06] p-1">
+            <div className="inline-flex rounded-[14px] border border-violet-300/16 bg-violet-500/8 p-1">
               <button
                 type="button"
                 onClick={() => setActiveTab('settings')}
-                className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'settings' ? 'border-violet-300 bg-violet-400 text-slate-950 shadow-[0_8px_24px_rgba(167,139,250,0.28)]' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+                className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'settings' ? 'border-violet-300 bg-violet-400 text-slate-950 shadow-[0_8px_24px_rgba(167,139,250,0.28)]' : 'border-violet-300/10 bg-violet-400/10 text-violet-100 hover:bg-violet-400/16'}`}
               >
                 <Settings2 size={16} />
                 <span>重新授权设置</span>
@@ -344,7 +351,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
               <button
                 type="button"
                 onClick={() => setActiveTab('logs')}
-                className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'logs' ? 'border-violet-300 bg-violet-400 text-slate-950 shadow-[0_8px_24px_rgba(167,139,250,0.28)]' : 'bg-white/[0.06] text-textMain hover:bg-white/[0.1]'}`}
+                className={`inline-flex h-10 items-center gap-2 rounded-[10px] px-4 text-sm ${SOFT_TAB_CLASS} ${activeTab === 'logs' ? 'border-violet-300 bg-violet-400 text-slate-950 shadow-[0_8px_24px_rgba(167,139,250,0.28)]' : 'border-violet-300/10 bg-violet-400/10 text-violet-100 hover:bg-violet-400/16'}`}
               >
                 <ScrollText size={16} />
                 <span>执行日志</span>

@@ -27,6 +27,7 @@ interface JoinExecutionResult {
   status: 'joined' | 'already' | 'requested'
   groupTitle: string
   entity?: unknown
+  note?: string
 }
 
 function wakeTaskWaiters(task: ActiveAutoJoinTask) {
@@ -141,25 +142,106 @@ function readAccountLogLabel(account: AccountRecord) {
 
 function readRequiredWaitSeconds(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
-  const explicitWait = message.match(/A wait of (\d+) seconds is required/i)
-  if (explicitWait?.[1]) {
-    const seconds = Number(explicitWait[1])
-    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
-  }
-
-  const floodWait = message.match(/FLOOD_WAIT_(\d+)/i)
-  if (floodWait?.[1]) {
-    const seconds = Number(floodWait[1])
-    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
-  }
-
-  const slowMode = message.match(/SLOWMODE_WAIT_(\d+)/i)
-  if (slowMode?.[1]) {
-    const seconds = Number(slowMode[1])
-    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+  for (const pattern of [
+    /A wait of (\d+) seconds is required/i,
+    /FLOOD_WAIT_?(\d+)/i,
+    /SLOWMODE_WAIT_?(\d+)/i,
+    /FloodWait(?:Error)?:?[^\d]*(\d+)s?/i,
+    /retry after[^\d]*(\d+)\s*seconds?/i
+  ]) {
+    const matched = message.match(pattern)
+    if (!matched?.[1]) continue
+    const seconds = Number(matched[1])
+    if (Number.isFinite(seconds) && seconds > 0) return seconds
   }
 
   return null
+}
+
+function extractChatlistSlug(input: string) {
+  const matched = input.match(/(?:https?:\/\/)?(?:www\.)?t\.me\/addlist\/([A-Za-z0-9_-]+)/i)
+  return matched?.[1]?.trim() || ''
+}
+
+function inferAutoJoinItemKind(raw: string, normalized: string): AutoJoinPayloadItem['kind'] {
+  if (extractChatlistSlug(raw) || extractChatlistSlug(normalized)) return 'chatlist'
+  if (normalized.startsWith('https://t.me/+')) return 'invite'
+  return 'username'
+}
+
+function readChatlistPeerKind(entity: unknown) {
+  const className = String((entity as { className?: unknown } | null)?.className || '')
+  if (className === 'Channel') {
+    return Boolean((entity as { broadcast?: unknown } | null)?.broadcast) && !Boolean((entity as { megagroup?: unknown } | null)?.megagroup)
+      ? 'channel'
+      : 'group'
+  }
+  if (className === 'Chat') return 'group'
+  return 'unknown'
+}
+
+function readEntityPeerKey(entity: unknown) {
+  const className = String((entity as { className?: unknown } | null)?.className || '')
+  const rawId = (entity as { id?: unknown } | null)?.id
+  const id = typeof rawId === 'bigint' || typeof rawId === 'number' || typeof rawId === 'string' ? String(rawId) : ''
+  if (!id) return ''
+  if (className === 'Channel') return `channel:${id}`
+  if (className === 'Chat') return `chat:${id}`
+  return ''
+}
+
+function readPeerKey(peer: unknown) {
+  const className = String((peer as { className?: unknown } | null)?.className || '')
+  if (className === 'PeerChannel') {
+    const value = (peer as { channelId?: unknown }).channelId
+    if (typeof value === 'bigint' || typeof value === 'number' || typeof value === 'string') return `channel:${String(value)}`
+  }
+  if (className === 'PeerChat') {
+    const value = (peer as { chatId?: unknown }).chatId
+    if (typeof value === 'bigint' || typeof value === 'number' || typeof value === 'string') return `chat:${String(value)}`
+  }
+  return ''
+}
+
+async function inspectChatlistPreview(client: TelegramClient, slug: string, fallback: string) {
+  const invite = await client.invoke(new Api.chatlists.CheckChatlistInvite({ slug }))
+  const chats = Array.isArray((invite as { chats?: unknown[] } | null)?.chats)
+    ? ((invite as { chats?: unknown[] }).chats ?? []).filter((entity) => ['group', 'channel'].includes(readChatlistPeerKind(entity)))
+    : []
+  return {
+    entity: null,
+    groupTitle: chats.length > 0 ? `addlist/${slug}（${chats.length} 个目标）` : fallback,
+    isBroadcast: false
+  }
+}
+
+async function joinChatlistTargets(client: TelegramClient, slug: string, fallback: string): Promise<JoinExecutionResult> {
+  const invite = await client.invoke(new Api.chatlists.CheckChatlistInvite({ slug }))
+  const inviteChats = Array.isArray((invite as { chats?: unknown[] } | null)?.chats)
+    ? ((invite as { chats?: unknown[] }).chats ?? []).filter((entity) => ['group', 'channel'].includes(readChatlistPeerKind(entity)))
+    : []
+  const missingPeerKeys = new Set(
+    Array.isArray((invite as { missingPeers?: unknown[] } | null)?.missingPeers)
+      ? ((invite as { missingPeers?: unknown[] }).missingPeers ?? []).map(readPeerKey).filter(Boolean)
+      : []
+  )
+  const peersToJoin = inviteChats.filter((entity) => missingPeerKeys.size === 0 || missingPeerKeys.has(readEntityPeerKey(entity)))
+  const joinedCount = peersToJoin.length
+  if (joinedCount > 0) {
+    await client.invoke(new Api.chatlists.JoinChatlistInvite({
+      slug,
+      peers: peersToJoin as never
+    }))
+  }
+  const totalCount = inviteChats.length
+  const title = totalCount > 0 ? `addlist/${slug}（${totalCount} 个目标）` : fallback
+  return {
+    status: joinedCount > 0 ? 'joined' : 'already',
+    groupTitle: title,
+    note: joinedCount > 0
+      ? `分组链接已批量导入 ${joinedCount} 个群/频道。`
+      : '这个分组里的群/频道之前已经都在账号里了。'
+  }
 }
 
 function isJoinRequestSent(error: unknown) {
@@ -288,6 +370,10 @@ function readFatalAccountStateFromProbe(result: TelethonFreezeCheckResult | null
 }
 
 function parseJoinTarget(target: AutoJoinPayloadItem) {
+  if (target.kind === 'chatlist') {
+    const slug = extractChatlistSlug(target.raw) || extractChatlistSlug(target.normalized)
+    return { kind: 'chatlist' as const, value: slug }
+  }
   if (target.kind === 'invite') {
     const matched = target.raw.match(/(?:https?:\/\/)?t\.me\/(?:joinchat\/|\+)([^/?#]+)/i)
     const hash = matched?.[1]?.trim() || target.normalized.replace(/^https:\/\/t\.me\/\+/, '').trim()
@@ -412,6 +498,9 @@ function readSendRestrictedRights(source: unknown) {
 
 async function inspectTargetPreview(client: TelegramClient, item: AutoJoinPayloadItem) {
   const parsed = parseJoinTarget(item)
+  if (parsed.kind === 'chatlist') {
+    return await inspectChatlistPreview(client, parsed.value, item.normalized)
+  }
   if (parsed.kind === 'invite') {
     const invite = await client.invoke(new Api.messages.CheckChatInvite({ hash: parsed.value }))
     const entity = extractInviteEntity(invite)
@@ -494,6 +583,9 @@ async function ensureAuthorizedClient(account: AccountRecord, sessionLoader: Ses
 
 async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadItem): Promise<JoinExecutionResult> {
   const parsed = parseJoinTarget(item)
+  if (parsed.kind === 'chatlist') {
+    return await joinChatlistTargets(client, parsed.value, item.normalized)
+  }
   if (parsed.kind === 'invite') {
     try {
       const result = await client.invoke(new Api.messages.ImportChatInvite({ hash: parsed.value }))
@@ -577,6 +669,9 @@ async function joinSingleTarget(client: TelegramClient, item: AutoJoinPayloadIte
 async function resolveSendEntity(client: TelegramClient, item: AutoJoinPayloadItem, joinedEntity?: unknown) {
   if (joinedEntity) return joinedEntity
   const parsed = parseJoinTarget(item)
+  if (parsed.kind === 'chatlist') {
+    throw new Error('CHATLIST_SEND_UNSUPPORTED')
+  }
   if (parsed.kind === 'invite') {
     const invite = await client.invoke(new Api.messages.CheckChatInvite({ hash: parsed.value }))
     if ('chat' in (invite as object) && (invite as { chat?: unknown }).chat) {
@@ -1134,11 +1229,13 @@ export class AutoJoinService {
               normalized: next.normalized,
               status: joined.status,
               errorMessage:
-                joined.status === 'already'
-                  ? '这个账号本来就在群里'
-                  : joined.status === 'requested'
-                    ? '这个群需要审核，已经申请等待通过'
-                    : '加入成功',
+                (('note' in joined && typeof joined.note === 'string' && joined.note.trim()) ? joined.note.trim() : '') || (
+                  joined.status === 'already'
+                    ? '这个账号本来就在群里'
+                    : joined.status === 'requested'
+                      ? '这个群需要审核，已经申请等待通过'
+                      : '加入成功'
+                ),
               accountId: account.id,
               accountLabel,
               groupTitle: joined.groupTitle,
@@ -1147,7 +1244,9 @@ export class AutoJoinService {
             }
 
             if (payload.mode === 'join-only') {
-              if (joined.status === 'requested') {
+              if (next.kind === 'chatlist') {
+                resultItem.errorMessage = ('note' in joined && typeof joined.note === 'string' && joined.note.trim()) ? joined.note.trim() : '分组链接已批量导入完成。'
+              } else if (joined.status === 'requested') {
                 resultItem.joinCategory = 'requested'
                 resultItem.errorMessage = '这个群需要管理员通过，先归到需验证。'
               } else if (client) {
@@ -1173,7 +1272,9 @@ export class AutoJoinService {
             finalizeResult(resultItem)
 
             if (needsMessage) {
-              if (payload.mode === 'join-and-send' && joined.status !== 'requested') {
+              if (next.kind === 'chatlist') {
+                finalizeSendState(resultItem, 'skipped', '分组链接会一次导入多个群/频道，这条先只执行批量加入，不直接群发。')
+              } else if (payload.mode === 'join-and-send' && joined.status !== 'requested') {
                 await sendToResolvedTarget(client as TelegramClient, account.id, accountLabel, {
                   id: next.id,
                   raw: next.raw,
@@ -1387,11 +1488,15 @@ export class AutoJoinService {
           }
 
           try {
+            if (inferAutoJoinItemKind(item.raw, item.normalized) === 'chatlist') {
+              finalizeSendState(item, 'skipped', '分组链接会一次导入多个群/频道，这条先不进入加完再发。')
+              continue
+            }
             const sourceItem: AutoJoinPayloadItem = {
               id: item.itemId,
               raw: item.raw,
               normalized: item.normalized,
-              kind: item.normalized.startsWith('https://t.me/+') ? 'invite' : 'username'
+              kind: inferAutoJoinItemKind(item.raw, item.normalized)
             }
             await sendToResolvedTarget(client, accountId, item.accountLabel || '当前账号', sourceItem, item.groupTitle || item.normalized, item)
           } catch (error) {
@@ -1460,11 +1565,17 @@ export class AutoJoinService {
               continue
             }
 
+            const inferredKind = inferAutoJoinItemKind(item.raw, item.normalized)
+            if (inferredKind === 'chatlist') {
+              finalizeSendState(item, 'skipped', '分组链接会一次导入多个群/频道，这条先不进入循环群发。')
+              continue
+            }
+
             const sourceItem: AutoJoinPayloadItem = {
               id: item.itemId,
               raw: item.raw,
               normalized: item.normalized,
-              kind: item.normalized.startsWith('https://t.me/+') ? 'invite' : 'username'
+              kind: inferredKind
             }
             await sendToResolvedTarget(client, accountId, item.accountLabel || '当前账号', sourceItem, item.groupTitle || item.normalized, item, `第 ${round} 轮`)
 

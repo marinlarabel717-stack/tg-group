@@ -33,6 +33,16 @@ function isNetworkLike(text: string) {
     || text.includes('连接')
 }
 
+function isRateLimitLike(text: string) {
+  return text.includes('flood_wait')
+    || text.includes('floodwait')
+    || text.includes('slowmode_wait')
+    || text.includes('retry after')
+    || text.includes('too many requests')
+    || text.includes('a wait of ')
+    || text.includes('请求过于频繁')
+}
+
 export class StatusResolver {
   resolveAuthorization(authorized: boolean): AccountStatus {
     return authorized ? 'checking' : 'not_logged_in'
@@ -85,6 +95,6 @@ export class StatusResolver {
     if (status === 'timeout') return true
 
     const text = normalizeError(error).toLowerCase()
-    return isTimeoutLike(text) || isNetworkLike(text)
+    return isTimeoutLike(text) || isNetworkLike(text) || isRateLimitLike(text)
   }
 }

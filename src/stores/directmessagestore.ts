@@ -132,6 +132,7 @@ interface DirectMessageState {
   welcomeMessageText: string
   welcomeDelaySeconds: number
   randomEmojiEnabled: boolean
+  tooManyRequestsStopThreshold: number
   groupConcurrency: number
   accountPerGroup: number
   intervalSeconds: number
@@ -168,6 +169,7 @@ interface DirectMessageState {
   setWelcomeMessageText: (value: string) => void
   setWelcomeDelaySeconds: (value: number) => void
   setRandomEmojiEnabled: (value: boolean) => void
+  setTooManyRequestsStopThreshold: (value: number) => void
   setGroupConcurrency: (value: number) => void
   setAccountPerGroup: (value: number) => void
   setIntervalSeconds: (value: number) => void
@@ -391,6 +393,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       welcomeMessageText: '',
       welcomeDelaySeconds: 3,
       randomEmojiEnabled: false,
+      tooManyRequestsStopThreshold: 30,
       groupConcurrency: 3,
       accountPerGroup: 5,
       intervalSeconds: 25,
@@ -441,6 +444,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       setWelcomeMessageText: (value) => set({ welcomeMessageText: value, previewItems: [] }),
       setWelcomeDelaySeconds: (value) => set({ welcomeDelaySeconds: Math.max(0, value || 0), previewItems: [] }),
       setRandomEmojiEnabled: (value) => set({ randomEmojiEnabled: value, previewItems: [] }),
+      setTooManyRequestsStopThreshold: (value) => set({ tooManyRequestsStopThreshold: Math.max(1, Math.trunc(value || 1)), previewItems: [] }),
       setGroupConcurrency: (value) => set({ groupConcurrency: Math.max(1, value || 1) }),
       setAccountPerGroup: (value) => set({ accountPerGroup: Math.max(1, value || 1), previewItems: [] }),
       setIntervalSeconds: (value) => set({ intervalSeconds: Math.max(5, value || 5), previewItems: [] }),
@@ -598,9 +602,14 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           set({ previewItems: [], lastActionMessage: '先把 postbot 生成代码填上。' })
           return
         }
+        const accountAssignedCount = new Map<number, number>()
         const previewItems = usableTargets.map((target, index) => {
           const account = selectedAccounts[index % selectedAccounts.length]
-          const batchIndex = Math.floor(index / Math.max(1, state.accountPerGroup))
+          const assignedCount = account ? (accountAssignedCount.get(account.id) ?? 0) : 0
+          if (account) {
+            accountAssignedCount.set(account.id, assignedCount + 1)
+          }
+          const batchIndex = Math.floor(assignedCount / Math.max(1, state.accountPerGroup))
           return {
             id: createId('dm_preview'),
             targetId: target.id,
@@ -618,7 +627,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         })
         set({
           previewItems,
-          lastActionMessage: `已生成 ${previewItems.length} 条私信预览，当前按每 ${state.intervalSeconds} 秒一批往后排。`
+          lastActionMessage: `已生成 ${previewItems.length} 条私信预览，当前按每个账号每 ${state.intervalSeconds} 秒一批往后排。`
         })
       },
       startSend: async (accounts) => {
@@ -670,7 +679,8 @@ export const useDirectMessageStore = create<DirectMessageState>()(
             welcomeMessageText: state.welcomeMessageText,
             welcomeDelaySeconds: state.welcomeDelaySeconds,
             randomEmojiEnabled: state.randomEmojiEnabled,
-            concurrency: state.groupConcurrency
+            concurrency: state.groupConcurrency,
+            tooManyRequestsStopThreshold: state.tooManyRequestsStopThreshold
           })
           const run = buildRunFromResult(result, state)
           set((current) => ({
@@ -812,7 +822,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
     }),
     {
       name: 'tg-group-direct-message-store',
-      version: 9,
+      version: 10,
       storage: createJSONStorage(() => window.localStorage),
       partialize: (state) => ({
         activeTab: state.activeTab,
@@ -833,6 +843,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         welcomeMessageText: state.welcomeMessageText,
         welcomeDelaySeconds: state.welcomeDelaySeconds,
         randomEmojiEnabled: state.randomEmojiEnabled,
+        tooManyRequestsStopThreshold: state.tooManyRequestsStopThreshold,
         groupConcurrency: state.groupConcurrency,
         accountPerGroup: state.accountPerGroup,
         intervalSeconds: state.intervalSeconds,
@@ -871,6 +882,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           welcomeMessageText: state?.welcomeMessageText || '',
           welcomeDelaySeconds: typeof state?.welcomeDelaySeconds === 'number' ? Math.max(0, state.welcomeDelaySeconds) : 3,
           randomEmojiEnabled: Boolean(state?.randomEmojiEnabled),
+          tooManyRequestsStopThreshold: typeof state?.tooManyRequestsStopThreshold === 'number' ? Math.max(1, Math.trunc(state.tooManyRequestsStopThreshold)) : 30,
           groupConcurrency: state?.groupConcurrency || 3,
           accountPerGroup: state?.accountPerGroup || 5,
           intervalSeconds: state?.intervalSeconds || 25,

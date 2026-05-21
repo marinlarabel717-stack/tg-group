@@ -136,26 +136,15 @@ function deriveStableDeviceModel(account: AccountRecord) {
 }
 
 function buildStableDesktopClientProfile(account: AccountRecord): StableDesktopClientProfile {
-  const storedDeviceModel = readTrimmedString(account.profile?.reauthorize_device_model)
-  const storedSystemVersion = readTrimmedString(account.profile?.reauthorize_system_version)
-  const storedAppVersion = readTrimmedString(account.profile?.reauthorize_app_version)
-  const storedLangCode = readTrimmedString(account.profile?.reauthorize_lang_code)
-  const storedSystemLangCode = readTrimmedString(account.profile?.reauthorize_system_lang_code)
-  const originalDeviceModel = readTrimmedString(account.profile?.device_model) || readTrimmedString(account.profile?.device)
-  const originalSystemVersion = readTrimmedString(account.profile?.system_version) || readTrimmedString(account.profile?.sdk)
-  const originalAppVersion = readTrimmedString(account.profile?.app_version)
-  const originalLangCode = readTrimmedString(account.profile?.lang_code)
-  const originalSystemLangCode = readTrimmedString(account.profile?.system_lang_code)
-
   const locale = normalizeSystemLangCode(app.getLocale?.() || Intl.DateTimeFormat().resolvedOptions().locale || 'en-US')
   const appVersion = readTrimmedString(app.getVersion?.()) || '0.0.0'
 
   return {
-    deviceModel: storedDeviceModel || originalDeviceModel || deriveStableDeviceModel(account) || resolveDesktopDeviceModel(),
-    systemVersion: storedSystemVersion || originalSystemVersion || resolveDesktopSystemVersion(),
-    appVersion: storedAppVersion || originalAppVersion || `TG-Matrix ${appVersion}`,
-    langCode: storedLangCode || originalLangCode || normalizeLangCode(locale),
-    systemLangCode: storedSystemLangCode || originalSystemLangCode || locale
+    deviceModel: deriveStableDeviceModel(account) || resolveDesktopDeviceModel(),
+    systemVersion: resolveDesktopSystemVersion(),
+    appVersion: `TG-Matrix ${appVersion}`,
+    langCode: normalizeLangCode(locale),
+    systemLangCode: locale
   }
 }
 

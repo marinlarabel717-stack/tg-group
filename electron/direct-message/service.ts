@@ -105,9 +105,18 @@ function readRiskPauseSeconds(error: unknown) {
   return null
 }
 
+function normalizeTooManyRequestsStopThreshold(value: number | undefined) {
+  return Math.max(1, Math.trunc(value || 1))
+}
+
 function isUnavailableAccountError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   return /AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED|PHONE_NUMBER_BANNED|USER_DEACTIVATED_BAN|ACCOUNT_RESTRICTED|FROZEN_METHOD_INVALID|FROZEN_PARTICIPANT_MISSING/i.test(message)
+}
+
+function isTooManyRequestsError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /Too many requests/i.test(message)
 }
 
 function createId(prefix: string) {
@@ -819,7 +828,7 @@ function buildPostSendFeatureSummary(payload: DirectMessageSendPayload) {
     parts.push(`先发欢迎帖，等待 ${normalizeDelaySeconds(payload.welcomeDelaySeconds, 3)} 秒再发广告`)
   }
   if (payload.pinAfterSendEnabled) {
-    parts.push(`${normalizeDelaySeconds(payload.pinDelaySeconds, 3)} 秒后置顶`)
+    parts.push(`${normalizeDelaySeconds(payload.pinDelaySeconds, 3)} 秒后置顶会话`)
   }
   if (payload.deleteMode && payload.deleteMode !== 'none') {
     parts.push(`${normalizeDelaySeconds(payload.deleteDelaySeconds, 0)} 秒后${readDeleteModeLabel(payload.deleteMode)}`)
@@ -1050,11 +1059,10 @@ export class DirectMessageService {
     }
   }
 
-  private async pinViaTelethon(account: AccountRecord, item: DirectMessageSendPayload['items'][number], messageId: number) {
+  private async pinViaTelethon(account: AccountRecord, item: DirectMessageSendPayload['items'][number]) {
     await this.telethonDirectMessageSender.pin({
       sessionPath: account.sessionPath,
       targetValue: item.targetValue,
-      messageId,
       timeoutSeconds: 25,
       proxy: this.getCurrentProxy()
     })
@@ -1177,6 +1185,7 @@ export class DirectMessageService {
     const results: DirectMessageSendResultItem[] = []
     const unavailableAccountIds = new Set<number>()
     const accountCooldownUntil = new Map<number, number>()
+    const accountTooManyRequestsCount = new Map<number, number>()
     const activeAccountIds = new Set<number>()
     const startedAt = Date.now()
     const pendingItems = [...payload.items]
@@ -1218,6 +1227,33 @@ export class DirectMessageService {
       }
 
       return { entry: null as null, waitMs: pendingItems.length > 0 ? 150 : 0 }
+    }
+
+    const retireAccount = async (
+      accountId: number,
+      messageFactory: (skippedCount: number) => string
+    ) => {
+      unavailableAccountIds.add(accountId)
+      accountCooldownUntil.delete(accountId)
+      const skippedCount = pendingItems.reduce((count, entry) => count + (entry.item.accountId === accountId ? 1 : 0), 0)
+      for (let index = pendingItems.length - 1; index >= 0; index -= 1) {
+        if (pendingItems[index]?.item.accountId === accountId) {
+          pendingItems.splice(index, 1)
+        }
+      }
+      const currentClient = clients.get(accountId)
+      if (currentClient) {
+        await this.clientManager.destroyClient(currentClient).catch(() => undefined)
+        clients.delete(accountId)
+      }
+
+      this.emitSendNotice(results, payload.items.length, messageFactory(skippedCount), onProgress, null)
+
+      if (unavailableAccountIds.size >= accountIds.length) {
+        stopReason = '无可用账号发送，本次任务已停止。'
+        this.emitSendNotice(results, payload.items.length, stopReason, onProgress, null)
+        task.cancelled = true
+      }
     }
 
     const processEntry = async (item: DirectMessageSendPayload['items'][number]) => {
@@ -1402,11 +1438,7 @@ export class DirectMessageService {
 
             const actions: Array<{ kind: 'pin' | 'delete'; delaySeconds: number }> = []
             if (payload.pinAfterSendEnabled) {
-              if (resultItem.remoteMessageId) {
-                actions.push({ kind: 'pin', delaySeconds: normalizeDelaySeconds(payload.pinDelaySeconds, 3) })
-              } else {
-                actionNotes.push('已发送，但没拿到消息 ID，暂时无法自动置顶')
-              }
+              actions.push({ kind: 'pin', delaySeconds: normalizeDelaySeconds(payload.pinDelaySeconds, 3) })
             }
             if (payload.deleteMode && payload.deleteMode !== 'none') {
               actions.push({ kind: 'delete', delaySeconds: normalizeDelaySeconds(payload.deleteDelaySeconds, 0) })
@@ -1429,20 +1461,17 @@ export class DirectMessageService {
                 }
 
                 if (action.kind === 'pin') {
-                  if (messageDeleted) {
-                    actionNotes.push('删除时间早于置顶时间，这条广告未再执行置顶')
-                    continue
-                  }
                   try {
                     if (useTelethonPrimary) {
-                      await this.pinViaTelethon(account, item, resultItem.remoteMessageId as number)
+                      await this.pinViaTelethon(account, item)
                     } else {
-                      await (client as TelegramClient).pinMessage((resolved as { entity: unknown }).entity as never, resultItem.remoteMessageId as number, {
-                        notify: false,
+                      await (client as TelegramClient).invoke(new Api.messages.ToggleDialogPin({
+                        peer: (resolved as { entity: unknown }).entity as never,
+                        pinned: true,
                         pmOneSide: true
-                      })
+                      } as any))
                     }
-                    actionNotes.push(`已在发送后 ${action.delaySeconds} 秒自动置顶`)
+                    actionNotes.push(`已在发送后 ${action.delaySeconds} 秒自动置顶会话`)
                   } catch (pinError) {
                     actionNotes.push(`置顶失败：${formatDirectMessageError(pinError)}`)
                   }
@@ -1537,37 +1566,20 @@ export class DirectMessageService {
         const resultItem = this.createFailedSendItem(item, formatDirectMessageError(error))
         results.push(resultItem)
         this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
-        if (typeof item.accountId === 'number' && isUnavailableAccountError(error)) {
-          unavailableAccountIds.add(item.accountId)
-          accountCooldownUntil.delete(item.accountId)
-          const skippedCount = pendingItems.reduce((count, entry) => count + (entry.item.accountId === item.accountId ? 1 : 0), 0)
-          for (let index = pendingItems.length - 1; index >= 0; index -= 1) {
-            if (pendingItems[index]?.item.accountId === item.accountId) {
-              pendingItems.splice(index, 1)
-            }
+        if (typeof item.accountId === 'number' && isTooManyRequestsError(error)) {
+          const nextCount = (accountTooManyRequestsCount.get(item.accountId) ?? 0) + 1
+          const tooManyRequestsStopThreshold = normalizeTooManyRequestsStopThreshold(payload.tooManyRequestsStopThreshold)
+          accountTooManyRequestsCount.set(item.accountId, nextCount)
+          if (nextCount >= tooManyRequestsStopThreshold) {
+            await retireAccount(item.accountId, (skippedCount) => skippedCount > 0
+              ? `[${account.phone || readAccountLabel(account)}] 请求过于频繁累计达到 ${tooManyRequestsStopThreshold} 次，已自动停号，后面剩余 ${skippedCount} 个目标不再发送。`
+              : `[${account.phone || readAccountLabel(account)}] 请求过于频繁累计达到 ${tooManyRequestsStopThreshold} 次，已自动停号。`)
           }
-          const currentClient = clients.get(item.accountId)
-          if (currentClient) {
-            await this.clientManager.destroyClient(currentClient).catch(() => undefined)
-            clients.delete(item.accountId)
-          }
-
+        } else if (typeof item.accountId === 'number' && isUnavailableAccountError(error)) {
           const reason = stopReasonForAccountError(error)
-          this.emitSendNotice(
-            results,
-            payload.items.length,
-            skippedCount > 0
-              ? `[${account.phone || readAccountLabel(account)}] 这个账号已判定为${reason}，已停止继续私信，后面剩余 ${skippedCount} 个目标不再发送。`
-              : `[${account.phone || readAccountLabel(account)}] 这个账号已判定为${reason}，已停止继续私信。`,
-            onProgress,
-            null
-          )
-
-          if (unavailableAccountIds.size >= accountIds.length) {
-            stopReason = '无可用账号发送，本次任务已停止。'
-            this.emitSendNotice(results, payload.items.length, stopReason, onProgress, null)
-            task.cancelled = true
-          }
+          await retireAccount(item.accountId, (skippedCount) => skippedCount > 0
+            ? `[${account.phone || readAccountLabel(account)}] 这个账号已判定为${reason}，已停止继续私信，后面剩余 ${skippedCount} 个目标不再发送。`
+            : `[${account.phone || readAccountLabel(account)}] 这个账号已判定为${reason}，已停止继续私信。`)
         }
       } finally {
         if (accountId != null) activeAccountIds.delete(accountId)

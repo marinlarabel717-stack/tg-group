@@ -15,12 +15,12 @@ export const moduleLabelMap = {
   automation: '定时群发',
   'bot-center': '机器人中心',
   'auto-join': '极速群发',
-  'group-invite': '群组成员邀请管理',
+  'group-invite': '群组邀请',
   'batch-create': '批量创建',
   'other-tools': '其他功能',
   'direct-message': '私信用户',
   'proxy-pool': '代理池',
-  'session-manager': '采集用户',
+  'session-manager': '会话管理',
   logs: '日志中心',
   settings: '设置'
 } as const

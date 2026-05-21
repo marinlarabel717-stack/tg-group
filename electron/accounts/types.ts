@@ -170,6 +170,7 @@ export interface StatusUpdateResult {
 export type AccountListStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
 export type AccountListPremiumFilter = 'all' | 'premium' | 'non-premium'
 export type AccountListPresenceFilter = 'all' | 'has' | 'none'
+export type AccountListReauthorizeFilter = 'all' | 'success' | 'failed'
 
 export interface AccountListQuery {
   search: string
@@ -181,6 +182,7 @@ export interface AccountListQuery {
   twoFactorFilter: AccountListPresenceFilter
   avatarFilter: AccountListPresenceFilter
   usernameFilter: AccountListPresenceFilter
+  reauthorizeFilter: AccountListReauthorizeFilter
   pageIndex: number
   pageSize: number
 }
@@ -260,6 +262,7 @@ export interface ReauthorizeLogEntry {
 
 export interface ReauthorizeProgressState {
   running: boolean
+  concurrency: number
   total: number
   completed: number
   successCount: number

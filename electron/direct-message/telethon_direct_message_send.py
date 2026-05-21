@@ -357,11 +357,12 @@ async def _run(command: Dict[str, Any]) -> Dict[str, Any]:
                 raise
 
         if action == 'pin':
-            message_id = _safe_int(command.get('messageId'), 0)
-            if message_id <= 0:
-                return {'ok': False, 'reason': 'MESSAGE_ID_INVALID'}
-            await asyncio.wait_for(client.pin_message(entity, message_id, notify=False, pm_oneside=True), timeout=timeout_seconds)
-            return {'ok': True, 'messageId': message_id}
+            await asyncio.wait_for(client(functions.messages.ToggleDialogPinRequest(
+                peer=entity,
+                pinned=True,
+                pm_oneside=True,
+            )), timeout=timeout_seconds)
+            return {'ok': True}
 
         delete_mode = str(command.get('deleteMode') or 'none').strip().lower()
         if delete_mode == 'self':
