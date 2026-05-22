@@ -317,6 +317,7 @@ export interface ReauthorizeLogEntry {
 }
 
 export interface ReauthorizeProgressState {
+  runId: string | null
   running: boolean
   concurrency: number
   total: number
@@ -326,6 +327,21 @@ export interface ReauthorizeProgressState {
   currentAccountId: number | null
   currentPhone: string | null
   logs: ReauthorizeLogEntry[]
+  lastUpdatedAt: string | null
+}
+
+export interface ReauthorizeProgressOverview {
+  runId: string | null
+  running: boolean
+  concurrency: number
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  currentAccountId: number | null
+  currentPhone: string | null
+  logCount: number
+  lastLog: ReauthorizeLogEntry | null
   lastUpdatedAt: string | null
 }
 
@@ -504,9 +520,11 @@ export interface DesktopAccountsApi {
   readPremiumExpiryFromDesktop: (accountId: number) => Promise<PremiumExpiryReadResult>
   pickProfileAvatar: () => Promise<string | null>
   reauthorize: (payload: ReauthorizeOperationPayload) => Promise<ReauthorizeOperationResult>
-  getReauthorizeState: () => Promise<ReauthorizeProgressState>
-  clearReauthorizeLogs: () => Promise<ReauthorizeProgressState>
-  onReauthorizeProgress: (callback: (state: ReauthorizeProgressState) => void) => () => void
+  getReauthorizeState: () => Promise<ReauthorizeProgressOverview>
+  getReauthorizeLogs: () => Promise<ReauthorizeLogEntry[]>
+  clearReauthorizeLogs: () => Promise<ReauthorizeProgressOverview>
+  onReauthorizeProgress: (callback: (state: ReauthorizeProgressOverview) => void) => () => void
+  onReauthorizeLogs: (callback: (logs: ReauthorizeLogEntry[]) => void) => () => void
   manageTwoFactor: (payload: TwoFactorOperationPayload) => Promise<TwoFactorOperationResult>
   stopTwoFactor: () => Promise<TwoFactorStopResult>
   getTwoFactorState: () => Promise<TwoFactorProgressState>

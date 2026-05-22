@@ -261,6 +261,7 @@ export interface ReauthorizeLogEntry {
 }
 
 export interface ReauthorizeProgressState {
+  runId: string | null
   running: boolean
   concurrency: number
   total: number
@@ -270,6 +271,21 @@ export interface ReauthorizeProgressState {
   currentAccountId: number | null
   currentPhone: string | null
   logs: ReauthorizeLogEntry[]
+  lastUpdatedAt: string | null
+}
+
+export interface ReauthorizeProgressOverview {
+  runId: string | null
+  running: boolean
+  concurrency: number
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  currentAccountId: number | null
+  currentPhone: string | null
+  logCount: number
+  lastLog: ReauthorizeLogEntry | null
   lastUpdatedAt: string | null
 }
 

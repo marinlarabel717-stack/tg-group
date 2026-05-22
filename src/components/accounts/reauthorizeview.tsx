@@ -1,6 +1,6 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, KeyRound, Loader2, RefreshCcw, ScrollText, Search, Settings2, ShieldAlert, X } from 'lucide-react'
-import type { AccountRecord, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressState } from '../../types'
+import type { AccountRecord, ReauthorizeLogEntry, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressOverview } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { ConfigRow, FoldSection, SOFT_INPUT_CLASS, SOFT_NOTICE_CLASS, SOFT_TAB_CLASS } from '../common/settings-ui'
 import { ResultDialogShell, ResultStatCard } from './resultdialog'
@@ -80,9 +80,11 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<ReauthorizeOperationResult | null>(null)
-  const [progressState, setProgressState] = useState<ReauthorizeProgressState | null>(null)
+  const [progressState, setProgressState] = useState<ReauthorizeProgressOverview | null>(null)
+  const [logs, setLogs] = useState<ReauthorizeLogEntry[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [resultDialogOpen, setResultDialogOpen] = useState(false)
+  const runIdRef = useRef<string | null>(null)
 
   const taskBusy = checkState.running || twoFactorState.running || profileOperationState.running || Boolean(importProgress)
 
@@ -94,10 +96,36 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
     const api = window.desktopAccounts
     if (!api?.getReauthorizeState || !api?.onReauthorizeProgress) return
 
-    void api.getReauthorizeState().then(setProgressState).catch(() => {})
-    return api.onReauthorizeProgress((state) => {
+    let cancelled = false
+    void Promise.all([
+      api.getReauthorizeState(),
+      api.getReauthorizeLogs?.().catch(() => []) ?? Promise.resolve([])
+    ]).then(([state, initialLogs]) => {
+      if (cancelled) return
+      runIdRef.current = state.runId
+      setProgressState(state)
+      setLogs(initialLogs)
+    }).catch(() => {})
+
+    const unsubscribeProgress = api.onReauthorizeProgress((state) => {
+      if (cancelled) return
+      if (runIdRef.current !== state.runId) {
+        runIdRef.current = state.runId
+        setLogs([])
+      }
       setProgressState(state)
     })
+
+    const unsubscribeLogs = api.onReauthorizeLogs?.((nextLogs) => {
+      if (cancelled || nextLogs.length === 0) return
+      setLogs((current) => [...current, ...nextLogs])
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribeProgress()
+      unsubscribeLogs?.()
+    }
   }, [])
 
   useEffect(() => {
@@ -108,7 +136,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const selectedAccounts = useMemo(() => accounts.filter((account) => selectedSet.has(account.id)), [accounts, selectedSet])
-  const displayedLogs = useMemo(() => [...(progressState?.logs ?? [])].reverse(), [progressState])
+  const displayedLogs = logs
 
   const applyPicker = (ids: number[]) => {
     setSelectedIds(ids.filter((id) => !getAccountTaskMeta(accountTaskStatusMap, id).occupied))
@@ -135,6 +163,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
     setSubmitting(true)
     setResult(null)
     setResultDialogOpen(false)
+    setLogs([])
     try {
       const nextResult = await api.reauthorize({
         accountIds: selectedIds,

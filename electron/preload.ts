@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AccountListPageResult, AccountListQuery, AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BatchCreatePayload, BatchCreateProgress, BatchCreateStopResult, BatchCreateTaskResult, BotCenterConfig, BotCenterState, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DeleteAccountsResult, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, GroupInvitePayload, GroupInviteProgressState, GroupInviteStopResult, GroupInviteTaskResult, ImportProgressPayload, OtherToolsSniperListenerPayload, OtherToolsSniperListenerState, OtherToolsSniperListenerStopResult, OtherToolsSniperPayload, OtherToolsSniperResult, OtherToolsUsernameFilterPayload, OtherToolsUsernameFilterResult, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationStopResult, ProxyPoolSettings, ProxyPoolState, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeProgressState, SessionManagerActionPayload, SessionManagerActionResult, SessionManagerProgressState, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState, TwoFactorStopResult } from '../src/types'
+import type { AccountListPageResult, AccountListQuery, AccountRecord, AppUpdaterState, AutoJoinPayload, AutoJoinProgress, AutoJoinStopResult, AutoJoinTaskResult, BatchCreatePayload, BatchCreateProgress, BatchCreateStopResult, BatchCreateTaskResult, BotCenterConfig, BotCenterState, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastScheduledMessageListResult, BroadcastStopResult, CheckAction, CheckQueueState, CheckResultInput, DeleteAccountsResult, DesktopLicenseActivateResult, DesktopLicenseState, DesktopLicenseValidateResult, DirectMessageAutoReplyEvent, DirectMessageAutoReplyPayload, DirectMessageAutoReplyState, DirectMessageCollectPayload, DirectMessageCollectResult, DirectMessageSendPayload, DirectMessageSendProgress, DirectMessageStopResult, GroupCollectorPayload, GroupCollectorResult, GroupCollectorTaskPayload, GroupCollectorTaskProgress, GroupCollectorTaskStartResult, GroupCollectorTaskStopResult, GroupInvitePayload, GroupInviteProgressState, GroupInviteStopResult, GroupInviteTaskResult, ImportProgressPayload, OtherToolsSniperListenerPayload, OtherToolsSniperListenerState, OtherToolsSniperListenerStopResult, OtherToolsSniperPayload, OtherToolsSniperResult, OtherToolsUsernameFilterPayload, OtherToolsUsernameFilterResult, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationStopResult, ProxyPoolSettings, ProxyPoolState, ReauthorizeLogEntry, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeProgressOverview, SessionManagerActionPayload, SessionManagerActionResult, SessionManagerProgressState, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState, TwoFactorStopResult } from '../src/types'
 
 const runtimeAppVersion = String(ipcRenderer.sendSync('desktop-info:get-version') || '').trim()
 
@@ -74,12 +74,18 @@ contextBridge.exposeInMainWorld('desktopAccounts', {
   readPremiumExpiryFromDesktop: (accountId: number) => ipcRenderer.invoke('accounts:read-premium-expiry-from-desktop', accountId),
   pickProfileAvatar: () => ipcRenderer.invoke('accounts:pick-profile-avatar') as Promise<string | null>,
   reauthorize: (payload: ReauthorizeOperationPayload) => ipcRenderer.invoke('accounts:reauthorize', payload) as Promise<ReauthorizeOperationResult>,
-  getReauthorizeState: () => ipcRenderer.invoke('accounts:get-reauthorize-state') as Promise<ReauthorizeProgressState>,
-  clearReauthorizeLogs: () => ipcRenderer.invoke('accounts:clear-reauthorize-logs') as Promise<ReauthorizeProgressState>,
-  onReauthorizeProgress: (callback: (state: ReauthorizeProgressState) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, state: ReauthorizeProgressState) => callback(state)
+  getReauthorizeState: () => ipcRenderer.invoke('accounts:get-reauthorize-state') as Promise<ReauthorizeProgressOverview>,
+  getReauthorizeLogs: () => ipcRenderer.invoke('accounts:get-reauthorize-logs') as Promise<ReauthorizeLogEntry[]>,
+  clearReauthorizeLogs: () => ipcRenderer.invoke('accounts:clear-reauthorize-logs') as Promise<ReauthorizeProgressOverview>,
+  onReauthorizeProgress: (callback: (state: ReauthorizeProgressOverview) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: ReauthorizeProgressOverview) => callback(state)
     ipcRenderer.on('accounts:reauthorize-progress', listener)
     return () => ipcRenderer.removeListener('accounts:reauthorize-progress', listener)
+  },
+  onReauthorizeLogs: (callback: (logs: ReauthorizeLogEntry[]) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, logs: ReauthorizeLogEntry[]) => callback(logs)
+    ipcRenderer.on('accounts:reauthorize-logs', listener)
+    return () => ipcRenderer.removeListener('accounts:reauthorize-logs', listener)
   },
   manageTwoFactor: (payload: TwoFactorOperationPayload) => ipcRenderer.invoke('accounts:manage-two-factor', payload) as Promise<TwoFactorOperationResult>,
   stopTwoFactor: () => ipcRenderer.invoke('accounts:stop-two-factor') as Promise<TwoFactorStopResult>,

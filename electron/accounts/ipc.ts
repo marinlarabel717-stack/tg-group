@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { AccountListQuery, CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, ReauthorizeLogEntry, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressState, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
+import type { AccountListQuery, CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, ReauthorizeLogEntry, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressOverview, ReauthorizeProgressState, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
 import type { AppSettings } from '../app-settings-store'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
@@ -70,6 +70,7 @@ function createEmptyProfileOperationState(): ProfileOperationProgressState {
 
 function createEmptyReauthorizeState(): ReauthorizeProgressState {
   return {
+    runId: null,
     running: false,
     concurrency: 1,
     total: 0,
@@ -119,6 +120,23 @@ function trimOperationLogs<T extends { level: string }>(logs: T[], maxNonErrorLo
     }
     return true
   })
+}
+
+function serializeReauthorizeStateForRenderer(state: ReauthorizeProgressState): ReauthorizeProgressOverview {
+  return {
+    runId: state.runId,
+    running: state.running,
+    concurrency: state.concurrency,
+    total: state.total,
+    completed: state.completed,
+    successCount: state.successCount,
+    failedCount: state.failedCount,
+    currentAccountId: state.currentAccountId,
+    currentPhone: state.currentPhone,
+    logCount: state.logs.length,
+    lastLog: state.logs[state.logs.length - 1] ?? null,
+    lastUpdatedAt: state.lastUpdatedAt
+  }
 }
 
 function serializeCheckStateForRenderer(state: ReturnType<CheckQueue['getState']>) {
@@ -316,6 +334,8 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   let checkStateEmitTimer: NodeJS.Timeout | null = null
   let checkLogsEmitTimer: NodeJS.Timeout | null = null
   let reauthorizeProgressEmitTimer: NodeJS.Timeout | null = null
+  let reauthorizeLogsEmitTimer: NodeJS.Timeout | null = null
+  let pendingReauthorizeLogs: ReauthorizeLogEntry[] = []
   let checkLaunchToken = 0
 
   const flushCheckState = () => {
@@ -353,7 +373,23 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('accounts:reauthorize-progress', reauthorizeState)
+    mainWindow.webContents.send('accounts:reauthorize-progress', serializeReauthorizeStateForRenderer(reauthorizeState))
+  }
+
+  const flushReauthorizeLogs = () => {
+    if (reauthorizeLogsEmitTimer) {
+      clearTimeout(reauthorizeLogsEmitTimer)
+      reauthorizeLogsEmitTimer = null
+    }
+
+    if (pendingReauthorizeLogs.length === 0) return
+
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+
+    const nextLogs = pendingReauthorizeLogs
+    pendingReauthorizeLogs = []
+    mainWindow.webContents.send('accounts:reauthorize-logs', nextLogs)
   }
 
   const emitCheckState = (force = false) => {
@@ -419,6 +455,23 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }, 320)
   }
 
+  const emitReauthorizeLogs = (force = false) => {
+    if (force) {
+      flushReauthorizeLogs()
+      return
+    }
+
+    if (!reauthorizeState.running) {
+      flushReauthorizeLogs()
+      return
+    }
+
+    if (reauthorizeLogsEmitTimer) return
+    reauthorizeLogsEmitTimer = setTimeout(() => {
+      flushReauthorizeLogs()
+    }, 180)
+  }
+
   const emitProfileOperationProgress = () => {
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
@@ -476,13 +529,16 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   }
 
   const pushReauthorizeLog = (entry: Omit<ReauthorizeLogEntry, 'id' | 'createdAt'>) => {
-    const nextLogs = trimOperationLogs([...reauthorizeState.logs, createReauthorizeLogEntry(entry)], 180)
+    const appendedLog = createReauthorizeLogEntry(entry)
+    const nextLogs = trimOperationLogs([...reauthorizeState.logs, appendedLog], 180)
     reauthorizeState = {
       ...reauthorizeState,
       logs: nextLogs,
       lastUpdatedAt: new Date().toISOString()
     }
+    pendingReauthorizeLogs.push(appendedLog)
     emitReauthorizeProgress()
+    emitReauthorizeLogs()
   }
 
   const updateProfileOperationState = (patch: Partial<ProfileOperationProgressState>) => {
@@ -795,7 +851,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     const queue = orderedAccounts.map((account, index) => ({ account, index }))
     const workerCount = Math.min(runtimeConcurrency, Math.max(1, queue.length))
 
+    pendingReauthorizeLogs = []
     reauthorizeState = {
+      runId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       running: true,
       concurrency: workerCount,
       total: orderedAccounts.length,
@@ -906,19 +964,22 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
         currentAccountId: null,
         currentPhone: null
       })
+      emitReauthorizeLogs(true)
       emitReauthorizeProgress(true)
     }
   }))
 
-  ipcMain.handle('accounts:get-reauthorize-state', () => reauthorizeState)
+  ipcMain.handle('accounts:get-reauthorize-state', () => serializeReauthorizeStateForRenderer(reauthorizeState))
+  ipcMain.handle('accounts:get-reauthorize-logs', () => reauthorizeState.logs)
   ipcMain.handle('accounts:clear-reauthorize-logs', () => {
+    pendingReauthorizeLogs = []
     reauthorizeState = {
       ...reauthorizeState,
       logs: [],
       lastUpdatedAt: new Date().toISOString()
     }
-    emitReauthorizeProgress()
-    return reauthorizeState
+    emitReauthorizeProgress(true)
+    return serializeReauthorizeStateForRenderer(reauthorizeState)
   })
 
   ipcMain.handle('accounts:get-two-factor-state', () => twoFactorState)

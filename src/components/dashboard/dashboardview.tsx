@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { FileClock, KeyRound, MessageCircleMore, Radio, RefreshCcw, ShieldCheck, UserPlus2, UserRoundPen } from 'lucide-react'
-import type { ModuleKey, ReauthorizeProgressState } from '../../types'
+import type { ModuleKey, ReauthorizeProgressOverview } from '../../types'
 import { GlassPanel } from '../common/glasspanel'
 import { useAccountStore } from '../../stores/accountstore'
 import { useBroadcastStore, type BroadcastTabKey } from '../../stores/broadcaststore'
@@ -86,7 +86,7 @@ export function DashboardView() {
   const proxyPoolState = useProxyPoolStore((state) => state.state)
   const proxyPoolLastActionMessage = useProxyPoolStore((state) => state.lastActionMessage)
 
-  const [reauthorizeState, setReauthorizeState] = useState<ReauthorizeProgressState | null>(null)
+  const [reauthorizeState, setReauthorizeState] = useState<ReauthorizeProgressOverview | null>(null)
 
   useEffect(() => {
     void initAccounts()
@@ -187,7 +187,7 @@ export function DashboardView() {
     }
 
     if (reauthorizeState?.running) {
-      const latestLogMessage = reauthorizeState.logs[reauthorizeState.logs.length - 1]?.message || '重新授权任务进行中'
+      const latestLogMessage = reauthorizeState.lastLog?.message || '重新授权任务进行中'
       items.push({
         id: 'reauthorize',
         title: '重新授权',
