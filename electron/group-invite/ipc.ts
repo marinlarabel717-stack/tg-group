@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { WebContents } from 'electron'
 import type { GroupInvitePayload } from '../../src/types'
 import type { GroupInviteService } from './service'
 
@@ -9,17 +10,45 @@ interface RegisterGroupInviteIpcOptions {
 export function registerGroupInviteIpc(options: RegisterGroupInviteIpcOptions) {
   const { groupInviteService } = options
 
+  let progressEmitTimer: NodeJS.Timeout | null = null
+  let pendingState: ReturnType<GroupInviteService['getState']> | null = null
+  let progressTarget: WebContents | null = null
+
+  const flushProgress = () => {
+    if (progressEmitTimer) {
+      clearTimeout(progressEmitTimer)
+      progressEmitTimer = null
+    }
+    if (!pendingState || !progressTarget || progressTarget.isDestroyed()) return
+    progressTarget.send('group-invite:progress', pendingState)
+    pendingState = null
+  }
+
+  const emitProgress = (force = false) => {
+    if (force) {
+      flushProgress()
+      return
+    }
+    if (progressEmitTimer) return
+    progressEmitTimer = setTimeout(flushProgress, 180)
+  }
+
+  groupInviteService.setProgressSink((state) => {
+    pendingState = state
+    if (!state.running) {
+      emitProgress(true)
+      return
+    }
+    emitProgress()
+  })
+
   ipcMain.handle('group-invite:start', async (event, payload: GroupInvitePayload) => {
-    groupInviteService.setProgressSink((state) => {
-      event.sender.send('group-invite:progress', state)
-    })
+    progressTarget = event.sender
     return groupInviteService.start(payload)
   })
 
   ipcMain.handle('group-invite:stop', async (event) => {
-    groupInviteService.setProgressSink((state) => {
-      event.sender.send('group-invite:progress', state)
-    })
+    progressTarget = event.sender
     return groupInviteService.stop()
   })
 

@@ -350,12 +350,29 @@ async function bootstrap() {
 
   await proxyPoolService.init()
 
-  const emitProxyPoolState = () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('proxy-pool:state', proxyPoolService.getState())
+  let proxyPoolEmitTimer: NodeJS.Timeout | null = null
+  let botCenterEmitTimer: NodeJS.Timeout | null = null
+
+  const emitProxyPoolState = (force = false) => {
+    const send = () => {
+      if (proxyPoolEmitTimer) {
+        clearTimeout(proxyPoolEmitTimer)
+        proxyPoolEmitTimer = null
+      }
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      mainWindow.webContents.send('proxy-pool:state', proxyPoolService.getState())
+    }
+
+    if (force) {
+      send()
+      return
+    }
+
+    if (proxyPoolEmitTimer) return
+    proxyPoolEmitTimer = setTimeout(send, 180)
   }
 
-  proxyPoolService.on('state', emitProxyPoolState)
+  proxyPoolService.on('state', () => emitProxyPoolState())
 
   ipcMain.handle('proxy-pool:get-state', () => proxyPoolService.getState())
   ipcMain.handle('proxy-pool:replace-list', (_event, text: string) => proxyPoolService.replaceProxyList(text))
@@ -367,9 +384,23 @@ async function bootstrap() {
   ipcMain.handle('license:validate', () => licenseService.validate())
   ipcMain.handle('license:clear', () => licenseService.clear())
 
-  const emitBotCenterState = () => {
-    if (!mainWindow || mainWindow.isDestroyed() || !botCenterService) return
-    mainWindow.webContents.send('bot-center:state', botCenterService.getState())
+  const emitBotCenterState = (force = false) => {
+    const send = () => {
+      if (botCenterEmitTimer) {
+        clearTimeout(botCenterEmitTimer)
+        botCenterEmitTimer = null
+      }
+      if (!mainWindow || mainWindow.isDestroyed() || !botCenterService) return
+      mainWindow.webContents.send('bot-center:state', botCenterService.getState())
+    }
+
+    if (force) {
+      send()
+      return
+    }
+
+    if (botCenterEmitTimer) return
+    botCenterEmitTimer = setTimeout(send, 180)
   }
 
   botCenterService.onState(() => emitBotCenterState())

@@ -11,10 +11,37 @@ interface RegisterOtherToolsIpcOptions {
 export function registerOtherToolsIpc(options: RegisterOtherToolsIpcOptions) {
   const { otherToolsService, getMainWindow } = options
 
-  otherToolsService.setSniperListenerStateSink((state) => {
+  let listenerStateEmitTimer: NodeJS.Timeout | null = null
+  let pendingListenerState: ReturnType<OtherToolsService['getSniperListenerState']> | null = null
+
+  const flushListenerState = () => {
+    if (listenerStateEmitTimer) {
+      clearTimeout(listenerStateEmitTimer)
+      listenerStateEmitTimer = null
+    }
+    if (!pendingListenerState) return
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('other-tools:sniper-listener-state', state)
+    mainWindow.webContents.send('other-tools:sniper-listener-state', pendingListenerState)
+    pendingListenerState = null
+  }
+
+  const emitListenerState = (force = false) => {
+    if (force) {
+      flushListenerState()
+      return
+    }
+    if (listenerStateEmitTimer) return
+    listenerStateEmitTimer = setTimeout(flushListenerState, 180)
+  }
+
+  otherToolsService.setSniperListenerStateSink((state) => {
+    pendingListenerState = state
+    if (!state.running) {
+      emitListenerState(true)
+      return
+    }
+    emitListenerState()
   })
 
   ipcMain.handle('other-tools:filter-usernames', async (_event, payload: OtherToolsUsernameFilterPayload) => {
