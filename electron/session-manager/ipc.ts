@@ -53,6 +53,7 @@ export function registerSessionManagerIpc(options: RegisterSessionManagerIpcOpti
     return sessionManagerService.runAction(payload)
   })
 
+  ipcMain.handle('session-manager:stop', () => sessionManagerService.stop())
   ipcMain.handle('session-manager:get-state', () => serializeProgressState(sessionManagerService.getState()))
   ipcMain.handle('session-manager:clear-logs', () => sessionManagerService.clearLogs())
 }

@@ -31,7 +31,9 @@ interface TelethonDirectMessageSendPayload extends TelethonDirectMessageBasePayl
   postbotCode: string
 }
 
-interface TelethonDirectMessagePinPayload extends TelethonDirectMessageBasePayload {}
+interface TelethonDirectMessagePinPayload extends TelethonDirectMessageBasePayload {
+  messageId?: number | null
+}
 
 interface TelethonDirectMessageDeletePayload extends TelethonDirectMessageBasePayload {
   messageId?: number | null

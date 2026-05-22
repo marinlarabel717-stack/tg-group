@@ -323,7 +323,7 @@ async function bootstrap() {
   const directMessageService = new DirectMessageService(repository, sessionLoader, clientManager, proxyPoolService, telethonGroupCollector, telethonDirectMessageSender)
   const autoJoinService = new AutoJoinService(repository, sessionLoader, clientManager, proxyPoolService, telethonFreezeChecker, telethonAutoJoiner)
   const groupInviteService = new GroupInviteService(repository, sessionLoader, clientManager, proxyPoolService)
-  const sessionManagerService = new SessionManagerService(repository, sessionLoader, clientManager, proxyPoolService)
+  const sessionManagerService = new SessionManagerService(repository, sessionLoader, clientManager, proxyPoolService, appSettingsStore)
   const batchCreateService = new BatchCreateService(repository, sessionLoader, clientManager, proxyPoolService)
   const otherToolsService = new OtherToolsService(repository, sessionLoader, clientManager, proxyPoolService)
   botCenterService = new BotCenterService(botCenterStoragePath)

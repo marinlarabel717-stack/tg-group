@@ -3,6 +3,7 @@ import bigInt from 'big-integer'
 import type { TelegramClient } from 'telegram'
 import type { AccountRecord } from '../accounts/types'
 import type { AccountRepository } from '../accounts/services/account-repository'
+import type { AppSettingsStore } from '../app-settings-store'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
@@ -12,8 +13,14 @@ import type {
   SessionManagerActionResult,
   SessionManagerActionResultItem,
   SessionManagerLogEntry,
-  SessionManagerProgressState
+  SessionManagerProgressState,
+  SessionManagerStopResult
 } from '../../src/types'
+
+interface ActiveSessionManagerTask {
+  cancelled: boolean
+  clients: Set<TelegramClient>
+}
 
 function createId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -22,6 +29,7 @@ function createId(prefix: string) {
 function createEmptyState(): SessionManagerProgressState {
   return {
     running: false,
+    stopRequested: false,
     action: null,
     total: 0,
     completed: 0,
@@ -167,6 +175,35 @@ function isPrivateDialogEntity(entity: unknown) {
   return Boolean(className)
 }
 
+function readEntityIdString(entity: unknown) {
+  const raw = (entity as { id?: { toString?: () => string } | number | string | bigint } | null)?.id
+  if (typeof raw === 'bigint') return raw.toString()
+  if (typeof raw === 'number' && Number.isFinite(raw)) return String(Math.trunc(raw))
+  if (typeof raw === 'string' && raw.trim()) return raw.trim()
+  if (raw && typeof raw === 'object' && typeof raw.toString === 'function') {
+    const value = raw.toString()
+    return value && value !== '[object Object]' ? value : ''
+  }
+  return ''
+}
+
+function readEntityUsername(entity: unknown) {
+  return typeof (entity as { username?: unknown } | null)?.username === 'string'
+    ? ((entity as { username: string }).username || '').trim().toLowerCase()
+    : ''
+}
+
+function isSavedMessagesEntity(entity: unknown) {
+  return Boolean((entity as { self?: unknown } | null)?.self)
+}
+
+function isSystemDialogEntity(entity: unknown) {
+  if (isSavedMessagesEntity(entity)) return false
+  const entityId = readEntityIdString(entity)
+  const username = readEntityUsername(entity)
+  return entityId === '777000' || username === 'telegram' || Boolean((entity as { support?: unknown } | null)?.support)
+}
+
 function readDialogEntityId(dialog: any) {
   const dialogId = typeof dialog?.id?.toString === 'function'
     ? dialog.id.toString()
@@ -285,6 +322,22 @@ async function clearDialogHistoryByEntity(client: TelegramClient, entity: unknow
   }))
 }
 
+async function clearSavedMessagesByEntity(client: TelegramClient, entity: unknown) {
+  const inputPeer = await client.getInputEntity(entity as never)
+  await client.invoke(new Api.messages.DeleteHistory({
+    peer: inputPeer as never,
+    maxId: 0,
+    justClear: false,
+    revoke: true
+  }))
+  await client.invoke(new Api.messages.DeleteHistory({
+    peer: inputPeer as never,
+    maxId: 0,
+    justClear: true,
+    revoke: false
+  })).catch(() => undefined)
+}
+
 async function leaveGroupLikeEntity(client: TelegramClient, entity: unknown) {
   const inputPeer = await client.getInputEntity(entity as never)
   const className = String((entity as { className?: string } | null)?.className || '')
@@ -309,6 +362,7 @@ function formatSessionManagerError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   const normalized = message.trim()
   if (!normalized) return '未知错误'
+  if (/SESSION_MANAGER_STOPPED/i.test(normalized)) return '任务已停止'
   if (/AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(normalized)) return '当前账号登录已失效'
   if (/GLOBAL_PROXY_REQUIRED/i.test(normalized)) return '当前已开启全局代理，但没有可用代理'
   if (/TARGET_REQUIRED/i.test(normalized)) return '目标不能为空'
@@ -361,12 +415,14 @@ function summarizeCleanup(action: SessionManagerActionKind, details: { dialogs?:
 export class SessionManagerService {
   private state = createEmptyState()
   private progressSink: ((state: SessionManagerProgressState) => void) | null = null
+  private activeTask: ActiveSessionManagerTask | null = null
 
   constructor(
     private readonly repository: AccountRepository,
     private readonly sessionLoader: SessionLoader,
     private readonly clientManager: TelegramClientManager,
-    private readonly proxyPoolService: ProxyPoolService
+    private readonly proxyPoolService: ProxyPoolService,
+    private readonly appSettingsStore: AppSettingsStore
   ) {}
 
   setProgressSink(sink: ((state: SessionManagerProgressState) => void) | null) {
@@ -385,6 +441,59 @@ export class SessionManagerService {
     }
     this.progressSink?.(this.state)
     return this.state
+  }
+
+  async stop(): Promise<SessionManagerStopResult> {
+    const activeTask = this.activeTask
+    if (!activeTask || !this.state.running) {
+      return {
+        stopped: false,
+        message: '当前没有正在执行的账号清理任务。'
+      }
+    }
+
+    if (activeTask.cancelled || this.state.stopRequested) {
+      return {
+        stopped: true,
+        message: '停止请求已发出，正在等待当前步骤收尾。'
+      }
+    }
+
+    activeTask.cancelled = true
+    this.updateState({ stopRequested: true })
+    this.pushLog({
+      level: 'warning',
+      accountId: null,
+      accountPhone: '',
+      message: '已请求停止账号清理任务，正在等待当前步骤结束...'
+    })
+
+    await Promise.allSettled(Array.from(activeTask.clients).map(async (client) => {
+      try {
+        await this.clientManager.destroyClient(client)
+      } finally {
+        activeTask.clients.delete(client)
+      }
+    }))
+
+    return {
+      stopped: true,
+      message: '已请求停止账号清理任务。'
+    }
+  }
+
+  private ensureNotCancelled(task: ActiveSessionManagerTask) {
+    if (task.cancelled) {
+      throw new Error('SESSION_MANAGER_STOPPED')
+    }
+  }
+
+  private addTaskClient(task: ActiveSessionManagerTask, client: TelegramClient) {
+    task.clients.add(client)
+  }
+
+  private removeTaskClient(task: ActiveSessionManagerTask, client: TelegramClient) {
+    task.clients.delete(client)
   }
 
   private updateState(patch: Partial<SessionManagerProgressState>) {
@@ -420,13 +529,21 @@ export class SessionManagerService {
     this.progressSink?.(this.state)
   }
 
-  private async cleanupAllDialogs(client: TelegramClient) {
-    const dialogs = (await loadDialogsWithFallback(client)).filter((dialog) => isPrivateDialogEntity(dialog?.entity) && !dialog?.entity?.self)
+  private async cleanupAllDialogs(client: TelegramClient, task: ActiveSessionManagerTask) {
+    const dialogs = (await loadDialogsWithFallback(client)).filter((dialog) => {
+      if (isSavedMessagesEntity(dialog?.entity)) return true
+      return isPrivateDialogEntity(dialog?.entity) && !isSystemDialogEntity(dialog?.entity)
+    })
     let failed = 0
 
     for (const dialog of dialogs) {
+      this.ensureNotCancelled(task)
       try {
-        await clearDialogHistoryByEntity(client, dialog.entity)
+        if (isSavedMessagesEntity(dialog?.entity)) {
+          await clearSavedMessagesByEntity(client, dialog.entity)
+        } else {
+          await clearDialogHistoryByEntity(client, dialog.entity)
+        }
       } catch {
         failed += 1
       }
@@ -435,11 +552,12 @@ export class SessionManagerService {
     return { dialogs: dialogs.length, failed }
   }
 
-  private async cleanupAllGroups(client: TelegramClient) {
+  private async cleanupAllGroups(client: TelegramClient, task: ActiveSessionManagerTask) {
     const dialogs = (await loadDialogsWithFallback(client)).filter((dialog) => isGroupLikeEntity(dialog?.entity))
     let failed = 0
 
     for (const dialog of dialogs) {
+      this.ensureNotCancelled(task)
       try {
         await clearDialogHistoryByEntity(client, dialog.entity).catch(() => undefined)
         await leaveGroupLikeEntity(client, dialog.entity)
@@ -451,7 +569,7 @@ export class SessionManagerService {
     return { groups: dialogs.length, failed }
   }
 
-  private async cleanupAllContacts(client: TelegramClient) {
+  private async cleanupAllContacts(client: TelegramClient, task: ActiveSessionManagerTask) {
     const response = await client.invoke(new Api.contacts.GetContacts({ hash: bigInt.zero }))
     const users = Array.isArray((response as { users?: unknown[] }).users) ? (response as { users: any[] }).users : []
     const inputUsers = users
@@ -466,6 +584,7 @@ export class SessionManagerService {
 
     let failed = 0
     for (let index = 0; index < inputUsers.length; index += 100) {
+      this.ensureNotCancelled(task)
       const chunk = inputUsers.slice(index, index + 100)
       try {
         await client.invoke(new Api.contacts.DeleteContacts({ id: chunk as never[] }))
@@ -477,10 +596,12 @@ export class SessionManagerService {
     return { contacts: inputUsers.length, failed }
   }
 
-  private async runAccountWideCleanup(account: AccountRecord, action: SessionManagerActionKind) {
+  private async runAccountWideCleanup(account: AccountRecord, action: SessionManagerActionKind, task: ActiveSessionManagerTask) {
     let client: TelegramClient | null = null
     try {
+      this.ensureNotCancelled(task)
       client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+      this.addTaskClient(task, client)
       const accountLabel = readAccountLabel(account)
       this.pushLog({
         level: 'info',
@@ -491,18 +612,20 @@ export class SessionManagerService {
 
       let details = { dialogs: 0, groups: 0, contacts: 0, failed: 0 }
       if (action === 'wipe-all-dialogs') {
-        const result = await this.cleanupAllDialogs(client)
+        const result = await this.cleanupAllDialogs(client, task)
         details = { dialogs: result.dialogs, groups: 0, contacts: 0, failed: result.failed }
       } else if (action === 'wipe-all-groups') {
-        const result = await this.cleanupAllGroups(client)
+        const result = await this.cleanupAllGroups(client, task)
         details = { dialogs: 0, groups: result.groups, contacts: 0, failed: result.failed }
       } else if (action === 'wipe-all-contacts') {
-        const result = await this.cleanupAllContacts(client)
+        const result = await this.cleanupAllContacts(client, task)
         details = { dialogs: 0, groups: 0, contacts: result.contacts, failed: result.failed }
       } else {
-        const dialogs = await this.cleanupAllDialogs(client)
-        const groups = await this.cleanupAllGroups(client)
-        const contacts = await this.cleanupAllContacts(client)
+        const dialogs = await this.cleanupAllDialogs(client, task)
+        this.ensureNotCancelled(task)
+        const groups = await this.cleanupAllGroups(client, task)
+        this.ensureNotCancelled(task)
+        const contacts = await this.cleanupAllContacts(client, task)
         details = {
           dialogs: dialogs.dialogs,
           groups: groups.groups,
@@ -528,6 +651,7 @@ export class SessionManagerService {
       } satisfies SessionManagerActionResultItem
     } finally {
       if (client) {
+        this.removeTaskClient(task, client)
         await this.clientManager.destroyClient(client).catch(() => undefined)
       }
     }
@@ -554,10 +678,18 @@ export class SessionManagerService {
       throw new Error('请先填写至少一个目标。')
     }
 
+    const totalPlanned = isAccountWideAction ? accounts.length : accounts.length * targetRefs.length
+    const task: ActiveSessionManagerTask = {
+      cancelled: false,
+      clients: new Set<TelegramClient>()
+    }
+    this.activeTask = task
+
     this.state = {
       running: true,
+      stopRequested: false,
       action,
-      total: isAccountWideAction ? accounts.length : accounts.length * targetRefs.length,
+      total: totalPlanned,
       completed: 0,
       successCount: 0,
       failedCount: 0,
@@ -576,28 +708,36 @@ export class SessionManagerService {
     })
 
     try {
-      for (const account of accounts) {
+      const processAccount = async (account: AccountRecord) => {
+        if (task.cancelled) return
         const accountLabel = readAccountLabel(account)
         this.updateState({ currentAccountId: account.id, currentPhone: accountLabel })
 
         if (isAccountWideAction) {
           try {
-            const item = await this.runAccountWideCleanup(account, action)
+            const item = await this.runAccountWideCleanup(account, action, task)
+            if (task.cancelled) return
             results.push(item)
             this.bumpCounters(item.success ? 'success' : 'failed')
           } catch (error) {
+            if (task.cancelled && /SESSION_MANAGER_STOPPED/i.test(error instanceof Error ? error.message : String(error))) {
+              return
+            }
             const message = formatSessionManagerError(error)
             this.pushLog({ level: 'error', accountId: account.id, accountPhone: accountLabel, message })
             results.push({ accountId: account.id, accountLabel, targetRef: readActionLabel(action), success: false, message })
             this.bumpCounters('failed')
           }
-          continue
+          return
         }
 
         let client: TelegramClient | null = null
         try {
+          this.ensureNotCancelled(task)
           client = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+          this.addTaskClient(task, client)
           for (const targetRef of targetRefs) {
+            if (task.cancelled) break
             try {
               const message = action === 'delete-messages'
                 ? await deleteMessages(client, targetRef, messageIds)
@@ -613,23 +753,55 @@ export class SessionManagerService {
               this.pushLog({ level: 'success', accountId: account.id, accountPhone: accountLabel, message: `${targetRef}：${message}` })
               this.bumpCounters('success')
             } catch (error) {
+              if (task.cancelled && /SESSION_MANAGER_STOPPED/i.test(error instanceof Error ? error.message : String(error))) {
+                break
+              }
               const message = formatSessionManagerError(error)
               results.push({ accountId: account.id, accountLabel, targetRef, success: false, message })
               this.pushLog({ level: 'error', accountId: account.id, accountPhone: accountLabel, message: `${targetRef}：${message}` })
               this.bumpCounters('failed')
             }
           }
+        } catch (error) {
+          if (task.cancelled && /SESSION_MANAGER_STOPPED/i.test(error instanceof Error ? error.message : String(error))) {
+            return
+          }
+          const message = formatSessionManagerError(error)
+          for (const targetRef of targetRefs) {
+            results.push({ accountId: account.id, accountLabel, targetRef, success: false, message })
+            this.pushLog({ level: 'error', accountId: account.id, accountPhone: accountLabel, message: `${targetRef}：${message}` })
+            this.bumpCounters('failed')
+          }
         } finally {
           if (client) {
+            this.removeTaskClient(task, client)
             await this.clientManager.destroyClient(client).catch(() => undefined)
           }
         }
       }
 
+      const runtimeConcurrency = Math.max(1, this.appSettingsStore.get().checkConcurrency)
+      let nextAccountIndex = 0
+      const worker = async () => {
+        while (!task.cancelled) {
+          const currentIndex = nextAccountIndex
+          nextAccountIndex += 1
+          if (currentIndex >= accounts.length) {
+            return
+          }
+          await processAccount(accounts[currentIndex])
+        }
+      }
+
+      await Promise.all(Array.from({ length: Math.min(runtimeConcurrency, accounts.length) }, () => worker()))
+
       const successCount = results.filter((item) => item.success).length
       const failedCount = results.length - successCount
-      const message = `${readActionLabel(action)}完成：成功 ${successCount}，失败 ${failedCount}。`
-      this.pushLog({ level: failedCount > 0 ? 'warning' : 'success', accountId: null, accountPhone: '', message })
+      const remainingCount = Math.max(0, totalPlanned - results.length)
+      const message = task.cancelled
+        ? `${readActionLabel(action)}已停止：成功 ${successCount}，失败 ${failedCount}，剩余 ${remainingCount} 个未继续处理。`
+        : `${readActionLabel(action)}完成：成功 ${successCount}，失败 ${failedCount}。`
+      this.pushLog({ level: task.cancelled || failedCount > 0 ? 'warning' : 'success', accountId: null, accountPhone: '', message })
       return {
         action,
         total: results.length,
@@ -639,8 +811,10 @@ export class SessionManagerService {
         message
       }
     } finally {
+      this.activeTask = null
       this.updateState({
         running: false,
+        stopRequested: false,
         currentAccountId: null,
         currentPhone: null
       })

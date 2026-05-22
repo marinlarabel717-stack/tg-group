@@ -398,6 +398,7 @@ function ProfileSummary({ state, logs, scrollContainerRef, onScroll }: { state: 
 function CleanupSummary({ scrollContainerRef, onScroll }: { scrollContainerRef: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
   const [state, setState] = useState<SessionManagerProgressState>({
     running: false,
+    stopRequested: false,
     action: null,
     total: 0,
     completed: 0,
@@ -452,13 +453,23 @@ function CleanupSummary({ scrollContainerRef, onScroll }: { scrollContainerRef: 
             <div className="flex items-center gap-2 text-sm font-medium text-white"><Trash2 size={16} className="text-violet-300" /><span>账号清理日志</span></div>
             <div className="mt-1 text-xs text-textMuted">从账号管理操作菜单启动后，会自动跳到这里显示删除过程。</div>
           </div>
-          <button
-            type="button"
-            onClick={() => void window.desktopSessionManager?.clearLogs?.().then(setState).catch(() => undefined)}
-            className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]"
-          >
-            清空日志
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={!state.running || state.stopRequested}
+              onClick={() => void window.desktopSessionManager?.stop?.()}
+              className="rounded-[12px] bg-rose-400/12 px-4 py-2 text-sm text-rose-200 transition hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {state.stopRequested ? '停止中' : '停止任务'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void window.desktopSessionManager?.clearLogs?.().then(setState).catch(() => undefined)}
+              className="rounded-[12px] bg-white/[0.05] px-4 py-2 text-sm text-white transition hover:bg-white/[0.08]"
+            >
+              清空日志
+            </button>
+          </div>
         </div>
       </div>
 
@@ -477,7 +488,7 @@ function CleanupSummary({ scrollContainerRef, onScroll }: { scrollContainerRef: 
         </div>
         <div className="rounded-[14px] bg-panel px-4 py-4">
           <div className="text-xs tracking-[0.16em] text-violet-300">状态</div>
-          <div className="mt-2 text-2xl font-semibold text-white">{state.running ? '执行中' : '已结束'}</div>
+          <div className="mt-2 text-2xl font-semibold text-white">{state.running ? (state.stopRequested ? '停止中' : '执行中') : '已结束'}</div>
         </div>
       </div>
 

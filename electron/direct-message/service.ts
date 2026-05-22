@@ -55,6 +55,7 @@ function formatDirectMessageError(error: unknown) {
   if (/ALLOW_PAYMENT_REQUIRED/i.test(normalized)) return '对方开启了付费私信，当前账号不能直接发送。'
   if (/INPUT_USER_DEACTIVATED/i.test(normalized)) return '对方账号已注销、被封，或者已经不存在。'
   if (/PHONE_NUMBER_INVALID/i.test(normalized)) return '这个手机号格式不对，请检查手机号。'
+  if (/MESSAGE_ID_INVALID/i.test(normalized)) return '这次发送后没有拿到可置顶的消息 ID，所以没法继续置顶。'
   if (/USER_PRIVACY_RESTRICTED/i.test(normalized)) return '对方隐私限制了私信，当前账号发不过去。'
   if (/USER_IS_BLOCKED/i.test(normalized)) return '对方已经把当前账号拉黑了。'
   if (/CHAT_SEND_PHOTOS_FORBIDDEN/i.test(normalized)) return '对方那边不允许收图片，或者当前会话不让发图片。'
@@ -297,6 +298,13 @@ function extractInviteHash(input: string) {
   return ''
 }
 
+function extractPublicTelegramUsername(input: string) {
+  const raw = input.trim()
+  if (!raw) return ''
+  const matched = raw.match(/(?:https?:\/\/)?t\.me\/(?:(?:s|a)\/)?([A-Za-z0-9_]{5,})(?:[/?#].*)?$/i)
+  return matched?.[1] ? matched[1].replace(/^@+/, '').trim() : ''
+}
+
 function normalizeCollectorGroupSource(input: string) {
   const raw = input.trim()
   if (!raw) return null
@@ -309,13 +317,12 @@ function normalizeCollectorGroupSource(input: string) {
     }
   }
 
-  const publicMatched = raw.match(/(?:https?:\/\/)?t\.me\/([A-Za-z0-9_]{5,})(?:\?.*)?$/i)
-  if (publicMatched?.[1]) {
-    const username = publicMatched[1].replace(/^@+/, '')
+  const publicUsername = extractPublicTelegramUsername(raw)
+  if (publicUsername) {
     return {
       kind: 'username' as const,
-      value: `@${username}`,
-      label: `@${username}`
+      value: `@${publicUsername}`,
+      label: `@${publicUsername}`
     }
   }
 
@@ -366,6 +373,11 @@ async function resolveCollectorGroupEntity(client: TelegramClient, source: Retur
     try {
       return await client.getEntity(`https://t.me/${username}` as never)
     } catch {
+      const resolved = await client.invoke(new Api.contacts.ResolveUsername({ username }))
+      const chats = Array.isArray((resolved as { chats?: unknown[] }).chats) ? (resolved as { chats: unknown[] }).chats : []
+      if (chats[0]) return chats[0]
+      const users = Array.isArray((resolved as { users?: unknown[] }).users) ? (resolved as { users: unknown[] }).users : []
+      if (users[0]) return users[0]
       throw error
     }
   }
@@ -1059,10 +1071,11 @@ export class DirectMessageService {
     }
   }
 
-  private async pinViaTelethon(account: AccountRecord, item: DirectMessageSendPayload['items'][number]) {
+  private async pinViaTelethon(account: AccountRecord, item: DirectMessageSendPayload['items'][number], messageId: number | null) {
     await this.telethonDirectMessageSender.pin({
       sessionPath: account.sessionPath,
       targetValue: item.targetValue,
+      messageId,
       timeoutSeconds: 25,
       proxy: this.getCurrentProxy()
     })
@@ -1463,15 +1476,19 @@ export class DirectMessageService {
                 if (action.kind === 'pin') {
                   try {
                     if (useTelethonPrimary) {
-                      await this.pinViaTelethon(account, item)
+                      await this.pinViaTelethon(account, item, resultItem.remoteMessageId)
                     } else {
-                      await (client as TelegramClient).invoke(new Api.messages.ToggleDialogPin({
+                      if (!resultItem.remoteMessageId) {
+                        throw new Error('MESSAGE_ID_INVALID')
+                      }
+                      await (client as TelegramClient).invoke(new Api.messages.UpdatePinnedMessage({
                         peer: (resolved as { entity: unknown }).entity as never,
-                        pinned: true,
-                        pmOneSide: true
+                        id: resultItem.remoteMessageId,
+                        silent: true,
+                        pmOneside: true
                       } as any))
                     }
-                    actionNotes.push(`已在发送后 ${action.delaySeconds} 秒自动置顶会话`)
+                    actionNotes.push(`已在发送后 ${action.delaySeconds} 秒自动置顶消息`)
                   } catch (pinError) {
                     actionNotes.push(`置顶失败：${formatDirectMessageError(pinError)}`)
                   }

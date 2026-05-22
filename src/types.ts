@@ -1575,6 +1575,11 @@ export interface SessionManagerActionPayload {
   messageIds?: number[]
 }
 
+export interface SessionManagerStopResult {
+  stopped: boolean
+  message: string
+}
+
 export interface SessionManagerLogEntry {
   id: string
   accountId: number | null
@@ -1586,6 +1591,7 @@ export interface SessionManagerLogEntry {
 
 export interface SessionManagerProgressState {
   running: boolean
+  stopRequested: boolean
   action: SessionManagerActionKind | null
   total: number
   completed: number
@@ -1616,6 +1622,7 @@ export interface SessionManagerActionResult {
 
 export interface DesktopSessionManagerApi {
   runAction: (payload: SessionManagerActionPayload) => Promise<SessionManagerActionResult>
+  stop: () => Promise<SessionManagerStopResult>
   getState: () => Promise<SessionManagerProgressState>
   clearLogs: () => Promise<SessionManagerProgressState>
   onProgress: (callback: (payload: SessionManagerProgressState) => void) => () => void

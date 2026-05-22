@@ -233,6 +233,7 @@ contextBridge.exposeInMainWorld('desktopBatchCreate', {
 
 contextBridge.exposeInMainWorld('desktopSessionManager', {
   runAction: (payload: SessionManagerActionPayload) => ipcRenderer.invoke('session-manager:run-action', payload) as Promise<SessionManagerActionResult>,
+  stop: () => ipcRenderer.invoke('session-manager:stop'),
   getState: () => ipcRenderer.invoke('session-manager:get-state') as Promise<SessionManagerProgressState>,
   clearLogs: () => ipcRenderer.invoke('session-manager:clear-logs') as Promise<SessionManagerProgressState>,
   onProgress: (callback: (payload: SessionManagerProgressState) => void) => {

@@ -55,6 +55,10 @@ def _normalize_username(raw: str) -> str:
     return value if re.fullmatch(r'[A-Za-z0-9_]{5,32}', value or '') else ''
 
 
+def _read_public_peer_ref(raw: str) -> str:
+    return _extract_public_username(raw) or _normalize_username(raw)
+
+
 def _extract_usernames_from_text(text: str) -> List[str]:
     seen = set()
     output: List[str] = []
@@ -153,13 +157,31 @@ async def _resolve_entity(client: Any, source: str):
             return refreshed.chat
         raise RuntimeError('INVITE_IMPORT_FAILED')
 
-    try:
-        return await client.get_entity(raw)
-    except Exception as first_error:
-        username = raw.replace('@', '').strip()
-        if not username:
-            raise first_error
-        return await client.get_entity(f'https://t.me/{username}')
+    public_peer_ref = _read_public_peer_ref(raw)
+    candidates = [raw]
+    if public_peer_ref:
+        candidates = [f'@{public_peer_ref}', f'https://t.me/{public_peer_ref}', raw]
+
+    first_error = None
+    for candidate in candidates:
+        try:
+            return await client.get_entity(candidate)
+        except Exception as exc:
+            if first_error is None:
+                first_error = exc
+
+    if public_peer_ref:
+        resolved = await client(functions.contacts.ResolveUsernameRequest(username=public_peer_ref))
+        chats = getattr(resolved, 'chats', None) or []
+        if chats:
+            return chats[0]
+        users = getattr(resolved, 'users', None) or []
+        if users:
+            return users[0]
+
+    if first_error is not None:
+        raise first_error
+    raise RuntimeError('SOURCE_INVALID')
 
 
 async def _resolve_message_entity(client: Any, source: str):
