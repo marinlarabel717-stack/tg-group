@@ -142,7 +142,7 @@ export function DashboardView() {
       items.push({
         id: 'accounts-two-factor',
         title: twoFactorState.stopRequested ? '2FA 收尾中' : '2FA 任务',
-        subtitle: twoFactorState.logs[twoFactorState.logs.length - 1]?.message || (twoFactorState.stopRequested ? '正在收尾当前 2FA 任务' : '2FA 任务进行中'),
+        subtitle: twoFactorState.lastLog?.message || (twoFactorState.stopRequested ? '正在收尾当前 2FA 任务' : '2FA 任务进行中'),
         progress: `${twoFactorState.completed} / ${twoFactorState.total}`,
         accentClass: 'border-fuchsia-300/18 bg-fuchsia-400/8 text-fuchsia-200',
         moduleKey: 'logs',
@@ -155,7 +155,7 @@ export function DashboardView() {
       items.push({
         id: 'accounts-profile',
         title: profileOperationState.stopRequested ? '资料收尾中' : '资料任务',
-        subtitle: profileOperationState.logs[profileOperationState.logs.length - 1]?.message || (profileOperationState.stopRequested ? '正在收尾当前资料任务' : '资料任务进行中'),
+        subtitle: profileOperationState.lastLog?.message || (profileOperationState.stopRequested ? '正在收尾当前资料任务' : '资料任务进行中'),
         progress: `${profileOperationState.completed} / ${profileOperationState.total}`,
         accentClass: 'border-cyan-300/18 bg-cyan-400/8 text-cyan-100',
         moduleKey: 'logs',

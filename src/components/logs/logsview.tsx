@@ -7,7 +7,7 @@ import { useProxyPoolStore } from '../../stores/proxypoolstore'
 import { useUIStore } from '../../stores/uistore'
 import { useBatchCreateStore } from '../../stores/batchcreatestore'
 import { useOtherToolsStore } from '../../stores/othertoolsstore'
-import type { CheckLogEntry, CheckLogLevel, OtherToolsSniperListenerLogEntry, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationProgressState, ProxyCheckLogEntry, SessionManagerLogEntry, SessionManagerProgressState, TwoFactorAction, TwoFactorLogEntry, TwoFactorProgressState } from '../../types'
+import type { CheckLogEntry, CheckLogLevel, OtherToolsSniperListenerLogEntry, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationProgressOverview, ProxyCheckLogEntry, SessionManagerLogEntry, SessionManagerProgressState, TwoFactorAction, TwoFactorLogEntry, TwoFactorProgressOverview } from '../../types'
 import { isGeoRestrictedError } from '../../lib/ui-text'
 
 function formatLogTimestamp(value: string) {
@@ -341,7 +341,7 @@ const AccountOperationSummary = memo(function AccountOperationSummary({
   )
 })
 
-function TwoFactorSummary({ state, scrollContainerRef, onScroll }: { state: TwoFactorProgressState; scrollContainerRef: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
+function TwoFactorSummary({ state, logs, scrollContainerRef, onScroll }: { state: TwoFactorProgressOverview; logs: TwoFactorLogEntry[]; scrollContainerRef: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
   const stopTwoFactorTask = useAccountStore((store) => store.stopTwoFactorTask)
   const clearTwoFactorLogs = useAccountStore((store) => store.clearTwoFactorLogs)
 
@@ -358,7 +358,7 @@ function TwoFactorSummary({ state, scrollContainerRef, onScroll }: { state: TwoF
       successCount={state.successCount}
       failedCount={state.failedCount}
       concurrency={state.concurrency}
-      logs={state.logs}
+      logs={logs}
       onStop={() => void stopTwoFactorTask()}
       onClear={() => void clearTwoFactorLogs()}
       lineClassResolver={getTwoFactorLineClass}
@@ -368,7 +368,7 @@ function TwoFactorSummary({ state, scrollContainerRef, onScroll }: { state: TwoF
   )
 }
 
-function ProfileSummary({ state, scrollContainerRef, onScroll }: { state: ProfileOperationProgressState; scrollContainerRef: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
+function ProfileSummary({ state, logs, scrollContainerRef, onScroll }: { state: ProfileOperationProgressOverview; logs: ProfileOperationLogEntry[]; scrollContainerRef: RefObject<HTMLDivElement | null>; onScroll?: () => void }) {
   const stopProfileOperationTask = useAccountStore((store) => store.stopProfileOperationTask)
   const clearProfileOperationLogs = useAccountStore((store) => store.clearProfileOperationLogs)
 
@@ -385,7 +385,7 @@ function ProfileSummary({ state, scrollContainerRef, onScroll }: { state: Profil
       successCount={state.successCount}
       failedCount={state.failedCount}
       concurrency={state.concurrency}
-      logs={state.logs}
+      logs={logs}
       onStop={() => void stopProfileOperationTask()}
       onClear={() => void clearProfileOperationLogs()}
       lineClassResolver={getProfileLineClass}
@@ -713,7 +713,9 @@ export default memo(function LogsView() {
   const checkRunning = useAccountStore((state) => state.checkState.running)
   const checkLogs = useAccountStore((state) => state.checkLogs)
   const twoFactorState = useAccountStore((state) => state.twoFactorState)
+  const twoFactorLogs = useAccountStore((state) => state.twoFactorLogs)
   const profileOperationState = useAccountStore((state) => state.profileOperationState)
+  const profileOperationLogs = useAccountStore((state) => state.profileOperationLogs)
   const batchCreateLogs = useBatchCreateStore((state) => state.logs)
   const logsContext = useUIStore((state) => state.logsContext)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
@@ -739,13 +741,13 @@ export default memo(function LogsView() {
 
   const activeLogCount = useMemo(() => {
     if (logsContext === 'accounts') return checkLogs.length
-    if (logsContext === 'accounts-two-factor') return twoFactorState.logs.length
-    if (logsContext === 'accounts-profile') return profileOperationState.logs.length
+    if (logsContext === 'accounts-two-factor') return twoFactorLogs.length
+    if (logsContext === 'accounts-profile') return profileOperationLogs.length
     if (logsContext === 'accounts-cleanup') return cleanupLogCount
     if (logsContext === 'batch-create') return batchCreateLogs.length
     if (logsContext === 'other-tools-sniper') return otherToolsSummaryLogs + otherToolsListenerLogs
     return 0
-  }, [batchCreateLogs.length, checkLogs.length, cleanupLogCount, logsContext, otherToolsListenerLogs, otherToolsSummaryLogs, profileOperationState.logs.length, twoFactorState.logs.length])
+  }, [batchCreateLogs.length, checkLogs.length, cleanupLogCount, logsContext, otherToolsListenerLogs, otherToolsSummaryLogs, profileOperationLogs.length, twoFactorLogs.length])
 
   useEffect(() => {
     const element = scrollContainerRef.current
@@ -766,11 +768,11 @@ export default memo(function LogsView() {
   }
 
   if (logsContext === 'accounts-two-factor') {
-    return <TwoFactorSummary state={twoFactorState} scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
+    return <TwoFactorSummary state={twoFactorState} logs={twoFactorLogs} scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
   }
 
   if (logsContext === 'accounts-profile') {
-    return <ProfileSummary state={profileOperationState} scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
+    return <ProfileSummary state={profileOperationState} logs={profileOperationLogs} scrollContainerRef={scrollContainerRef} onScroll={handleScroll} />
   }
 
   if (logsContext === 'accounts-cleanup') {

@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, KeyRound, Loader2, MailCheck, RotateCcw, ShieldOff } from 'lucide-react'
-import type { AccountRecord, TwoFactorAction, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressState } from '../../types'
+import type { AccountRecord, TwoFactorAction, TwoFactorOperationPayload, TwoFactorOperationResult, TwoFactorProgressOverview } from '../../types'
 import { SOFT_INPUT_CLASS } from '../common/settings-ui'
 import { ResultDialogShell, ResultHero, ResultPrimaryButton, ResultStatCard } from './resultdialog'
 
@@ -221,14 +221,14 @@ export const TwoFactorProgressDialog = memo(function TwoFactorProgressDialog({
   state,
   onStop
 }: {
-  state: TwoFactorProgressState | null
+  state: TwoFactorProgressOverview | null
   onStop: () => void
 }) {
   if (!state?.running) return null
 
   const tone = state.action ? readActionTone(state.action) : 'violet'
   const actionLabel = state.action ? readActionLabel(state.action) : '2FA 处理'
-  const latestLog = state.logs[state.logs.length - 1] ?? null
+  const latestLog = state.lastLog ?? null
 
   return (
     <ResultDialogShell

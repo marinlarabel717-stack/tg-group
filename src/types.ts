@@ -379,6 +379,7 @@ export interface TwoFactorLogEntry {
 }
 
 export interface TwoFactorProgressState {
+  runId: string | null
   running: boolean
   stopRequested: boolean
   action: TwoFactorAction | null
@@ -391,6 +392,24 @@ export interface TwoFactorProgressState {
   currentAccountId: number | null
   currentPhone: string | null
   logs: TwoFactorLogEntry[]
+  lastUpdatedAt: string | null
+}
+
+export interface TwoFactorProgressOverview {
+  runId: string | null
+  running: boolean
+  stopRequested: boolean
+  action: TwoFactorAction | null
+  phase: TwoFactorOperationPhase
+  concurrency: number
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  currentAccountId: number | null
+  currentPhone: string | null
+  logCount: number
+  lastLog: TwoFactorLogEntry | null
   lastUpdatedAt: string | null
 }
 
@@ -438,6 +457,7 @@ export interface ProfileOperationLogEntry {
 }
 
 export interface ProfileOperationProgressState {
+  runId: string | null
   running: boolean
   stopRequested: boolean
   action: ProfileOperationAction | null
@@ -449,6 +469,23 @@ export interface ProfileOperationProgressState {
   currentAccountId: number | null
   currentPhone: string | null
   logs: ProfileOperationLogEntry[]
+  lastUpdatedAt: string | null
+}
+
+export interface ProfileOperationProgressOverview {
+  runId: string | null
+  running: boolean
+  stopRequested: boolean
+  action: ProfileOperationAction | null
+  concurrency: number
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  currentAccountId: number | null
+  currentPhone: string | null
+  logCount: number
+  lastLog: ProfileOperationLogEntry | null
   lastUpdatedAt: string | null
 }
 
@@ -527,14 +564,18 @@ export interface DesktopAccountsApi {
   onReauthorizeLogs: (callback: (logs: ReauthorizeLogEntry[]) => void) => () => void
   manageTwoFactor: (payload: TwoFactorOperationPayload) => Promise<TwoFactorOperationResult>
   stopTwoFactor: () => Promise<TwoFactorStopResult>
-  getTwoFactorState: () => Promise<TwoFactorProgressState>
-  clearTwoFactorLogs: () => Promise<TwoFactorProgressState>
-  onTwoFactorProgress: (callback: (state: TwoFactorProgressState) => void) => () => void
+  getTwoFactorState: () => Promise<TwoFactorProgressOverview>
+  getTwoFactorLogs: () => Promise<TwoFactorLogEntry[]>
+  clearTwoFactorLogs: () => Promise<TwoFactorProgressOverview>
+  onTwoFactorProgress: (callback: (state: TwoFactorProgressOverview) => void) => () => void
+  onTwoFactorLogs: (callback: (logs: TwoFactorLogEntry[]) => void) => () => void
   manageProfileOperation: (payload: ProfileOperationPayload) => Promise<ProfileOperationResult>
   stopProfileOperation: () => Promise<ProfileOperationStopResult>
-  getProfileOperationState: () => Promise<ProfileOperationProgressState>
-  clearProfileOperationLogs: () => Promise<ProfileOperationProgressState>
-  onProfileOperationProgress: (callback: (state: ProfileOperationProgressState) => void) => () => void
+  getProfileOperationState: () => Promise<ProfileOperationProgressOverview>
+  getProfileOperationLogs: () => Promise<ProfileOperationLogEntry[]>
+  clearProfileOperationLogs: () => Promise<ProfileOperationProgressOverview>
+  onProfileOperationProgress: (callback: (state: ProfileOperationProgressOverview) => void) => () => void
+  onProfileOperationLogs: (callback: (logs: ProfileOperationLogEntry[]) => void) => () => void
 }
 
 export interface DeleteAccountsResult {

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { formatCountryDisplay } from '../lib/ui-text'
-import type { AccountListReauthorizeFilter, AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload, ProfileOperationProgressState, ReauthorizeProgressOverview, TwoFactorProgressState } from '../types'
+import type { AccountListReauthorizeFilter, AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload, ProfileOperationLogEntry, ProfileOperationProgressOverview, ReauthorizeProgressOverview, TwoFactorLogEntry, TwoFactorProgressOverview } from '../types'
 
 export type AccountStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
 
@@ -41,6 +41,20 @@ interface CheckResultDialogState {
 
 function getDesktopAccountsApi() {
   return window.desktopAccounts
+}
+
+function trimOperationLogs<T extends { level: string }>(logs: T[], maxNonErrorLogs = 400) {
+  let removableRegularLogs = Math.max(0, logs.filter((log) => log.level !== 'error').length - maxNonErrorLogs)
+  if (removableRegularLogs <= 0) return logs
+
+  return logs.filter((log) => {
+    if (log.level === 'error') return true
+    if (removableRegularLogs > 0) {
+      removableRegularLogs -= 1
+      return false
+    }
+    return true
+  })
 }
 
 const DELETE_STATUS_GROUPS = {
@@ -90,8 +104,9 @@ function createEmptyCheckState(): CheckQueueState {
   }
 }
 
-function createEmptyTwoFactorState(): TwoFactorProgressState {
+function createEmptyTwoFactorState(): TwoFactorProgressOverview {
   return {
+    runId: null,
     running: false,
     stopRequested: false,
     action: null,
@@ -103,13 +118,15 @@ function createEmptyTwoFactorState(): TwoFactorProgressState {
     failedCount: 0,
     currentAccountId: null,
     currentPhone: null,
-    logs: [],
+    logCount: 0,
+    lastLog: null,
     lastUpdatedAt: null
   }
 }
 
-function createEmptyProfileOperationState(): ProfileOperationProgressState {
+function createEmptyProfileOperationState(): ProfileOperationProgressOverview {
   return {
+    runId: null,
     running: false,
     stopRequested: false,
     action: null,
@@ -120,7 +137,8 @@ function createEmptyProfileOperationState(): ProfileOperationProgressState {
     failedCount: 0,
     currentAccountId: null,
     currentPhone: null,
-    logs: [],
+    logCount: 0,
+    lastLog: null,
     lastUpdatedAt: null
   }
 }
@@ -208,14 +226,18 @@ async function syncRuntimeProgressState(
   const previousCheckState = get().checkState
   const previousCheckLogs = get().checkLogs
   const previousTwoFactorState = get().twoFactorState
+  const previousTwoFactorLogs = get().twoFactorLogs
   const previousProfileOperationState = get().profileOperationState
+  const previousProfileOperationLogs = get().profileOperationLogs
   const previousReauthorizeState = get().reauthorizeState
 
-  const [checkState, checkLogs, twoFactorState, profileOperationState, reauthorizeState] = await Promise.all([
+  const [checkState, checkLogs, twoFactorState, twoFactorLogs, profileOperationState, profileOperationLogs, reauthorizeState] = await Promise.all([
     api.getCheckState().catch(() => previousCheckState),
     api.getCheckLogs().catch(() => previousCheckLogs),
     api.getTwoFactorState?.().catch(() => previousTwoFactorState) ?? Promise.resolve(previousTwoFactorState),
+    api.getTwoFactorLogs?.().catch(() => previousTwoFactorLogs) ?? Promise.resolve(previousTwoFactorLogs),
     api.getProfileOperationState?.().catch(() => previousProfileOperationState) ?? Promise.resolve(previousProfileOperationState),
+    api.getProfileOperationLogs?.().catch(() => previousProfileOperationLogs) ?? Promise.resolve(previousProfileOperationLogs),
     api.getReauthorizeState?.().catch(() => previousReauthorizeState) ?? Promise.resolve(previousReauthorizeState)
   ])
 
@@ -238,7 +260,9 @@ async function syncRuntimeProgressState(
     checkLogs,
     checkTaskAccountIds: nextCheckTaskAccountIds,
     twoFactorState,
+    twoFactorLogs,
     profileOperationState,
+    profileOperationLogs,
     reauthorizeState
   })
 }
@@ -260,8 +284,10 @@ interface AccountStoreState {
   checkState: CheckQueueState
   checkLogs: CheckQueueState['logs']
   checkTaskAccountIds: number[]
-  twoFactorState: TwoFactorProgressState
-  profileOperationState: ProfileOperationProgressState
+  twoFactorState: TwoFactorProgressOverview
+  twoFactorLogs: TwoFactorLogEntry[]
+  profileOperationState: ProfileOperationProgressOverview
+  profileOperationLogs: ProfileOperationLogEntry[]
   reauthorizeState: ReauthorizeProgressOverview
   importProgress: ImportProgressPayload | null
   importResultDialog: ImportResultDialogState
@@ -306,12 +332,14 @@ async function syncAccounts(set: (partial: Partial<AccountStoreState>) => void, 
     return
   }
 
-  const [accounts, checkState, checkLogs, twoFactorState, profileOperationState, reauthorizeState] = await Promise.all([
+  const [accounts, checkState, checkLogs, twoFactorState, twoFactorLogs, profileOperationState, profileOperationLogs, reauthorizeState] = await Promise.all([
     api.list(),
     api.getCheckState(),
     api.getCheckLogs ? api.getCheckLogs() : Promise.resolve([]),
     api.getTwoFactorState ? api.getTwoFactorState() : Promise.resolve(createEmptyTwoFactorState()),
+    api.getTwoFactorLogs ? api.getTwoFactorLogs() : Promise.resolve([]),
     api.getProfileOperationState ? api.getProfileOperationState() : Promise.resolve(createEmptyProfileOperationState()),
+    api.getProfileOperationLogs ? api.getProfileOperationLogs() : Promise.resolve([]),
     api.getReauthorizeState ? api.getReauthorizeState() : Promise.resolve(createEmptyReauthorizeOverview())
   ])
   applyAccountSnapshot(accounts, set, get, {
@@ -319,7 +347,9 @@ async function syncAccounts(set: (partial: Partial<AccountStoreState>) => void, 
     checkLogs,
     checkTaskAccountIds: checkState.running ? checkState.activeAccountIds : [],
     twoFactorState,
+    twoFactorLogs,
     profileOperationState,
+    profileOperationLogs,
     reauthorizeState
   })
 }
@@ -354,7 +384,9 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   checkLogs: [],
   checkTaskAccountIds: [],
   twoFactorState: createEmptyTwoFactorState(),
+  twoFactorLogs: [],
   profileOperationState: createEmptyProfileOperationState(),
+  profileOperationLogs: [],
   reauthorizeState: createEmptyReauthorizeOverview(),
   importProgress: null,
   importResultDialog: {
@@ -451,7 +483,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           lastActionMessage: importProgress.phase === 'completed' ? importProgress.message : get().lastActionMessage
         })
       })
-      let pendingTwoFactorState: TwoFactorProgressState | null = null
+      let pendingTwoFactorState: TwoFactorProgressOverview | null = null
       let twoFactorFlushTimer: ReturnType<typeof setTimeout> | null = null
       const flushTwoFactorProgress = () => {
         if (twoFactorFlushTimer) {
@@ -462,7 +494,10 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         const nextState = pendingTwoFactorState
         pendingTwoFactorState = null
         const previousState = get().twoFactorState
-        set({ twoFactorState: nextState })
+        set((state) => ({
+          twoFactorState: nextState,
+          twoFactorLogs: previousState.runId !== nextState.runId ? [] : state.twoFactorLogs
+        }))
 
         if (previousState.running && !nextState.running) {
           void syncAccounts(set, get).then(() => {
@@ -484,6 +519,10 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           twoFactorFlushTimer = setTimeout(flushTwoFactorProgress, 120)
         }
       })
+      window.desktopAccounts?.onTwoFactorLogs?.((twoFactorLogs) => {
+        if (twoFactorLogs.length === 0) return
+        set((state) => ({ twoFactorLogs: trimOperationLogs([...state.twoFactorLogs, ...twoFactorLogs]) }))
+      })
       window.desktopAccounts?.onReauthorizeProgress?.((reauthorizeState) => {
         const previousState = get().reauthorizeState
         set({ reauthorizeState })
@@ -496,7 +535,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           })
         }
       })
-      let pendingProfileOperationState: ProfileOperationProgressState | null = null
+      let pendingProfileOperationState: ProfileOperationProgressOverview | null = null
       let profileOperationFlushTimer: ReturnType<typeof setTimeout> | null = null
       const flushProfileOperationProgress = () => {
         if (profileOperationFlushTimer) {
@@ -507,7 +546,10 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         const nextState = pendingProfileOperationState
         pendingProfileOperationState = null
         const previousState = get().profileOperationState
-        set({ profileOperationState: nextState })
+        set((state) => ({
+          profileOperationState: nextState,
+          profileOperationLogs: previousState.runId !== nextState.runId ? [] : state.profileOperationLogs
+        }))
 
         if (previousState.running && !nextState.running) {
           void syncAccounts(set, get).then(() => {
@@ -528,6 +570,10 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
         if (!profileOperationFlushTimer) {
           profileOperationFlushTimer = setTimeout(flushProfileOperationProgress, 120)
         }
+      })
+      window.desktopAccounts?.onProfileOperationLogs?.((profileOperationLogs) => {
+        if (profileOperationLogs.length === 0) return
+        set((state) => ({ profileOperationLogs: trimOperationLogs([...state.profileOperationLogs, ...profileOperationLogs]) }))
       })
       subscribed = true
     }
@@ -911,7 +957,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   clearTwoFactorLogs: async () => {
     const twoFactorState = await getDesktopAccountsApi()?.clearTwoFactorLogs?.()
     if (twoFactorState) {
-      set({ twoFactorState, lastActionMessage: '2FA 日志已清空。' })
+      set({ twoFactorState, twoFactorLogs: [], lastActionMessage: '2FA 日志已清空。' })
     }
   },
   stopProfileOperationTask: async () => {
@@ -923,7 +969,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   clearProfileOperationLogs: async () => {
     const profileOperationState = await getDesktopAccountsApi()?.clearProfileOperationLogs?.()
     if (profileOperationState) {
-      set({ profileOperationState, lastActionMessage: '个人资料日志已清空。' })
+      set({ profileOperationState, profileOperationLogs: [], lastActionMessage: '个人资料日志已清空。' })
     }
   },
   revealPath: async (targetPath) => {

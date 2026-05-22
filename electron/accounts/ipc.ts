@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { AccountListQuery, CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, ReauthorizeLogEntry, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressOverview, ReauthorizeProgressState, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressState, TwoFactorStopResult } from './types'
+import type { AccountListQuery, CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressOverview, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, ReauthorizeLogEntry, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressOverview, ReauthorizeProgressState, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressOverview, TwoFactorProgressState, TwoFactorStopResult } from './types'
 import type { AppSettings } from '../app-settings-store'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
@@ -35,6 +35,7 @@ interface RegisterAccountIpcOptions {
 
 function createEmptyTwoFactorState(): TwoFactorProgressState {
   return {
+    runId: null,
     running: false,
     stopRequested: false,
     action: null,
@@ -53,6 +54,7 @@ function createEmptyTwoFactorState(): TwoFactorProgressState {
 
 function createEmptyProfileOperationState(): ProfileOperationProgressState {
   return {
+    runId: null,
     running: false,
     stopRequested: false,
     action: null,
@@ -120,6 +122,45 @@ function trimOperationLogs<T extends { level: string }>(logs: T[], maxNonErrorLo
     }
     return true
   })
+}
+
+function serializeTwoFactorStateForRenderer(state: TwoFactorProgressState): TwoFactorProgressOverview {
+  return {
+    runId: state.runId,
+    running: state.running,
+    stopRequested: state.stopRequested,
+    action: state.action,
+    phase: state.phase,
+    concurrency: state.concurrency,
+    total: state.total,
+    completed: state.completed,
+    successCount: state.successCount,
+    failedCount: state.failedCount,
+    currentAccountId: state.currentAccountId,
+    currentPhone: state.currentPhone,
+    logCount: state.logs.length,
+    lastLog: state.logs[state.logs.length - 1] ?? null,
+    lastUpdatedAt: state.lastUpdatedAt
+  }
+}
+
+function serializeProfileOperationStateForRenderer(state: ProfileOperationProgressState): ProfileOperationProgressOverview {
+  return {
+    runId: state.runId,
+    running: state.running,
+    stopRequested: state.stopRequested,
+    action: state.action,
+    concurrency: state.concurrency,
+    total: state.total,
+    completed: state.completed,
+    successCount: state.successCount,
+    failedCount: state.failedCount,
+    currentAccountId: state.currentAccountId,
+    currentPhone: state.currentPhone,
+    logCount: state.logs.length,
+    lastLog: state.logs[state.logs.length - 1] ?? null,
+    lastUpdatedAt: state.lastUpdatedAt
+  }
 }
 
 function serializeReauthorizeStateForRenderer(state: ReauthorizeProgressState): ReauthorizeProgressOverview {
@@ -333,9 +374,15 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   let profileOperationStopRequested = false
   let checkStateEmitTimer: NodeJS.Timeout | null = null
   let checkLogsEmitTimer: NodeJS.Timeout | null = null
+  let twoFactorProgressEmitTimer: NodeJS.Timeout | null = null
+  let twoFactorLogsEmitTimer: NodeJS.Timeout | null = null
+  let pendingTwoFactorLogs: TwoFactorLogEntry[] = []
   let reauthorizeProgressEmitTimer: NodeJS.Timeout | null = null
   let reauthorizeLogsEmitTimer: NodeJS.Timeout | null = null
   let pendingReauthorizeLogs: ReauthorizeLogEntry[] = []
+  let profileOperationProgressEmitTimer: NodeJS.Timeout | null = null
+  let profileOperationLogsEmitTimer: NodeJS.Timeout | null = null
+  let pendingProfileOperationLogs: ProfileOperationLogEntry[] = []
   let checkLaunchToken = 0
 
   const flushCheckState = () => {
@@ -432,10 +479,64 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     mainWindow.webContents.send('accounts:import-progress', payload)
   }
 
-  const emitTwoFactorProgress = () => {
+  const flushTwoFactorProgress = () => {
+    if (twoFactorProgressEmitTimer) {
+      clearTimeout(twoFactorProgressEmitTimer)
+      twoFactorProgressEmitTimer = null
+    }
+
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('accounts:two-factor-progress', twoFactorState)
+    mainWindow.webContents.send('accounts:two-factor-progress', serializeTwoFactorStateForRenderer(twoFactorState))
+  }
+
+  const flushTwoFactorLogs = () => {
+    if (twoFactorLogsEmitTimer) {
+      clearTimeout(twoFactorLogsEmitTimer)
+      twoFactorLogsEmitTimer = null
+    }
+
+    if (pendingTwoFactorLogs.length === 0) return
+
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    const nextLogs = pendingTwoFactorLogs
+    pendingTwoFactorLogs = []
+    mainWindow.webContents.send('accounts:two-factor-logs', nextLogs)
+  }
+
+  const emitTwoFactorProgress = (force = false) => {
+    if (force) {
+      flushTwoFactorProgress()
+      return
+    }
+
+    if (!twoFactorState.running) {
+      flushTwoFactorProgress()
+      return
+    }
+
+    if (twoFactorProgressEmitTimer) return
+    twoFactorProgressEmitTimer = setTimeout(() => {
+      flushTwoFactorProgress()
+    }, 180)
+  }
+
+  const emitTwoFactorLogs = (force = false) => {
+    if (force) {
+      flushTwoFactorLogs()
+      return
+    }
+
+    if (!twoFactorState.running) {
+      flushTwoFactorLogs()
+      return
+    }
+
+    if (twoFactorLogsEmitTimer) return
+    twoFactorLogsEmitTimer = setTimeout(() => {
+      flushTwoFactorLogs()
+    }, 140)
   }
 
   const emitReauthorizeProgress = (force = false) => {
@@ -472,10 +573,64 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }, 180)
   }
 
-  const emitProfileOperationProgress = () => {
+  const flushProfileOperationProgress = () => {
+    if (profileOperationProgressEmitTimer) {
+      clearTimeout(profileOperationProgressEmitTimer)
+      profileOperationProgressEmitTimer = null
+    }
+
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('accounts:profile-operation-progress', profileOperationState)
+    mainWindow.webContents.send('accounts:profile-operation-progress', serializeProfileOperationStateForRenderer(profileOperationState))
+  }
+
+  const flushProfileOperationLogs = () => {
+    if (profileOperationLogsEmitTimer) {
+      clearTimeout(profileOperationLogsEmitTimer)
+      profileOperationLogsEmitTimer = null
+    }
+
+    if (pendingProfileOperationLogs.length === 0) return
+
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    const nextLogs = pendingProfileOperationLogs
+    pendingProfileOperationLogs = []
+    mainWindow.webContents.send('accounts:profile-operation-logs', nextLogs)
+  }
+
+  const emitProfileOperationProgress = (force = false) => {
+    if (force) {
+      flushProfileOperationProgress()
+      return
+    }
+
+    if (!profileOperationState.running) {
+      flushProfileOperationProgress()
+      return
+    }
+
+    if (profileOperationProgressEmitTimer) return
+    profileOperationProgressEmitTimer = setTimeout(() => {
+      flushProfileOperationProgress()
+    }, 180)
+  }
+
+  const emitProfileOperationLogs = (force = false) => {
+    if (force) {
+      flushProfileOperationLogs()
+      return
+    }
+
+    if (!profileOperationState.running) {
+      flushProfileOperationLogs()
+      return
+    }
+
+    if (profileOperationLogsEmitTimer) return
+    profileOperationLogsEmitTimer = setTimeout(() => {
+      flushProfileOperationLogs()
+    }, 140)
   }
 
   const updateTwoFactorState = (patch: Partial<TwoFactorProgressState>) => {
@@ -508,13 +663,16 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   }
 
   const pushTwoFactorLog = (entry: Omit<TwoFactorLogEntry, 'id' | 'createdAt'>) => {
-    const nextLogs = trimOperationLogs([...twoFactorState.logs, createTwoFactorLogEntry(entry)])
+    const appendedLog = createTwoFactorLogEntry(entry)
+    const nextLogs = trimOperationLogs([...twoFactorState.logs, appendedLog])
     twoFactorState = {
       ...twoFactorState,
       logs: nextLogs,
       lastUpdatedAt: new Date().toISOString()
     }
+    pendingTwoFactorLogs.push(appendedLog)
     emitTwoFactorProgress()
+    emitTwoFactorLogs()
   }
 
   const bumpReauthorizeCounters = (kind: 'success' | 'failed') => {
@@ -562,13 +720,16 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   }
 
   const pushProfileOperationLog = (entry: Omit<ProfileOperationLogEntry, 'id' | 'createdAt'>) => {
-    const nextLogs = trimOperationLogs([...profileOperationState.logs, createProfileOperationLogEntry(entry)])
+    const appendedLog = createProfileOperationLogEntry(entry)
+    const nextLogs = trimOperationLogs([...profileOperationState.logs, appendedLog])
     profileOperationState = {
       ...profileOperationState,
       logs: nextLogs,
       lastUpdatedAt: new Date().toISOString()
     }
+    pendingProfileOperationLogs.push(appendedLog)
     emitProfileOperationProgress()
+    emitProfileOperationLogs()
   }
 
   checkQueue.on('state', () => {
@@ -982,15 +1143,17 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     return serializeReauthorizeStateForRenderer(reauthorizeState)
   })
 
-  ipcMain.handle('accounts:get-two-factor-state', () => twoFactorState)
+  ipcMain.handle('accounts:get-two-factor-state', () => serializeTwoFactorStateForRenderer(twoFactorState))
+  ipcMain.handle('accounts:get-two-factor-logs', () => twoFactorState.logs)
   ipcMain.handle('accounts:clear-two-factor-logs', () => {
+    pendingTwoFactorLogs = []
     twoFactorState = {
       ...twoFactorState,
       logs: [],
       lastUpdatedAt: new Date().toISOString()
     }
-    emitTwoFactorProgress()
-    return twoFactorState
+    emitTwoFactorProgress(true)
+    return serializeTwoFactorStateForRenderer(twoFactorState)
   })
 
   ipcMain.handle('accounts:stop-two-factor', async (): Promise<TwoFactorStopResult> => {
@@ -1024,15 +1187,17 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }
   })
 
-  ipcMain.handle('accounts:get-profile-operation-state', () => profileOperationState)
+  ipcMain.handle('accounts:get-profile-operation-state', () => serializeProfileOperationStateForRenderer(profileOperationState))
+  ipcMain.handle('accounts:get-profile-operation-logs', () => profileOperationState.logs)
   ipcMain.handle('accounts:clear-profile-operation-logs', () => {
+    pendingProfileOperationLogs = []
     profileOperationState = {
       ...profileOperationState,
       logs: [],
       lastUpdatedAt: new Date().toISOString()
     }
-    emitProfileOperationProgress()
-    return profileOperationState
+    emitProfileOperationProgress(true)
+    return serializeProfileOperationStateForRenderer(profileOperationState)
   })
 
   ipcMain.handle('accounts:stop-profile-operation', async (): Promise<ProfileOperationStopResult> => {
@@ -1108,7 +1273,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
     twoFactorStopRequested = false
     telegramTwoFactorService.cancelActiveOperations()
+    pendingTwoFactorLogs = []
     twoFactorState = {
+      runId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       running: true,
       stopRequested: false,
       action: action as TwoFactorAction,
@@ -1123,7 +1290,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       logs: [],
       lastUpdatedAt: new Date().toISOString()
     }
-    emitTwoFactorProgress()
+    emitTwoFactorProgress(true)
 
     const results: TwoFactorOperationResultItem[] = []
 
@@ -1225,6 +1392,8 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
         ? `2FA 任务已停止：成功 ${twoFactorState.successCount}，失败 ${twoFactorState.failedCount}，剩余 ${Math.max(0, orderedAccounts.length - twoFactorState.completed)} 个账号未继续执行。`
         : `2FA 任务执行完成：成功 ${twoFactorState.successCount}，失败 ${twoFactorState.failedCount}。`
     })
+    emitTwoFactorLogs(true)
+    emitTwoFactorProgress(true)
 
     const finalMessage = twoFactorStopRequested
       ? `2FA 任务已停止：成功 ${twoFactorState.successCount}，失败 ${twoFactorState.failedCount}，剩余 ${Math.max(0, orderedAccounts.length - twoFactorState.completed)} 个账号未继续执行。`
@@ -1286,7 +1455,9 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
 
     profileOperationStopRequested = false
     telegramProfileService.cancelActiveOperations()
+    pendingProfileOperationLogs = []
     profileOperationState = {
+      runId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       running: true,
       stopRequested: false,
       action: action as ProfileOperationAction,
@@ -1388,6 +1559,8 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
         ? `个人资料任务已停止：成功 ${profileOperationState.successCount}，失败 ${profileOperationState.failedCount}，剩余 ${Math.max(0, orderedAccounts.length - profileOperationState.completed)} 个账号未继续执行。`
         : `个人资料任务执行完成：成功 ${profileOperationState.successCount}，失败 ${profileOperationState.failedCount}。`
     })
+    emitProfileOperationLogs(true)
+    emitProfileOperationProgress(true)
 
     const finalMessage = profileOperationStopRequested
       ? `个人资料任务已停止：成功 ${profileOperationState.successCount}，失败 ${profileOperationState.failedCount}，剩余 ${Math.max(0, orderedAccounts.length - profileOperationState.completed)} 个账号未继续执行。`

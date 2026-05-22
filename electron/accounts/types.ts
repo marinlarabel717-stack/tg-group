@@ -323,6 +323,7 @@ export interface TwoFactorLogEntry {
 }
 
 export interface TwoFactorProgressState {
+  runId: string | null
   running: boolean
   stopRequested: boolean
   action: TwoFactorAction | null
@@ -338,53 +339,12 @@ export interface TwoFactorProgressState {
   lastUpdatedAt: string | null
 }
 
-export interface ProfileOperationPayload {
-  action: ProfileOperationAction
-  accountIds: number[]
-  value?: string
-  avatarPath?: string
-}
-
-export interface ProfileOperationResultItem {
-  accountId: number
-  phone: string
-  success: boolean
-  message: string
-  firstName?: string | null
-  lastName?: string | null
-  username?: string | null
-  bio?: string | null
-  avatar?: string | null
-  hasProfilePhoto?: boolean | null
-}
-
-export interface ProfileOperationResult {
-  action: ProfileOperationAction
-  total: number
-  successCount: number
-  failedCount: number
-  results: ProfileOperationResultItem[]
-  message?: string
-}
-
-export interface ProfileOperationStopResult {
-  stopped: boolean
-  message: string
-}
-
-export interface ProfileOperationLogEntry {
-  id: string
-  accountId: number | null
-  phone: string
-  level: CheckLogLevel
-  message: string
-  createdAt: string
-}
-
-export interface ProfileOperationProgressState {
+export interface TwoFactorProgressOverview {
+  runId: string | null
   running: boolean
   stopRequested: boolean
-  action: ProfileOperationAction | null
+  action: TwoFactorAction | null
+  phase: TwoFactorOperationPhase
   concurrency: number
   total: number
   completed: number
@@ -392,7 +352,8 @@ export interface ProfileOperationProgressState {
   failedCount: number
   currentAccountId: number | null
   currentPhone: string | null
-  logs: ProfileOperationLogEntry[]
+  logCount: number
+  lastLog: TwoFactorLogEntry | null
   lastUpdatedAt: string | null
 }
 
@@ -440,6 +401,7 @@ export interface ProfileOperationLogEntry {
 }
 
 export interface ProfileOperationProgressState {
+  runId: string | null
   running: boolean
   stopRequested: boolean
   action: ProfileOperationAction | null
@@ -451,6 +413,23 @@ export interface ProfileOperationProgressState {
   currentAccountId: number | null
   currentPhone: string | null
   logs: ProfileOperationLogEntry[]
+  lastUpdatedAt: string | null
+}
+
+export interface ProfileOperationProgressOverview {
+  runId: string | null
+  running: boolean
+  stopRequested: boolean
+  action: ProfileOperationAction | null
+  concurrency: number
+  total: number
+  completed: number
+  successCount: number
+  failedCount: number
+  currentAccountId: number | null
+  currentPhone: string | null
+  logCount: number
+  lastLog: ProfileOperationLogEntry | null
   lastUpdatedAt: string | null
 }
 
