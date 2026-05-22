@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
-import type { AccountListQuery, CheckAction, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressOverview, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, ReauthorizeLogEntry, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressOverview, ReauthorizeProgressState, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressOverview, TwoFactorProgressState, TwoFactorStopResult } from './types'
+import type { AccountListQuery, CheckAction, CheckLogEntry, CheckResultInput, ImportProgressPayload, ProfileOperationAction, ProfileOperationLogEntry, ProfileOperationPayload, ProfileOperationProgressOverview, ProfileOperationProgressState, ProfileOperationResult, ProfileOperationResultItem, ProfileOperationStopResult, ReauthorizeLogEntry, ReauthorizeOperationPayload, ReauthorizeOperationResult, ReauthorizeOperationResultItem, ReauthorizeProgressOverview, ReauthorizeProgressState, TwoFactorAction, TwoFactorLogEntry, TwoFactorOperationPayload, TwoFactorOperationPhase, TwoFactorOperationResult, TwoFactorOperationResultItem, TwoFactorProgressOverview, TwoFactorProgressState, TwoFactorStopResult } from './types'
 import type { AppSettings } from '../app-settings-store'
 import type { AccountImportService } from './services/account-import-service'
 import type { AccountRepository } from './services/account-repository'
@@ -374,6 +374,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
   let profileOperationStopRequested = false
   let checkStateEmitTimer: NodeJS.Timeout | null = null
   let checkLogsEmitTimer: NodeJS.Timeout | null = null
+  let lastCheckLogId: string | null = null
   let twoFactorProgressEmitTimer: NodeJS.Timeout | null = null
   let twoFactorLogsEmitTimer: NodeJS.Timeout | null = null
   let pendingTwoFactorLogs: TwoFactorLogEntry[] = []
@@ -402,9 +403,26 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
       checkLogsEmitTimer = null
     }
 
+    const logs = checkQueue.getLogs()
+    if (logs.length === 0) {
+      lastCheckLogId = null
+      return
+    }
+
+    let nextLogs: CheckLogEntry[] = logs
+    if (lastCheckLogId) {
+      const lastIndex = logs.findIndex((log) => log.id === lastCheckLogId)
+      if (lastIndex >= 0) {
+        nextLogs = logs.slice(lastIndex + 1)
+      }
+    }
+
+    lastCheckLogId = logs[logs.length - 1]?.id ?? null
+    if (nextLogs.length === 0) return
+
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('accounts:check-logs', checkQueue.getLogs())
+    mainWindow.webContents.send('accounts:check-logs', nextLogs)
   }
 
   const showOpenDialog = (dialogOptions: Electron.OpenDialogOptions) => {
@@ -757,6 +775,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     return next
   })
   ipcMain.handle('accounts:clear-check-logs', () => {
+    lastCheckLogId = null
     checkQueue.clearLogs()
     emitCheckState(true)
     emitCheckLogs(true)
@@ -775,6 +794,7 @@ export function registerAccountIpc(options: RegisterAccountIpcOptions) {
     }
 
     const mode = actions.includes('account-survival') ? 'account-survival' : 'account-status'
+    lastCheckLogId = null
     const previewState = buildDeferredStartCheckState(checkQueue.getSummaryState(), ids, mode)
     const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isFinite(id))))
     checkLaunchToken += 1

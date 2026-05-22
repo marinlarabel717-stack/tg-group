@@ -424,51 +424,73 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   errorMessage: '',
   init: async () => {
     if (!subscribed) {
-      window.desktopAccounts?.onCheckState(async (checkState) => {
+      let pendingCheckState: CheckQueueState | null = null
+      let checkStateFlushTimer: ReturnType<typeof setTimeout> | null = null
+      const flushCheckState = () => {
+        if (checkStateFlushTimer) {
+          clearTimeout(checkStateFlushTimer)
+          checkStateFlushTimer = null
+        }
+        if (!pendingCheckState) return
+
+        const nextRawState = pendingCheckState
+        pendingCheckState = null
         const previousState = get().checkState
         const normalizedCheckState = {
-          ...checkState,
-          queuedAccountIds: areSameNumberArrays(previousState.queuedAccountIds, checkState.queuedAccountIds)
+          ...nextRawState,
+          queuedAccountIds: areSameNumberArrays(previousState.queuedAccountIds, nextRawState.queuedAccountIds)
             ? previousState.queuedAccountIds
-            : checkState.queuedAccountIds,
-          activeAccountIds: areSameNumberArrays(previousState.activeAccountIds, checkState.activeAccountIds)
+            : nextRawState.queuedAccountIds,
+          activeAccountIds: areSameNumberArrays(previousState.activeAccountIds, nextRawState.activeAccountIds)
             ? previousState.activeAccountIds
-            : checkState.activeAccountIds
+            : nextRawState.activeAccountIds
         }
 
-        const nextCheckTaskAccountIds = checkState.running
+        const nextCheckTaskAccountIds = normalizedCheckState.running
           ? Array.from(new Set([...normalizedCheckState.activeAccountIds, ...normalizedCheckState.queuedAccountIds]))
           : []
 
         set({ checkState: normalizedCheckState, checkTaskAccountIds: nextCheckTaskAccountIds })
-        const fullyCompleted = !checkState.running
-          && checkState.totalCount > 0
-          && checkState.completedCount >= checkState.totalCount
-          && checkState.resultSummary.total >= checkState.totalCount
+        const fullyCompleted = !normalizedCheckState.running
+          && normalizedCheckState.totalCount > 0
+          && normalizedCheckState.completedCount >= normalizedCheckState.totalCount
+          && normalizedCheckState.resultSummary.total >= normalizedCheckState.totalCount
 
         if (previousState.running && fullyCompleted) {
-          await syncAccounts(set, get)
-          set({
-            checkResultDialog: {
-              open: true,
-              runMode: checkState.runMode,
-              total: checkState.resultSummary.total,
-              alive: checkState.resultSummary.alive,
-              limited: checkState.resultSummary.limited,
-              temporaryLimited: checkState.resultSummary.temporary_limited,
-              geoRestricted: checkState.resultSummary.geo_restricted,
-              frozen: checkState.resultSummary.frozen,
-              banned: checkState.resultSummary.banned,
-              multiIp: checkState.resultSummary.multi_ip,
-              timeout: checkState.resultSummary.timeout
-            },
-            checkTaskAccountIds: [],
-            lastActionMessage: '批量检测已完成，账号资料已刷新。'
+          void syncAccounts(set, get).then(() => {
+            set({
+              checkResultDialog: {
+                open: true,
+                runMode: normalizedCheckState.runMode,
+                total: normalizedCheckState.resultSummary.total,
+                alive: normalizedCheckState.resultSummary.alive,
+                limited: normalizedCheckState.resultSummary.limited,
+                temporaryLimited: normalizedCheckState.resultSummary.temporary_limited,
+                geoRestricted: normalizedCheckState.resultSummary.geo_restricted,
+                frozen: normalizedCheckState.resultSummary.frozen,
+                banned: normalizedCheckState.resultSummary.banned,
+                multiIp: normalizedCheckState.resultSummary.multi_ip,
+                timeout: normalizedCheckState.resultSummary.timeout
+              },
+              checkTaskAccountIds: [],
+              lastActionMessage: '批量检测已完成，账号资料已刷新。'
+            })
           })
+        }
+      }
+      window.desktopAccounts?.onCheckState((checkState) => {
+        pendingCheckState = checkState
+        if (!checkState.running || checkState.completedCount >= checkState.totalCount) {
+          flushCheckState()
+          return
+        }
+        if (!checkStateFlushTimer) {
+          checkStateFlushTimer = setTimeout(flushCheckState, 120)
         }
       })
       window.desktopAccounts?.onCheckLogs?.((checkLogs) => {
-        set({ checkLogs })
+        if (checkLogs.length === 0) return
+        set((state) => ({ checkLogs: trimOperationLogs([...state.checkLogs, ...checkLogs], 180) }))
       })
       window.desktopAccounts?.onAccountsUpdated((accounts) => {
         if (hasRunningAccountTask(get())) {
