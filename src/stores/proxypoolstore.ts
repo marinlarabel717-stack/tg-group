@@ -24,6 +24,8 @@ function createEmptyState(): ProxyPoolState {
 }
 
 let subscribed = false
+let stateFlushTimer: ReturnType<typeof setTimeout> | null = null
+let pendingState: ProxyPoolState | null = null
 
 interface ProxyPoolStoreState {
   initialized: boolean
@@ -83,16 +85,35 @@ export const useProxyPoolStore = create<ProxyPoolStoreState>((set, get) => ({
   init: async () => {
     if (!subscribed) {
       window.desktopProxyPool?.onState((state) => {
-        const previous = get().state
-        const finished = previous.checkState.running && !state.checkState.running
-        set({
-          state,
-          loading: false,
-          initialized: true,
-          lastActionMessage: finished
-            ? `代理检查完成：可用 ${state.checkState.aliveCount} 条，不可用 ${state.checkState.deadCount} 条。`
-            : get().lastActionMessage
-        })
+        pendingState = state
+
+        const flushState = () => {
+          if (stateFlushTimer) {
+            clearTimeout(stateFlushTimer)
+            stateFlushTimer = null
+          }
+          if (!pendingState) return
+          const nextState = pendingState
+          pendingState = null
+          const previous = get().state
+          const finished = previous.checkState.running && !nextState.checkState.running
+          set({
+            state: nextState,
+            loading: false,
+            initialized: true,
+            lastActionMessage: finished
+              ? `代理检查完成：可用 ${nextState.checkState.aliveCount} 条，不可用 ${nextState.checkState.deadCount} 条。`
+              : get().lastActionMessage
+          })
+        }
+
+        if (!state.checkState.running) {
+          flushState()
+          return
+        }
+
+        if (stateFlushTimer) return
+        stateFlushTimer = setTimeout(flushState, 120)
       })
       subscribed = true
     }

@@ -65,6 +65,8 @@ const DEFAULT_STATE: BotCenterState = {
 }
 
 let subscribed = false
+let stateFlushTimer: ReturnType<typeof setTimeout> | null = null
+let pendingState: BotCenterState | null = null
 
 type StoreSet = (partial: Partial<BotCenterStoreState> | ((state: BotCenterStoreState) => Partial<BotCenterStoreState>)) => void
 
@@ -121,7 +123,26 @@ export const useBotCenterStore = create<BotCenterStoreState>((set, get) => ({
       if (!subscribed) {
         subscribed = true
         api.onState((nextState) => {
-          useBotCenterStore.setState({ state: nextState, loading: false, initialized: true, saving: false })
+          pendingState = nextState
+
+          const flushState = () => {
+            if (stateFlushTimer) {
+              clearTimeout(stateFlushTimer)
+              stateFlushTimer = null
+            }
+            if (!pendingState) return
+            useBotCenterStore.setState({ state: pendingState, loading: false, initialized: true, saving: false })
+            pendingState = null
+          }
+
+          const hasRunningBot = nextState.bots.some((bot) => bot.running || bot.polling)
+          if (!hasRunningBot) {
+            flushState()
+            return
+          }
+
+          if (stateFlushTimer) return
+          stateFlushTimer = setTimeout(flushState, 120)
         })
       }
     } catch (error) {

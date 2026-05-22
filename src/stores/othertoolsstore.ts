@@ -17,6 +17,8 @@ interface OtherToolsState {
 }
 
 let subscribed = false
+let listenerStateFlushTimer: ReturnType<typeof setTimeout> | null = null
+let pendingListenerState: OtherToolsSniperListenerState | null = null
 
 export const useOtherToolsStore = create<OtherToolsState>((set) => ({
   initialized: false,
@@ -44,7 +46,25 @@ export const useOtherToolsStore = create<OtherToolsState>((set) => ({
       .catch(() => undefined)
 
     api.onSniperListenerState((state) => {
-      set({ listenerState: state })
+      pendingListenerState = state
+
+      const flushListenerState = () => {
+        if (listenerStateFlushTimer) {
+          clearTimeout(listenerStateFlushTimer)
+          listenerStateFlushTimer = null
+        }
+        if (!pendingListenerState) return
+        set({ listenerState: pendingListenerState })
+        pendingListenerState = null
+      }
+
+      if (!state.running) {
+        flushListenerState()
+        return
+      }
+
+      if (listenerStateFlushTimer) return
+      listenerStateFlushTimer = setTimeout(flushListenerState, 120)
     })
   },
   startManualRun: (message = '抢注巡检进行中…') => set({
