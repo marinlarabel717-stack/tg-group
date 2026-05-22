@@ -11,6 +11,17 @@ interface RegisterOtherToolsIpcOptions {
 export function registerOtherToolsIpc(options: RegisterOtherToolsIpcOptions) {
   const { otherToolsService, getMainWindow } = options
 
+  const LISTENER_LOGS_LIMIT = 180
+  const LISTENER_CLAIMED_ITEMS_LIMIT = 80
+  const LISTENER_CREATED_CARRIER_ITEMS_LIMIT = 60
+
+  const serializeListenerState = (state: ReturnType<OtherToolsService['getSniperListenerState']>) => ({
+    ...state,
+    logs: state.logs.slice(-LISTENER_LOGS_LIMIT),
+    claimedItems: state.claimedItems.slice(-LISTENER_CLAIMED_ITEMS_LIMIT),
+    createdCarrierItems: state.createdCarrierItems.slice(-LISTENER_CREATED_CARRIER_ITEMS_LIMIT)
+  })
+
   let listenerStateEmitTimer: NodeJS.Timeout | null = null
   let pendingListenerState: ReturnType<OtherToolsService['getSniperListenerState']> | null = null
 
@@ -22,7 +33,7 @@ export function registerOtherToolsIpc(options: RegisterOtherToolsIpcOptions) {
     if (!pendingListenerState) return
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('other-tools:sniper-listener-state', pendingListenerState)
+    mainWindow.webContents.send('other-tools:sniper-listener-state', serializeListenerState(pendingListenerState))
     pendingListenerState = null
   }
 
@@ -61,6 +72,6 @@ export function registerOtherToolsIpc(options: RegisterOtherToolsIpcOptions) {
   })
 
   ipcMain.handle('other-tools:get-sniper-listener-state', async () => {
-    return otherToolsService.getSniperListenerState()
+    return serializeListenerState(otherToolsService.getSniperListenerState())
   })
 }

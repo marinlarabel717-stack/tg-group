@@ -102,6 +102,19 @@ export function DashboardView() {
     if (!api?.getReauthorizeState || !api?.onReauthorizeProgress) return
 
     let cancelled = false
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+    let pendingState: ReauthorizeProgressOverview | null = null
+
+    const flushReauthorizeState = () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      if (!pendingState || cancelled) return
+      setReauthorizeState(pendingState)
+      pendingState = null
+    }
+
     void api.getReauthorizeState()
       .then((state) => {
         if (!cancelled) {
@@ -111,13 +124,20 @@ export function DashboardView() {
       .catch(() => undefined)
 
     const unsubscribe = api.onReauthorizeProgress((state) => {
-      if (!cancelled) {
-        setReauthorizeState(state)
+      pendingState = state
+      if (!state.running) {
+        flushReauthorizeState()
+        return
       }
+      if (flushTimer) return
+      flushTimer = setTimeout(flushReauthorizeState, 120)
     })
 
     return () => {
       cancelled = true
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+      }
       unsubscribe()
     }
   }, [])

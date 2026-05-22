@@ -412,10 +412,36 @@ function CleanupSummary({ scrollContainerRef, onScroll }: { scrollContainerRef: 
   useEffect(() => {
     if (!window.desktopSessionManager?.getState || !window.desktopSessionManager?.onProgress) return
 
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+    let pendingState: SessionManagerProgressState | null = null
+
+    const flushState = () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      if (!pendingState) return
+      setState(pendingState)
+      pendingState = null
+    }
+
     void window.desktopSessionManager.getState().then(setState).catch(() => undefined)
-    return window.desktopSessionManager.onProgress((nextState) => {
-      setState(nextState)
+    const unsubscribe = window.desktopSessionManager.onProgress((nextState) => {
+      pendingState = nextState
+      if (!nextState.running) {
+        flushState()
+        return
+      }
+      if (flushTimer) return
+      flushTimer = setTimeout(flushState, 120)
     })
+
+    return () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+      }
+      unsubscribe()
+    }
   }, [])
 
   return (
@@ -733,10 +759,36 @@ export default memo(function LogsView() {
   useEffect(() => {
     if (logsContext !== 'accounts-cleanup' || !window.desktopSessionManager?.getState || !window.desktopSessionManager?.onProgress) return
 
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+    let pendingLogCount: number | null = null
+
+    const flushCleanupLogCount = () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      if (pendingLogCount == null) return
+      setCleanupLogCount(pendingLogCount)
+      pendingLogCount = null
+    }
+
     void window.desktopSessionManager.getState().then((state) => setCleanupLogCount(state.logs.length)).catch(() => undefined)
-    return window.desktopSessionManager.onProgress((state) => {
-      setCleanupLogCount(state.logs.length)
+    const unsubscribe = window.desktopSessionManager.onProgress((state) => {
+      pendingLogCount = state.logs.length
+      if (!state.running) {
+        flushCleanupLogCount()
+        return
+      }
+      if (flushTimer) return
+      flushTimer = setTimeout(flushCleanupLogCount, 120)
     })
+
+    return () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+      }
+      unsubscribe()
+    }
   }, [logsContext])
 
   const activeLogCount = useMemo(() => {

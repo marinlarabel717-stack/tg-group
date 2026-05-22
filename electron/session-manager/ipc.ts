@@ -10,6 +10,12 @@ interface RegisterSessionManagerIpcOptions {
 export function registerSessionManagerIpc(options: RegisterSessionManagerIpcOptions) {
   const { sessionManagerService } = options
 
+  const SESSION_MANAGER_RENDER_LOGS_LIMIT = 240
+  const serializeProgressState = (state: ReturnType<SessionManagerService['getState']>) => ({
+    ...state,
+    logs: state.logs.slice(-SESSION_MANAGER_RENDER_LOGS_LIMIT)
+  })
+
   let progressEmitTimer: NodeJS.Timeout | null = null
   let pendingState: ReturnType<SessionManagerService['getState']> | null = null
   let progressTarget: WebContents | null = null
@@ -20,7 +26,7 @@ export function registerSessionManagerIpc(options: RegisterSessionManagerIpcOpti
       progressEmitTimer = null
     }
     if (!pendingState || !progressTarget || progressTarget.isDestroyed()) return
-    progressTarget.send('session-manager:progress', pendingState)
+    progressTarget.send('session-manager:progress', serializeProgressState(pendingState))
     pendingState = null
   }
 
@@ -47,6 +53,6 @@ export function registerSessionManagerIpc(options: RegisterSessionManagerIpcOpti
     return sessionManagerService.runAction(payload)
   })
 
-  ipcMain.handle('session-manager:get-state', () => sessionManagerService.getState())
+  ipcMain.handle('session-manager:get-state', () => serializeProgressState(sessionManagerService.getState()))
   ipcMain.handle('session-manager:clear-logs', () => sessionManagerService.clearLogs())
 }

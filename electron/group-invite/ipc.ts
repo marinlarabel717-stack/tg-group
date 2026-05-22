@@ -10,6 +10,12 @@ interface RegisterGroupInviteIpcOptions {
 export function registerGroupInviteIpc(options: RegisterGroupInviteIpcOptions) {
   const { groupInviteService } = options
 
+  const GROUP_INVITE_RENDER_LOGS_LIMIT = 240
+  const serializeProgressState = (state: ReturnType<GroupInviteService['getState']>) => ({
+    ...state,
+    logs: state.logs.slice(-GROUP_INVITE_RENDER_LOGS_LIMIT)
+  })
+
   let progressEmitTimer: NodeJS.Timeout | null = null
   let pendingState: ReturnType<GroupInviteService['getState']> | null = null
   let progressTarget: WebContents | null = null
@@ -20,7 +26,7 @@ export function registerGroupInviteIpc(options: RegisterGroupInviteIpcOptions) {
       progressEmitTimer = null
     }
     if (!pendingState || !progressTarget || progressTarget.isDestroyed()) return
-    progressTarget.send('group-invite:progress', pendingState)
+    progressTarget.send('group-invite:progress', serializeProgressState(pendingState))
     pendingState = null
   }
 
@@ -53,6 +59,6 @@ export function registerGroupInviteIpc(options: RegisterGroupInviteIpcOptions) {
   })
 
   ipcMain.handle('group-invite:get-state', async () => {
-    return groupInviteService.getState()
+    return serializeProgressState(groupInviteService.getState())
   })
 }

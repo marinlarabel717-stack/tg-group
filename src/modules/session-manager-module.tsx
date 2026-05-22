@@ -342,56 +342,94 @@ export default function SessionManagerModule() {
   }, [initAccounts])
 
   useEffect(() => {
-    const unsubscribe = window.desktopDirectMessage?.onGroupCollectorProgress((payload: GroupCollectorTaskProgress) => {
-      let resolvedSourceType: CollectorSourceType = 'group'
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+    const pendingPayloads = new Map<string, GroupCollectorTaskProgress>()
+
+    const flushCollectorProgress = () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      if (pendingPayloads.size === 0) return
+
+      const payloads = Array.from(pendingPayloads.values())
+      pendingPayloads.clear()
+
+      const completedResults: Array<{ result: GroupCollectorTaskResult; sourceType: CollectorSourceType }> = []
+
       setTasks((current) => {
-        const existing = current.find((task) => task.id === payload.taskId)
-        const nextTask: CollectorTaskView = {
-          id: payload.taskId,
-          title: existing?.title || `任务 ${current.length + 1}`,
-          sourceType: existing?.sourceType || 'group',
-          status: payload.status,
-          totalGroups: payload.totalGroups,
-          processedGroups: payload.processedGroups,
-          totalAccounts: payload.totalAccounts,
-          joinedCount: payload.joinedCount,
-          successCount: payload.successCount,
-          failedCount: payload.failedCount,
-          message: payload.message,
-          logs: payload.log ? [
-            ...(existing?.logs || []),
-            {
-              id: payload.log.id,
-              level: payload.log.level,
-              createdAt: payload.log.createdAt,
-              message: payload.log.message,
-              accountPhone: payload.log.accountPhone,
-              source: payload.log.source
-            }
-          ].slice(-600) : (existing?.logs || []),
-          usernames: payload.result?.usernames || existing?.usernames || [],
-          result: payload.result || existing?.result || null,
-          selectedAccountIds: existing?.selectedAccountIds || [],
-          groups: existing?.groups || [],
-          createdAt: existing?.createdAt || new Date().toISOString()
-        }
-        resolvedSourceType = nextTask.sourceType
+        let nextTasks = current
 
-        if (!existing) {
-          return [nextTask, ...current]
+        for (const payload of payloads) {
+          const existing = nextTasks.find((task) => task.id === payload.taskId)
+          const nextTask: CollectorTaskView = {
+            id: payload.taskId,
+            title: existing?.title || `任务 ${nextTasks.length + 1}`,
+            sourceType: existing?.sourceType || 'group',
+            status: payload.status,
+            totalGroups: payload.totalGroups,
+            processedGroups: payload.processedGroups,
+            totalAccounts: payload.totalAccounts,
+            joinedCount: payload.joinedCount,
+            successCount: payload.successCount,
+            failedCount: payload.failedCount,
+            message: payload.message,
+            logs: payload.log ? [
+              ...(existing?.logs || []),
+              {
+                id: payload.log.id,
+                level: payload.log.level,
+                createdAt: payload.log.createdAt,
+                message: payload.log.message,
+                accountPhone: payload.log.accountPhone,
+                source: payload.log.source
+              }
+            ].slice(-600) : (existing?.logs || []),
+            usernames: payload.result?.usernames || existing?.usernames || [],
+            result: payload.result || existing?.result || null,
+            selectedAccountIds: existing?.selectedAccountIds || [],
+            groups: existing?.groups || [],
+            createdAt: existing?.createdAt || new Date().toISOString()
+          }
+
+          if (payload.result && (payload.status === 'completed' || payload.status === 'stopped' || payload.status === 'failed')) {
+            completedResults.push({ result: payload.result, sourceType: nextTask.sourceType })
+          }
+
+          nextTasks = existing
+            ? [nextTask, ...nextTasks.filter((task) => task.id !== payload.taskId)]
+            : [nextTask, ...nextTasks]
         }
 
-        return [nextTask, ...current.filter((task) => task.id !== payload.taskId)]
+        return nextTasks
       })
 
-      if (payload.status === 'completed' || payload.status === 'stopped' || payload.status === 'failed') {
-        if (payload.result) {
-          setResultDialog({ open: true, result: payload.result, sourceType: resolvedSourceType })
-        }
+      const latestResult = completedResults.at(-1)
+      if (latestResult) {
+        setResultDialog({ open: true, result: latestResult.result, sourceType: latestResult.sourceType })
       }
+    }
+
+    const scheduleCollectorProgressFlush = () => {
+      if (flushTimer) return
+      flushTimer = setTimeout(flushCollectorProgress, 120)
+    }
+
+    const unsubscribe = window.desktopDirectMessage?.onGroupCollectorProgress((payload: GroupCollectorTaskProgress) => {
+      pendingPayloads.set(payload.taskId, payload)
+
+      if (payload.status === 'completed' || payload.status === 'stopped' || payload.status === 'failed' || pendingPayloads.size >= 20) {
+        flushCollectorProgress()
+        return
+      }
+
+      scheduleCollectorProgressFlush()
     })
 
     return () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+      }
       unsubscribe?.()
     }
   }, [])

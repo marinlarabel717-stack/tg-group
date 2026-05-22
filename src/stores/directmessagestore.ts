@@ -754,8 +754,11 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         subscribed = true
 
         let sendProgressFlushTimer: ReturnType<typeof setTimeout> | null = null
+        let autoReplyEventsFlushTimer: ReturnType<typeof setTimeout> | null = null
         const pendingPreviewUpdates = new Map<string, Pick<DirectMessagePreviewItem, 'status' | 'errorMessage' | 'remoteMessageId' | 'sentAt'>>()
+        let pendingAutoReplyEvents: DirectMessageAutoReplyEvent[] = []
         let latestSendProgressMessage = ''
+        let latestAutoReplyMessage = ''
 
         const flushSendProgress = () => {
           if (sendProgressFlushTimer) {
@@ -784,6 +787,31 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           sendProgressFlushTimer = setTimeout(flushSendProgress, 120)
         }
 
+        const flushAutoReplyEvents = () => {
+          if (autoReplyEventsFlushTimer) {
+            clearTimeout(autoReplyEventsFlushTimer)
+            autoReplyEventsFlushTimer = null
+          }
+          if (pendingAutoReplyEvents.length === 0 && !latestAutoReplyMessage) return
+
+          const nextEvents = pendingAutoReplyEvents
+          pendingAutoReplyEvents = []
+          const nextMessage = latestAutoReplyMessage
+          latestAutoReplyMessage = ''
+
+          set((state) => ({
+            autoReplyEvents: nextEvents.length > 0
+              ? [...nextEvents.slice().reverse(), ...state.autoReplyEvents].slice(0, 100)
+              : state.autoReplyEvents,
+            lastActionMessage: nextMessage || state.lastActionMessage
+          }))
+        }
+
+        const scheduleAutoReplyEventsFlush = () => {
+          if (autoReplyEventsFlushTimer) return
+          autoReplyEventsFlushTimer = setTimeout(flushAutoReplyEvents, 120)
+        }
+
         window.desktopDirectMessage.onSendProgress((payload) => {
           latestSendProgressMessage = payload.message
           if (payload.item) {
@@ -803,12 +831,17 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           scheduleSendProgressFlush()
         })
         window.desktopDirectMessage.onAutoReplyEvent((payload) => {
-          set((state) => ({
-            autoReplyEvents: [payload, ...state.autoReplyEvents].slice(0, 100),
-            lastActionMessage: payload.status === 'replied'
-              ? `自动回复已发送：${payload.senderLabel}`
-              : `自动回复失败：${payload.errorMessage || '未知错误'}`
-          }))
+          pendingAutoReplyEvents.push(payload)
+          latestAutoReplyMessage = payload.status === 'replied'
+            ? `自动回复已发送：${payload.senderLabel}`
+            : `自动回复失败：${payload.errorMessage || '未知错误'}`
+
+          if (pendingAutoReplyEvents.length >= 20 || payload.status !== 'replied') {
+            flushAutoReplyEvents()
+            return
+          }
+
+          scheduleAutoReplyEventsFlush()
         })
         try {
           const autoReplyState = await window.desktopDirectMessage.getAutoReplyState()

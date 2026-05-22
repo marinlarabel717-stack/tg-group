@@ -353,6 +353,32 @@ async function bootstrap() {
   let proxyPoolEmitTimer: NodeJS.Timeout | null = null
   let botCenterEmitTimer: NodeJS.Timeout | null = null
 
+  const PROXY_POOL_RENDER_LOGS_LIMIT = 240
+  const BOT_CENTER_RENDER_LOGS_LIMIT = 120
+
+  const serializeProxyPoolState = () => {
+    const state = proxyPoolService.getState()
+    return {
+      ...state,
+      checkState: {
+        ...state.checkState,
+        logs: state.checkState.logs.slice(-PROXY_POOL_RENDER_LOGS_LIMIT)
+      }
+    }
+  }
+
+  const serializeBotCenterState = () => {
+    if (!botCenterService) return null
+    const state = botCenterService.getState()
+    return {
+      ...state,
+      bots: state.bots.map((bot) => ({
+        ...bot,
+        logs: bot.logs.slice(-BOT_CENTER_RENDER_LOGS_LIMIT)
+      }))
+    }
+  }
+
   const emitProxyPoolState = (force = false) => {
     const send = () => {
       if (proxyPoolEmitTimer) {
@@ -360,7 +386,7 @@ async function bootstrap() {
         proxyPoolEmitTimer = null
       }
       if (!mainWindow || mainWindow.isDestroyed()) return
-      mainWindow.webContents.send('proxy-pool:state', proxyPoolService.getState())
+      mainWindow.webContents.send('proxy-pool:state', serializeProxyPoolState())
     }
 
     if (force) {
@@ -374,7 +400,7 @@ async function bootstrap() {
 
   proxyPoolService.on('state', () => emitProxyPoolState())
 
-  ipcMain.handle('proxy-pool:get-state', () => proxyPoolService.getState())
+  ipcMain.handle('proxy-pool:get-state', () => serializeProxyPoolState())
   ipcMain.handle('proxy-pool:replace-list', (_event, text: string) => proxyPoolService.replaceProxyList(text))
   ipcMain.handle('proxy-pool:update-settings', (_event, patch) => proxyPoolService.updateSettings(patch))
   ipcMain.handle('proxy-pool:clear-logs', () => proxyPoolService.clearLogs())
@@ -391,7 +417,9 @@ async function bootstrap() {
         botCenterEmitTimer = null
       }
       if (!mainWindow || mainWindow.isDestroyed() || !botCenterService) return
-      mainWindow.webContents.send('bot-center:state', botCenterService.getState())
+      const state = serializeBotCenterState()
+      if (!state) return
+      mainWindow.webContents.send('bot-center:state', state)
     }
 
     if (force) {

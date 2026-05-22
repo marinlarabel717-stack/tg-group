@@ -116,6 +116,19 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
     if (!api?.getReauthorizeState || !api?.onReauthorizeProgress) return
 
     let cancelled = false
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+    let pendingProgressState: ReauthorizeProgressOverview | null = null
+
+    const flushProgressState = () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      if (cancelled || !pendingProgressState) return
+      setProgressState(pendingProgressState)
+      pendingProgressState = null
+    }
+
     void Promise.all([
       api.getReauthorizeState(),
       api.getReauthorizeLogs?.().catch(() => []) ?? Promise.resolve([])
@@ -132,7 +145,13 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
         runIdRef.current = state.runId
         setLogs([])
       }
-      setProgressState(state)
+      pendingProgressState = state
+      if (!state.running) {
+        flushProgressState()
+        return
+      }
+      if (flushTimer) return
+      flushTimer = setTimeout(flushProgressState, 120)
     })
 
     const unsubscribeLogs = api.onReauthorizeLogs?.((nextLogs) => {
@@ -142,6 +161,9 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
 
     return () => {
       cancelled = true
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+      }
       unsubscribeProgress()
       unsubscribeLogs?.()
     }
