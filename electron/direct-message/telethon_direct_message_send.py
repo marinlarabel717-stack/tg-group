@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from telethon import TelegramClient as TelethonClient
-from telethon import utils
+from telethon import helpers, utils
 from telethon.tl import functions, types
 
 DEFAULT_API_ID = int(os.getenv('ACCOUNT_CHECK_API_ID', '2040') or '2040')
@@ -309,7 +309,7 @@ async def _send_message(client: Any, entity: Any, payload: Dict[str, Any]) -> in
             peer=entity,
             query_id=inline_results.query_id,
             id=first_result.id,
-            random_id=utils.generate_random_long(),
+            random_id=helpers.generate_random_long(),
             clear_draft=True
         ))
         return _extract_message_id(updates)

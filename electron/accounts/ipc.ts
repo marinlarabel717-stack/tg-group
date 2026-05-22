@@ -180,13 +180,16 @@ function serializeReauthorizeStateForRenderer(state: ReauthorizeProgressState): 
   }
 }
 
+const CHECK_RENDER_ACTIVE_IDS_LIMIT = 16
+const CHECK_RENDER_QUEUED_IDS_LIMIT = 120
+
 function serializeCheckStateForRenderer(state: ReturnType<CheckQueue['getState']>) {
   if (!state.running) return state
 
   return {
     ...state,
-    queuedAccountIds: state.queuedAccountIds,
-    activeAccountIds: state.activeAccountIds.slice(-Math.max(1, state.concurrency))
+    queuedAccountIds: state.queuedAccountIds.slice(0, CHECK_RENDER_QUEUED_IDS_LIMIT),
+    activeAccountIds: state.activeAccountIds.slice(-Math.max(1, Math.min(state.concurrency, CHECK_RENDER_ACTIVE_IDS_LIMIT)))
   }
 }
 

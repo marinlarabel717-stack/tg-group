@@ -169,12 +169,21 @@ function areSameNumberArrays(left: number[], right: number[]) {
   return true
 }
 
+const CHECK_TASK_STATUS_IDS_LIMIT = 160
+
 function hasRunningAccountTask(state: Pick<AccountStoreState, 'checkState' | 'twoFactorState' | 'profileOperationState' | 'reauthorizeState' | 'importProgress'>) {
   return state.checkState.running
     || state.twoFactorState.running
     || state.profileOperationState.running
     || state.reauthorizeState.running
     || Boolean(state.importProgress)
+}
+
+function buildCheckTaskAccountIds(checkState: Pick<CheckQueueState, 'running' | 'activeAccountIds' | 'queuedAccountIds'>) {
+  if (!checkState.running) return []
+
+  const limitedQueuedIds = checkState.queuedAccountIds.slice(0, CHECK_TASK_STATUS_IDS_LIMIT)
+  return Array.from(new Set([...checkState.activeAccountIds, ...limitedQueuedIds]))
 }
 
 function applyAccountSnapshot(
@@ -251,9 +260,7 @@ async function syncRuntimeProgressState(
       : checkState.activeAccountIds
   }
 
-  const nextCheckTaskAccountIds = normalizedCheckState.running
-    ? Array.from(new Set([...normalizedCheckState.activeAccountIds, ...normalizedCheckState.queuedAccountIds]))
-    : []
+  const nextCheckTaskAccountIds = buildCheckTaskAccountIds(normalizedCheckState)
 
   set({
     checkState: normalizedCheckState,
@@ -446,9 +453,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
             : nextRawState.activeAccountIds
         }
 
-        const nextCheckTaskAccountIds = normalizedCheckState.running
-          ? Array.from(new Set([...normalizedCheckState.activeAccountIds, ...normalizedCheckState.queuedAccountIds]))
-          : []
+        const nextCheckTaskAccountIds = buildCheckTaskAccountIds(normalizedCheckState)
 
         set({ checkState: normalizedCheckState, checkTaskAccountIds: nextCheckTaskAccountIds })
         const fullyCompleted = !normalizedCheckState.running
