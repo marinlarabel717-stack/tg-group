@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { DirectMessageAutoReplyPayload, DirectMessageCollectPayload, DirectMessageSendPayload, GroupCollectorPayload, GroupCollectorTaskPayload } from '../../src/types'
+import type { DirectMessageAutoReplyPayload, DirectMessageCollectPayload, DirectMessageSendPayload, DirectMessageSendProgress, GroupCollectorPayload, GroupCollectorTaskPayload, GroupCollectorTaskProgress } from '../../src/types'
 import type { DirectMessageService } from './service'
 
 interface RegisterDirectMessageIpcOptions {
@@ -8,8 +8,25 @@ interface RegisterDirectMessageIpcOptions {
   getMainWindow: () => BrowserWindow | null
 }
 
+const DIRECT_MESSAGE_SEND_PROGRESS_FLUSH_MS = 120
+const GROUP_COLLECTOR_PROGRESS_FLUSH_MS = 120
+
 export function registerDirectMessageIpc(options: RegisterDirectMessageIpcOptions) {
   const { directMessageService, getMainWindow } = options
+
+  let groupCollectorProgressEmitTimer: NodeJS.Timeout | null = null
+  let pendingGroupCollectorProgress: GroupCollectorTaskProgress | null = null
+
+  const flushGroupCollectorProgress = () => {
+    if (groupCollectorProgressEmitTimer) {
+      clearTimeout(groupCollectorProgressEmitTimer)
+      groupCollectorProgressEmitTimer = null
+    }
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed() || !pendingGroupCollectorProgress) return
+    mainWindow.webContents.send('direct-message:group-collector-progress', pendingGroupCollectorProgress)
+    pendingGroupCollectorProgress = null
+  }
 
   directMessageService.setAutoReplyEventSink((payload) => {
     const mainWindow = getMainWindow()
@@ -18,15 +35,44 @@ export function registerDirectMessageIpc(options: RegisterDirectMessageIpcOption
   })
 
   directMessageService.setGroupCollectorProgressSink((payload) => {
-    const mainWindow = getMainWindow()
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('direct-message:group-collector-progress', payload)
+    pendingGroupCollectorProgress = payload
+    if (payload.status !== 'running' || payload.result) {
+      flushGroupCollectorProgress()
+      return
+    }
+    if (groupCollectorProgressEmitTimer) return
+    groupCollectorProgressEmitTimer = setTimeout(flushGroupCollectorProgress, GROUP_COLLECTOR_PROGRESS_FLUSH_MS)
   })
 
   ipcMain.handle('direct-message:send', async (event, payload: DirectMessageSendPayload) => {
-    return directMessageService.sendMessages(payload, (progress) => {
-      event.sender.send('direct-message:send-progress', progress)
-    })
+    let sendProgressEmitTimer: NodeJS.Timeout | null = null
+    let pendingSendProgress: DirectMessageSendProgress | null = null
+
+    const flushSendProgress = () => {
+      if (sendProgressEmitTimer) {
+        clearTimeout(sendProgressEmitTimer)
+        sendProgressEmitTimer = null
+      }
+      if (!pendingSendProgress || event.sender.isDestroyed()) return
+      event.sender.send('direct-message:send-progress', pendingSendProgress)
+      pendingSendProgress = null
+    }
+
+    const emitSendProgress = (progress: DirectMessageSendProgress) => {
+      pendingSendProgress = progress
+      if (progress.completed >= progress.total || !progress.item) {
+        flushSendProgress()
+        return
+      }
+      if (sendProgressEmitTimer) return
+      sendProgressEmitTimer = setTimeout(flushSendProgress, DIRECT_MESSAGE_SEND_PROGRESS_FLUSH_MS)
+    }
+
+    try {
+      return await directMessageService.sendMessages(payload, emitSendProgress)
+    } finally {
+      flushSendProgress()
+    }
   })
 
   ipcMain.handle('direct-message:stop-send', () => {
