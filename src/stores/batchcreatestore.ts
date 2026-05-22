@@ -206,30 +206,62 @@ export const useBatchCreateStore = create<BatchCreateState>((set, get) => ({
       set({ errorMessage: '当前环境不支持批量创建模块。' })
       return
     }
-    api.onProgress((progress) => {
+    let pendingProgress: BatchCreateProgress | null = null
+    let pendingLogs: BatchCreateLogEntry[] = []
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+    const flushProgress = () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      if (!pendingProgress && pendingLogs.length === 0) return
+
+      const nextProgress = pendingProgress
+      const nextLogs = pendingLogs
+      pendingProgress = null
+      pendingLogs = []
+      if (!nextProgress) return
+
       set((state) => {
-        const currentTask = state.tasks.find((item) => item.id === progress.taskId) ?? createTaskRecord(progress.taskId, progress.total)
+        const currentTask = state.tasks.find((item) => item.id === nextProgress.taskId) ?? createTaskRecord(nextProgress.taskId, nextProgress.total)
         const nextTask: BatchCreateTaskRecord = {
           ...currentTask,
-          total: progress.total,
-          completed: progress.completed,
-          successCount: progress.successCount,
-          failedCount: progress.failedCount,
-          groupCount: progress.groupCount,
-          channelCount: progress.channelCount,
-          lastMessage: progress.message,
-          status: progress.running ? 'running' : state.stopping ? 'stopped' : 'completed',
-          finishedAt: progress.running ? currentTask.finishedAt : new Date().toISOString()
+          total: nextProgress.total,
+          completed: nextProgress.completed,
+          successCount: nextProgress.successCount,
+          failedCount: nextProgress.failedCount,
+          groupCount: nextProgress.groupCount,
+          channelCount: nextProgress.channelCount,
+          lastMessage: nextProgress.message,
+          status: nextProgress.running ? 'running' : state.stopping ? 'stopped' : 'completed',
+          finishedAt: nextProgress.running ? currentTask.finishedAt : new Date().toISOString()
         }
-        const nextLogs = [createLogEntry(progress), ...state.logs].slice(0, 500)
         return {
           tasks: upsertTask(state.tasks, nextTask),
-          logs: nextLogs,
-          lastActionMessage: progress.message,
-          running: progress.running,
-          stopping: progress.running ? state.stopping : false
+          logs: nextLogs.reduce((acc, log) => [log, ...acc].slice(0, 500), state.logs),
+          lastActionMessage: nextProgress.message,
+          running: nextProgress.running,
+          stopping: nextProgress.running ? state.stopping : false
         }
       })
+    }
+
+    const scheduleFlush = () => {
+      if (flushTimer) return
+      flushTimer = setTimeout(flushProgress, 120)
+    }
+
+    api.onProgress((progress) => {
+      pendingProgress = progress
+      pendingLogs.push(createLogEntry(progress))
+
+      if (!progress.running || progress.completed >= progress.total || pendingLogs.length >= 30) {
+        flushProgress()
+        return
+      }
+
+      scheduleFlush()
     })
   },
   startTask: async () => {

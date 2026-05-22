@@ -451,18 +451,37 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           lastActionMessage: importProgress.phase === 'completed' ? importProgress.message : get().lastActionMessage
         })
       })
-      window.desktopAccounts?.onTwoFactorProgress?.((twoFactorState) => {
+      let pendingTwoFactorState: TwoFactorProgressState | null = null
+      let twoFactorFlushTimer: ReturnType<typeof setTimeout> | null = null
+      const flushTwoFactorProgress = () => {
+        if (twoFactorFlushTimer) {
+          clearTimeout(twoFactorFlushTimer)
+          twoFactorFlushTimer = null
+        }
+        if (!pendingTwoFactorState) return
+        const nextState = pendingTwoFactorState
+        pendingTwoFactorState = null
         const previousState = get().twoFactorState
-        set({ twoFactorState })
+        set({ twoFactorState: nextState })
 
-        if (previousState.running && !twoFactorState.running) {
+        if (previousState.running && !nextState.running) {
           void syncAccounts(set, get).then(() => {
             set({
-              lastActionMessage: twoFactorState.stopRequested
+              lastActionMessage: nextState.stopRequested
                 ? '2FA 任务已收尾完成，账号列表已统一刷新。'
                 : '2FA 任务已完成，账号列表已统一刷新。'
             })
           })
+        }
+      }
+      window.desktopAccounts?.onTwoFactorProgress?.((twoFactorState) => {
+        pendingTwoFactorState = twoFactorState
+        if (!twoFactorState.running || twoFactorState.completed >= twoFactorState.total) {
+          flushTwoFactorProgress()
+          return
+        }
+        if (!twoFactorFlushTimer) {
+          twoFactorFlushTimer = setTimeout(flushTwoFactorProgress, 120)
         }
       })
       window.desktopAccounts?.onReauthorizeProgress?.((reauthorizeState) => {
@@ -477,18 +496,37 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
           })
         }
       })
-      window.desktopAccounts?.onProfileOperationProgress?.((profileOperationState) => {
+      let pendingProfileOperationState: ProfileOperationProgressState | null = null
+      let profileOperationFlushTimer: ReturnType<typeof setTimeout> | null = null
+      const flushProfileOperationProgress = () => {
+        if (profileOperationFlushTimer) {
+          clearTimeout(profileOperationFlushTimer)
+          profileOperationFlushTimer = null
+        }
+        if (!pendingProfileOperationState) return
+        const nextState = pendingProfileOperationState
+        pendingProfileOperationState = null
         const previousState = get().profileOperationState
-        set({ profileOperationState })
+        set({ profileOperationState: nextState })
 
-        if (previousState.running && !profileOperationState.running) {
+        if (previousState.running && !nextState.running) {
           void syncAccounts(set, get).then(() => {
             set({
-              lastActionMessage: profileOperationState.stopRequested
+              lastActionMessage: nextState.stopRequested
                 ? '个人资料任务已收尾完成，账号列表已统一刷新。'
                 : '个人资料任务已完成，账号列表已统一刷新。'
             })
           })
+        }
+      }
+      window.desktopAccounts?.onProfileOperationProgress?.((profileOperationState) => {
+        pendingProfileOperationState = profileOperationState
+        if (!profileOperationState.running || profileOperationState.completed >= profileOperationState.total) {
+          flushProfileOperationProgress()
+          return
+        }
+        if (!profileOperationFlushTimer) {
+          profileOperationFlushTimer = setTimeout(flushProfileOperationProgress, 120)
         }
       })
       subscribed = true
