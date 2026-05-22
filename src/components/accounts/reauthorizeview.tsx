@@ -47,6 +47,25 @@ function formatLogTime(createdAt?: string | null) {
   return date.toLocaleTimeString('zh-CN', { hour12: false })
 }
 
+function trimLiveLogs(entries: ReauthorizeLogEntry[], maxNonErrorLogs = 180) {
+  let removableRegularLogs = Math.max(0, entries.filter((entry) => entry.level !== 'error').length - maxNonErrorLogs)
+  if (removableRegularLogs <= 0) return entries
+
+  return entries.filter((entry) => {
+    if (entry.level === 'error') return true
+    if (removableRegularLogs > 0) {
+      removableRegularLogs -= 1
+      return false
+    }
+    return true
+  })
+}
+
+function appendLiveLogs(current: ReauthorizeLogEntry[], nextLogs: ReauthorizeLogEntry[]) {
+  if (nextLogs.length === 0) return current
+  return trimLiveLogs([...current, ...nextLogs])
+}
+
 function sortAccounts(accounts: AccountRecord[], selectedIds: number[]) {
   const selectedSet = new Set(selectedIds)
   return [...accounts].sort((left, right) => {
@@ -104,7 +123,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
       if (cancelled) return
       runIdRef.current = state.runId
       setProgressState(state)
-      setLogs(initialLogs)
+      setLogs(trimLiveLogs(initialLogs))
     }).catch(() => {})
 
     const unsubscribeProgress = api.onReauthorizeProgress((state) => {
@@ -118,7 +137,7 @@ export const AccountReauthorizeView = memo(function AccountReauthorizeView() {
 
     const unsubscribeLogs = api.onReauthorizeLogs?.((nextLogs) => {
       if (cancelled || nextLogs.length === 0) return
-      setLogs((current) => [...current, ...nextLogs])
+      setLogs((current) => appendLiveLogs(current, nextLogs))
     })
 
     return () => {

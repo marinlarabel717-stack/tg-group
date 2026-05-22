@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { formatCountryDisplay } from '../lib/ui-text'
-import type { AccountListReauthorizeFilter, AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload, ProfileOperationProgressState, TwoFactorProgressState } from '../types'
+import type { AccountListReauthorizeFilter, AccountRecord, AccountStatus, CheckAction, CheckQueueState, ImportProgressPayload, ProfileOperationProgressState, ReauthorizeProgressOverview, TwoFactorProgressState } from '../types'
 
 export type AccountStatusFilter = 'all' | AccountStatus | 'premium' | 'limited-group' | 'timeout-group'
 
@@ -125,6 +125,23 @@ function createEmptyProfileOperationState(): ProfileOperationProgressState {
   }
 }
 
+function createEmptyReauthorizeOverview(): ReauthorizeProgressOverview {
+  return {
+    runId: null,
+    running: false,
+    concurrency: 1,
+    total: 0,
+    completed: 0,
+    successCount: 0,
+    failedCount: 0,
+    currentAccountId: null,
+    currentPhone: null,
+    logCount: 0,
+    lastLog: null,
+    lastUpdatedAt: null
+  }
+}
+
 function areSameNumberArrays(left: number[], right: number[]) {
   if (left === right) return true
   if (left.length !== right.length) return false
@@ -134,10 +151,11 @@ function areSameNumberArrays(left: number[], right: number[]) {
   return true
 }
 
-function hasRunningAccountTask(state: Pick<AccountStoreState, 'checkState' | 'twoFactorState' | 'profileOperationState' | 'importProgress'>) {
+function hasRunningAccountTask(state: Pick<AccountStoreState, 'checkState' | 'twoFactorState' | 'profileOperationState' | 'reauthorizeState' | 'importProgress'>) {
   return state.checkState.running
     || state.twoFactorState.running
     || state.profileOperationState.running
+    || state.reauthorizeState.running
     || Boolean(state.importProgress)
 }
 
@@ -191,12 +209,14 @@ async function syncRuntimeProgressState(
   const previousCheckLogs = get().checkLogs
   const previousTwoFactorState = get().twoFactorState
   const previousProfileOperationState = get().profileOperationState
+  const previousReauthorizeState = get().reauthorizeState
 
-  const [checkState, checkLogs, twoFactorState, profileOperationState] = await Promise.all([
+  const [checkState, checkLogs, twoFactorState, profileOperationState, reauthorizeState] = await Promise.all([
     api.getCheckState().catch(() => previousCheckState),
     api.getCheckLogs().catch(() => previousCheckLogs),
     api.getTwoFactorState?.().catch(() => previousTwoFactorState) ?? Promise.resolve(previousTwoFactorState),
-    api.getProfileOperationState?.().catch(() => previousProfileOperationState) ?? Promise.resolve(previousProfileOperationState)
+    api.getProfileOperationState?.().catch(() => previousProfileOperationState) ?? Promise.resolve(previousProfileOperationState),
+    api.getReauthorizeState?.().catch(() => previousReauthorizeState) ?? Promise.resolve(previousReauthorizeState)
   ])
 
   const normalizedCheckState = {
@@ -218,7 +238,8 @@ async function syncRuntimeProgressState(
     checkLogs,
     checkTaskAccountIds: nextCheckTaskAccountIds,
     twoFactorState,
-    profileOperationState
+    profileOperationState,
+    reauthorizeState
   })
 }
 
@@ -241,6 +262,7 @@ interface AccountStoreState {
   checkTaskAccountIds: number[]
   twoFactorState: TwoFactorProgressState
   profileOperationState: ProfileOperationProgressState
+  reauthorizeState: ReauthorizeProgressOverview
   importProgress: ImportProgressPayload | null
   importResultDialog: ImportResultDialogState
   exportResultDialog: ExportResultDialogState
@@ -284,19 +306,21 @@ async function syncAccounts(set: (partial: Partial<AccountStoreState>) => void, 
     return
   }
 
-  const [accounts, checkState, checkLogs, twoFactorState, profileOperationState] = await Promise.all([
+  const [accounts, checkState, checkLogs, twoFactorState, profileOperationState, reauthorizeState] = await Promise.all([
     api.list(),
     api.getCheckState(),
     api.getCheckLogs ? api.getCheckLogs() : Promise.resolve([]),
     api.getTwoFactorState ? api.getTwoFactorState() : Promise.resolve(createEmptyTwoFactorState()),
-    api.getProfileOperationState ? api.getProfileOperationState() : Promise.resolve(createEmptyProfileOperationState())
+    api.getProfileOperationState ? api.getProfileOperationState() : Promise.resolve(createEmptyProfileOperationState()),
+    api.getReauthorizeState ? api.getReauthorizeState() : Promise.resolve(createEmptyReauthorizeOverview())
   ])
   applyAccountSnapshot(accounts, set, get, {
     checkState,
     checkLogs,
     checkTaskAccountIds: checkState.running ? checkState.activeAccountIds : [],
     twoFactorState,
-    profileOperationState
+    profileOperationState,
+    reauthorizeState
   })
 }
 
@@ -331,6 +355,7 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
   checkTaskAccountIds: [],
   twoFactorState: createEmptyTwoFactorState(),
   profileOperationState: createEmptyProfileOperationState(),
+  reauthorizeState: createEmptyReauthorizeOverview(),
   importProgress: null,
   importResultDialog: {
     open: false,
@@ -436,6 +461,18 @@ export const useAccountStore = create<AccountStoreState>((set, get) => ({
               lastActionMessage: twoFactorState.stopRequested
                 ? '2FA 任务已收尾完成，账号列表已统一刷新。'
                 : '2FA 任务已完成，账号列表已统一刷新。'
+            })
+          })
+        }
+      })
+      window.desktopAccounts?.onReauthorizeProgress?.((reauthorizeState) => {
+        const previousState = get().reauthorizeState
+        set({ reauthorizeState })
+
+        if (previousState.running && !reauthorizeState.running) {
+          void syncAccounts(set, get).then(() => {
+            set({
+              lastActionMessage: '重新授权任务已完成，账号列表已统一刷新。'
             })
           })
         }
