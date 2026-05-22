@@ -172,6 +172,34 @@ function readLastMessage(state: GroupInviteProgressState | null) {
   return state?.logs[state.logs.length - 1]?.message || ''
 }
 
+function buildProgressPatch(current: GroupInviteState, state: GroupInviteProgressState) {
+  const currentTaskId = state.running ? current.currentTaskId ?? createId('group-invite-task') : current.currentTaskId
+  const nextTasks = currentTaskId
+    ? upsertTask(current.tasks, {
+        ...(current.tasks.find((item) => item.id === currentTaskId) ?? createTaskRecord(currentTaskId, state.total, state.groupTitle || state.groupRef)),
+        total: state.total,
+        completed: state.completed,
+        successCount: state.successCount,
+        failedCount: state.failedCount,
+        lastMessage: readLastMessage(state) || '群组邀请任务进行中',
+        groupTitle: state.groupTitle || state.groupRef,
+        status: state.running ? 'running' : current.stopping ? 'stopped' : 'completed',
+        finishedAt: state.running ? null : new Date().toISOString()
+      })
+    : current.tasks
+
+  return {
+    progressState: state,
+    running: state.running,
+    stopping: state.stopRequested,
+    runningAccountIds: state.runningAccountIds,
+    runtimeReady: true,
+    currentTaskId: state.running ? currentTaskId : current.currentTaskId,
+    tasks: nextTasks,
+    lastActionMessage: readLastMessage(state)
+  }
+}
+
 function removeSuccessfulTargetsFromInput(input: string, successTargets: Set<string>) {
   if (successTargets.size === 0) return input
 
@@ -389,63 +417,42 @@ export const useGroupInviteStore = create<GroupInviteState>((set, get) => ({
     void api.getState()
       .then((state) => {
         set((current) => {
-          const currentTaskId = state.running ? current.currentTaskId ?? createId('group-invite-task') : current.currentTaskId
-          const nextTasks = state.running && currentTaskId
-            ? upsertTask(current.tasks, {
-                ...(current.tasks.find((item) => item.id === currentTaskId) ?? createTaskRecord(currentTaskId, state.total, state.groupTitle || state.groupRef)),
-                total: state.total,
-                completed: state.completed,
-                successCount: state.successCount,
-                failedCount: state.failedCount,
-                lastMessage: readLastMessage(state) || '群组邀请任务进行中',
-                groupTitle: state.groupTitle || state.groupRef
-              })
-            : current.tasks
-
-          return {
-            progressState: state,
-            running: state.running,
-            stopping: state.stopRequested,
-            runningAccountIds: state.runningAccountIds,
-            runtimeReady: true,
-            currentTaskId,
-            tasks: nextTasks,
-            lastActionMessage: readLastMessage(state)
-          }
+          const patch = buildProgressPatch(current, state)
+          return state.running
+            ? patch
+            : { ...patch, currentTaskId: current.currentTaskId }
         })
       })
       .catch((error) => {
         set({ runtimeReady: false, lastActionMessage: error instanceof Error ? error.message : '读取群组邀请状态失败。' })
       })
 
-    api.onProgress((state) => {
-      set((current) => {
-        const currentTaskId = state.running ? current.currentTaskId ?? createId('group-invite-task') : current.currentTaskId
-        const nextTasks = currentTaskId
-          ? upsertTask(current.tasks, {
-              ...(current.tasks.find((item) => item.id === currentTaskId) ?? createTaskRecord(currentTaskId, state.total, state.groupTitle || state.groupRef)),
-              total: state.total,
-              completed: state.completed,
-              successCount: state.successCount,
-              failedCount: state.failedCount,
-              lastMessage: readLastMessage(state) || '群组邀请任务进行中',
-              groupTitle: state.groupTitle || state.groupRef,
-              status: state.running ? 'running' : current.stopping ? 'stopped' : 'completed',
-              finishedAt: state.running ? null : new Date().toISOString()
-            })
-          : current.tasks
+    let pendingState: GroupInviteProgressState | null = null
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
 
-        return {
-          progressState: state,
-          running: state.running,
-          stopping: state.stopRequested,
-          runningAccountIds: state.runningAccountIds,
-          runtimeReady: true,
-          currentTaskId: state.running ? currentTaskId : current.currentTaskId,
-          tasks: nextTasks,
-          lastActionMessage: readLastMessage(state)
-        }
-      })
+    const flushProgress = () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      if (!pendingState) return
+      const nextState = pendingState
+      pendingState = null
+      set((current) => buildProgressPatch(current, nextState))
+    }
+
+    const scheduleProgressFlush = () => {
+      if (flushTimer) return
+      flushTimer = setTimeout(flushProgress, 120)
+    }
+
+    api.onProgress((state) => {
+      pendingState = state
+      if (!state.running || state.completed >= state.total) {
+        flushProgress()
+        return
+      }
+      scheduleProgressFlush()
     })
   }
 }))

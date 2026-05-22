@@ -752,17 +752,55 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           return
         }
         subscribed = true
-        window.desktopDirectMessage.onSendProgress((payload) => {
+
+        let sendProgressFlushTimer: ReturnType<typeof setTimeout> | null = null
+        const pendingPreviewUpdates = new Map<string, Pick<DirectMessagePreviewItem, 'status' | 'errorMessage' | 'remoteMessageId' | 'sentAt'>>()
+        let latestSendProgressMessage = ''
+
+        const flushSendProgress = () => {
+          if (sendProgressFlushTimer) {
+            clearTimeout(sendProgressFlushTimer)
+            sendProgressFlushTimer = null
+          }
+          if (pendingPreviewUpdates.size === 0 && !latestSendProgressMessage) return
+
+          const updates = new Map(pendingPreviewUpdates)
+          pendingPreviewUpdates.clear()
+          const nextMessage = latestSendProgressMessage
+
           set((state) => ({
-            previewItems: payload.item ? state.previewItems.map((item) => item.id === payload.item?.previewItemId ? {
-              ...item,
+            previewItems: updates.size === 0
+              ? state.previewItems
+              : state.previewItems.map((item) => {
+                  const matched = updates.get(item.id)
+                  return matched ? { ...item, ...matched } : item
+                }),
+            lastActionMessage: nextMessage || state.lastActionMessage
+          }))
+        }
+
+        const scheduleSendProgressFlush = () => {
+          if (sendProgressFlushTimer) return
+          sendProgressFlushTimer = setTimeout(flushSendProgress, 120)
+        }
+
+        window.desktopDirectMessage.onSendProgress((payload) => {
+          latestSendProgressMessage = payload.message
+          if (payload.item) {
+            pendingPreviewUpdates.set(payload.item.previewItemId, {
               status: payload.item.status,
               errorMessage: payload.item.errorMessage,
               remoteMessageId: payload.item.remoteMessageId,
               sentAt: payload.item.sentAt
-            } : item) : state.previewItems,
-            lastActionMessage: payload.message
-          }))
+            })
+          }
+
+          if (payload.completed >= payload.total || pendingPreviewUpdates.size >= 40 || !payload.item) {
+            flushSendProgress()
+            return
+          }
+
+          scheduleSendProgressFlush()
         })
         window.desktopDirectMessage.onAutoReplyEvent((payload) => {
           set((state) => ({

@@ -581,17 +581,56 @@ export const useAutoJoinStore = create<AutoJoinState>()(
           return
         }
 
-        window.desktopAutoJoin.onProgress((payload) => {
-          const nextLogs = buildProgressLog(payload)
+        let pendingPayload: AutoJoinProgress | null = null
+        let pendingLogs: AutoJoinLogEntry[] = []
+        let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+        const flushProgress = () => {
+          if (flushTimer) {
+            clearTimeout(flushTimer)
+            flushTimer = null
+          }
+          if (!pendingPayload && pendingLogs.length === 0) return
+
+          const nextPayload = pendingPayload
+          const nextLogs = pendingLogs
+          pendingPayload = null
+          pendingLogs = []
+
+          if (!nextPayload) {
+            if (nextLogs.length > 0) {
+              set((state) => ({ logs: nextLogs.reduce((acc, log) => appendLog(acc, log), state.logs) }))
+            }
+            return
+          }
+
           set((state) => ({
             runtimeReady: true,
-            running: payload.running,
+            running: nextPayload.running,
             stopping: false,
-            currentTaskId: payload.running ? payload.taskId : state.currentTaskId === payload.taskId ? null : state.currentTaskId,
-            tasks: applyProgress(state.tasks, payload),
-            logs: nextLogs ? appendLog(state.logs, nextLogs) : state.logs,
-            lastActionMessage: payload.message
+            currentTaskId: nextPayload.running ? nextPayload.taskId : state.currentTaskId === nextPayload.taskId ? null : state.currentTaskId,
+            tasks: applyProgress(state.tasks, nextPayload),
+            logs: nextLogs.reduce((acc, log) => appendLog(acc, log), state.logs),
+            lastActionMessage: nextPayload.message
           }))
+        }
+
+        const scheduleFlush = () => {
+          if (flushTimer) return
+          flushTimer = setTimeout(flushProgress, 120)
+        }
+
+        window.desktopAutoJoin.onProgress((payload) => {
+          pendingPayload = payload
+          const nextLog = buildProgressLog(payload)
+          if (nextLog) pendingLogs.push(nextLog)
+
+          if (!payload.running || payload.completed >= payload.total || pendingLogs.length >= 30) {
+            flushProgress()
+            return
+          }
+
+          scheduleFlush()
         })
 
         subscribed = true
