@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import time
+import random
 import urllib.request
 import urllib.parse
 from pathlib import Path
@@ -210,6 +211,13 @@ def _extract_message_id(result: Any) -> int | None:
     return int(message_id) if isinstance(message_id, int) else None
 
 
+def _generate_random_id() -> int:
+    generator = getattr(helpers, 'generate_random_long', None)
+    if callable(generator):
+        return int(generator())
+    return random.getrandbits(63)
+
+
 def _normalize_compare_text(value: str) -> str:
     return re.sub(r'\s+', ' ', str(value or '')).strip()
 
@@ -309,7 +317,7 @@ async def _send_message(client: Any, entity: Any, payload: Dict[str, Any]) -> in
             peer=entity,
             query_id=inline_results.query_id,
             id=first_result.id,
-            random_id=helpers.generate_random_long(),
+            random_id=_generate_random_id(),
             clear_draft=True
         ))
         return _extract_message_id(updates)
