@@ -1,46 +1,73 @@
 # Visitor Bot
 
-这是从 `TG-Matrix` 的 `机器人中心` 里抽出来的一套独立访客机器人。
+这是从 `TG-Matrix` 的 `机器人中心` 里抽出来的一套独立访客机器人，现已改成 **Python 独立版**。
 
 特点：
 
-- 不依赖 Electron，单独用 `Node.js 18+` 就能跑
+- 不依赖 Electron，也不需要 Node.js
+- 直接用 `Python 3.10+` 就能跑
+- 机器人交互内容继续放在 `config.json`
+- 机器人 `Token` 单独放在 `.env`
 - 支持 `Guest / 访客消息` 自动回复
-- 支持 `按钮交互配置`
-- 支持 `关键词 -> 指定回复`
-- 支持 `页面式按钮跳转`
-- 不依赖 `/start`、`/menu` 这种指令；私聊里用户直接发一句话，机器人就会回默认菜单
+- 支持按钮交互配置
+- 支持关键词匹配回复
+- 支持页面式按钮跳转
+- 不靠 `/start`、`/menu` 这类指令驱动
 
 ## 运行
 
-1. 复制一份配置：
+1. 复制配置文件：
 
 ```powershell
 Copy-Item .\config.example.json .\config.json
+Copy-Item .\.env.example .\.env
 ```
 
-2. 把 `config.json` 里的 `botToken` 改成你自己的。
+2. 修改 `.env`：
 
-3. 启动：
-
-```powershell
-npm start
+```env
+BOT_TOKEN=你的机器人Token
 ```
 
-也可以直接跑示例配置做语法检查：
+3. 修改 `config.json` 里的页面、按钮、关键词等交互内容。
+
+4. 先做配置检查：
 
 ```powershell
-npm run start:example
+python .\main.py --config .\config.json --check
+```
+
+5. 启动：
+
+```powershell
+python .\main.py --config .\config.json
+```
+
+Linux / 宝塔里直接用：
+
+```bash
+python3 main.py --config ./config.json
 ```
 
 ## 配置说明
 
-单个机器人主要用这几块：
+顶层配置：
 
+- `envFile`
+  `.env` 文件路径，默认 `./.env`
+- `stateFile`
+  运行状态文件，默认 `./data/runtime-state.json`
+- `bots`
+  机器人列表
+
+单个机器人主要配置：
+
+- `tokenEnvName`
+  这个机器人从哪个环境变量里取 Token，例如 `BOT_TOKEN`
 - `guestReply*`
-  用于群里 `Guest Chat / 访客消息` 的自动回复
+  群里 `Guest Chat / 访客消息` 的自动回复
 - `privateReply*`
-  用于私聊默认欢迎页
+  私聊默认欢迎页
 - `keywordRules`
   按关键词匹配不同回复
 - `pages`

@@ -1,10 +1,11 @@
 {
+  "envFile": "./.env",
   "stateFile": "./data/runtime-state.json",
   "bots": [
     {
       "id": "visitor-bot-1",
       "name": "访客机器人 1",
-      "botToken": "",
+      "tokenEnvName": "BOT_TOKEN",
       "autoStart": true,
       "guestReplyEnabled": true,
       "guestReplyTitle": "欢迎咨询",
@@ -47,7 +48,7 @@
           "replyEnabled": true,
           "replyType": "text",
           "title": "价格说明",
-          "text": "你刚才问到了价格。\n\n点击下面按钮看详细套餐。",
+          "text": "你刚才问到了价格。\n\n点下面按钮看详细套餐。",
           "imageUrl": "",
           "buttons": [
             {
