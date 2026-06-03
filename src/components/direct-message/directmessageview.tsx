@@ -152,6 +152,8 @@ const SendWorkbench = memo(function SendWorkbench() {
   const setTooManyRequestsStopThreshold = useDirectMessageStore((state) => state.setTooManyRequestsStopThreshold)
   const groupConcurrency = useDirectMessageStore((state) => state.groupConcurrency)
   const setGroupConcurrency = useDirectMessageStore((state) => state.setGroupConcurrency)
+  const leaveForbiddenDialogsEnabled = useDirectMessageStore((state) => state.leaveForbiddenDialogsEnabled)
+  const setLeaveForbiddenDialogsEnabled = useDirectMessageStore((state) => state.setLeaveForbiddenDialogsEnabled)
   const intervalSeconds = useDirectMessageStore((state) => state.intervalSeconds)
   const setIntervalSeconds = useDirectMessageStore((state) => state.setIntervalSeconds)
   const startSend = useDirectMessageStore((state) => state.startSend)
@@ -240,6 +242,13 @@ const SendWorkbench = memo(function SendWorkbench() {
 
                 <ConfigRow label="并发线程" hint="默认少一点，稳定优先。">
                   <input type="number" min={1} max={20} value={groupConcurrency} onChange={(event) => setGroupConcurrency(Number(event.target.value) || 1)} className={COMPACT_INPUT_CLASS} />
+                </ConfigRow>
+
+                <ConfigRow label="禁言/无权限自动退群" hint="遇到发不了消息、被限制发言、没有发送权限的群时，这条会自动跳过；开启后还会顺手自动退群。">
+                  <label className="inline-flex items-center gap-2 text-sm text-white">
+                    <input type="checkbox" checked={leaveForbiddenDialogsEnabled} onChange={(event) => setLeaveForbiddenDialogsEnabled(event.target.checked)} />
+                    开启自动退群
+                  </label>
                 </ConfigRow>
               </FoldSection>
 

@@ -918,6 +918,7 @@ export interface DirectMessageSendPayload {
   randomEmojiEnabled?: boolean
   concurrency?: number
   tooManyRequestsStopThreshold?: number
+  leaveForbiddenDialogsEnabled?: boolean
 }
 
 export interface DirectMessageSendResultItem {

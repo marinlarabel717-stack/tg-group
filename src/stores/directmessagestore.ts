@@ -134,6 +134,7 @@ interface DirectMessageState {
   randomEmojiEnabled: boolean
   tooManyRequestsStopThreshold: number
   groupConcurrency: number
+  leaveForbiddenDialogsEnabled: boolean
   accountPerGroup: number
   intervalSeconds: number
   dedupeEnabled: boolean
@@ -171,6 +172,7 @@ interface DirectMessageState {
   setRandomEmojiEnabled: (value: boolean) => void
   setTooManyRequestsStopThreshold: (value: number) => void
   setGroupConcurrency: (value: number) => void
+  setLeaveForbiddenDialogsEnabled: (value: boolean) => void
   setAccountPerGroup: (value: number) => void
   setIntervalSeconds: (value: number) => void
   setDedupeEnabled: (value: boolean) => void
@@ -395,6 +397,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       randomEmojiEnabled: false,
       tooManyRequestsStopThreshold: 30,
       groupConcurrency: 3,
+      leaveForbiddenDialogsEnabled: false,
       accountPerGroup: 5,
       intervalSeconds: 25,
       dedupeEnabled: true,
@@ -446,6 +449,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
       setRandomEmojiEnabled: (value) => set({ randomEmojiEnabled: value, previewItems: [] }),
       setTooManyRequestsStopThreshold: (value) => set({ tooManyRequestsStopThreshold: Math.max(1, Math.trunc(value || 1)), previewItems: [] }),
       setGroupConcurrency: (value) => set({ groupConcurrency: Math.max(1, value || 1) }),
+      setLeaveForbiddenDialogsEnabled: (value) => set({ leaveForbiddenDialogsEnabled: value, previewItems: [] }),
       setAccountPerGroup: (value) => set({ accountPerGroup: Math.max(1, value || 1), previewItems: [] }),
       setIntervalSeconds: (value) => set({ intervalSeconds: Math.max(5, value || 5), previewItems: [] }),
       setDedupeEnabled: (value) => set({ dedupeEnabled: value, previewItems: [] }),
@@ -680,7 +684,8 @@ export const useDirectMessageStore = create<DirectMessageState>()(
             welcomeDelaySeconds: state.welcomeDelaySeconds,
             randomEmojiEnabled: state.randomEmojiEnabled,
             concurrency: state.groupConcurrency,
-            tooManyRequestsStopThreshold: state.tooManyRequestsStopThreshold
+            tooManyRequestsStopThreshold: state.tooManyRequestsStopThreshold,
+            leaveForbiddenDialogsEnabled: state.leaveForbiddenDialogsEnabled
           })
           const run = buildRunFromResult(result, state)
           set((current) => ({
@@ -893,7 +898,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
     }),
     {
       name: 'tg-group-direct-message-store',
-      version: 10,
+      version: 11,
       storage: createJSONStorage(() => window.localStorage),
       partialize: (state) => ({
         activeTab: state.activeTab,
@@ -916,6 +921,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
         randomEmojiEnabled: state.randomEmojiEnabled,
         tooManyRequestsStopThreshold: state.tooManyRequestsStopThreshold,
         groupConcurrency: state.groupConcurrency,
+        leaveForbiddenDialogsEnabled: state.leaveForbiddenDialogsEnabled,
         accountPerGroup: state.accountPerGroup,
         intervalSeconds: state.intervalSeconds,
         dedupeEnabled: state.dedupeEnabled,
@@ -955,6 +961,7 @@ export const useDirectMessageStore = create<DirectMessageState>()(
           randomEmojiEnabled: Boolean(state?.randomEmojiEnabled),
           tooManyRequestsStopThreshold: typeof state?.tooManyRequestsStopThreshold === 'number' ? Math.max(1, Math.trunc(state.tooManyRequestsStopThreshold)) : 30,
           groupConcurrency: state?.groupConcurrency || 3,
+          leaveForbiddenDialogsEnabled: state?.leaveForbiddenDialogsEnabled === true,
           accountPerGroup: state?.accountPerGroup || 5,
           intervalSeconds: state?.intervalSeconds || 25,
           dedupeEnabled: true,

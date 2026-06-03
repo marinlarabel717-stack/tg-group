@@ -120,6 +120,11 @@ function isTooManyRequestsError(error: unknown) {
   return /Too many requests/i.test(message)
 }
 
+function isDirectMessageForbiddenError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /CHAT_WRITE_FORBIDDEN|USER_BANNED_IN_CHANNEL|CHAT_RESTRICTED|CHAT_ADMIN_REQUIRED|CHAT_SEND_[A-Z_]+_FORBIDDEN/i.test(message)
+}
+
 function createId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
 }
@@ -960,6 +965,26 @@ async function resolveSendEntity(client: TelegramClient, targetValue: string) {
   }
 }
 
+async function leaveDirectMessageEntity(client: TelegramClient, entity: unknown) {
+  const inputPeer = await client.getInputEntity(entity as never)
+  const className = String((entity as { className?: string } | null)?.className || '')
+  if (className.includes('Channel')) {
+    await client.invoke(new Api.channels.LeaveChannel({ channel: inputPeer as never }))
+    return true
+  }
+
+  if (className === 'Chat') {
+    await client.invoke(new Api.messages.DeleteChatUser({
+      chatId: bigInt(Number((entity as { id?: unknown }).id)),
+      userId: new Api.InputUserSelf(),
+      revokeHistory: false
+    }))
+    return true
+  }
+
+  return false
+}
+
 interface AutoReplyRuntimeEntry {
   account: AccountRecord
   client: TelegramClient
@@ -1266,6 +1291,45 @@ export class DirectMessageService {
         stopReason = '无可用账号发送，本次任务已停止。'
         this.emitSendNotice(results, payload.items.length, stopReason, onProgress, null)
         task.cancelled = true
+      }
+    }
+
+    const ensureSendClient = async (account: AccountRecord) => {
+      const existing = clients.get(account.id)
+      if (existing) return existing
+      const created = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+      clients.set(account.id, created)
+      return created
+    }
+
+    const formatForbiddenTargetMessage = async (
+      account: AccountRecord,
+      item: DirectMessageSendPayload['items'][number],
+      reason: unknown
+    ) => {
+      const base = formatDirectMessageError(reason)
+      if (!isDirectMessageForbiddenError(reason)) {
+        return base
+      }
+
+      if (!payload.leaveForbiddenDialogsEnabled) {
+        return `${base} 这条已自动跳过。`
+      }
+
+      try {
+        const client = await ensureSendClient(account)
+        const resolved = await resolveSendEntity(client, item.targetValue)
+        try {
+          const left = await leaveDirectMessageEntity(client, resolved.entity)
+          if (!left) {
+            return `${base} 这条已自动跳过，不过目标不是群，自动退群没执行。`
+          }
+          return `${base} 这条已自动跳过，并已自动退群。`
+        } finally {
+          await resolved.cleanup?.()
+        }
+      } catch {
+        return `${base} 这条已自动跳过，不过自动退群没成功。`
       }
     }
 
@@ -1580,7 +1644,7 @@ export class DirectMessageService {
         results.push(resultItem)
         this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
       } catch (error) {
-        const resultItem = this.createFailedSendItem(item, formatDirectMessageError(error))
+        const resultItem = this.createFailedSendItem(item, await formatForbiddenTargetMessage(account, item, error))
         results.push(resultItem)
         this.emitSendProgress(results, payload.items.length, resultItem, onProgress)
         if (typeof item.accountId === 'number' && isTooManyRequestsError(error)) {
