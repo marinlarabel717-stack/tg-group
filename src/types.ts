@@ -745,6 +745,7 @@ export interface BroadcastPushSchedulePayload {
   items: BroadcastPreviewSyncItem[]
   creatives: BroadcastCreativePayload[]
   groups: BroadcastGroupPayload[]
+  leaveForbiddenGroupsEnabled?: boolean
 }
 
 export interface BroadcastPushScheduleResultItem {

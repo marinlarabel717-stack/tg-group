@@ -48,6 +48,7 @@ export interface BroadcastTask {
   intervalMinutes: number
   jitterMinutes: number
   dailyLimitPerGroup: number
+  leaveForbiddenGroupsEnabled: boolean
   lastSyncedAt: string | null
 }
 
@@ -462,6 +463,7 @@ const initialTasks: BroadcastTask[] = [
     intervalMinutes: 10,
     jitterMinutes: 0,
     dailyLimitPerGroup: 12,
+    leaveForbiddenGroupsEnabled: false,
     lastSyncedAt: null
   }
 ]
@@ -505,6 +507,7 @@ export const useBroadcastStore = create<BroadcastState>()(
           intervalMinutes: 10,
           jitterMinutes: 0,
           dailyLimitPerGroup: 12,
+          leaveForbiddenGroupsEnabled: false,
           lastSyncedAt: null
         }
         set((state) => ({
@@ -761,7 +764,8 @@ export const useBroadcastStore = create<BroadcastState>()(
         const payload: BroadcastPushSchedulePayload = {
           items: sanitizedItems,
           creatives: state.creatives,
-          groups: state.groups
+          groups: state.groups,
+          leaveForbiddenGroupsEnabled: Boolean(workingTask.leaveForbiddenGroupsEnabled)
         }
 
         if (!window.desktopBroadcast?.pushSchedule) {
@@ -919,7 +923,7 @@ export const useBroadcastStore = create<BroadcastState>()(
     }),
     {
       name: 'tg-group-broadcast-workbench',
-      version: 10,
+      version: 11,
       storage: createJSONStorage(() => localStorage),
       migrate: (persistedState: any) => {
         const defaultCreativeTitles = new Set(['早间图文 A', '转化图文 B'])
@@ -981,6 +985,7 @@ export const useBroadcastStore = create<BroadcastState>()(
               startDate: typeof task?.startDate === 'string' && task.startDate.trim() ? task.startDate : defaultStartDate,
               endDate: typeof task?.endDate === 'string' && task.endDate.trim() ? task.endDate : (typeof task?.startDate === 'string' && task.startDate.trim() ? task.startDate : defaultStartDate),
               scheduleMode: task?.scheduleMode === 'daily_repeat' ? 'daily_repeat' : 'date_range',
+              leaveForbiddenGroupsEnabled: task?.leaveForbiddenGroupsEnabled === true,
               groupIds: Array.isArray(task?.groupIds)
                 ? dedupeTaskGroupIds((Array.from(new Set((task.groupIds as string[]).map((groupId: string) => deduped.idMap.get(groupId) || groupId))) as string[]).filter((groupId) => deduped.groups.some((group) => group.id === groupId)), deduped.groups)
                 : [],

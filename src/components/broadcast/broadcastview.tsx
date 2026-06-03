@@ -1288,6 +1288,15 @@ const BroadcastConsole = memo(function BroadcastConsole() {
                 <label className="space-y-2 text-sm"><span className="text-textMuted">发送间隔（分钟）</span><input type="number" min={5} value={selectedTask.intervalMinutes} onChange={(event) => updateTask(selectedTask.id, { intervalMinutes: Number(event.target.value) || 10 })} className={COMPACT_INPUT_CLASS} /></label>
                 <label className="space-y-2 text-sm"><span className="text-textMuted">单群当天条数（每日上限 100）</span><input type="number" min={1} max={100} value={selectedTask.dailyLimitPerGroup} onChange={(event) => updateTask(selectedTask.id, { dailyLimitPerGroup: Math.min(Number(event.target.value) || 1, 100) })} className={COMPACT_INPUT_CLASS} /></label>
               </div>
+              <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4">
+                <label className="flex items-center justify-between gap-4 text-sm text-slate-200">
+                  <div>
+                    <div className="font-medium text-white">禁言/无权限自动退群</div>
+                    <div className="mt-1 text-xs text-textMuted">遇到发不了消息、被限制发言、没有发送权限的群时，这条会自动跳过；开启后还会顺手自动退群。</div>
+                  </div>
+                  <input type="checkbox" checked={Boolean(selectedTask.leaveForbiddenGroupsEnabled)} onChange={(event) => updateTask(selectedTask.id, { leaveForbiddenGroupsEnabled: event.target.checked })} className="h-4 w-4 rounded border-white/20 bg-transparent" />
+                </label>
+              </div>
               {selectedPreview.length > 0 ? (
                 <div className="mt-4 rounded-[16px] bg-white/[0.04] px-4 py-4 text-sm text-slate-200">
                   {selectedTask.scheduleMode === 'daily_repeat' ? (

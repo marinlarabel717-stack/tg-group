@@ -7,7 +7,7 @@ import type { AccountRepository } from '../accounts/services/account-repository'
 import { SessionLoader } from '../accounts/check-engine/session-loader'
 import { TelegramClientManager, type AccountClientProxyOptions } from '../accounts/check-engine/telegram-client-manager'
 import { ProxyPoolService, type AccountCheckProxy } from '../proxy-pool/service'
-import type { BroadcastCreativePayload, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastScheduledMessageItem, BroadcastScheduledMessageListResult, BroadcastStopResult } from '../../src/types'
+import type { BroadcastCreativePayload, BroadcastDeleteScheduledMessagesPayload, BroadcastDeleteScheduledMessagesResult, BroadcastGroupPayload, BroadcastJoinedGroup, BroadcastPushSchedulePayload, BroadcastPushScheduleProgress, BroadcastPushScheduleResult, BroadcastPushScheduleResultItem, BroadcastScheduledMessageItem, BroadcastScheduledMessageListResult, BroadcastStopResult } from '../../src/types'
 import { TelethonJoinedGroupReader } from './telethon-joined-group-reader'
 import { TelethonScheduledMessageService } from './telethon-scheduled-message-service'
 
@@ -106,6 +106,11 @@ function formatBroadcastError(error: unknown) {
   }
   if (/Too many requests/i.test(normalized)) return '发送失败：请求过于频繁，请稍后再试。'
   return `发送失败：${normalized}`
+}
+
+function isBroadcastSendForbiddenError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /CHAT_WRITE_FORBIDDEN|USER_BANNED_IN_CHANNEL|CHAT_RESTRICTED|CHAT_ADMIN_REQUIRED|CHAT_SEND_[A-Z_]+_FORBIDDEN/i.test(message)
 }
 
 function parseTelegramMessageLink(input: string) {
@@ -378,6 +383,26 @@ async function resolveGroupEntity(client: TelegramClient, groupRef: ReturnType<t
   return client.getEntity(groupRef.value as never)
 }
 
+async function leaveBroadcastGroupEntity(client: TelegramClient, entity: unknown) {
+  const inputPeer = await client.getInputEntity(entity as never)
+  const className = String((entity as { className?: string } | null)?.className || '')
+  if (className.includes('Channel')) {
+    await client.invoke(new Api.channels.LeaveChannel({ channel: inputPeer as never }))
+    return
+  }
+
+  if (className === 'Chat') {
+    await client.invoke(new Api.messages.DeleteChatUser({
+      chatId: bigInt(Number((entity as { id?: unknown }).id)),
+      userId: new Api.InputUserSelf(),
+      revokeHistory: false
+    }))
+    return
+  }
+
+  throw new Error('TARGET_NOT_GROUP')
+}
+
 function inferImageExtension(mimeType: string) {
   if (mimeType.includes('png')) return 'png'
   if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg'
@@ -612,6 +637,43 @@ export class BroadcastService {
       this.emitProgress(payload.items.length, completedCount, successCount, failedCount, item, onProgress)
     }
 
+    const ensurePushClient = async (account: AccountRecord) => {
+      const existing = clients.get(account.id)
+      if (existing) return existing
+      const created = await ensureAuthorizedClient(account, this.sessionLoader, this.clientManager, this.proxyPoolService)
+      clients.set(account.id, created)
+      return created
+    }
+
+    const formatSkippedGroupMessage = async (account: AccountRecord, group: BroadcastGroupPayload | undefined, reason: unknown) => {
+      const base = formatBroadcastError(reason)
+      if (!isBroadcastSendForbiddenError(reason)) {
+        return base
+      }
+
+      if (!payload.leaveForbiddenGroupsEnabled) {
+        return `${base} 这条已自动跳过。`
+      }
+
+      const groupRefRaw = String(group?.targetRef || group?.username || '').trim()
+      const groupRef = normalizeGroupRef(groupRefRaw)
+      if (!groupRef) {
+        return `${base} 这条已自动跳过，不过没拿到有效群引用，自动退群没执行。`
+      }
+
+      try {
+        const client = await ensurePushClient(account)
+        const entity = await resolveGroupEntity(client, groupRef)
+        if (!entity) {
+          return `${base} 这条已自动跳过，不过自动退群没执行成功。`
+        }
+        await leaveBroadcastGroupEntity(client, entity)
+        return `${base} 这条已自动跳过，并已自动退群。`
+      } catch {
+        return `${base} 这条已自动跳过，不过自动退群没成功。`
+      }
+    }
+
     try {
       for (const item of payload.items) {
         if (task.cancelled) break
@@ -831,7 +893,7 @@ export class BroadcastService {
               if (typeof currentCount === 'number' && currentCount > 0) {
                 scheduledCountCache.set(meta.entityKey, currentCount - 1)
               }
-              const resultItem = this.createFailedItem(meta.item, formatBroadcastError(batchItem.reason))
+              const resultItem = this.createFailedItem(meta.item, await formatSkippedGroupMessage(account, groupsById.get(meta.item.groupId), batchItem.reason))
               results.push(resultItem)
               reportProgress(resultItem)
             }
@@ -856,7 +918,7 @@ export class BroadcastService {
               if (typeof currentCount === 'number' && currentCount > 0) {
                 scheduledCountCache.set(meta.entityKey, currentCount - 1)
               }
-              const resultItem = this.createFailedItem(meta.item, formatBroadcastError(error))
+              const resultItem = this.createFailedItem(meta.item, await formatSkippedGroupMessage(account, groupsById.get(meta.item.groupId), error))
               results.push(resultItem)
               reportProgress(resultItem)
             }
