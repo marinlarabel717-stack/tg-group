@@ -1,0 +1,11 @@
+{
+  "name": "tg-matrix-visitor-bot",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Standalone visitor bot extracted from TG-Matrix Bot Center",
+  "scripts": {
+    "start": "node src/index.js --config ./config.json",
+    "start:example": "node src/index.js --config ./config.example.json"
+  }
+}
