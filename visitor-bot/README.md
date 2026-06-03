@@ -6,7 +6,7 @@
 
 - 不依赖 Electron，也不需要 Node.js
 - 直接用 `Python 3.10+` 就能跑
-- 机器人交互内容继续放在 `config.json`
+- 机器人交互内容统一放在 `config.json` 里的 `interactionConfig`
 - 机器人 `Token` 单独放在 `.env`
 - 支持 `Guest / 访客消息` 自动回复
 - 支持按钮交互配置
@@ -29,7 +29,7 @@ Copy-Item .\.env.example .\.env
 BOT_TOKEN=你的机器人Token
 ```
 
-3. 修改 `config.json` 里的页面、按钮、关键词等交互内容。
+3. 修改 `config.json` 里的 `interactionConfig`，页面、按钮、关键词回复都在这里。
 
 4. 先做配置检查：
 
@@ -64,6 +64,11 @@ python3 main.py --config ./config.json
 
 - `tokenEnvName`
   这个机器人从哪个环境变量里取 Token，例如 `BOT_TOKEN`
+- `interactionConfig`
+  机器人交互配置，按钮、页面、关键词回复、默认欢迎回复都放这里
+
+`interactionConfig` 里主要是：
+
 - `guestReply*`
   群里 `Guest Chat / 访客消息` 的自动回复
 - `privateReply*`
@@ -72,6 +77,8 @@ python3 main.py --config ./config.json
   按关键词匹配不同回复
 - `pages`
   按钮跳转的页面配置
+
+如果你之前已经按旧格式写过，程序现在也兼容，但后面建议统一改成 `interactionConfig` 这一块。
 
 ## 按钮
 

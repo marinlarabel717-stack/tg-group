@@ -7,112 +7,114 @@
       "name": "访客机器人 1",
       "tokenEnvName": "BOT_TOKEN",
       "autoStart": true,
-      "guestReplyEnabled": true,
-      "guestReplyTitle": "欢迎咨询",
-      "guestReplyText": "你好，我已经收到你的访客消息。\n\n访客：{caller_name}\n群：{chat_title}\n内容：{text}",
-      "guestReplyType": "text",
-      "guestReplyImageUrl": "",
-      "guestReplyButtons": [
-        {
-          "id": "home",
-          "text": "产品菜单",
-          "actionType": "page",
-          "targetPageId": "menu"
-        },
-        {
-          "id": "channel",
-          "text": "联系频道",
-          "actionType": "url",
-          "url": "https://t.me/example"
-        }
-      ],
-      "privateReplyEnabled": true,
-      "privateReplyTitle": "欢迎来到访客机器人",
-      "privateReplyText": "这里不用指令，直接点按钮就行。",
-      "privateReplyType": "text",
-      "privateReplyImageUrl": "",
-      "privateReplyButtons": [
-        {
-          "id": "menu",
-          "text": "打开菜单",
-          "actionType": "page",
-          "targetPageId": "menu"
-        }
-      ],
-      "keywordRules": [
-        {
-          "id": "price-rule",
-          "enabled": true,
-          "keyword": "价格",
-          "matchType": "contains",
-          "replyEnabled": true,
-          "replyType": "text",
-          "title": "价格说明",
-          "text": "你刚才问到了价格。\n\n点下面按钮看详细套餐。",
-          "imageUrl": "",
-          "buttons": [
-            {
-              "id": "price-page",
-              "text": "查看套餐",
-              "actionType": "page",
-              "targetPageId": "pricing"
-            }
-          ]
-        }
-      ],
-      "pages": [
-        {
-          "id": "menu",
-          "title": "主菜单",
-          "text": "选择你要查看的内容。",
-          "replyType": "text",
-          "imageUrl": "",
-          "buttons": [
-            {
-              "id": "pricing",
-              "text": "套餐介绍",
-              "actionType": "page",
-              "targetPageId": "pricing"
-            },
-            {
-              "id": "faq",
-              "text": "常见问题",
-              "actionType": "page",
-              "targetPageId": "faq"
-            }
-          ]
-        },
-        {
-          "id": "pricing",
-          "title": "套餐介绍",
-          "text": "这里放你的套餐内容、报价、发货说明。",
-          "replyType": "text",
-          "imageUrl": "",
-          "buttons": [
-            {
-              "id": "back-home",
-              "text": "返回菜单",
-              "actionType": "page",
-              "targetPageId": "menu"
-            }
-          ]
-        },
-        {
-          "id": "faq",
-          "title": "常见问题",
-          "text": "这里放常见问题和答案。",
-          "replyType": "text",
-          "imageUrl": "",
-          "buttons": [
-            {
-              "id": "faq-back",
-              "text": "返回菜单",
-              "actionType": "page",
-              "targetPageId": "menu"
-            }
-          ]
-        }
-      ]
+      "interactionConfig": {
+        "guestReplyEnabled": true,
+        "guestReplyTitle": "欢迎咨询",
+        "guestReplyText": "你好，我已经收到你的访客消息。\n\n访客：{caller_name}\n群：{chat_title}\n内容：{text}",
+        "guestReplyType": "text",
+        "guestReplyImageUrl": "",
+        "guestReplyButtons": [
+          {
+            "id": "home",
+            "text": "产品菜单",
+            "actionType": "page",
+            "targetPageId": "menu"
+          },
+          {
+            "id": "channel",
+            "text": "联系频道",
+            "actionType": "url",
+            "url": "https://t.me/example"
+          }
+        ],
+        "privateReplyEnabled": true,
+        "privateReplyTitle": "欢迎来到访客机器人",
+        "privateReplyText": "这里不用指令，直接点按钮就行。",
+        "privateReplyType": "text",
+        "privateReplyImageUrl": "",
+        "privateReplyButtons": [
+          {
+            "id": "menu",
+            "text": "打开菜单",
+            "actionType": "page",
+            "targetPageId": "menu"
+          }
+        ],
+        "keywordRules": [
+          {
+            "id": "price-rule",
+            "enabled": true,
+            "keyword": "价格",
+            "matchType": "contains",
+            "replyEnabled": true,
+            "replyType": "text",
+            "title": "价格说明",
+            "text": "你刚才问到了价格。\n\n点下面按钮看详细套餐。",
+            "imageUrl": "",
+            "buttons": [
+              {
+                "id": "price-page",
+                "text": "查看套餐",
+                "actionType": "page",
+                "targetPageId": "pricing"
+              }
+            ]
+          }
+        ],
+        "pages": [
+          {
+            "id": "menu",
+            "title": "主菜单",
+            "text": "选择你要查看的内容。",
+            "replyType": "text",
+            "imageUrl": "",
+            "buttons": [
+              {
+                "id": "pricing",
+                "text": "套餐介绍",
+                "actionType": "page",
+                "targetPageId": "pricing"
+              },
+              {
+                "id": "faq",
+                "text": "常见问题",
+                "actionType": "page",
+                "targetPageId": "faq"
+              }
+            ]
+          },
+          {
+            "id": "pricing",
+            "title": "套餐介绍",
+            "text": "这里放你的套餐内容、报价、发货说明。",
+            "replyType": "text",
+            "imageUrl": "",
+            "buttons": [
+              {
+                "id": "back-home",
+                "text": "返回菜单",
+                "actionType": "page",
+                "targetPageId": "menu"
+              }
+            ]
+          },
+          {
+            "id": "faq",
+            "title": "常见问题",
+            "text": "这里放常见问题和答案。",
+            "replyType": "text",
+            "imageUrl": "",
+            "buttons": [
+              {
+                "id": "faq-back",
+                "text": "返回菜单",
+                "actionType": "page",
+                "targetPageId": "menu"
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

@@ -45,20 +45,22 @@ DEFAULT_BOT = {
     "name": "访客机器人 1",
     "tokenEnvName": "BOT_TOKEN",
     "autoStart": True,
-    "guestReplyEnabled": True,
-    "guestReplyTitle": "访客机器人",
-    "guestReplyText": "你好，我已经收到你的访客消息。\n\n你刚才发送的是：{text}",
-    "guestReplyType": "text",
-    "guestReplyImageUrl": "",
-    "guestReplyButtons": [],
-    "privateReplyEnabled": True,
-    "privateReplyTitle": "欢迎来到访客机器人",
-    "privateReplyText": "这里不用指令，直接点下面按钮就行。",
-    "privateReplyType": "text",
-    "privateReplyImageUrl": "",
-    "privateReplyButtons": [],
-    "keywordRules": [],
-    "pages": [],
+    "interactionConfig": {
+        "guestReplyEnabled": True,
+        "guestReplyTitle": "访客机器人",
+        "guestReplyText": "你好，我已经收到你的访客消息。\n\n你刚才发送的是：{text}",
+        "guestReplyType": "text",
+        "guestReplyImageUrl": "",
+        "guestReplyButtons": [],
+        "privateReplyEnabled": True,
+        "privateReplyTitle": "欢迎来到访客机器人",
+        "privateReplyText": "这里不用指令，直接点下面按钮就行。",
+        "privateReplyType": "text",
+        "privateReplyImageUrl": "",
+        "privateReplyButtons": [],
+        "keywordRules": [],
+        "pages": [],
+    },
 }
 
 
@@ -149,6 +151,28 @@ def normalize_page(raw: Any, index: int = 0) -> dict[str, Any]:
     }
 
 
+def normalize_interaction_config(raw: Any, fallback_source: dict[str, Any] | None = None) -> dict[str, Any]:
+    item = raw if isinstance(raw, dict) else {}
+    fallback = fallback_source if isinstance(fallback_source, dict) else {}
+    default = DEFAULT_BOT["interactionConfig"]
+    return {
+        "guestReplyEnabled": normalize_boolean(item.get("guestReplyEnabled", fallback.get("guestReplyEnabled")), default["guestReplyEnabled"]),
+        "guestReplyTitle": normalize_string(item.get("guestReplyTitle", fallback.get("guestReplyTitle")), default["guestReplyTitle"]) or default["guestReplyTitle"],
+        "guestReplyText": item.get("guestReplyText", fallback.get("guestReplyText")) if isinstance(item.get("guestReplyText", fallback.get("guestReplyText")), str) and item.get("guestReplyText", fallback.get("guestReplyText")).strip() else default["guestReplyText"],
+        "guestReplyType": normalize_reply_type(item.get("guestReplyType", fallback.get("guestReplyType")), default["guestReplyType"]),
+        "guestReplyImageUrl": normalize_string(item.get("guestReplyImageUrl", fallback.get("guestReplyImageUrl"))),
+        "guestReplyButtons": normalize_buttons(item.get("guestReplyButtons", fallback.get("guestReplyButtons"))),
+        "privateReplyEnabled": normalize_boolean(item.get("privateReplyEnabled", fallback.get("privateReplyEnabled")), default["privateReplyEnabled"]),
+        "privateReplyTitle": normalize_string(item.get("privateReplyTitle", fallback.get("privateReplyTitle")), default["privateReplyTitle"]) or default["privateReplyTitle"],
+        "privateReplyText": item.get("privateReplyText", fallback.get("privateReplyText")) if isinstance(item.get("privateReplyText", fallback.get("privateReplyText")), str) and item.get("privateReplyText", fallback.get("privateReplyText")).strip() else default["privateReplyText"],
+        "privateReplyType": normalize_reply_type(item.get("privateReplyType", fallback.get("privateReplyType")), default["privateReplyType"]),
+        "privateReplyImageUrl": normalize_string(item.get("privateReplyImageUrl", fallback.get("privateReplyImageUrl"))),
+        "privateReplyButtons": normalize_buttons(item.get("privateReplyButtons", fallback.get("privateReplyButtons"))),
+        "keywordRules": [normalize_keyword_rule(rule, rule_index) for rule_index, rule in enumerate(item.get("keywordRules", fallback.get("keywordRules", [])))] if isinstance(item.get("keywordRules", fallback.get("keywordRules", [])), list) else [],
+        "pages": [normalize_page(page, page_index) for page_index, page in enumerate(item.get("pages", fallback.get("pages", [])))] if isinstance(item.get("pages", fallback.get("pages", [])), list) else [],
+    }
+
+
 def normalize_bot(raw: Any, index: int = 0) -> dict[str, Any]:
     item = raw if isinstance(raw, dict) else {}
     return {
@@ -156,20 +180,7 @@ def normalize_bot(raw: Any, index: int = 0) -> dict[str, Any]:
         "name": normalize_string(item.get("name"), f"访客机器人 {index + 1}") or f"访客机器人 {index + 1}",
         "tokenEnvName": normalize_string(item.get("tokenEnvName"), DEFAULT_BOT["tokenEnvName"]) or DEFAULT_BOT["tokenEnvName"],
         "autoStart": normalize_boolean(item.get("autoStart"), DEFAULT_BOT["autoStart"]),
-        "guestReplyEnabled": normalize_boolean(item.get("guestReplyEnabled"), DEFAULT_BOT["guestReplyEnabled"]),
-        "guestReplyTitle": normalize_string(item.get("guestReplyTitle"), DEFAULT_BOT["guestReplyTitle"]) or DEFAULT_BOT["guestReplyTitle"],
-        "guestReplyText": item.get("guestReplyText") if isinstance(item.get("guestReplyText"), str) and item.get("guestReplyText").strip() else DEFAULT_BOT["guestReplyText"],
-        "guestReplyType": normalize_reply_type(item.get("guestReplyType"), DEFAULT_BOT["guestReplyType"]),
-        "guestReplyImageUrl": normalize_string(item.get("guestReplyImageUrl")),
-        "guestReplyButtons": normalize_buttons(item.get("guestReplyButtons")),
-        "privateReplyEnabled": normalize_boolean(item.get("privateReplyEnabled"), DEFAULT_BOT["privateReplyEnabled"]),
-        "privateReplyTitle": normalize_string(item.get("privateReplyTitle"), DEFAULT_BOT["privateReplyTitle"]) or DEFAULT_BOT["privateReplyTitle"],
-        "privateReplyText": item.get("privateReplyText") if isinstance(item.get("privateReplyText"), str) and item.get("privateReplyText").strip() else DEFAULT_BOT["privateReplyText"],
-        "privateReplyType": normalize_reply_type(item.get("privateReplyType"), DEFAULT_BOT["privateReplyType"]),
-        "privateReplyImageUrl": normalize_string(item.get("privateReplyImageUrl")),
-        "privateReplyButtons": normalize_buttons(item.get("privateReplyButtons")),
-        "keywordRules": [normalize_keyword_rule(rule, rule_index) for rule_index, rule in enumerate(item.get("keywordRules", []))] if isinstance(item.get("keywordRules"), list) else [],
-        "pages": [normalize_page(page, page_index) for page_index, page in enumerate(item.get("pages", []))] if isinstance(item.get("pages"), list) else [],
+        "interactionConfig": normalize_interaction_config(item.get("interactionConfig"), item),
     }
 
 
@@ -466,7 +477,7 @@ class VisitorBotRuntime:
         normalized_text = normalize_keyword_text(text)
         if not normalized_text:
             return None
-        for rule in self.bot["keywordRules"]:
+        for rule in self.bot["interactionConfig"]["keywordRules"]:
             if not rule.get("enabled") or not rule.get("replyEnabled"):
                 continue
             keyword = normalize_keyword_text(rule.get("keyword"))
@@ -478,7 +489,7 @@ class VisitorBotRuntime:
         return None
 
     def resolve_page(self, page_id: str) -> dict[str, Any] | None:
-        for page in self.bot["pages"]:
+        for page in self.bot["interactionConfig"]["pages"]:
             if page.get("id") == page_id:
                 return page
         return None
@@ -581,7 +592,8 @@ class VisitorBotRuntime:
         )
         self.log("info", f"收到访客消息：群【{chat_title}】/ 用户【{caller_name}】/ 内容【{text}】")
 
-        if not self.bot.get("guestReplyEnabled"):
+        interaction = self.bot["interactionConfig"]
+        if not interaction.get("guestReplyEnabled"):
             self.log("warning", "Guest 自动回复当前已关闭，这条只记日志，不回复。")
             return
         if not query_id:
@@ -600,11 +612,11 @@ class VisitorBotRuntime:
 
         matched_rule = self.resolve_keyword_reply(text)
         reply_config = matched_rule or {
-            "title": self.bot["guestReplyTitle"],
-            "text": self.bot["guestReplyText"],
-            "replyType": self.bot["guestReplyType"],
-            "imageUrl": self.bot["guestReplyImageUrl"],
-            "buttons": self.bot["guestReplyButtons"],
+            "title": interaction["guestReplyTitle"],
+            "text": interaction["guestReplyText"],
+            "replyType": interaction["guestReplyType"],
+            "imageUrl": interaction["guestReplyImageUrl"],
+            "buttons": interaction["guestReplyButtons"],
         }
 
         try:
@@ -657,7 +669,8 @@ class VisitorBotRuntime:
             return
         if isinstance(message.get("from"), dict) and message["from"].get("is_bot"):
             return
-        if not self.bot.get("privateReplyEnabled"):
+        interaction = self.bot["interactionConfig"]
+        if not interaction.get("privateReplyEnabled"):
             return
 
         text = normalize_string(message.get("text")) or normalize_string(message.get("caption")) or "[非文本消息]"
@@ -666,11 +679,11 @@ class VisitorBotRuntime:
         caller_username = f"@{sender.get('username').lstrip('@')}" if normalize_string(sender.get("username")) else "未提供"
         matched_rule = self.resolve_keyword_reply(text)
         reply_config = matched_rule or {
-            "title": self.bot["privateReplyTitle"],
-            "text": self.bot["privateReplyText"],
-            "replyType": self.bot["privateReplyType"],
-            "imageUrl": self.bot["privateReplyImageUrl"],
-            "buttons": self.bot["privateReplyButtons"],
+            "title": interaction["privateReplyTitle"],
+            "text": interaction["privateReplyText"],
+            "replyType": interaction["privateReplyType"],
+            "imageUrl": interaction["privateReplyImageUrl"],
+            "buttons": interaction["privateReplyButtons"],
         }
 
         try:
