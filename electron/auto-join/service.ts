@@ -408,7 +408,7 @@ function applySafeModeLimits(payload: AutoJoinPayload) {
     sendIntervalMax: Math.max(Math.max(25, payload.sendIntervalMin), Math.max(60, payload.sendIntervalMax)),
     floodRestMin: Math.max(20, payload.floodRestMin),
     floodRestMax: Math.max(Math.max(20, payload.floodRestMin), Math.max(45, payload.floodRestMax)),
-    maxJoinsPerAccount: Math.max(1, Math.min(20, payload.maxJoinsPerAccount || 3))
+    maxJoinsPerAccount: Math.max(1, Math.min(1000, payload.maxJoinsPerAccount || 3))
   }
 }
 

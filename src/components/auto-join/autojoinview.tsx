@@ -257,8 +257,8 @@ const TasksWorkbench = memo(function TasksWorkbench() {
                 </label>
               </ConfigRow>
 
-              <ConfigRow label="每号最多加群" hint="建议 2-3 个。">
-                <input type="number" min={1} max={20} value={maxJoinsPerAccount} onChange={(event) => setMaxJoinsPerAccount(Math.min(20, Math.max(1, Number(event.target.value) || 1)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
+              <ConfigRow label="每号最多加群" hint="最多支持 1000 个。">
+                <input type="number" min={1} max={1000} value={maxJoinsPerAccount} onChange={(event) => setMaxJoinsPerAccount(Math.min(1000, Math.max(1, Number(event.target.value) || 1)))} className={`h-10 w-full rounded-[12px] px-3 ${SOFT_INPUT_CLASS}`} />
               </ConfigRow>
 
               <ConfigRow label="重复加群" hint="关闭后，成功/已在群/已申请的目标会自动从列表移除。">
